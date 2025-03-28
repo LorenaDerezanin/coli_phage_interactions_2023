@@ -77,7 +77,7 @@ for p in phage_features.index:
     interaction_with_features = pd.merge(interaction_matrix_long, bact_features, left_on=["bacteria"], right_index=True)
 
     # Add phage host features to predictors
-    phage_host_features = pd.merge(phage_feat, bact_features.filter(regex="(ST_Warwick|O-type|H-type|ABC_serotype)", axis=1), left_on="Phage_host", right_index=True).rename({"Clermont_Phylo": "Clermont_host", "LPS_type": "LPS_host", "O-type": "O_host", "H-type": "H_host", "ST_Warwick": "ST_host", "ABC_serotype": "ABC_serotype_host"}, axis=1)
+    phage_host_features = pd.merge(phage_feat, bact_features.filter(regex="(ST_Warwick|O-type|H-type)", axis=1), left_on="Phage_host", right_index=True).rename({"Clermont_Phylo": "Clermont_host", "LPS_type": "LPS_host", "O-type": "O_host", "H-type": "H_host", "ST_Warwick": "ST_host"}, axis=1)
 
     if not p.startswith("LF110"):  # do not have the data for LF110 host strain
         interaction_with_features = pd.merge(interaction_with_features, phage_host_features.drop(["Phage_host"], axis=1), left_on="phage", right_index=True)
@@ -99,7 +99,7 @@ for p in phage_features.index:
 
     if "ABC_serotype" in bact_features.columns:
         if not p.startswith("LF110"):
-            interaction_with_features["same_ABC_as_host"] = interaction_with_features["ABC_serotype"] == interaction_with_features["ABC_serotype_host"]
+            interaction_with_features["same_ABC_as_host"] = interaction_with_features["ABC_serotype"] == interaction_with_features["ABC_serotype"]
 
     if "same_O_as_host" in interaction_with_features.columns and "same_ST_as_host" in interaction_with_features.columns and not p.startswith("LF110"):
         interaction_with_features["same_O_and_ST_as_host"] = interaction_with_features["same_O_as_host"] * interaction_with_features["same_ST_as_host"]
