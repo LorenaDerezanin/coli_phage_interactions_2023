@@ -1,0 +1,7 @@
+# created conda env first
+conda create -n phage_env python=3.8
+
+# used env yaml file with requirements and recreated conda env
+conda env create -f environment.yml
+
+
