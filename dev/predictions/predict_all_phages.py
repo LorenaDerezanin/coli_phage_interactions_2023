@@ -63,8 +63,81 @@ bact_features = pd.merge(bact_features, bact_embeddings, left_index=True, right_
 bact_feat_names = "(UMAP|O-type|LPS|ST_Warwick|Klebs|ABC_serotype)"
 bact_features = bact_features.filter(regex=bact_feat_names, axis=1)
 
-for p in phage_features.index:
-    print(f"Processing phage {p}...")
+def preprocess_interaction_matrix(interaction_matrix):
+    """Filter out phages with single-class interactions and generate a detailed report."""
+    original_count = len(interaction_matrix.columns)
+    valid_phages = []
+    excluded_phages = []
+    
+    # Create a detailed report of excluded phages
+    excluded_report = {
+        'total_phages': original_count,
+        'excluded_phages': [],
+        'summary': {
+            'all_negative': 0,
+            'all_positive': 0,
+            'interaction_counts': {}
+        }
+    }
+    
+    for phage in interaction_matrix.columns:
+        unique_values = np.unique(interaction_matrix[phage])
+        interaction_count = sum(interaction_matrix[phage] == unique_values[0])
+        
+        if len(unique_values) > 1:  # Only keep phages with both positive and negative interactions
+            valid_phages.append(phage)
+        else:
+            excluded_phages.append({
+                'phage': phage,
+                'class': unique_values[0],
+                'count': interaction_count,
+                'percentage': (interaction_count / len(interaction_matrix)) * 100
+            })
+            
+            # Update summary statistics
+            if unique_values[0] == 0:
+                excluded_report['summary']['all_negative'] += 1
+            else:
+                excluded_report['summary']['all_positive'] += 1
+            
+            # Track interaction counts
+            excluded_report['summary']['interaction_counts'][phage] = interaction_count
+    
+    # Create a report of excluded phages
+    excluded_df = pd.DataFrame(excluded_phages)
+    if not excluded_df.empty:
+        # Save detailed CSV report
+        excluded_df.to_csv(os.path.join(save_dir, "excluded_phages.csv"), index=False)
+        
+        # Save summary report as JSON
+        with open(os.path.join(save_dir, "excluded_phages_summary.json"), 'w') as f:
+            json.dump(excluded_report, f, indent=4)
+        
+        # Print summary
+        print(f"\nPhage Interaction Analysis:")
+        print(f"Total phages: {original_count}")
+        print(f"Excluded phages: {len(excluded_phages)}")
+        print(f"Valid phages: {len(valid_phages)}")
+        print(f"\nExcluded Phages Breakdown:")
+        print(f"- Phages with only negative interactions: {excluded_report['summary']['all_negative']}")
+        print(f"- Phages with only positive interactions: {excluded_report['summary']['all_positive']}")
+        
+        # Print top 5 phages with most interactions
+        print("\nTop 5 excluded phages by number of interactions:")
+        top_5 = sorted(excluded_report['summary']['interaction_counts'].items(), 
+                      key=lambda x: x[1], reverse=True)[:5]
+        for phage, count in top_5:
+            print(f"- {phage}: {count} interactions")
+    
+    return interaction_matrix[valid_phages]
+
+# In the main code:
+print("\nPreprocessing interaction matrix...")
+interaction_matrix = preprocess_interaction_matrix(interaction_matrix)
+print(f"Processing {len(interaction_matrix.columns)} phages with both positive and negative interactions")
+
+for p in interaction_matrix.columns:
+    print(f"\nProcessing phage {p}...")
 
     # Filter phages according to phylogeny
     phage_feat = phage_features.loc[[p]]
@@ -183,84 +256,80 @@ for p in phage_features.index:
             print(f"Warning: Only one class ({unique_classes[0]}) found in the data. Skipping cross-validation.")
             return [], [], pd.DataFrame(), []
         
-        # Rest of the function remains the same
         group_kfold = GroupKFold(n_splits=n_splits)
         umap_dim = X.shape[1] // 2
-
-        if groups is None:
-            raise ValueError("Should provide grouping variable in order to perform Group-K-fold CV.")
-        
-        # Train feature scaler on the whole dataset (if required)
+        std_scaler = StandardScaler()
         if do_scale:
-            std_scaler = MinMaxScaler()
             std_scaler.fit(X)
 
-        for i, (train_idx, test_idx) in enumerate(group_kfold.split(X, y, groups)):  # K-fold cross-validation
+        for i, (train_idx, test_idx) in enumerate(group_kfold.split(X, y, groups)):
             X_train, X_test, y_train, y_test = X.iloc[train_idx], X.iloc[test_idx], y.iloc[train_idx], y.iloc[test_idx]
-            chosen_groups = groups[test_idx].unique().values
-
-            # check that train set observations and validation set observations are disjoint
+            
+            # Check for single class in training data
+            unique_train_classes = np.unique(y_train)
+            if len(unique_train_classes) < 2:
+                print(f"Warning: Only one class ({unique_train_classes[0]}) found in training data for fold {i}. Skipping this fold.")
+                continue
+            
+            if do_scale:
+                X_train = std_scaler.transform(X_train)
+                X_test = std_scaler.transform(X_test)
+            
+            chosen_groups = groups[train_idx]
             assert(set(X_train.index).intersection(set(X_test.index)) == set())
             
             for model_name, model in model_list:
                 alias = get_alias(model)
-
-                # Fit model (train set)
-                model.fit(X_train, y_train)
-
-                # Model evaluation (train and test set)
-                for (ds, ds_name) in zip([[X_train, y_train], [X_test, y_test]], ["train", "test"]):
-                    xset, yset = ds
-
-                    # Feature scaling (if required)
-                    if do_scale:
-                        xset = pd.DataFrame(std_scaler.transform(xset), columns=X.columns)
-
-                    # Predictions
-                    y_pred, y_pred_proba = model.predict(xset), model.predict_proba(xset)
-                    print(f"Unique values in yset: {np.unique(yset)}")
-                    print(f"Unique values in y_pred: {np.unique(y_pred)}")
-
+                try:
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                    y_pred_proba = model.predict_proba(X_test)[:, 1]
+                    
                     # Metrics
-                    if np.unique(yset).shape[0] > 1:  # Cannot compute metrics if only one class is predicted
-                        cm = confusion_matrix(yset, y_pred)
+                    if np.unique(y_test).shape[0] > 1:  # Cannot compute metrics if only one class is predicted
+                        cm = confusion_matrix(y_test, y_pred)
                         if cm.shape == (2, 2):
                             tn, fp, fn, tp = cm.ravel()
                         else:
                             # Handle single-class case
-                            if len(np.unique(yset)) == 1:
-                                if np.unique(yset)[0] == 0:
-                                    tn, fp, fn, tp = len(yset), 0, 0, 0
+                            if len(np.unique(y_test)) == 1:
+                                if np.unique(y_test)[0] == 0:
+                                    tn, fp, fn, tp = len(y_test), 0, 0, 0
                                 else:
-                                    tn, fp, fn, tp = 0, 0, 0, len(yset)
+                                    tn, fp, fn, tp = 0, 0, 0, len(y_test)
                             else:
                                 tn, fp, fn, tp = 0, 0, 0, 0
-                        precision, recall, f1 = precision_score(yset, y_pred, pos_label=1), recall_score(yset, y_pred, pos_label=1), f1_score(yset, y_pred, pos_label=1)
+                        precision, recall, f1 = precision_score(y_test, y_pred, pos_label=1), recall_score(y_test, y_pred, pos_label=1), f1_score(y_test, y_pred, pos_label=1)
                         try:
-                            average_prec = average_precision_score(yset, y_pred_proba[:, 1])
-                            roc_auc = roc_auc_score(yset, y_pred_proba[:, 1])
+                            average_prec = average_precision_score(y_test, y_pred_proba)
+                            roc_auc = roc_auc_score(y_test, y_pred_proba)
                         except (ValueError, IndexError):
                             # Handle cases where we can't compute these metrics
                             average_prec = np.nan
                             roc_auc = np.nan
 
-                        performance.append({"model": alias, "fold": i, "dataset": ds_name, "precision": precision, "recall": recall, "f1": f1, "roc_auc": roc_auc, "avg_precision": average_prec,
-                                        "tp": tp, "fp": fp, "tn": tn, "fn": fn,})
+                        performance.append({"model": alias, "fold": i, "dataset": "test", "precision": precision, "recall": recall, "f1": f1, "roc_auc": roc_auc, "avg_precision": average_prec,
+                                            "tp": tp, "fp": fp, "tn": tn, "fn": fn,})
                     else:
                         performance.append({"model": np.nan, "fold": np.nan, "dataset": np.nan, "precision": np.nan, "recall": np.nan, "f1": np.nan, "roc_auc": np.nan, "avg_precision": np.nan,
-                                        "tp": np.nan, "fp": np.nan, "tn": np.nan, "fn": np.nan,})
+                                            "tp": np.nan, "fp": np.nan, "tn": np.nan, "fn": np.nan,})
 
                     # Collect predictions (test set only)
-                    if ds_name == "test": #and not alias.startswith("Dummy"):
+                    if alias != "Dummy":
                         preds = index_names.iloc[test_idx].copy()
                     else:
                         preds = index_names.iloc[train_idx].copy()
-                    preds["y_pred"] = model.predict(xset)
-                    preds["y_pred_proba"] = model.predict_proba(xset)[:, 1]
+                    preds["y_pred"] = y_pred
+                    preds["y_pred_proba"] = y_pred_proba
                     preds["fold"] = i
                     preds["model"] = alias
-                    preds["dataset"] = ds_name
+                    preds["dataset"] = "test"
                     predictions.append(preds)  # add bacteria-phage name as index instead of integer (avoid ambiguity)
+
+                except (NotFittedError, ValueError) as e:
+                    print(f"Error fitting model {alias}: {e}")
+                    performance.append({"model": alias, "fold": i, "dataset": "test", "precision": np.nan, "recall": np.nan, "f1": np.nan, "roc_auc": np.nan, "avg_precision": np.nan,
+                                        "tp": np.nan, "fp": np.nan, "tn": np.nan, "fn": np.nan,})
 
             logs.append({"fold": i, "train_size": train_idx.shape[0], "test_size": test_idx.shape[0], "train_idx": train_idx, "test_idx": test_idx, "cv_groups": chosen_groups})
 
