@@ -35,7 +35,13 @@ os.makedirs(os.path.join(save_dir, "predictions"), exist_ok=True)
 
 # Load data
 interaction_matrix = pd.read_csv(os.path.join(repo_root, "data", "interactions", "interaction_matrix.csv"), sep=";").set_index("bacteria")
-interaction_matrix = interaction_matrix.replace({"N": 0, "P": 1, "F": np.nan, "U": 1})
+print("Unique values in raw interaction matrix:", interaction_matrix.values.ravel())
+
+# Convert numeric values to binary classification
+# Values 0.0 and 1.0 are considered negative interactions (0)
+# Values 2.0, 3.0, and 4.0 are considered positive interactions (1)
+interaction_matrix = interaction_matrix.replace({0.0: 0, 1.0: 0, 2.0: 1, 3.0: 1, 4.0: 1})
+print("Unique values after binary conversion:", pd.unique(interaction_matrix.values.ravel()))
 
 # interaction_matrix = interaction_matrix.loc[interaction_matrix.count(axis=1)[interaction_matrix.count(axis=1) > 70].index].fillna(0)
 
@@ -182,6 +188,8 @@ for p in phage_features.index:
 
                     # Predictions
                     y_pred, y_pred_proba = model.predict(xset), model.predict_proba(xset)
+                    print(f"Unique values in yset: {np.unique(yset)}")
+                    print(f"Unique values in y_pred: {np.unique(y_pred)}")
 
                     # Metrics
                     if np.unique(yset).shape[0] > 1:  # Cannot compute metrics if only one class is predicted
@@ -197,7 +205,7 @@ for p in phage_features.index:
                                     tn, fp, fn, tp = 0, 0, 0, len(yset)
                             else:
                                 tn, fp, fn, tp = 0, 0, 0, 0
-                        precision, recall, f1 = precision_score(yset, y_pred), recall_score(yset, y_pred), f1_score(yset, y_pred)
+                        precision, recall, f1 = precision_score(yset, y_pred, pos_label=1), recall_score(yset, y_pred, pos_label=1), f1_score(yset, y_pred, pos_label=1)
                         try:
                             average_prec = average_precision_score(yset, y_pred_proba[:, 1])
                             roc_auc = roc_auc_score(yset, y_pred_proba[:, 1])
