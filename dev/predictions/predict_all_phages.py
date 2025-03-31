@@ -131,12 +131,21 @@ for p in phage_features.index:
     warnings.filterwarnings(action='ignore', category=UndefinedMetricWarning)  # shutdown sklearn warning regarding ill-defined precision
 
     def get_alias(model):
-        aliases = {LogisticRegression: "LogReg", RandomForestClassifier: "RF", DummyClassifier: "Dummy", MLPClassifier: "MLP",
-                BernoulliNB: "NaiveBayes", DecisionTreeClassifier: "DecTree"}
+        aliases = {
+            LogisticRegression: "LogReg", 
+            RandomForestClassifier: "RF", 
+            DummyClassifier: "Dummy", 
+            MLPClassifier: "MLP",
+            BernoulliNB: "NaiveBayes", 
+            DecisionTreeClassifier: "DecTree",
+            GradientBoostingClassifier: "GBoost"
+        }
         name = aliases[type(model)]
         if type(model) == LogisticRegression:
             name += "_" + model.penalty
         elif type(model) == RandomForestClassifier:
+            name += "_" + str(model.n_estimators) + "_" + str(model.max_depth)
+        elif type(model) == GradientBoostingClassifier:
             name += "_" + str(model.n_estimators) + "_" + str(model.max_depth)
         elif type(model) == DummyClassifier:
             name += "_" + model.strategy
@@ -149,7 +158,32 @@ for p in phage_features.index:
 
     from sklearn.exceptions import NotFittedError
 
-    def perform_group_cross_validation(X, y, models, models_params, n_splits=10, groups=None, index_names=None, do_scale=False):
+    def perform_group_cross_validation(X, y, n_splits=5, groups=None, model_list=None, index_names=None, do_scale=False):
+        if model_list is None:
+            model_list = [
+                ("LogReg_l2_weight=3", LogisticRegression(C=1/3, max_iter=1000)),
+                ("LogReg_l2_weight=1", LogisticRegression(C=1, max_iter=1000)),
+                ("LogReg_l2_weight=0.3", LogisticRegression(C=1/0.3, max_iter=1000)),
+                ("RandomForest", RandomForestClassifier(n_estimators=100, max_depth=5)),
+                ("GradientBoosting", GradientBoostingClassifier(n_estimators=100, max_depth=3)),
+                ("MLP", MLPClassifier(hidden_layer_sizes=(100,), max_iter=1000)),
+                ("DecisionTree", DecisionTreeClassifier(max_depth=5)),
+                ("Dummy", DummyClassifier(strategy="most_frequent")),
+                ("BernoulliNB", BernoulliNB())
+            ]
+        
+        predictions = []
+        logs = []
+        performance = []
+        trained_models = []
+        
+        # Check if we have both classes in the data
+        unique_classes = np.unique(y)
+        if len(unique_classes) < 2:
+            print(f"Warning: Only one class ({unique_classes[0]}) found in the data. Skipping cross-validation.")
+            return [], [], pd.DataFrame(), []
+        
+        # Rest of the function remains the same
         group_kfold = GroupKFold(n_splits=n_splits)
         umap_dim = X.shape[1] // 2
 
@@ -161,8 +195,6 @@ for p in phage_features.index:
             std_scaler = MinMaxScaler()
             std_scaler.fit(X)
 
-        performance, predictions, logs = [], [], []
-        model_list = {}
         for i, (train_idx, test_idx) in enumerate(group_kfold.split(X, y, groups)):  # K-fold cross-validation
             X_train, X_test, y_train, y_test = X.iloc[train_idx], X.iloc[test_idx], y.iloc[train_idx], y.iloc[test_idx]
             chosen_groups = groups[test_idx].unique().values
@@ -170,9 +202,7 @@ for p in phage_features.index:
             # check that train set observations and validation set observations are disjoint
             assert(set(X_train.index).intersection(set(X_test.index)) == set())
             
-            for model_type, param in zip(models, models_params):
-                
-                model = model_type(**param)
+            for model_name, model in model_list:
                 alias = get_alias(model)
 
                 # Fit model (train set)
@@ -232,8 +262,6 @@ for p in phage_features.index:
                     preds["dataset"] = ds_name
                     predictions.append(preds)  # add bacteria-phage name as index instead of integer (avoid ambiguity)
 
-                model_list[f"{p}_{alias}_fold={i}"] = model
-                del model
             logs.append({"fold": i, "train_size": train_idx.shape[0], "test_size": test_idx.shape[0], "train_idx": train_idx, "test_idx": test_idx, "cv_groups": chosen_groups})
 
         logs = pd.DataFrame(logs)
@@ -277,9 +305,14 @@ for p in phage_features.index:
                     {"class_weight": cw, "penalty": "l1", "solver": "saga", "max_iter": 10000},
                     {"strategy":"stratified"}
                 ]
-        logs, performance, cv_predictions, trained_models = perform_group_cross_validation(X_oh, y, n_splits=n_splits, groups=interaction_with_features.index, 
-                                                                                        index_names=bact_phage_names, 
-                                                                                        models=models_to_test, models_params=params, do_scale=False)
+        logs, performance, cv_predictions, trained_models = perform_group_cross_validation(
+            X_oh, 
+            y, 
+            n_splits=n_splits, 
+            groups=interaction_with_features.index, 
+            index_names=bact_phage_names,
+            do_scale=False
+        )
         
         performance["phage"] = p
         cv_predictions["phage"] = p
