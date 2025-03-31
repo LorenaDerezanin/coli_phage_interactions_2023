@@ -331,10 +331,10 @@ for p in phage_features.index:
             if not os.path.isdir(os.path.join(save_dir, "models", p)):
                 os.mkdir(os.path.join(save_dir, "models", p))
 
-            for k, mod in enumerate(trained_models):
-                save_name = str(k) + "_" + mod.split("_")[0] + "_" + mod.split("_")[1] + "_" + mod.split("_")[-1]
-                with open(os.path.join(save_dir, "models", p, f"{mod}.pickle"), "wb") as save_file:
-                    pickle.dump(trained_models[mod], save_file)
+            for k, (model_name, model) in enumerate(trained_models):
+                save_name = f"{k}_{model_name}"
+                with open(os.path.join(save_dir, "models", p, f"{save_name}.pickle"), "wb") as save_file:
+                    pickle.dump(model, save_file)
 
             # print("Saved performances, predictions, log files and models !")
 
