@@ -234,17 +234,13 @@ for p in interaction_matrix.columns:
     def perform_group_cross_validation(X, y, n_splits=5, groups=None, model_list=None, index_names=None, do_scale=False):
         if model_list is None:
             model_list = [
-                ("LogReg_l2_weight=3", LogisticRegression(C=1/3, max_iter=1000)),
-                ("LogReg_l2_weight=1", LogisticRegression(C=1, max_iter=1000)),
-                ("LogReg_l2_weight=0.3", LogisticRegression(C=1/0.3, max_iter=1000)),
+                ("LogReg_l1", LogisticRegression(penalty='l1', solver='liblinear', max_iter=1000)),
+                ("LogReg_l2", LogisticRegression(penalty='l2', max_iter=1000)),
                 ("RandomForest", RandomForestClassifier(n_estimators=100, max_depth=5)),
-                ("GradientBoosting", GradientBoostingClassifier(n_estimators=100, max_depth=3)),
-                ("MLP", MLPClassifier(hidden_layer_sizes=(100,), max_iter=1000)),
-                ("DecisionTree", DecisionTreeClassifier(max_depth=5)),
-                ("Dummy", DummyClassifier(strategy="most_frequent")),
-                ("BernoulliNB", BernoulliNB())
+                ("DecisionTree", DecisionTreeClassifier(max_depth=5))
             ]
         
+        print("Starting cross-validation...")
         predictions = []
         logs = []
         performance = []
@@ -257,12 +253,15 @@ for p in interaction_matrix.columns:
             return [], [], pd.DataFrame(), []
         
         group_kfold = GroupKFold(n_splits=n_splits)
+        print(f"Performing {n_splits}-fold cross-validation...")
+        
         umap_dim = X.shape[1] // 2
         std_scaler = StandardScaler()
         if do_scale:
             std_scaler.fit(X)
-
+        
         for i, (train_idx, test_idx) in enumerate(group_kfold.split(X, y, groups)):
+            print(f"\nProcessing fold {i+1}/{n_splits}...")
             X_train, X_test, y_train, y_test = X.iloc[train_idx], X.iloc[test_idx], y.iloc[train_idx], y.iloc[test_idx]
             
             # Check for single class in training data
@@ -278,8 +277,9 @@ for p in interaction_matrix.columns:
             chosen_groups = groups[train_idx]
             assert(set(X_train.index).intersection(set(X_test.index)) == set())
             
+            print(f"Training {len(model_list)} models on fold {i+1}...")
             for model_name, model in model_list:
-                alias = get_alias(model)
+                print(f"Training {model_name}...")
                 try:
                     model.fit(X_train, y_train)
                     y_pred = model.predict(X_test)
@@ -308,31 +308,32 @@ for p in interaction_matrix.columns:
                             average_prec = np.nan
                             roc_auc = np.nan
 
-                        performance.append({"model": alias, "fold": i, "dataset": "test", "precision": precision, "recall": recall, "f1": f1, "roc_auc": roc_auc, "avg_precision": average_prec,
+                        performance.append({"model": model_name, "fold": i, "dataset": "test", "precision": precision, "recall": recall, "f1": f1, "roc_auc": roc_auc, "avg_precision": average_prec,
                                             "tp": tp, "fp": fp, "tn": tn, "fn": fn,})
                     else:
                         performance.append({"model": np.nan, "fold": np.nan, "dataset": np.nan, "precision": np.nan, "recall": np.nan, "f1": np.nan, "roc_auc": np.nan, "avg_precision": np.nan,
                                             "tp": np.nan, "fp": np.nan, "tn": np.nan, "fn": np.nan,})
 
                     # Collect predictions (test set only)
-                    if alias != "Dummy":
+                    if model_name != "Dummy":
                         preds = index_names.iloc[test_idx].copy()
                     else:
                         preds = index_names.iloc[train_idx].copy()
                     preds["y_pred"] = y_pred
                     preds["y_pred_proba"] = y_pred_proba
                     preds["fold"] = i
-                    preds["model"] = alias
+                    preds["model"] = model_name
                     preds["dataset"] = "test"
                     predictions.append(preds)  # add bacteria-phage name as index instead of integer (avoid ambiguity)
 
                 except (NotFittedError, ValueError) as e:
-                    print(f"Error fitting model {alias}: {e}")
-                    performance.append({"model": alias, "fold": i, "dataset": "test", "precision": np.nan, "recall": np.nan, "f1": np.nan, "roc_auc": np.nan, "avg_precision": np.nan,
+                    print(f"Error fitting model {model_name}: {e}")
+                    performance.append({"model": model_name, "fold": i, "dataset": "test", "precision": np.nan, "recall": np.nan, "f1": np.nan, "roc_auc": np.nan, "avg_precision": np.nan,
                                         "tp": np.nan, "fp": np.nan, "tn": np.nan, "fn": np.nan,})
-
+            
             logs.append({"fold": i, "train_size": train_idx.shape[0], "test_size": test_idx.shape[0], "train_idx": train_idx, "test_idx": test_idx, "cv_groups": chosen_groups})
-
+        
+        print("Cross-validation completed")
         logs = pd.DataFrame(logs)
         performance = pd.DataFrame(performance)
         all_cv_predictions = pd.concat([pred for pred in predictions])[["fold", "model", "dataset", "bacteria", "phage", "y_pred_proba", "y_pred"]]
@@ -345,12 +346,12 @@ for p in interaction_matrix.columns:
 
         # Make predictions
         models_to_test =  [
-                            RandomForestClassifier,
-                            RandomForestClassifier,
-                            LogisticRegression,
-                            LogisticRegression,
-                            DummyClassifier
-                        ]
+            RandomForestClassifier,
+            RandomForestClassifier,
+            LogisticRegression,
+            LogisticRegression,
+            DummyClassifier
+        ]
         
         # choose class weight
         perc_pos_class = y.sum() / y.shape[0]
@@ -365,15 +366,13 @@ for p in interaction_matrix.columns:
         else:
             cw = {0:1, 1: 3}
 
-        # cw = "balanced"
-
         params = [
-                    {"max_depth": 3, "n_estimators": 250, "class_weight": cw},
-                    {"max_depth": 6, "n_estimators": 250, "class_weight": cw},
-                    {"class_weight": cw, "max_iter": 10000},
-                    {"class_weight": cw, "penalty": "l1", "solver": "saga", "max_iter": 10000},
-                    {"strategy":"stratified"}
-                ]
+            {"max_depth": 3, "n_estimators": 250, "class_weight": cw},
+            {"max_depth": 6, "n_estimators": 250, "class_weight": cw},
+            {"class_weight": cw, "max_iter": 10000},
+            {"class_weight": cw, "penalty": "l1", "solver": "saga", "max_iter": 10000},
+            {"strategy":"stratified"}
+        ]
         logs, performance, cv_predictions, trained_models = perform_group_cross_validation(
             X_oh, 
             y, 

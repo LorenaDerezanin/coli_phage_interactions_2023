@@ -1,0 +1,6 @@
+# Results directories
+dev/predictions/results/
+dev/predictions/results/*
+*.pyc
+__pycache__/
+.ipynb_checkpoints/ 
