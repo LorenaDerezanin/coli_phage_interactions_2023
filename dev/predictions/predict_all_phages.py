@@ -234,10 +234,11 @@ for p in interaction_matrix.columns:
     def perform_group_cross_validation(X, y, n_splits=5, groups=None, model_list=None, index_names=None, do_scale=False):
         if model_list is None:
             model_list = [
-                ("LogReg_l1", LogisticRegression(penalty='l1', solver='liblinear', max_iter=1000)),
-                ("LogReg_l2", LogisticRegression(penalty='l2', max_iter=1000)),
-                ("RandomForest", RandomForestClassifier(n_estimators=100, max_depth=5)),
-                ("DecisionTree", DecisionTreeClassifier(max_depth=5))
+                ("RF_3", RandomForestClassifier(max_depth=3, n_estimators=250)),
+                ("RF_6", RandomForestClassifier(max_depth=6, n_estimators=250)),
+                ("LogReg", LogisticRegression()),
+                ("LogReg_L1", LogisticRegression(penalty="l1", solver="saga")),
+                ("Dummy", DummyClassifier(strategy="stratified"))
             ]
         
         print("Starting cross-validation...")
@@ -246,6 +247,7 @@ for p in interaction_matrix.columns:
         performance = []
         trained_models = []
         
+        # Check if we have only one class
         # Check if we have both classes in the data
         unique_classes = np.unique(y)
         if len(unique_classes) < 2:
@@ -281,9 +283,11 @@ for p in interaction_matrix.columns:
             for model_name, model in model_list:
                 print(f"Training {model_name}...")
                 try:
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
-                    y_pred_proba = model.predict_proba(X_test)[:, 1]
+                    # Create a fresh copy of the model for this fold
+                    model_copy = sklearn.clone(model)
+                    model_copy.fit(X_train, y_train)
+                    y_pred = model_copy.predict(X_test)
+                    y_pred_proba = model_copy.predict_proba(X_test)[:, 1]
                     
                     # Metrics
                     if np.unique(y_test).shape[0] > 1:  # Cannot compute metrics if only one class is predicted
@@ -315,16 +319,16 @@ for p in interaction_matrix.columns:
                                             "tp": np.nan, "fp": np.nan, "tn": np.nan, "fn": np.nan,})
 
                     # Collect predictions (test set only)
-                    if model_name != "Dummy":
-                        preds = index_names.iloc[test_idx].copy()
-                    else:
-                        preds = index_names.iloc[train_idx].copy()
+                    preds = index_names.iloc[test_idx].copy()
                     preds["y_pred"] = y_pred
                     preds["y_pred_proba"] = y_pred_proba
                     preds["fold"] = i
                     preds["model"] = model_name
                     preds["dataset"] = "test"
                     predictions.append(preds)  # add bacteria-phage name as index instead of integer (avoid ambiguity)
+                    
+                    # Store the trained model
+                    trained_models.append((model_name, model_copy))
 
                 except (NotFittedError, ValueError) as e:
                     print(f"Error fitting model {model_name}: {e}")
@@ -338,21 +342,13 @@ for p in interaction_matrix.columns:
         performance = pd.DataFrame(performance)
         all_cv_predictions = pd.concat([pred for pred in predictions])[["fold", "model", "dataset", "bacteria", "phage", "y_pred_proba", "y_pred"]]
 
-        return logs, performance, all_cv_predictions, model_list
+        return logs, performance, all_cv_predictions, trained_models
 
     n_splits = 10
     redo_predictions = True
     if redo_predictions:  # avoid overwriting predictions by mistake
 
         # Make predictions
-        models_to_test =  [
-            RandomForestClassifier,
-            RandomForestClassifier,
-            LogisticRegression,
-            LogisticRegression,
-            DummyClassifier
-        ]
-        
         # choose class weight
         perc_pos_class = y.sum() / y.shape[0]
         if 0.60 <= perc_pos_class:
@@ -366,12 +362,12 @@ for p in interaction_matrix.columns:
         else:
             cw = {0:1, 1: 3}
 
-        params = [
-            {"max_depth": 3, "n_estimators": 250, "class_weight": cw},
-            {"max_depth": 6, "n_estimators": 250, "class_weight": cw},
-            {"class_weight": cw, "max_iter": 10000},
-            {"class_weight": cw, "penalty": "l1", "solver": "saga", "max_iter": 10000},
-            {"strategy":"stratified"}
+        models_to_test = [
+            ("RF_3", RandomForestClassifier(max_depth=3, n_estimators=250, class_weight=cw)),
+            ("RF_6", RandomForestClassifier(max_depth=6, n_estimators=250, class_weight=cw)),
+            ("LogReg", LogisticRegression(class_weight=cw, max_iter=10000)),
+            ("LogReg_L1", LogisticRegression(class_weight=cw, penalty="l1", solver="saga", max_iter=10000)),
+            ("Dummy", DummyClassifier(strategy="stratified"))
         ]
         logs, performance, cv_predictions, trained_models = perform_group_cross_validation(
             X_oh, 
@@ -406,15 +402,17 @@ for p in interaction_matrix.columns:
 
             # print("Saved performances, predictions, log files and models !")
 
-        # Feature importance retried by random forest classifier
-        # print(f"Bacterial features : Clermont_Phylo, ST_Warwick, LPS_type, O-type, H-type.")
-        # print(f"Phage features : Morphotype, Genus, Phage_host.")
-
         # get best model on test set
         perf_by_model = performance.loc[performance["dataset"] == "test"].groupby("model")["avg_precision"].mean()
+        print("\nPerformance summary by model:")
+        print(perf_by_model)
+        
+        if perf_by_model.empty:
+            print("\nWarning: No valid performance metrics were calculated.")
+            continue
+            
         model_name = perf_by_model.sort_values(ascending=False).index[0]
-
-        print(f"Best model: {model_name}")
+        print(f"\nBest model: {model_name}")
 
         clfs = []
         for mod in os.listdir(os.path.join(save_dir, "models", p)):
