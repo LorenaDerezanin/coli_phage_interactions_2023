@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+.ipynb_checkpoints/
+dev/predictions/results/models/
+dev/predictions/results/feature_importances/
+dev/predictions/results/predictions/
