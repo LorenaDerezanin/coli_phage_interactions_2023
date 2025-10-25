@@ -1,0 +1,1 @@
+nature_paper_model_test/coli_phage_interactions_2023/data/genomics/bacteria/new_strains/GCF_000005845.2_ASM584v2_genomic.fna	ecoli_achtman_4	10	adk(10)	fumC(11)	gyrB(4)	icd(8)	mdh(8)	purA(8)	recA(2)

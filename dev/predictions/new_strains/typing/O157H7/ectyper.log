@@ -1,0 +1,20 @@
+Database structure QC is OK at /Users/lorenaderezanin/miniconda3/envs/phage_env/lib/python3.8/site-packages/ectyper/Data/ectyper_alleles_db.json
+Starting ectyper v2.0.0 running on O and H antigen allele database v1.0 (11-03-2020) and pathotype database v2024-10-03
+Output_directory is /Users/lorenaderezanin/PhageMatch/nature_paper_model_test/coli_phage_interactions_2023/dev/predictions/new_strains/typing/O157H7
+Command-line arguments Namespace(cores=1, dbpath=None, debug=False, input=['nature_paper_model_test/coli_phage_interactions_2023/data/genomics/bacteria/new_strains/GCF_000008865.2_ASM886v2_genomic.fna'], longreads=False, maxdirdepth=0, output='nature_paper_model_test/coli_phage_interactions_2023/dev/predictions/new_strains/typing/O157H7', pathotype=False, percentCoverageHtype=50, percentCoverageOtype=90, percentCoveragePathotype=50, percentIdentityHtype=95, percentIdentityOtype=95, percentIdentityPathotype=90, reference='/Users/lorenaderezanin/miniconda3/envs/phage_env/lib/python3.8/site-packages/ectyper/Data/EnteroRef_GTDBSketch_20231003_V2.msh', sequence=False, verify=False)
+MASH species id sketch at /Users/lorenaderezanin/miniconda3/envs/phage_env/lib/python3.8/site-packages/ectyper/Data/EnteroRef_GTDBSketch_20231003_V2.msh exists and is in good health and does not need to be downloaded
+Gathering genome files list ...
+Overall identified 1 file(s) (GCF_000008865.2_ASM886v2_genomic.fna) to process ...
+Identifying genome file types on 1 inputs ...
+Creating combined reference database fasta file at /Users/lorenaderezanin/PhageMatch/nature_paper_model_test/coli_phage_interactions_2023/dev/predictions/new_strains/typing/O157H7/tmp_2tXGVDCYM/combined_ident_serotype.fasta ...
+Assembling final list of fasta files
+Verifying the E.coli-ness of the genome files and validity of file inputs
+For /Users/lorenaderezanin/PhageMatch/nature_paper_model_test/coli_phage_interactions_2023/data/genomics/bacteria/new_strains/GCF_000008865.2_ASM886v2_genomic.fna following top hits and hash ratios returned by MASH [('GCF_000008865.2', '1000/1000'), ('GCF_002473685.1', '1000/1000'), ('GCF_002473725.1', '1000/1000'), ('GCF_002473735.1', '1000/1000'), ('GCF_002474265.1', '1000/1000')]
+MASH species top hit GCF_000008865.2 identified as Escherichia coli with distance 0 to /Users/lorenaderezanin/PhageMatch/nature_paper_model_test/coli_phage_interactions_2023/data/genomics/bacteria/new_strains/GCF_000008865.2_ASM886v2_genomic.fna and shared hashes ratio 1000/1000
+MASH dist predicted species name: 'Escherichia coli' based on species ID sketch /Users/lorenaderezanin/miniconda3/envs/phage_env/lib/python3.8/site-packages/ectyper/Data/EnteroRef_GTDBSketch_20231003_V2.msh
+Standardizing the E.coli genome headers based on file names
+Updating fasta headers ....
+Reporting final results to output.tsv file ...
+Name	Species	SpeciesMashRatio	SpeciesMashDistance	SpeciesMashTopID	O-type	H-type	Serotype	QC	Evidence	GeneScores	AlleleKeys	GeneIdentities(%)	GeneCoverages(%)	GeneContigNames	GeneRanges	GeneLengths	DatabaseVer	Warnings	Pathotype	PathotypeCounts	PathotypeGenes	PathotypeGeneNames	PathotypeAccessions	PathotypeAlleleIDs	PathotypeIdentities(%)	PathotypeCoverages(%)	PathotypeGeneLengthRatios	PathotypeRuleIDs	PathotypeGeneCounts	PathoDBVer	StxSubtypes	StxAccessions	StxAlleleIDs	StxAlleleNames	StxIdentities(%)	StxCoverages(%)	StxLengths	StxContigNames	StxCoordinates
+GCF_000008865.2_ASM886v2_genomic	Escherichia coli	1000/1000	0	GCF_000008865.2	O157	H7	O157:H7	-	Based on 3 allele(s)	wzx:1;wzy:1;fliC:1;	O157-1-wzx-origin;O157-118-wzy;H7-1-fliC-origin;	100;100;100;	100;100;100;	NC_002695.2;NC_002695.2;NC_002695.2;	2783354-2784745;2785447-2786613;2624516-2626273;	1392;1167;1758;	v1.0 (11-03-2020)	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+ECTyper has finished successfully. Results available at /Users/lorenaderezanin/PhageMatch/nature_paper_model_test/coli_phage_interactions_2023/dev/predictions/new_strains/typing/O157H7

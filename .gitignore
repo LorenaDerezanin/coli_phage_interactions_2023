@@ -1,6 +1,9 @@
 # Results directories
-dev/predictions/results/
-dev/predictions/results/*
+dev/predictions/results/models/
+dev/predictions/results/feature_importances/
+dev/predictions/results/predictions/
 *.pyc
 __pycache__/
 .ipynb_checkpoints/ 
+.DS_Store
+
