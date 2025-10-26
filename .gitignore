@@ -5,3 +5,5 @@ dev/predictions/results/models/
 dev/predictions/results/feature_importances/
 dev/predictions/results/predictions/
 /paper/
+/figures/
+.idea/
