@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from scipy.cluster.hierarchy import linkage
@@ -22,22 +23,22 @@ from sklearn.metrics import precision_recall_curve, precision_score, recall_scor
 
 np.random.seed(0)
 
-save_dir = "D:\\These\\30_dev\\302_HR_predictions\\+++\\stratified_all_phages\\adsorption_factors+core_genome_1e-4_quat"
-if not os.path.isdir(save_dir + "\\results"):
-    os.mkdir(save_dir + "\\results")
-if not os.path.isdir(save_dir + "\\results\\models"):
-    os.mkdir(save_dir + "\\" + "results\\models")
-if not os.path.isdir(save_dir + "\\results\\feature_importances"):
-    os.mkdir(save_dir + "\\" + "results\\feature_importances")
-if not os.path.isdir(save_dir + "\\results\\logs"):
-    os.mkdir(save_dir + "\\" + "results\\logs")
-if not os.path.isdir(save_dir + "\\results\\performances"):
-    os.mkdir(save_dir + "\\" + "results\\performances")
-if not os.path.isdir(save_dir + "\\results\\predictions"):
-    os.mkdir(save_dir + "\\" + "results\\predictions")
+# Write outputs under the repo: dev/predictions
+save_dir = Path(__file__).parent
+results_dir = save_dir / "results"
+(results_dir / "models").mkdir(parents=True, exist_ok=True)
+(results_dir / "feature_importances").mkdir(parents=True, exist_ok=True)
+(results_dir / "logs").mkdir(parents=True, exist_ok=True)
+(results_dir / "performances").mkdir(parents=True, exist_ok=True)
+(results_dir / "predictions").mkdir(parents=True, exist_ok=True)
 
 # Load data
-interaction_matrix = pd.read_csv("D:\\These\\20_data\\212_interaction_matrices\\ADSORPTION_MATRIX_370+host_vs_96_less_stringent.csv", sep=";").set_index("bacteria")
+ROOT = Path(__file__).resolve().parents[2]
+
+# Map from ADSORPTION_MATRIX_370+host_vs_96_less_stringent.csv → repo data/interactions/interaction_matrix.csv
+# Confidence: 0.7 — Rationale: local file is the standard bacteria×phage matrix (0–6); the script immediately maps qualitative N/P/U to 0/1, so quantitative works for training.
+interaction_matrix_path = ROOT / "data" / "interactions" / "interaction_matrix.csv"
+interaction_matrix = pd.read_csv(interaction_matrix_path, sep=";").set_index("bacteria")
 interaction_matrix = interaction_matrix.replace({"N": 0, "P": 1, "F": np.nan, "U": 1})
 
 # interaction_matrix = interaction_matrix.loc[interaction_matrix.count(axis=1)[interaction_matrix.count(axis=1) > 70].index].fillna(0)
@@ -45,11 +46,22 @@ interaction_matrix = interaction_matrix.replace({"N": 0, "P": 1, "F": np.nan, "U
 phage_feat_names = ["Morphotype", "Genus", "Phage_host"]
 print(f"Phage features : {phage_feat_names}")
 
-phage_features = pd.read_csv("D:\These\\20_data\\201_genomic_data\\097_phage\\Phage_features_with_host.csv", sep=";").set_index("phage").loc[interaction_matrix.columns, phage_feat_names]
-bact_features = pd.read_csv("D:\These\\20_data\\201_genomic_data\\370_and_host\\370+host_features_with_ABC_capsules_2.csv", sep=";").set_index("bacteria")
+# Map from Phage_features_with_host.csv → repo data/genomics/phages/guelin_collection.csv
+# Confidence: 0.95 — Rationale: columns match (phage, Morphotype, Genus, Phage_host, ...).
+phage_features_path = ROOT / "data" / "genomics" / "phages" / "guelin_collection.csv"
+phage_features = pd.read_csv(phage_features_path, sep=";").set_index("phage").loc[interaction_matrix.columns, phage_feat_names]
+
+# Map from 370+host_features_with_ABC_capsules_2.csv → repo data/genomics/bacteria/picard_collection.csv
+# Confidence: 0.8 — Rationale: provides Clermont phylogroup, ST_Warwick, O/H, LPS; ABC_serotype may be absent but code gates on column presence.
+bact_features_path = ROOT / "data" / "genomics" / "bacteria" / "picard_collection.csv"
+bact_features = pd.read_csv(bact_features_path, sep=";").set_index("bacteria")
+# TODO: this doesn't seem to exist in the repo
 cv_clusters = pd.read_csv("D:\\These\\30_dev\\302_HR_predictions\\370+host_cross_validation_groups_1e-4.csv", sep=";").set_index("bacteria")
 
-bact_embeddings = pd.read_csv("D:\\These\\30_dev\\302_HR_predictions\\core_genome\\UMAP_dim_reduction_from_phylogeny\\data\\coli_umap_8_dims.tsv", sep="\t").set_index("bacteria")
+# Map from core_genome/.../coli_umap_8_dims.tsv → repo data/genomics/bacteria/umap_phylogeny/coli_umap_8_dims.tsv
+# Confidence: 0.98 — Rationale: identical filename/purpose (UMAP embeddings from phylogeny).
+bact_embeddings_path = ROOT / "data" / "genomics" / "bacteria" / "umap_phylogeny" / "coli_umap_8_dims.tsv"
+bact_embeddings = pd.read_csv(bact_embeddings_path, sep="\t").set_index("bacteria")
 
 bact_features = pd.merge(bact_features, bact_embeddings, left_index=True, right_index=True)
 
@@ -266,16 +278,16 @@ for p in phage_features.index:
 
         overwrite_files = True  # overwrite log and performance files
         if overwrite_files:
-            logs.to_csv(f"{save_dir}\\results\\logs\\logs_{p}_Group{n_splits}Fold_CV.csv", sep=";", index=False)
-            performance.to_csv(f"{save_dir}\\results\\performances\\performance_{p}_Group{n_splits}Fold_CV.csv", sep=";",)
-            cv_predictions.to_csv(f"{save_dir}\\results\\predictions\\predictions_{p}_core_features_Group{n_splits}Fold_CV.csv", sep=";", index=False)
+            logs.to_csv((results_dir / "logs" / f"logs_{p}_Group{n_splits}Fold_CV.csv"), sep=";", index=False)
+            performance.to_csv((results_dir / "performances" / f"performance_{p}_Group{n_splits}Fold_CV.csv"), sep=";",)
+            cv_predictions.to_csv((results_dir / "predictions" / f"predictions_{p}_core_features_Group{n_splits}Fold_CV.csv"), sep=";", index=False)
 
-            if not os.path.isdir(f"{save_dir}\\results\\models\\{p}"):
-                os.mkdir(f"{save_dir}\\results\\models\\{p}")
+            models_dir = results_dir / "models" / p
+            models_dir.mkdir(parents=True, exist_ok=True)
 
             for k, mod in enumerate(trained_models):
                 save_name = str(k) + "_" + mod.split("_")[0] + "_" + mod.split("_")[1] + "_" + mod.split("_")[-1]
-                with open(f"{save_dir}\\results\\models\\{p}\\{mod}.pickle", "wb") as save_file:
+                with open(models_dir / f"{mod}.pickle", "wb") as save_file:
                     pickle.dump(trained_models[mod], save_file)
 
             # print("Saved performances, predictions, log files and models !")
@@ -291,9 +303,10 @@ for p in phage_features.index:
         print(f"Best model: {model_name}")
 
         clfs = []
-        for mod in os.listdir(save_dir + f"\\results\\models\\{p}"):
+        for mod_path in (results_dir / "models" / p).iterdir():
+            mod = mod_path.name
             if mod.startswith(p + "_" + model_name) and mod.endswith("pickle"):
-                clfs.append(pickle.load(open(save_dir +  f"\\results\\models\\{p}\\" + mod, "rb")))
+                clfs.append(pickle.load(open(mod_path, "rb")))
 
         # save feature importance
         if model_name.startswith("RF"):
@@ -307,5 +320,5 @@ for p in phage_features.index:
         feature_importances = pd.merge(feature_importances, sorted_by_average_importance, on="variable")
         feature_importances["phage"] = p
         feature_importances["model"] = model_name
-        feature_importances.to_csv(f"{save_dir}/results/feature_importances/{p}_feature_importance.csv", sep=";", index=False)       
+        feature_importances.to_csv((results_dir / "feature_importances" / f"{p}_feature_importance.csv"), sep=";", index=False)       
         
