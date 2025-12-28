@@ -55,8 +55,12 @@ phage_features = pd.read_csv(phage_features_path, sep=";").set_index("phage").lo
 # Confidence: 0.8 — Rationale: provides Clermont phylogroup, ST_Warwick, O/H, LPS; ABC_serotype may be absent but code gates on column presence.
 bact_features_path = ROOT / "data" / "genomics" / "bacteria" / "picard_collection.csv"
 bact_features = pd.read_csv(bact_features_path, sep=";").set_index("bacteria")
-# TODO: this doesn't seem to exist in the repo
-cv_clusters = pd.read_csv("D:\\These\\30_dev\\302_HR_predictions\\370+host_cross_validation_groups_1e-4.csv", sep=";").set_index("bacteria")
+
+# CV clusters: strains closer than 1e-4 substitutions/site must be grouped in the same fold (README).
+cv_clusters = pd.read_csv(
+    ROOT / "data" / "metadata" / "370+host_cross_validation_groups_1e-4.csv",
+    sep=";",
+).set_index("bacteria")
 
 # Map from core_genome/.../coli_umap_8_dims.tsv → repo data/genomics/bacteria/umap_phylogeny/coli_umap_8_dims.tsv
 # Confidence: 0.98 — Rationale: identical filename/purpose (UMAP embeddings from phylogeny).
