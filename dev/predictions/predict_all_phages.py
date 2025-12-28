@@ -125,6 +125,7 @@ for p in phage_features.index:
 
     # Dummy encoding of categorical variables and standardization for numerical variables
     X, y, bact_phage_names = interaction_with_features.drop(["bacteria", "phage", "y"], axis=1), interaction_with_features["y"], interaction_with_features[["bacteria", "phage"]]
+    y = (y > 0).astype(int)  # convert semi-quantitative scores to binary labels for classifiers/metrics
 
     num, factors = [], []
     for col_dtype, col in zip(X.dtypes, X.dtypes.index):
