@@ -343,6 +343,12 @@ python -m ipykernel install --user --name phage_env --display-name phage_env
 Now when you run notebooks in `jupyter lab`, make sure to select the `phage_env`
 kernel.
 
+## Pipeline reproduction steps
+- Run `predict_all_phages.py` without any arguments
+  - This generates different outputs than what was originally committed in `dev/predictions/results/(logs|performances)`
+- Section 2 from the README can not be reproduced because the 
+  `recommend_cocktail.py` script the README refers to does not exist.
+
 ## Research Notes
 Predicted cocktails are benchmarked against a "baseline" and a "generic" cocktail.
 From the paper:
