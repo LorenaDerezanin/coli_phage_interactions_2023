@@ -40,7 +40,7 @@ The process involves five main steps:
 2. Extraction of genomic features
 3. Feature encoding and normalization
 4. Model training and cross-validation
-5. Model selection and evaluation
+5. Predictions
 
 ---
 
@@ -54,10 +54,8 @@ Expected directory structure for the pipeline:
 
 ```
 data/
-├── genomes/
+├── genomics/
 ├── interactions/interaction_matrix.csv
-├── metadata/
-└── features/
 ```
 
 ---
@@ -105,7 +103,7 @@ Klebsiella_capsule_serotype
 ### 1.5 Feature Encoding
 
 Categorical features are one-hot encoded; numerical ones are standardized (centered to mean 0 and scaled to unit variance).
-Rare categories (<3 occurrences) are grouped together.
+In order to control the number of input features, rare categories (<3 occurrences) are binned together in an "Other" category.
 
 Example (O-antigen encoding):
 
@@ -154,24 +152,11 @@ Precision, Recall, F1, AUROC, and Average Precision (AUPR).
 
 All results for the 100 models per phage are available [here](https://github.com/mdmparis/coli_phage_interactions_2023/tree/main/dev/predictions/results):
 
-* `/performance`: contains performance metrics including average precision for each model
-* `/predictions`: contains the predicted probability of infection for each phage–strain pair
+* `performances/`: contains performance metrics including average precision for each model (4 models + 1 baseline are evaluated on train and test set, 10 cross-validation folds: 100 models per phage in total)
+* `predictions.rar`: contains the predicted probability of infection for each phage–strain pair
 
 The best model for each phage is selected based on the mean AUPR across folds.
-Example: `RF_250_6_weight=2; fold=9` was selected for phage T4LD.
 
-**Outputs:**
-
-```
-models/best_model_<phage>.pkl
-results/performance_<phage>.csv
-results/predictions_<phage>.csv
-```
-
-Example GitHub resources:
-
-* [interaction_matrix.csv](https://github.com/mdmparis/coli_phage_interactions_2023/blob/main/data/interactions/interaction_matrix.csv)
-* [performance_T4LD_Group10Fold_CV.csv](https://github.com/mdmparis/coli_phage_interactions_2023/blob/main/dev/predictions/results/performances/performance_T4LD_Group10Fold_CV.csv)
 
 ---
 
@@ -180,13 +165,6 @@ Example GitHub resources:
 The script used in the paper is available [here](https://github.com/mdmparis/coli_phage_interactions_2023/blob/main/dev/predictions/predict_all_phages.py).
 Please note that not all input files used in the publication are publicly available.
 
-```
-python predict_all_phages.py \
-    --matrix data/interactions/interaction_matrix.csv \
-    --features data/features/bacterial_features.csv \
-    --cv data/metadata/cv_clusters.csv \
-    --outdir results/
-```
 
 ---
 
@@ -203,9 +181,8 @@ The upstream steps have priority, as they are empirically more precise.
 
 ### 2.2 Input Data
 
-* Trained model files (`.pkl`)
 * Interaction matrix
-* Bacterial feature table (same structure as used for model training)
+* Bacterial feature table (same features as the ones used for predictions)
 
 ---
 
@@ -235,7 +212,7 @@ Phages infecting at least half (≥50%) of these strains are recommended, ranked
 
 ### 2.5 Step 3 — “Trait Matching”
 
-If fewer than three phages have been selected, this step applies the previously trained machine learning models (random forests, depth=4, 80 estimators, positive class weight=1.5) using the complete feature set (UMAP, Outer core LPS type, ST, Klebsiella capsule serotype, O antigen, ABC capsule serotype).
+If fewer than three phages have been selected, this step applies the previously trained machine learning models (random forests, depth=4, 80 estimators, positive class weight=1.5) using the complete feature set (UMAP, Outer core LPS type, ST, Klebsiella capsule serotype, O-antigen, ABC capsule serotype).
 Phages with predicted infection probability >0.5 are recommended, ranked by probability.
 
 ---
@@ -244,71 +221,13 @@ Phages with predicted infection probability >0.5 are recommended, ranked by prob
 
 If fewer than three phages are still recommended, the remaining slots are filled with the most **generalist phages** from the Guelin collection (those with the highest overall lytic coverage).
 
-To preserve diversity:
-
-* Two phages from the same genus or isolated on the same host cannot both be recommended.
+Throughout the whole pipeline, to ensure phage diversity among each recommended cocktail, two phages from the same genus *and* isolated on the same host cannot both be recommended.
 
 ---
 
 ### 2.7 Output
 
 Results from the publication are available [here](https://github.com/mdmparis/coli_phage_interactions_2023/tree/main/dev/cocktails).
-
-The algorithm returns:
-
-```
-results/recommendations_<strain>.csv
-```
-
-with columns:
-
-```
-phage_id, predicted_probability, decision_step
-```
-
----
-
-### 2.8 Example Command
-
-```
-python recommend_cocktail.py \
-    --features data/features/query_strain.csv \
-    --models models/ \
-    --matrix data/interactions/interaction_matrix.csv \
-    --outdir results/
-```
-
----
-
-## 3. Global Workflow Diagram
-
-```mermaid
-flowchart TD
-    A[Genome assemblies (FASTA)] --> B[Annotation & core genome phylogeny (PanACoTA)]
-    B --> C[Feature extraction (MacSyFinder, SRST2, ECTyper...)]
-    C --> D[Feature encoding (UMAP, one-hot)]
-    D --> E[Model training (per phage)]
-    E --> F[Model selection (best AUPR)]
-    F --> G[Trained models (.pkl)]
-    G --> H[Phage cocktail recommendation algorithm]
-    H --> I[Phage recommendations (CSV)]
-```
-
----
-
-## 4. Reproducibility
-
-* Python 3.9+
-* `scikit-learn` 1.1.2
-* `umap-learn`, `pandas`, `numpy`, `matplotlib`
-* Compatible with Conda or Docker environments
-
-Example environment setup:
-
-```
-conda env create -f environment.yml
-conda activate phage-predict
-```
 
 ---
 
@@ -320,4 +239,3 @@ conda activate phage-predict
 * ECTyper: [https://github.com/phac-nml/ecoli_serotyping](https://github.com/phac-nml/ecoli_serotyping)
 * Kaptive: [https://github.com/katholt/Kaptive](https://github.com/katholt/Kaptive)
 * Data repository: [https://github.com/mdmparis/coli_phage_interactions_2023](https://github.com/mdmparis/coli_phage_interactions_2023)
-
