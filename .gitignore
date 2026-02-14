@@ -8,3 +8,6 @@ dev/predictions/results/predictions/
 /figures/
 .idea/
 .scratch/
+
+# lyzortx generated artifacts
+lyzortx/generated_outputs/

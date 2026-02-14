@@ -128,3 +128,44 @@ Current reproducibility assumptions used in this audit:
 - Tailored: cocktails containing phages selected via earlier, more specific steps.
 
 The distinction matters because frequency-based post hoc labeling can be close to the paper labels but not identical.
+
+## New learning (2026-02-15): morphotype breadth and narrow susceptibility
+Numbers in this section come from:
+- Script: `lyzortx/research_notes/ad_hoc_analysis_code/morphotype_narrow_susceptibility_stats.py`
+- Inputs: `data/interactions/interaction_matrix.csv` and `data/genomics/phages/guelin_collection.csv`
+- Output tables: `lyzortx/generated_outputs/raw_interactions_summary/*.csv`
+
+### Morphotype lytic breadth
+Using phage-level counts of lysed bacteria (`matrix > 0` as lytic):
+1. Kruskal-Wallis across morphotypes: `H=60.6156`, `p=6.8785e-14` (strong difference).
+2. Pairwise Mann-Whitney:
+   - Myoviridae vs Podoviridae: `p=1.3556e-12` (Myoviridae much higher).
+   - Myoviridae vs Siphoviridae: `p=1.6149e-09` (Myoviridae much higher).
+   - Podoviridae vs Siphoviridae: `p=0.1015` (not significant in this matrix).
+3. Medians:
+   - Myoviridae: `170.5`
+   - Podoviridae: `44.0`
+   - Siphoviridae: `28.0`
+
+### Bacteria with no lysis
+1. `12 / 402` bacteria (`2.99%`) are not lysed by any phage:
+   `NILS24, ROAR205, FN-B4, ROAR220, DEC2a, NILS22, FN-B7, H1-002-0060-C-T,`
+   `B253, B156, H1-007-0015-D-G, E_albertiiCIP107988T`.
+
+### Bacteria with narrow susceptibility
+1. `25 / 402` bacteria (`6.22%`) are lysed by only `1-3` phages.
+2. `10` bacteria are lysed by exactly one phage.
+3. Among those single-lyser cases:
+   - `9` are unique Myoviridae hits.
+   - `1` is a unique Podoviridae hit.
+
+Top "unique rescuer" phages (count of bacteria they alone lyse):
+1. `NIC06_P2 -> 3`
+2. `LF73_P1 -> 2`
+3. `AL505_Ev3 -> 2`
+4. `LF82_P9 -> 1`
+5. `AN24_P4 -> 1`
+6. `LF73_P4 -> 1`
+
+Interpretation: this supports a mixed landscape where broad Myoviridae dominate global coverage, but a small
+set of strain-specific "rescuer" phages is still critical for hard-to-lyse bacteria.
