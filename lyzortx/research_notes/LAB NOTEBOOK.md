@@ -1,3 +1,31 @@
+### 2026-02-15: ST0.7 implemented (final report artifacts)
+
+#### What we implemented in ST0.7
+
+1. Added ST0.7 step: `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`.
+2. Added ST0.7 regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st07_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
+4. Extended CI workflow to run ST0.7 regression in addition to ST0.1 through ST0.6.
+
+#### ST0.7 output summary on current internal data
+
+- Metrics summary rows: `48`.
+- Top-3 recommendation rows: `1,107`.
+- Calibration summary rows: `12`.
+- Error analysis rows (holdout misses): `14`.
+- Output artifacts:
+  - `lyzortx/generated_outputs/steel_thread_v0/metrics_summary.csv`
+  - `lyzortx/generated_outputs/steel_thread_v0/top3_recommendations.csv`
+  - `lyzortx/generated_outputs/steel_thread_v0/calibration_summary.csv`
+  - `lyzortx/generated_outputs/steel_thread_v0/error_analysis.csv`
+  - `lyzortx/generated_outputs/steel_thread_v0/run_manifest.json`
+
+#### ST0.7 Interpretation
+
+1. The steel thread is now complete end-to-end, with deterministic outputs and regression-gated final artifacts.
+2. The recommendation gap observed in ST0.6 is now explicit in `error_analysis.csv` for targeted iteration.
+3. The immediate next optimization target should be recommendation quality (Top-3 hit rate), not additional plumbing.
+
 ### 2026-02-15: ST0.6 implemented (top-3 recommendation generation)
 
 #### What we implemented in ST0.6

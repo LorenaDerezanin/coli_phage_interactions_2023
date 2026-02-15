@@ -1,0 +1,20 @@
+{
+  "hashes": {
+    "calibration_summary": "ebc9efa257440c0c75a97cc7410ac514bf6734eaecf9204baf6769052727def4",
+    "error_analysis": "651c5fdf99bde6ec2d8121decd8d8783e08bf419275c9645fc10fd57a38a58c9",
+    "metrics_summary": "db974b0bcb6ed207b36f1fbe94bda9740c58f54c9827453e61a2d16745895a72",
+    "top3_recommendations": "0ddaa8a5e282766d944588338195459c6d849dddd9a0a094f360a28ce78ff18d"
+  },
+  "manifest_counts": {
+    "calibration_summary_rows": 12,
+    "error_analysis_rows": 14,
+    "metrics_summary_rows": 48,
+    "top3_recommendations_rows": 1107
+  },
+  "row_counts": {
+    "calibration_summary_rows": 12,
+    "error_analysis_rows": 14,
+    "metrics_summary_rows": 48,
+    "top3_recommendations_rows": 1107
+  }
+}

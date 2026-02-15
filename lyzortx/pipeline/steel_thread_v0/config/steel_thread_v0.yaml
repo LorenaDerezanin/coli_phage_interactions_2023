@@ -51,3 +51,11 @@ st06:
   output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
   top_k: 3
   max_per_family: 2
+
+st07:
+  st04_metrics_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st04_model_metrics_raw.json
+  st05_calibration_summary_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st05_calibration_summary.csv
+  st05_ranked_predictions_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st05_ranked_predictions.csv
+  st06_top3_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st06_top3_recommendations.csv
+  st06_summary_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st06_recommendation_summary.json
+  output_dir: lyzortx/generated_outputs/steel_thread_v0

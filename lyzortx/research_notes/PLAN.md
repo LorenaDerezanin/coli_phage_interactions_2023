@@ -57,7 +57,9 @@ Last updated: 2026-02-15
 - [x] ST0.6 Generate minimal top-3 recommendations with simple diversity constraints. Implemented in
       `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
-- [ ] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`.
+- [x] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
 
 ### Required Artifacts
 
@@ -265,7 +267,7 @@ graph LR
 
 ## Immediate Next Tasks
 
-- [ ] Start Steel Thread v0 and complete ST0.7 before any external-data ingest work.
+- [x] Start Steel Thread v0 and complete ST0.7 before any external-data ingest work.
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.

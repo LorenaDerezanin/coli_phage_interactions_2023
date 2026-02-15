@@ -18,6 +18,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
   - `ST0.5` calibrator and ranker: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
   - `ST0.6` recommender: `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`.
+  - `ST0.7` report artifact builder: `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
   - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
@@ -25,8 +26,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - Regression gate for ST0.4: `lyzortx/pipeline/steel_thread_v0/checks/check_st04_regression.py`.
   - Regression gate for ST0.5: `lyzortx/pipeline/steel_thread_v0/checks/check_st05_regression.py`.
   - Regression gate for ST0.6: `lyzortx/pipeline/steel_thread_v0/checks/check_st06_regression.py`.
-- Planned next:
-  - `ST0.7` (currently placeholder).
+  - Regression gate for ST0.7: `lyzortx/pipeline/steel_thread_v0/checks/check_st07_regression.py`.
 
 ## Step Map
 
@@ -98,7 +98,8 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st04
 Run the ST0.4 regression gate (recomputes ST0.1 through ST0.4 then compares against baseline):
 
 ```bash
-python -m lyzortx.pipeline.steel_thread_v0.checks.check_st04_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st04_regression \
+  --run-st01 --run-st01b --run-st02 --run-st03 --run-st04
 ```
 
 Run ST0.5 calibration and ranking:
@@ -110,7 +111,8 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st05
 Run the ST0.5 regression gate (recomputes ST0.1 through ST0.5 then compares against baseline):
 
 ```bash
-python -m lyzortx.pipeline.steel_thread_v0.checks.check_st05_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st05_regression \
+  --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05
 ```
 
 Run ST0.6 recommendation generation:
@@ -122,7 +124,21 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06
 Run the ST0.6 regression gate (recomputes ST0.1 through ST0.6 then compares against baseline):
 
 ```bash
-python -m lyzortx.pipeline.steel_thread_v0.checks.check_st06_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05 --run-st06
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st06_regression \
+  --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05 --run-st06
+```
+
+Run ST0.7 report build:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.steps.st07_build_report
+```
+
+Run the ST0.7 regression gate (recomputes ST0.1 through ST0.7 then compares against baseline):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st07_regression \
+  --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05 --run-st06 --run-st07
 ```
 
 Alternative via orchestrator:
@@ -153,6 +169,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st05
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st06
+```
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st07
 ```
 
 ## Outputs
@@ -186,6 +206,12 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st06
 - ST0.6 files:
   - `st06_top3_recommendations.csv`
   - `st06_recommendation_summary.json`
+- ST0.7 files (`lyzortx/generated_outputs/steel_thread_v0/`):
+  - `metrics_summary.csv`
+  - `top3_recommendations.csv`
+  - `calibration_summary.csv`
+  - `error_analysis.csv`
+  - `run_manifest.json`
 - Baseline snapshots used by regression checks:
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`
@@ -194,6 +220,7 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st06
   - `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`
+  - `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`
 
 ## CI
 
