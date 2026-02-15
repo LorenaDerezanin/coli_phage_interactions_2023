@@ -54,9 +54,12 @@ Last updated: 2026-02-15
 - [x] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions. Implemented in
       `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
-- [x] ST0.6 Generate minimal top-3 recommendations with simple diversity constraints. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline:
+- [x] ST0.6 Generate top-3 recommendations with policy-tuned defaults (`pred_logreg_platt`, no family cap). Implemented
+      in `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
+- [x] ST0.6b Compare ranking policy variants (`raw`, `platt`, `isotonic`; with/without family cap) to avoid
+      recommendation-policy regressions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
 - [x] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`. Implemented in
       `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
@@ -72,16 +75,41 @@ Last updated: 2026-02-15
 ### Go / No-Go Gates
 
 - [ ] End-to-end command completes on a clean environment without manual patching.
-- [ ] No leakage violations detected by the v0 checks.
-- [ ] Top-3 hit-rate and calibration metrics are reported for the locked protocol.
+- [x] No leakage violations detected by the v0 checks.
+- [x] Top-3 hit-rate and calibration metrics are reported for the locked protocol.
 - [ ] Top-3 and calibration metrics are reported on both slices: full-label and high-confidence (ST0.1b).
-- [ ] v0 model materially outperforms a naive baseline on the same split.
+- [x] v0 model materially outperforms a naive baseline on the same split.
 - [ ] Failure cases are documented with at least one concrete hypothesis per major error bucket.
 
 ### Expansion Rule After v0
 
 - Only after v0 passes: add Track I Tier A datasets in strict order (`VHRdb -> BASEL -> KlebPhaCol -> GPB`) with
   one-source-at-a-time ablations.
+
+### Steel Thread Findings (2026-02-15)
+
+- Signal exists in current internal data: ST0.4 logistic baseline reached holdout ROC-AUC `0.826948` and top-3 hit rate
+  `0.846154` (`55/65` strains), far above naive baseline (`0.015385` top-3).
+- Label noise is a first-order issue: `8,917 / 35,424` pairs (`25.17%`) show conflicting interpretable observations.
+- Strict-confidence filtering keeps `28,338 / 35,424` pairs (`79.9966%`) but remains class-imbalanced (`4,135` strict
+  positives vs `24,203` strict negatives).
+- Calibration quality improved materially at ST0.5 (logreg ECE: raw `0.176341`, isotonic `0.031802`, Platt `0.029253`),
+  but best recommendation ranking was `platt/raw`, not isotonic.
+- Raw and Platt top-3 tie by construction in current setup (monotonic remapping of the same raw model score), so top-k
+  lift must come from new model signal, better labels, or new data, not calibration-only ranking changes.
+- Recommendation policy choice is high-impact: `logreg_platt__none` yields top-3 `0.846154` vs prior
+  `logreg_isotonic__max_family_2` at `0.784615`.
+- ST0.7 error analysis now isolates `10` holdout miss strains for targeted follow-up, making next work item clear.
+
+### Steel Thread Risks
+
+- High replicate/dilution disagreement can cap achievable performance unless label uncertainty is modeled explicitly.
+- Current v0 split mainly stress-tests host generalization; phage-family generalization risk is still under-tested.
+- Current v0 features are metadata-heavy; missing mechanistic host/phage features may cap ceiling performance.
+- Holdout denominator at strain level is modest (`65`), so metric variance can be non-trivial without confidence
+  intervals.
+- Tier 1 KPI targets remain stretch relative to current v0 (`84.6%` all-strain top-3), so short-cycle lift tracking is
+  needed before major external-data integration.
 
 ## Parallel Execution View
 
@@ -194,9 +222,13 @@ graph LR
 - [ ] Define fixed split protocol before model iteration: leave-cluster-out host splits and phage-clade holdouts.
 - [ ] Keep a strict untouched external test benchmark for final validation.
 - [ ] Add leakage checks for all split strategies.
+- [ ] Add bootstrap confidence intervals for strain-level top-k metrics to quantify variance on small holdouts.
+- [ ] Add dual-slice reporting for all benchmarks: full-label slice and strict-confidence slice.
 - [ ] Add source-aware evaluation for external integration: leave-one-datasource-out and cross-source transfer
       benchmarks.
 - [ ] Add source-aware leakage checks: ensure no duplicated isolates/genomes leak across datasource boundaries.
+- [ ] Add pre-Tier-1 progress gates for internal-only iteration (delta vs locked ST0.6 baseline, not only absolute
+      thresholds).
 - [ ] Define Tier 1 (current-panel feasible) benchmark suite:
   - **Top-3 Lytic Hit Rate (all strains, fixed panel) >= 95%**; stretch target >= 96.5%.
   - **Top-3 Lytic Hit Rate (susceptible strains only) >= 98%**.
@@ -220,11 +252,17 @@ graph LR
 - [ ] Stretch branch: compose final probability `P(lysis) = P(adsorption) * P(productive_lysis | adsorption)`.
 - [ ] Add multi-task formulation for binary + strength + potency targets.
 - [ ] Add calibrated outputs (isotonic/Platt) and uncertainty intervals.
+- [ ] Add label-noise-aware training variants (confidence-weighted or probabilistic labels from replicate structure).
+- [ ] Add ablation matrix to measure where signal comes from: host-only, phage-only, pairwise-only, and no-identity
+      controls.
 - [ ] Add robust handling of class imbalance and label uncertainty.
 - [ ] Add model interpretation outputs (global and per-sample).
 
 ## Track H: In-Silico Cocktail Recommendation
 
+- [x] Benchmark policy variants for top-k recommendation and lock a non-regressing default (`ST0.6b` diagnostics).
+- [ ] Add policy guardrail: do not expect top-k gains from monotonic score recalibration alone; require demonstrable
+      ranking change from non-monotonic transformation, new model signal, or new constraints/objectives.
 - [ ] Replace heuristic-only recommender with optimization-based recommender.
 - [ ] Define objective: maximize expected coverage and potency under uncertainty.
 - [ ] Add constraints: diversity, redundancy penalties, and risk-aware terms.
@@ -272,7 +310,11 @@ graph LR
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.
 - [ ] Build canonical ID normalization and mismatch report script.
+- [ ] Implement ST0.3b split suite with explicit phage-family holdout and host+phage dual-axis stress tests.
+- [ ] Implement ST0.4b ablations (host-only, phage-only, no-identity controls) to quantify true signal sources.
+- [ ] Implement ST0.5b/ST0.6c reporting on both slices (full-label and strict-confidence) with bootstrap CIs.
 - [ ] Implement label builder for binary/strength/potency targets from raw interactions.
-- [ ] Implement first calibrated joint host+phage baseline with fixed leakage-safe splits.
+- [ ] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
+      RBP/depolymerase/domain proxies.
 - [ ] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
 - [ ] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.

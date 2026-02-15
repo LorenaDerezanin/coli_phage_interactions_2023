@@ -45,6 +45,8 @@
 3. Family-cap diversity (`max_per_family=2`) reduces hit-rate for all three score variants in current holdout.
 4. Next change should be to switch operational ranking from isotonic to platt (or raw), while keeping calibration
    outputs for probability-quality reporting.
+5. Raw and Platt top-3 tie in this setup because Platt is a monotonic remapping of the same raw score; top-k lift should
+   therefore be expected from better model signal, better labels, or new data, not monotonic recalibration alone.
 
 ### 2026-02-15: ST0.7 implemented (final report artifacts)
 
