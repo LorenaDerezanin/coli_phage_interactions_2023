@@ -42,7 +42,9 @@ Last updated: 2026-02-15
       ST0.1 to support dual-slice evaluation. Implemented in
       `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`.
-- [ ] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks.
+- [x] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
 - [ ] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0.
 - [ ] ST0.4 Train one strong tabular baseline and one simple comparator baseline.
 - [ ] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions.
@@ -255,7 +257,7 @@ graph LR
 
 ## Immediate Next Tasks
 
-- [ ] Start Steel Thread v0 and complete ST0.2 through ST0.3 before any external-data ingest work.
+- [ ] Start Steel Thread v0 and complete ST0.3 before any external-data ingest work.
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.

@@ -1,3 +1,30 @@
+### 2026-02-15: ST0.2 implemented (canonical pair table)
+
+#### What we implemented in ST0.2
+
+1. Added ST0.2 step: `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`.
+2. Added ST0.2 regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
+4. Extended CI workflow to run ST0.2 regression in addition to ST0.1 and ST0.1b.
+
+#### ST0.2 output summary on current internal data
+
+- Output rows: `35,424` (369 bacteria x 96 phages).
+- Output schema: `64` columns in `st02_pair_table.csv`.
+- Strict-slice rows: `28,338` (`0.799966` of all rows), inherited from ST0.1b.
+- Join coverage:
+  - Host metadata missing: `0`
+  - Phage metadata missing: `0`
+  - CV group missing: `0`
+  - Interaction-matrix missing: `156` (auxiliary only; non-blocking).
+
+#### Notes
+
+1. ST0.2 treats `interaction_matrix.csv` as an auxiliary reference and explicitly marks it as non-feature to avoid
+   leakage confusion.
+2. A notable host metadata gap remains in `host_abc_serotype` (`22,848` missing row-values in the pair table).
+3. ST0.2 is now stable and regression-gated; ST0.3 can consume `st02_pair_table.csv` as canonical input.
+
 ### 2026-02-15: ST0.1b implemented (strict confidence tiers)
 
 #### What we implemented in ST0.1b

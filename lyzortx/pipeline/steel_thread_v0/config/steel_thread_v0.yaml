@@ -13,3 +13,12 @@ st01b:
   min_positive_fraction: 0.4
   min_negative_no_lysis_obs: 7
   max_uninterpretable_obs: 1
+
+st02:
+  st01b_pair_audit_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st01b_pair_confidence_audit.csv
+  host_metadata_path: data/genomics/bacteria/picard_collection.csv
+  phage_metadata_path: data/genomics/phages/guelin_collection.csv
+  interaction_matrix_path: data/interactions/interaction_matrix.csv
+  cv_groups_path: data/metadata/370+host_cross_validation_groups_1e-4.csv
+  output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
+  allow_missing_joins: false

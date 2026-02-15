@@ -13,10 +13,12 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 - Implemented:
   - `ST0.1` label policy and uncertainty flags: `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`.
   - `ST0.1b` strict confidence tiers: `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`.
+  - `ST0.2` canonical pair table builder: `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
+  - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
 - Planned next:
-  - `ST0.2` through `ST0.7` (currently placeholders).
+  - `ST0.3` through `ST0.7` (currently placeholders).
 
 ## Step Map
 
@@ -55,6 +57,18 @@ Run the ST0.1b regression gate (recomputes ST0.1 and ST0.1b then compares agains
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st01b_regression --run-st01 --run-st01b
 ```
 
+Run ST0.2 canonical pair table:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st02
+```
+
+Run the ST0.2 regression gate (recomputes ST0.1, ST0.1b, and ST0.2 then compares against baseline):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st02_regression --run-st01 --run-st01b --run-st02
+```
+
 Alternative via orchestrator:
 
 ```bash
@@ -63,6 +77,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st01
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st01b
+```
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st02
 ```
 
 ## Outputs
@@ -76,9 +94,14 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st01
   - `st01b_confidence_policy_definition.json`
   - `st01b_confidence_audit.json`
   - `st01b_pair_confidence_audit.csv`
+- ST0.2 files:
+  - `st02_pair_table.csv`
+  - `st02_pair_table_audit.json`
+  - `st02_feature_manifest.json`
 - Baseline snapshots used by regression checks:
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`
+  - `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`
 
 ## CI
 
