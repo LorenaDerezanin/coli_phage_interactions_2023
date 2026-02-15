@@ -22,3 +22,10 @@ st02:
   cv_groups_path: data/metadata/370+host_cross_validation_groups_1e-4.csv
   output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
   allow_missing_joins: false
+
+st03:
+  st02_pair_table_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st02_pair_table.csv
+  output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
+  holdout_group_fraction: 0.2
+  n_cv_folds: 5
+  split_salt: steel_thread_v0_st03_split_v1

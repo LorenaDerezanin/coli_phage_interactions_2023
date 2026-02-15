@@ -45,7 +45,9 @@ Last updated: 2026-02-15
 - [x] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks. Implemented in
       `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
-- [ ] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0.
+- [x] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`.
 - [ ] ST0.4 Train one strong tabular baseline and one simple comparator baseline.
 - [ ] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions.
 - [ ] ST0.6 Generate minimal top-3 recommendations with simple diversity constraints.
@@ -257,7 +259,7 @@ graph LR
 
 ## Immediate Next Tasks
 
-- [ ] Start Steel Thread v0 and complete ST0.3 before any external-data ingest work.
+- [ ] Start Steel Thread v0 and complete ST0.4 before any external-data ingest work.
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.

@@ -1,0 +1,51 @@
+{
+  "artifacts": {
+    "split_assignments_csv_sha256": "e01f60345c13a8e1e4f790297ce4f3cffb0b47b369055bad70983c43deffbd82"
+  },
+  "leakage_and_trainable_summary": {
+    "hard_trainable_holdout_counts": {
+      "holdout_test": 6235,
+      "train_non_holdout": 29031
+    },
+    "leakage_checks": {
+      "cv_group_cross_fold_overlap_count": 0,
+      "holdout_bacteria_overlap_count": 0,
+      "holdout_cv_group_overlap_count": 0
+    },
+    "strict_trainable_cv_fold_counts": {
+      "0": 4556,
+      "1": 4339,
+      "2": 5235,
+      "3": 4075,
+      "4": 5003
+    },
+    "strict_trainable_holdout_counts": {
+      "holdout_test": 5130,
+      "train_non_holdout": 23208
+    }
+  },
+  "protocol_summary": {
+    "holdout_group_fraction": 0.2,
+    "n_cv_folds": 5,
+    "split_salt": "steel_thread_v0_st03_split_v1",
+    "split_type": "grouped_host_split",
+    "step_name": "st03_build_splits"
+  },
+  "split_summary": {
+    "cv_fold_row_counts": {
+      "0": 5760,
+      "1": 5280,
+      "2": 6624,
+      "3": 5184,
+      "4": 6336
+    },
+    "cv_group_count": 283,
+    "holdout_group_count": 57,
+    "holdout_group_fraction_actual": 0.201413,
+    "holdout_row_counts": {
+      "holdout_test": 6240,
+      "train_non_holdout": 29184
+    },
+    "row_count": 35424
+  }
+}

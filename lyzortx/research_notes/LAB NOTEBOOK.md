@@ -1,3 +1,49 @@
+### 2026-02-15: ST0.3 implemented (leakage-safe split protocol)
+
+#### What we implemented in ST0.3
+
+1. Added ST0.3 step: `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`.
+2. Added ST0.3 regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st03_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`.
+4. Extended CI workflow to run ST0.3 regression in addition to ST0.1 through ST0.2.
+
+#### ST0.3 split summary on current internal data
+
+- Rows assigned: `35,424`.
+- Group key: `cv_group` from ST0.2.
+- Fixed holdout groups: `57 / 283` (`0.201413`).
+- Holdout rows: `6,240`.
+- Non-holdout rows: `29,184`.
+- CV fold rows on non-holdout:
+  - fold 0: `5,760`
+  - fold 1: `5,280`
+  - fold 2: `6,624`
+  - fold 3: `5,184`
+  - fold 4: `6,336`
+
+#### Leakage check results
+
+- Holdout bacteria overlap count: `0`.
+- Holdout cv_group overlap count: `0`.
+- Cross-fold cv_group overlap count: `0`.
+
+#### ST0.3 Notes
+
+1. ST0.3 defines the locked v0 split contract for downstream model training and evaluation.
+2. Assignment is deterministic via hash with salt `steel_thread_v0_st03_split_v1`.
+3. ST0.4 should consume `st03_split_assignments.csv` directly and avoid custom split logic.
+
+#### ST0.3 Interpretation
+
+1. The leakage checks are clean (`0` overlap across holdout/train and across CV folds by `cv_group`), so this split
+   protocol is suitable as the v0 benchmark contract.
+2. Fold sizes are not perfectly balanced, but they are close enough for v0 model comparison; metrics should still be
+   reported per fold and macro-averaged to reduce sensitivity to fold-size differences.
+3. The strict trainable subset remains dominated by negatives in every fold, so ST0.4 should use class-imbalance-aware
+   training and report both ranking metrics and calibration metrics.
+4. Holdout size (~17.6% of rows) is large enough to be meaningful for a fixed benchmark while preserving enough
+   non-holdout data for model development.
+
 ### 2026-02-15: ST0.2 implemented (canonical pair table)
 
 #### What we implemented in ST0.2
@@ -18,7 +64,7 @@
   - CV group missing: `0`
   - Interaction-matrix missing: `156` (auxiliary only; non-blocking).
 
-#### Notes
+#### ST0.2 Notes
 
 1. ST0.2 treats `interaction_matrix.csv` as an auxiliary reference and explicitly marks it as non-feature to avoid
    leakage confusion.
@@ -64,7 +110,7 @@
 2. Added ST0.1 regression checker and baseline: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`,
    `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
 3. Added CI workflow to run the regression gate on push and pull request:
-   `.github/workflows/steel-thread-st01-regression.yml`.
+   `.github/workflows/steel-thread-regression.yml`.
 
 #### ST0.1 findings from current internal data
 
