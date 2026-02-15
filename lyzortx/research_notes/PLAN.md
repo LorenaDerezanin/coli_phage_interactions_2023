@@ -14,6 +14,9 @@ Last updated: 2026-02-15
 - Update checklist status in this file as work progresses.
 - Link every major code change or note update to one or more items here.
 - Keep methods reproducible and auditable (deterministic where possible).
+- Use two KPI tiers:
+  - **Tier 1 (Current Panel, Feasible):** evaluation with current 96-phage panel and current interaction matrix.
+  - **Tier 2 (North-Star):** aspirational targets that may require panel expansion and external data.
 
 ## Parallel Execution View
 - Use this view for planning workstreams.
@@ -59,7 +62,6 @@ graph LR
   td --> tg
   te --> tg
   tf --> tg
-  ti --> tg
 
   tf --> th
   tg --> th
@@ -79,6 +81,7 @@ graph LR
 - [ ] Resolve naming/alias mismatches (for example legacy phage names).
 - [ ] Add automated data integrity checks for row/column consistency.
 - [ ] Define and document handling policy for uninterpretable labels (`score='n'`).
+- [ ] Define cohort contracts and denominator rules (`raw369`, `matrix402`, `features404`) for all reports.
 - [ ] Preserve replicate and dilution structure in intermediate tables.
 - [ ] Create label set v1:
   `any_lysis`, `lysis_strength`, `dilution_potency`, `uncertainty_flags`.
@@ -122,20 +125,27 @@ graph LR
   leave-cluster-out host splits and phage-clade holdouts.
 - [ ] Keep a strict untouched external test benchmark for final validation.
 - [ ] Add leakage checks for all split strategies.
-- [ ] Define product-oriented benchmark suite for cocktail recommendation utility:
-  - **Top-3 Lytic Hit Rate > 95%:** At least one phage in the recommended 3-phage cocktail must be truly lytic.
-  - **Precision @ P(Lysis) > 0.9 must be > 99%:** High-confidence predictions must be highly reliable.
-  - **Simulated 3-Phage Cocktail Coverage > 98%:** End-to-end system must be effective on held-out strains.
+- [ ] Define Tier 1 (current-panel feasible) benchmark suite:
+  - **Top-3 Lytic Hit Rate (all strains, fixed panel) >= 95%**; stretch target >= 96.5%.
+  - **Top-3 Lytic Hit Rate (susceptible strains only) >= 98%**.
+  - **Precision at high confidence >= 99%** with minimum support threshold (report both precision and support).
+  - **Calibration quality gates:** Brier score and ECE tracked for each model version.
+- [ ] Define Tier 2 (north-star) benchmark suite:
+  - **Top-3 Lytic Hit Rate (all strains) > 98%** after justified panel expansion and external integration.
+  - **Simulated 3-phage cocktail coverage > 98%** in expanded-panel evaluation.
 - [ ] Add benchmark report template for fair model-to-model comparison.
 
 ## Track G: Modeling Pipeline
-- **Guiding Principle:** A "meaningful model" for this project is one that produces a **calibrated probability of lysis** for any given phage-bacterium pair, enabling nuanced downstream cocktail recommendations.
+- **Guiding Principle:** A "meaningful model" for this project is one that produces a
+  **calibrated probability of lysis** for any given phage-bacterium pair, enabling nuanced downstream
+  cocktail recommendations.
 - [ ] Baseline 1: strong tabular binary model on existing host-only features.
 - [ ] Baseline 2: joint host+phage feature model without pairwise interactions.
-- [ ] Stage A model: `P(adsorption)` from host-surface + phage-RBP + compatibility features.
-- [ ] Stage B model: `P(productive_lysis | adsorption)` from post-entry features.
-- [ ] Compose final probability:
-  `P(lysis) = P(adsorption) * P(productive_lysis | adsorption)`. 
+- [ ] Milestone G0: ship a calibrated Baseline 2 with leakage-safe protocol before mechanistic branching.
+- [ ] Stretch branch: Stage A model `P(adsorption)` from host-surface + phage-RBP + compatibility features.
+- [ ] Stretch branch: Stage B model `P(productive_lysis | adsorption)` from post-entry features.
+- [ ] Stretch branch: compose final probability
+  `P(lysis) = P(adsorption) * P(productive_lysis | adsorption)`.
 - [ ] Add multi-task formulation for binary + strength + potency targets.
 - [ ] Add calibrated outputs (isotonic/Platt) and uncertainty intervals.
 - [ ] Add robust handling of class imbalance and label uncertainty.
@@ -152,11 +162,14 @@ graph LR
 - [ ] Add recommendation explanations at per-strain and per-cocktail levels.
 
 ## Track I: External Data and Literature Integration
-- [ ] Systematically query public databases (Virus-Host DB, NCBI BioSample) to compile an expanded set of phage-host interaction pairs.
+- [ ] Systematically query public databases (Virus-Host DB, NCBI BioSample) to compile an
+  expanded set of phage-host interaction pairs.
 - [ ] Create a curated reading list of closely related phage-host prediction papers.
 - [ ] Extract reusable methods and feature ideas into a structured note table.
 - [ ] Search for compatible external interaction datasets and assess merge feasibility.
 - [ ] Define data harmonization protocol for external dataset integration.
+- [ ] Define confidence tiers for external labels (for example assay-backed, metadata-only, inferred).
+- [ ] Integrate external data as a non-blocking enhancer: internal-only baseline must remain runnable and reportable.
 - [ ] Run ablations to quantify value added from external data/features.
 
 ## Track J: Reproducibility and Release Quality
@@ -176,6 +189,7 @@ graph LR
 
 ## Immediate Next Tasks
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
+- [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.
 - [ ] Build canonical ID normalization and mismatch report script.
 - [ ] Implement label builder for binary/strength/potency targets from raw interactions.
-- [ ] Implement first joint host+phage baseline with fixed leakage-safe splits.
+- [ ] Implement first calibrated joint host+phage baseline with fixed leakage-safe splits.
