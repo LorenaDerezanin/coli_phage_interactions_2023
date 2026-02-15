@@ -12,6 +12,14 @@
 - Before running project tooling, activate it with `micromamba activate phage_env`.
 - Do not use system Python for repository tasks unless the user explicitly asks.
 
+# Dependency Selection Policy
+
+- Do not choose dependency-light implementations solely to keep CI minimal.
+- When a library-based approach is expected to improve model quality, scientific validity, or maintainability, prefer
+  the library-based approach.
+- If adding dependencies is needed for the technically better implementation, update CI/environment setup accordingly
+  rather than degrading the implementation.
+
 # Agent Scratch Space
 
 - Use `.scratch/` for temporary agent-generated files (draft commit messages, notes, and intermediate artifacts).
