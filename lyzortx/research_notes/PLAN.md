@@ -19,6 +19,51 @@ Last updated: 2026-02-15
   - **Tier 1 (Current Panel, Feasible):** evaluation with current 96-phage panel and current interaction matrix.
   - **Tier 2 (North-Star):** aspirational targets that may require panel expansion and external data.
 
+## Steel Thread v0 (Start Small)
+
+- Goal: prove end-to-end viability quickly with a minimal but honest pipeline.
+- Philosophy: internal paper data first; external data only after the end-to-end path is proven.
+- Success condition: one command runs data prep -> training -> calibration -> recommendation -> report.
+
+### Scope Guardrails
+
+- Use only local internal inputs for v0: `data/interactions/raw/raw_interactions.csv`,
+  `data/interactions/interaction_matrix.csv`, `data/genomics/bacteria/picard_collection.csv`,
+  `data/genomics/phages/guelin_collection.csv`, `data/metadata/370+host_cross_validation_groups_1e-4.csv`.
+- Exclude for v0: external datasets, mechanistic Stage A/B decomposition, and complex optimization recommender logic.
+- Keep features simple: existing host metadata, phage metadata, and lightweight pairwise flags only.
+
+### Execution Checklist
+
+- [ ] ST0.1 Define v0 label policy and uncertainty flags from raw interactions (`score='n'` included).
+- [ ] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks.
+- [ ] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0.
+- [ ] ST0.4 Train one strong tabular baseline and one simple comparator baseline.
+- [ ] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions.
+- [ ] ST0.6 Generate minimal top-3 recommendations with simple diversity constraints.
+- [ ] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`.
+
+### Required Artifacts
+
+- `lyzortx/generated_outputs/steel_thread_v0/metrics_summary.csv`
+- `lyzortx/generated_outputs/steel_thread_v0/top3_recommendations.csv`
+- `lyzortx/generated_outputs/steel_thread_v0/calibration_summary.csv`
+- `lyzortx/generated_outputs/steel_thread_v0/error_analysis.csv`
+- `lyzortx/generated_outputs/steel_thread_v0/run_manifest.json`
+
+### Go / No-Go Gates
+
+- [ ] End-to-end command completes on a clean environment without manual patching.
+- [ ] No leakage violations detected by the v0 checks.
+- [ ] Top-3 hit-rate and calibration metrics are reported for the locked protocol.
+- [ ] v0 model materially outperforms a naive baseline on the same split.
+- [ ] Failure cases are documented with at least one concrete hypothesis per major error bucket.
+
+### Expansion Rule After v0
+
+- Only after v0 passes: add Track I Tier A datasets in strict order (`VHRdb -> BASEL -> KlebPhaCol -> GPB`) with
+  one-source-at-a-time ablations.
+
 ## Parallel Execution View
 
 - Use this view for planning workstreams.
@@ -203,6 +248,7 @@ graph LR
 
 ## Immediate Next Tasks
 
+- [ ] Start Steel Thread v0 and complete ST0.1 through ST0.3 before any external-data ingest work.
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.
 - [ ] Build canonical ID normalization and mismatch report script.
