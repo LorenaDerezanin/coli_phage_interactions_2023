@@ -16,13 +16,15 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.2` canonical pair table builder: `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`.
   - `ST0.3` split builder: `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`.
   - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
+  - `ST0.5` calibrator and ranker: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
   - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
   - Regression gate for ST0.3: `lyzortx/pipeline/steel_thread_v0/checks/check_st03_regression.py`.
   - Regression gate for ST0.4: `lyzortx/pipeline/steel_thread_v0/checks/check_st04_regression.py`.
+  - Regression gate for ST0.5: `lyzortx/pipeline/steel_thread_v0/checks/check_st05_regression.py`.
 - Planned next:
-  - `ST0.5` through `ST0.7` (currently placeholders).
+  - `ST0.6` through `ST0.7` (currently placeholders).
 
 ## Step Map
 
@@ -97,6 +99,18 @@ Run the ST0.4 regression gate (recomputes ST0.1 through ST0.4 then compares agai
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st04_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04
 ```
 
+Run ST0.5 calibration and ranking:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st05
+```
+
+Run the ST0.5 regression gate (recomputes ST0.1 through ST0.5 then compares against baseline):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st05_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05
+```
+
 Alternative via orchestrator:
 
 ```bash
@@ -117,6 +131,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st03
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st04
+```
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st05
 ```
 
 ## Outputs
@@ -142,12 +160,18 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st04
   - `st04_pair_predictions_raw.csv`
   - `st04_model_metrics_raw.json`
   - `st04_model_artifacts.json`
+- ST0.5 files:
+  - `st05_calibration_summary.csv`
+  - `st05_pair_predictions_calibrated.csv`
+  - `st05_ranked_predictions.csv`
+  - `st05_calibration_artifacts.json`
 - Baseline snapshots used by regression checks:
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`
+  - `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`
 
 ## CI
 

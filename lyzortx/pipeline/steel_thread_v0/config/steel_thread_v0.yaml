@@ -37,3 +37,11 @@ st04:
   random_state: 42
   logreg_c: 1.0
   logreg_max_iter: 2000
+
+st05:
+  st04_predictions_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st04_pair_predictions_raw.csv
+  st02_pair_table_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st02_pair_table.csv
+  output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
+  calibration_fold: 0
+  ece_bins: 10
+  platt_random_state: 42

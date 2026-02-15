@@ -1,3 +1,35 @@
+### 2026-02-15: ST0.5 implemented (calibration and ranking)
+
+#### What we implemented in ST0.5
+
+1. Added ST0.5 step: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
+2. Added ST0.5 regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st05_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
+4. Extended CI workflow to run ST0.5 regression in addition to ST0.1 through ST0.4.
+
+#### ST0.5 output summary on current internal data
+
+- Calibration rows (fold 0, non-holdout hard-labeled): `5,755`.
+- Holdout eval rows (hard-labeled): `6,235`.
+- Methods implemented per model: raw, isotonic calibration, and Platt scaling.
+- Output artifacts:
+  - `st05_calibration_summary.csv`
+  - `st05_pair_predictions_calibrated.csv`
+  - `st05_ranked_predictions.csv`
+
+#### Holdout calibration metrics (logreg model)
+
+- Raw: Brier `0.171223`, Log loss `0.521944`, ECE `0.176341`.
+- Isotonic: Brier `0.140218`, Log loss `0.500302`, ECE `0.031802`.
+- Platt: Brier `0.137795`, Log loss `0.430845`, ECE `0.029253`.
+
+#### ST0.5 Interpretation
+
+1. Calibration materially improved probabilistic quality, especially ECE, which dropped by an order of magnitude
+   relative to raw logreg outputs.
+2. Platt scaling slightly outperformed isotonic on holdout in this split configuration.
+3. ST0.6 should use calibrated ranking scores (not raw model scores) for top-3 recommendation generation.
+
 ### 2026-02-15: ST0.4 implemented (baseline training)
 
 #### What we implemented in ST0.4

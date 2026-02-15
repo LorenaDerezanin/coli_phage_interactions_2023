@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Regression check for ST0.5 calibration/ranking outputs."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from lyzortx.pipeline.steel_thread_v0.steps import (
+    st01_label_policy,
+    st01b_confidence_tiers,
+    st02_build_pair_table,
+    st03_build_splits,
+    st04_train_baselines,
+    st05_calibrate_rank,
+)
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--expected-baseline-path",
+        type=Path,
+        default=Path("lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json"),
+        help="Path to expected regression baseline JSON.",
+    )
+    parser.add_argument(
+        "--intermediate-dir",
+        type=Path,
+        default=Path("lyzortx/generated_outputs/steel_thread_v0/intermediate"),
+        help="Directory containing ST0.5 generated artifacts.",
+    )
+    parser.add_argument("--run-st01", action="store_true", help="Run ST0.1 before checking ST0.5.")
+    parser.add_argument("--run-st01b", action="store_true", help="Run ST0.1b before checking ST0.5.")
+    parser.add_argument("--run-st02", action="store_true", help="Run ST0.2 before checking ST0.5.")
+    parser.add_argument("--run-st03", action="store_true", help="Run ST0.3 before checking ST0.5.")
+    parser.add_argument("--run-st04", action="store_true", help="Run ST0.4 before checking ST0.5.")
+    parser.add_argument("--run-st05", action="store_true", help="Run ST0.5 before checking ST0.5.")
+    return parser.parse_args(argv)
+
+
+def load_json(path: Path) -> Dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def read_csv_rows(path: Path) -> List[Dict[str, str]]:
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"No header found in {path}.")
+        return [
+            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
+            for row in reader
+        ]
+
+
+def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
+    summary_path = intermediate_dir / "st05_calibration_summary.csv"
+    predictions_path = intermediate_dir / "st05_pair_predictions_calibrated.csv"
+    ranked_path = intermediate_dir / "st05_ranked_predictions.csv"
+    artifacts_path = intermediate_dir / "st05_calibration_artifacts.json"
+
+    missing = [
+        str(p)
+        for p in (summary_path, predictions_path, ranked_path, artifacts_path)
+        if not p.exists()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            "ST0.5 artifacts missing. Run ST0.5 first or pass --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05. "
+            + "Missing: "
+            + ", ".join(missing)
+        )
+
+    summary_rows = read_csv_rows(summary_path)
+    artifacts = load_json(artifacts_path)
+    summary_by_key = {}
+    for row in summary_rows:
+        key = f"{row['model']}|{row['dataset']}|{row['variant']}"
+        summary_by_key[key] = {
+            "n": int(row["n"]),
+            "positive_rate": float(row["positive_rate"]),
+            "brier_score": float(row["brier_score"]),
+            "log_loss": float(row["log_loss"]),
+            "ece": float(row["ece"]),
+        }
+
+    return {
+        "row_counts": {
+            "calibration_summary_rows": len(summary_rows),
+            "calibrated_predictions_rows": len(read_csv_rows(predictions_path)),
+            "ranked_predictions_rows": len(read_csv_rows(ranked_path)),
+        },
+        "calibration_metrics": summary_by_key,
+        "artifact_params": {
+            "calibration_fold": artifacts["calibration_fold"],
+            "models": sorted(list(artifacts["models"].keys())),
+            "dummy_platt_coef": artifacts["models"]["dummy_prior"]["platt_coef"],
+            "logreg_platt_coef": artifacts["models"]["logreg_host_phage"]["platt_coef"],
+        },
+        "hashes": {
+            "calibrated_predictions_csv_sha256": hashlib.sha256(predictions_path.read_bytes()).hexdigest(),
+            "ranked_predictions_csv_sha256": hashlib.sha256(ranked_path.read_bytes()).hexdigest(),
+            "calibration_summary_csv_sha256": hashlib.sha256(summary_path.read_bytes()).hexdigest(),
+        },
+    }
+
+
+def compare_dicts(expected: Dict[str, Any], actual: Dict[str, Any], prefix: str = "") -> List[str]:
+    errors: List[str] = []
+    all_keys = sorted(set(expected.keys()) | set(actual.keys()))
+    for key in all_keys:
+        path = f"{prefix}.{key}" if prefix else key
+        if key not in expected:
+            errors.append(f"Unexpected key in actual: {path}")
+            continue
+        if key not in actual:
+            errors.append(f"Missing key in actual: {path}")
+            continue
+        exp_val = expected[key]
+        act_val = actual[key]
+        if isinstance(exp_val, dict) and isinstance(act_val, dict):
+            errors.extend(compare_dicts(exp_val, act_val, prefix=path))
+            continue
+        if exp_val != act_val:
+            errors.append(f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}")
+    return errors
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    args = parse_args(argv)
+
+    if args.run_st01:
+        st01_label_policy.main([])
+    if args.run_st01b:
+        st01b_confidence_tiers.main([])
+    if args.run_st02:
+        st02_build_pair_table.main([])
+    if args.run_st03:
+        st03_build_splits.main([])
+    if args.run_st04:
+        st04_train_baselines.main([])
+    if args.run_st05:
+        st05_calibrate_rank.main([])
+
+    expected = load_json(args.expected_baseline_path)
+    actual = build_actual_summary(args.intermediate_dir)
+    errors = compare_dicts(expected, actual)
+    if errors:
+        print("ST0.5 regression check failed:")
+        for err in errors:
+            print(f"- {err}")
+        raise SystemExit(1)
+
+    print("ST0.5 regression check passed.")
+    print(f"- Baseline: {args.expected_baseline_path}")
+    print(f"- Intermediate: {args.intermediate_dir}")
+
+
+if __name__ == "__main__":
+    main()

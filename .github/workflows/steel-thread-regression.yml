@@ -50,3 +50,7 @@ jobs:
       - name: Run ST0.4 regression check
         run: |
           python -m lyzortx.pipeline.steel_thread_v0.checks.check_st04_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04
+
+      - name: Run ST0.5 regression check
+        run: |
+          python -m lyzortx.pipeline.steel_thread_v0.checks.check_st05_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05

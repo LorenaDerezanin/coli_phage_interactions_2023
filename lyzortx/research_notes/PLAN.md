@@ -51,7 +51,9 @@ Last updated: 2026-02-15
 - [x] ST0.4 Train one strong tabular baseline and one simple comparator baseline. Implemented in
       `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`. Regression baseline:
       `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`.
-- [ ] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions.
+- [x] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
 - [ ] ST0.6 Generate minimal top-3 recommendations with simple diversity constraints.
 - [ ] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`.
 
@@ -261,7 +263,7 @@ graph LR
 
 ## Immediate Next Tasks
 
-- [ ] Start Steel Thread v0 and complete ST0.5 before any external-data ingest work.
+- [ ] Start Steel Thread v0 and complete ST0.6 before any external-data ingest work.
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.

@@ -1,0 +1,107 @@
+{
+  "artifact_params": {
+    "calibration_fold": 0,
+    "dummy_platt_coef": -0.207109,
+    "logreg_platt_coef": 4.700346,
+    "models": [
+      "dummy_prior",
+      "logreg_host_phage"
+    ]
+  },
+  "calibration_metrics": {
+    "dummy_prior|calibration|isotonic": {
+      "brier_score": 0.214095,
+      "ece": 0.0,
+      "log_loss": 0.61951,
+      "n": 5755,
+      "positive_rate": 0.310513
+    },
+    "dummy_prior|calibration|platt": {
+      "brier_score": 0.214095,
+      "ece": 8e-06,
+      "log_loss": 0.61951,
+      "n": 5755,
+      "positive_rate": 0.310513
+    },
+    "dummy_prior|calibration|raw": {
+      "brier_score": 0.214983,
+      "ece": 0.029813,
+      "log_loss": 0.621667,
+      "n": 5755,
+      "positive_rate": 0.310513
+    },
+    "dummy_prior|holdout|isotonic": {
+      "brier_score": 0.191906,
+      "ece": 0.058548,
+      "log_loss": 0.572805,
+      "n": 6235,
+      "positive_rate": 0.251965
+    },
+    "dummy_prior|holdout|platt": {
+      "brier_score": 0.191907,
+      "ece": 0.058556,
+      "log_loss": 0.572807,
+      "n": 6235,
+      "positive_rate": 0.251965
+    },
+    "dummy_prior|holdout|raw": {
+      "brier_score": 0.189304,
+      "ece": 0.028735,
+      "log_loss": 0.566574,
+      "n": 6235,
+      "positive_rate": 0.251965
+    },
+    "logreg_host_phage|calibration|isotonic": {
+      "brier_score": 0.153626,
+      "ece": 0.0,
+      "log_loss": 0.470887,
+      "n": 5755,
+      "positive_rate": 0.310513
+    },
+    "logreg_host_phage|calibration|platt": {
+      "brier_score": 0.156518,
+      "ece": 0.015367,
+      "log_loss": 0.480955,
+      "n": 5755,
+      "positive_rate": 0.310513
+    },
+    "logreg_host_phage|calibration|raw": {
+      "brier_score": 0.183129,
+      "ece": 0.150541,
+      "log_loss": 0.547032,
+      "n": 5755,
+      "positive_rate": 0.310513
+    },
+    "logreg_host_phage|holdout|isotonic": {
+      "brier_score": 0.140218,
+      "ece": 0.031802,
+      "log_loss": 0.500302,
+      "n": 6235,
+      "positive_rate": 0.251965
+    },
+    "logreg_host_phage|holdout|platt": {
+      "brier_score": 0.137795,
+      "ece": 0.029253,
+      "log_loss": 0.430845,
+      "n": 6235,
+      "positive_rate": 0.251965
+    },
+    "logreg_host_phage|holdout|raw": {
+      "brier_score": 0.171223,
+      "ece": 0.176341,
+      "log_loss": 0.521944,
+      "n": 6235,
+      "positive_rate": 0.251965
+    }
+  },
+  "hashes": {
+    "calibrated_predictions_csv_sha256": "73e745d2bbd1b942c30b6a3969884212413364c55b1a87d389b5eef4bdcf64d8",
+    "calibration_summary_csv_sha256": "ebc9efa257440c0c75a97cc7410ac514bf6734eaecf9204baf6769052727def4",
+    "ranked_predictions_csv_sha256": "5da495de326f8e9461e412bc251f7c536f3f5a8471cc83827b8b515c78acddcb"
+  },
+  "row_counts": {
+    "calibrated_predictions_rows": 35424,
+    "calibration_summary_rows": 12,
+    "ranked_predictions_rows": 35424
+  }
+}
