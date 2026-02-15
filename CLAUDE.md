@@ -25,6 +25,20 @@
 - Do not add new pipeline code at repository root or in original upstream directories by default.
 - Modify code outside `lyzortx/` only when intentionally fixing a bug in the original repository code.
 
+# Plan-Driven Execution
+
+- The main driver for project execution is `lyzortx/research_notes/PLAN.md`.
+- Follow that plan for task sequencing and update its checklist states as work progresses.
+- When scope decisions are ambiguous, prefer alignment with the plan unless the user overrides it.
+
+# Requirement Challenge Policy
+
+- For any non-trivial user request, first question the requirement before implementing.
+- If the request is unreasonable, overcomplicated, or lower-value than a simpler option, push back clearly.
+- Suggest deletion or simplification when that is the better technical path.
+- Only comply directly when the requirement is technically reasonable after this check.
+- Apply this policy to all plan decisions, including whether to keep, change, or remove planned work.
+
 # One-Off Analyses
 
 - If a one-off analysis is referenced in research notes, store the script under

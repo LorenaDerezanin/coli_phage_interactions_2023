@@ -15,6 +15,9 @@ up your development environment and run the pipelines.
 ## Research notes
 We are recording detailed research notes in the [research_notes](research_notes)
 directory.
+The main execution driver for this repository is
+[research_notes/PLAN.md](research_notes/PLAN.md). We will follow and update
+that checklist as work progresses.
 
 ## Original paper pipeline reproduction steps
 - Run `predict_all_phages.py` without any arguments
