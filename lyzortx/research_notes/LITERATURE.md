@@ -28,6 +28,7 @@ Last updated: 2026-02-15
   - Per-datasource and aggregated host-range records.
 - Caveats:
   - Some original study score scales are compressed to `0/1/2` in VHRdb representation.
+  - API responses are in the VHRdb global response scheme (not raw source-native responses).
   - For highest-fidelity labels, cross-reference original publications or source repositories.
 - Access:
   - Web: `https://viralhostrangedb.pasteur.cloud/`
@@ -43,6 +44,9 @@ Last updated: 2026-02-15
   - Explicitly designed for host-range machine learning.
 - Usable labels:
   - Spot-test-derived host range labels between phages and bacterial strains.
+- Evaluation signals to reuse:
+  - Leave-one-group-out cross-validation (LOGOCV).
+  - Mean hit ratio @ `k` for practical recommendation quality.
 - Access:
   - Paper: `https://www.nature.com/articles/s41467-024-48675-6`
   - Data package: `https://zenodo.org/records/11061100`
@@ -187,6 +191,29 @@ Last updated: 2026-02-15
 - Recommended role:
   - Phage metadata harmonization and candidate feature augmentation.
 
+### 12) PHIStruct (structure-aware RBP embeddings)
+
+- Why it matters:
+  - Targets a core steel-thread gap: low-similarity generalization for new phages.
+  - Uses structure-aware embeddings of RBPs and reports gains at lower train-test similarity.
+- Access:
+  - Paper: `https://pubmed.ncbi.nlm.nih.gov/39804673/`
+  - Full text: `https://pmc.ncbi.nlm.nih.gov/articles/PMC11783280/`
+  - Code: `https://github.com/bioinfodlsu/PHIStruct`
+  - Accompanying RBP structures dataset: `https://zenodo.org/records/11202338`
+- Recommended role:
+  - Pilot representation-learning branch for Track D/Track G, especially for phage-family holdouts.
+
+### 13) Raw plaque image assets from the core E. coli study
+
+- Why it matters:
+  - Directly addresses steel-thread label-noise risk by enabling image-assisted QC of uncertain pairs.
+  - Supports uncertainty flags beyond hard aggregation of replicate labels.
+- Access:
+  - Core paper (Data availability): `https://www.nature.com/articles/s41564-024-01832-5`
+- Recommended role:
+  - Optional but high-value label-audit enhancer before large-scale weak-label ingestion.
+
 ## Literature Shortlist with Direct Project Relevance
 
 ### A) Strain-level prediction and treatment utility
@@ -203,6 +230,8 @@ Last updated: 2026-02-15
 - WIsH (2017): `https://pubmed.ncbi.nlm.nih.gov/28961777/`
 - VirHostMatcher (2016): `https://pubmed.ncbi.nlm.nih.gov/27634843/`
 - PHIST (2022): `https://pubmed.ncbi.nlm.nih.gov/35231951/`
+- PHIStruct (2025): `https://pubmed.ncbi.nlm.nih.gov/39804673/`
+- Digital phagograms review (2022): `https://pubmed.ncbi.nlm.nih.gov/34952265/`
 
 ### C) Data and benchmarking resources
 
@@ -233,6 +262,32 @@ Last updated: 2026-02-15
 - Do not mix all external data at once; add one source family at a time.
 - Report all key metrics with cohort denominators (`raw369`, `matrix402`, `features404`, `external`).
 - Keep cross-source leakage checks mandatory before accepting any benchmark gains.
+- For VHRdb ingestion, keep source-fidelity metadata: global scheme response, per-datasource response, disagreement
+  flag, and link back to source-native labels when available.
+
+## Gap-to-Solution Map (Steel Thread -> Literature-Backed Fixes)
+
+- Gap: label noise and conflicting replicate/dilution signals.
+  - Fix: image-assisted QC from the core Nature dataset raw plaque images plus uncertainty-aware label tiers.
+  - Sources:
+    - Core paper data availability and raw image release: `https://www.nature.com/articles/s41564-024-01832-5`
+    - VHRdb conflict/disagreement handling and response schemes:
+      `https://hub.pages.pasteur.fr/viralhostrangedb/explore.html`
+      `https://hub.pages.pasteur.fr/viralhostrangedb/api.html`
+- Gap: weak performance on novel/low-similarity phage contexts.
+  - Fix: structure-aware RBP embeddings (PHIStruct) as a Track D/Track G pilot branch.
+  - Source:
+    - `https://pubmed.ncbi.nlm.nih.gov/39804673/`
+- Gap: recommender objective drift vs practical top-k utility.
+  - Fix: LOGOCV-style grouped validation and mean hit ratio @ `k` as first-class evaluation signals.
+  - Source:
+    - PhageHostLearn practical validation setup: `https://www.nature.com/articles/s41467-024-48675-6`
+- Gap: limited mechanistic signal in metadata-heavy baseline features.
+  - Fix: receptor-first feature program (RBP/tailspike/depolymerase + host adsorption factors).
+  - Sources:
+    - Core E. coli study on adsorption determinants: `https://www.nature.com/articles/s41564-024-01832-5`
+    - BASEL collection and completion: `https://pubmed.ncbi.nlm.nih.gov/34784345/`
+      `https://pubmed.ncbi.nlm.nih.gov/40193529/`
 
 ## Source-Quality Rubric (for Go / No-Go Decisions)
 

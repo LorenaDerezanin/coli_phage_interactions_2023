@@ -176,6 +176,7 @@ graph LR
 - [ ] Resolve naming/alias mismatches (for example legacy phage names).
 - [ ] Add automated data integrity checks for row/column consistency.
 - [ ] Define and document handling policy for uninterpretable labels (`score='n'`).
+- [ ] Add plaque-image-assisted QC pass for ambiguous/conflicting pairs using the core study raw image release.
 - [ ] Define cohort contracts and denominator rules (`raw369`, `matrix402`, `features404`) for all reports.
 - [ ] Preserve replicate and dilution structure in intermediate tables.
 - [ ] Create label set v1: `any_lysis`, `lysis_strength`, `dilution_potency`, `uncertainty_flags`.
@@ -205,6 +206,7 @@ graph LR
 
 - [ ] Build phage sequence processing pipeline from genome/protein files.
 - [ ] Extract RBP/depolymerase/domain features (HMM/domain and structure-aware proxies).
+- [ ] Pilot structure-aware RBP embeddings (PHIStruct-style) for low-similarity generalization.
 - [ ] Build phage protein family embeddings or pangenome cluster features.
 - [ ] Add phage architecture/taxonomy/module features.
 - [ ] Add isolation-host and lineage priors as weak features (not dominant).
@@ -222,6 +224,7 @@ graph LR
 - [ ] Define fixed split protocol before model iteration: leave-cluster-out host splits and phage-clade holdouts.
 - [ ] Keep a strict untouched external test benchmark for final validation.
 - [ ] Add leakage checks for all split strategies.
+- [ ] Add LOGOCV-style grouped validation and mean-hit-ratio@k reporting for recommendation utility tracking.
 - [ ] Add bootstrap confidence intervals for strain-level top-k metrics to quantify variance on small holdouts.
 - [ ] Add dual-slice reporting for all benchmarks: full-label slice and strict-confidence slice.
 - [ ] Add source-aware evaluation for external integration: leave-one-datasource-out and cross-source transfer
@@ -246,6 +249,8 @@ graph LR
 - [ ] Baseline 1: strong tabular binary model on existing host-only features.
 - [ ] Baseline 2: joint host+phage feature model without pairwise interactions.
 - [ ] Milestone G0: ship a calibrated Baseline 2 with leakage-safe protocol before mechanistic branching.
+- [ ] Milestone G0.1: ship receptor-first enriched baseline (host adsorption proxies + phage RBP/depolymerase features)
+      before broad weak-label expansion.
 - [ ] External-data training order: internal-only baseline -> +Tier A supervised sources -> +Tier B weak-label sources.
 - [ ] Stretch branch: Stage A model `P(adsorption)` from host-surface + phage-RBP + compatibility features.
 - [ ] Stretch branch: Stage B model `P(productive_lysis | adsorption)` from post-entry features.
@@ -276,6 +281,8 @@ graph LR
       `lyzortx/research_notes/LITERATURE.md`.
 - [ ] Build `source_registry.csv` for all external sources: source type, label kind, host resolution, assay type,
       license, access path, last checked.
+- [ ] For VHRdb ingest, keep source-fidelity fields: global response, datasource response, disagreement flag, and
+      source-native reference link.
 - [ ] Tier A supervised ingestion priority:
   1. VHRdb, 2) BASEL, 3) KlebPhaCol, 4) GPB.
 - [ ] Define harmonization protocol for Tier A datasets: taxonomy normalization, ID mapping, assay-scale mapping,
@@ -316,5 +323,7 @@ graph LR
 - [ ] Implement label builder for binary/strength/potency targets from raw interactions.
 - [ ] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
       RBP/depolymerase/domain proxies.
+- [ ] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
+      features.
 - [ ] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
 - [ ] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.
