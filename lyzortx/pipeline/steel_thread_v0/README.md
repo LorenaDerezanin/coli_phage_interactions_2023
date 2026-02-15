@@ -12,9 +12,10 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 
 - Implemented:
   - `ST0.1` label policy and uncertainty flags: `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`.
+  - `ST0.1b` strict confidence tiers: `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
+  - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
 - Planned next:
-  - `ST0.1b` strict confidence tiering (`high_conf_pos`, `high_conf_neg`, `ambiguous`).
   - `ST0.2` through `ST0.7` (currently placeholders).
 
 ## Step Map
@@ -36,16 +37,32 @@ Run from repository root.
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st01
 ```
 
+Run ST0.1b confidence tiering (consumes ST0.1 pair-level output):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st01b
+```
+
 Run the ST0.1 regression gate (recomputes ST0.1 then compares against baseline):
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st01_regression --run-st01
 ```
 
+Run the ST0.1b regression gate (recomputes ST0.1 and ST0.1b then compares against baseline):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st01b_regression --run-st01 --run-st01b
+```
+
 Alternative via orchestrator:
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st01
+```
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st01b
 ```
 
 ## Outputs
@@ -55,14 +72,14 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st01
   - `st01_label_policy_definition.json`
   - `st01_label_policy_audit.json`
   - `st01_pair_label_audit.csv`
-- Baseline snapshot used by regression check: `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
+- ST0.1b files:
+  - `st01b_confidence_policy_definition.json`
+  - `st01b_confidence_audit.json`
+  - `st01b_pair_confidence_audit.csv`
+- Baseline snapshots used by regression checks:
+  - `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`
+  - `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`
 
 ## CI
 
 GitHub Actions workflow: `.github/workflows/steel-thread-st01-regression.yml`.
-
-It runs:
-
-```bash
-python -m lyzortx.pipeline.steel_thread_v0.checks.check_st01_regression --run-st01
-```

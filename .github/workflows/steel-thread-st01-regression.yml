@@ -1,4 +1,4 @@
-name: Steel Thread ST0.1 Regression
+name: Steel Thread ST0.1-0.1b Regression
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ on:
 
 jobs:
   st01-regression:
-    name: ST0.1 Regression Gate
+    name: ST0.1/ST0.1b Regression Gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -30,3 +30,7 @@ jobs:
       - name: Run ST0.1 regression check
         run: |
           python -m lyzortx.pipeline.steel_thread_v0.checks.check_st01_regression --run-st01
+
+      - name: Run ST0.1b regression check
+        run: |
+          python -m lyzortx.pipeline.steel_thread_v0.checks.check_st01b_regression --run-st01 --run-st01b

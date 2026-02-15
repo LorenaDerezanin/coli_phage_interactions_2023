@@ -1,0 +1,39 @@
+{
+  "artifacts": {
+    "pair_confidence_audit_csv_sha256": "95e9e946712b630f9a686a83c2a17e6be98ab311542456f93bfc58575228a3b0"
+  },
+  "confidence_policy": {
+    "policy_name": "steel_thread_v0_st01b_confidence_tiers",
+    "policy_version": "v1",
+    "thresholds": {
+      "max_uninterpretable_obs": 1,
+      "min_negative_no_lysis_obs": 7,
+      "min_positive_fraction": 0.4,
+      "min_positive_lysis_obs": 2
+    }
+  },
+  "quality_summary": {
+    "strict_conflicting_counts": {
+      "high_conf_pos": 3390
+    },
+    "strict_has_uninterpretable_counts": {
+      "high_conf_neg": 1961,
+      "high_conf_pos": 217
+    }
+  },
+  "tier_summary": {
+    "strict_coverage_fraction": 0.799966,
+    "strict_label_counts": {
+      "ambiguous": 7086,
+      "negative_0": 24203,
+      "positive_1": 4135
+    },
+    "strict_positive_fraction_within_strict_slice": 0.145917,
+    "strict_tier_counts": {
+      "ambiguous": 7086,
+      "high_conf_neg": 24203,
+      "high_conf_pos": 4135
+    },
+    "total_pairs": 35424
+  }
+}

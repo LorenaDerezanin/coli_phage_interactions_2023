@@ -1,3 +1,34 @@
+### 2026-02-15: ST0.1b implemented (strict confidence tiers)
+
+#### What we implemented in ST0.1b
+
+1. Added ST0.1b step: `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`.
+2. Added ST0.1b regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`.
+4. Extended CI workflow to run both ST0.1 and ST0.1b regression gates.
+
+#### ST0.1b policy (v1)
+
+- `high_conf_pos`: hard label is positive, `score_1_count >= 2`, positive fraction among interpretable observations
+  `>= 0.4`, and `score_n_count <= 1`.
+- `high_conf_neg`: hard label is negative, `score_0_count >= 7`, and `score_n_count <= 1`.
+- `ambiguous`: all remaining pairs.
+
+#### ST0.1b output summary on current internal data
+
+- Total pairs: `35,424`.
+- `high_conf_pos`: `4,135`.
+- `high_conf_neg`: `24,203`.
+- `ambiguous`: `7,086`.
+- Strict-slice coverage: `0.799966`.
+- Strict positive fraction within strict slice: `0.145917`.
+
+#### Interpretation
+
+1. ST0.1b provides a narrower, more conservative training/evaluation slice while preserving broad coverage (~80%).
+2. The strict slice remains class-imbalanced, so downstream modeling will need imbalance-aware training.
+3. Positive-side conflict burden remains non-trivial in this first strict policy and should be stress-tested in ST0.2.
+
 ### 2026-02-15: ST0.1 diagnostics, CI regression gate, and ST0.1b decision
 
 #### What we implemented
