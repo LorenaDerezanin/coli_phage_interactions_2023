@@ -61,19 +61,22 @@ Last updated: 2026-02-15
 ## Track F: Splits, Evaluation Protocol, and Leakage Control
 - [ ] Define fixed split protocol before model iteration:
   leave-cluster-out host splits and phage-clade holdouts.
-- [ ] Keep a strict untouched external test benchmark.
+- [ ] Keep a strict untouched external test benchmark for final validation.
 - [ ] Add leakage checks for all split strategies.
-- [ ] Define metric suite per target:
-  AUROC, AUPR, calibration, top-k utility, uncertainty quality.
+- [ ] Define product-oriented benchmark suite for cocktail recommendation utility:
+  - **Top-3 Lytic Hit Rate > 95%:** At least one phage in the recommended 3-phage cocktail must be truly lytic.
+  - **Precision @ P(Lysis) > 0.9 must be > 99%:** High-confidence predictions must be highly reliable.
+  - **Simulated 3-Phage Cocktail Coverage > 98%:** End-to-end system must be effective on held-out strains.
 - [ ] Add benchmark report template for fair model-to-model comparison.
 
 ## Track G: Modeling Pipeline
+- **Guiding Principle:** A "meaningful model" for this project is one that produces a **calibrated probability of lysis** for any given phage-bacterium pair, enabling nuanced downstream cocktail recommendations.
 - [ ] Baseline 1: strong tabular binary model on existing host-only features.
 - [ ] Baseline 2: joint host+phage feature model without pairwise interactions.
 - [ ] Stage A model: `P(adsorption)` from host-surface + phage-RBP + compatibility features.
 - [ ] Stage B model: `P(productive_lysis | adsorption)` from post-entry features.
 - [ ] Compose final probability:
-  `P(lysis) = P(adsorption) * P(productive_lysis | adsorption)`.
+  `P(lysis) = P(adsorption) * P(productive_lysis | adsorption)`. 
 - [ ] Add multi-task formulation for binary + strength + potency targets.
 - [ ] Add calibrated outputs (isotonic/Platt) and uncertainty intervals.
 - [ ] Add robust handling of class imbalance and label uncertainty.
@@ -107,6 +110,7 @@ Last updated: 2026-02-15
 
 ## Track K: Sentinel Benchmarks
 - [ ] Define a set of sentinel tailored cases (hard but biologically plausible hits).
+- [ ] **Sentinel Strain Recovery = 100%:** Model must correctly identify known solutions for all sentinel strains.
 - [ ] Require each major model version to report sentinel recovery performance.
 - [ ] Track regressions in sentinel behavior across pipeline updates.
 
