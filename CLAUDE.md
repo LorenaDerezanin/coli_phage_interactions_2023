@@ -1,6 +1,16 @@
 # Documentation Style Rules
 
-- Keep all Markdown lines at 120 characters maximum.
+- Markdown style relies on tool settings in `.pre-commit-config.yaml` and `.markdownlint.yaml`.
+- The line-length policy is 120 characters for prose, with configured exceptions for code blocks, tables, and headings.
+- Use `pre-commit run prettier --all-files` for bulk auto-fixes.
+- Use `pre-commit run markdownlint --all-files` for optional manual lint checks.
+- After auto-fixes, stage updated files explicitly before committing.
+
+# Environment Policy
+
+- Use the `phage_env` micromamba environment for project commands by default.
+- Before running project tooling, activate it with `micromamba activate phage_env`.
+- Do not use system Python for repository tasks unless the user explicitly asks.
 
 # Agent Scratch Space
 
@@ -12,8 +22,7 @@
 - The research paper is expected in the local `paper/` directory.
 - `paper/` is listed in `.gitignore` because the paper is paywalled and should not be redistributed in git history.
 - Contributors should obtain the paper themselves for their local copy of the repository.
-- A detailed gist of the paper is available at
-  `lyzortx/research_notes/GIST Prediction Ecoli nature paper.md`.
+- A detailed gist of the paper is available at `lyzortx/research_notes/GIST Prediction Ecoli nature paper.md`.
 
 # Code Placement Policy
 
@@ -47,8 +56,7 @@
 # Generated Outputs
 
 - Store generated analysis outputs (CSVs, figures, reports) under `lyzortx/generated_outputs/`.
-- Organize outputs by analysis name, for example
-  `lyzortx/generated_outputs/raw_interactions_summary/`.
+- Organize outputs by analysis name, for example `lyzortx/generated_outputs/raw_interactions_summary/`.
 - Do not write new generated artifacts to top-level directories like `figures/` for `lyzortx` analyses.
 
 # Commit Shortcut
