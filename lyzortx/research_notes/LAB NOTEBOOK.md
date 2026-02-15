@@ -1,3 +1,21 @@
+### 2026-02-15: ST0.6 policy switch to `logreg_platt__none`
+
+#### What we changed
+
+1. Updated ST0.6 default ranking policy to `score_column=pred_logreg_platt`.
+2. Disabled family-cap diversity by default (`max_per_family=0`, diversity mode `none`).
+3. Updated ST0.6 and ST0.7 baselines to match the new default policy outputs.
+
+#### Updated ST0.6 holdout metrics
+
+- Top-3 hit rate (all strains): `0.846154` (`55/65`).
+- Top-3 hit rate (susceptible-only): `0.873016` (`55/63`).
+- Diversity relaxation count: `0` (diversity mode `none`).
+
+#### Updated ST0.7 consequence
+
+- `error_analysis.csv` holdout miss rows decreased from `14` to `10` under the new ST0.6 default policy.
+
 ### 2026-02-15: ST0.6b implemented (ranking-policy comparison)
 
 #### What we implemented in ST0.6b
@@ -18,7 +36,7 @@
 - `logreg_platt__max_family_2`: top-3 all `0.815385`, susceptible-only `0.841270`
 - `logreg_raw__max_family_2`: top-3 all `0.815385`, susceptible-only `0.841270`
 - `logreg_isotonic__none`: top-3 all `0.800000`, susceptible-only `0.825397`
-- `logreg_isotonic__max_family_2` (current ST0.6 policy): top-3 all `0.784615`, susceptible-only `0.809524`
+- `logreg_isotonic__max_family_2` (former ST0.6 policy): top-3 all `0.784615`, susceptible-only `0.809524`
 
 #### ST0.6b Interpretation
 

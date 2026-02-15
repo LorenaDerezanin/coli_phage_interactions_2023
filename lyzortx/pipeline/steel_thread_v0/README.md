@@ -124,6 +124,8 @@ Run ST0.6 recommendation generation:
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06
 ```
 
+ST0.6 defaults to `score_column=pred_logreg_platt` with `max_per_family=0` (no family-cap diversity constraint).
+
 Run the ST0.6 regression gate (recomputes ST0.1 through ST0.6 then compares against baseline):
 
 ```bash

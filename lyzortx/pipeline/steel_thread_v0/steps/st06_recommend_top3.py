@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ST0.6: Generate top-k phage recommendations with simple diversity constraints."""
+"""ST0.6: Generate top-k phage recommendations with configurable ranking policy."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--st05-ranked-predictions-path",
+        "--st05-predictions-path",
         type=Path,
-        default=Path("lyzortx/generated_outputs/steel_thread_v0/intermediate/st05_ranked_predictions.csv"),
-        help="Input ST0.5 ranked predictions CSV.",
+        default=Path("lyzortx/generated_outputs/steel_thread_v0/intermediate/st05_pair_predictions_calibrated.csv"),
+        help="Input ST0.5 calibrated pair predictions CSV.",
     )
     parser.add_argument(
         "--output-dir",
@@ -34,10 +34,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Number of phages to recommend per strain.",
     )
     parser.add_argument(
+        "--score-column",
+        type=str,
+        default="pred_logreg_platt",
+        help="Column used for ranking phages within each strain.",
+    )
+    parser.add_argument(
         "--max-per-family",
         type=int,
-        default=2,
-        help="Maximum recommendations from the same phage family before relaxing diversity.",
+        default=0,
+        help="Maximum recommendations from one phage family. Set to 0 to disable diversity cap.",
     )
     return parser.parse_args(argv)
 
@@ -63,15 +69,28 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if args.top_k < 1:
         raise ValueError("top-k must be >= 1")
-    if args.max_per_family < 1:
-        raise ValueError("max-per-family must be >= 1")
+    if args.max_per_family < 0:
+        raise ValueError("max-per-family must be >= 0")
 
-    ranked_rows = read_csv_rows(args.st05_ranked_predictions_path)
-    if not ranked_rows:
-        raise ValueError("ST0.5 ranked predictions input is empty.")
+    prediction_rows = read_csv_rows(args.st05_predictions_path)
+    if not prediction_rows:
+        raise ValueError("ST0.5 calibrated predictions input is empty.")
+    if args.score_column not in prediction_rows[0]:
+        raise ValueError(f"Configured score column not found: {args.score_column}")
+    required_columns = [
+        "bacteria",
+        "phage",
+        "phage_family",
+        "split_holdout",
+        "label_hard_binary",
+        "label_strict_confidence_tier",
+    ]
+    missing = [col for col in required_columns if col not in prediction_rows[0]]
+    if missing:
+        raise ValueError(f"Missing required columns in ST0.5 predictions: {', '.join(missing)}")
 
     by_bacteria: Dict[str, List[Dict[str, str]]] = defaultdict(list)
-    for row in ranked_rows:
+    for row in prediction_rows:
         by_bacteria[row["bacteria"]].append(row)
 
     recommendation_rows: List[Dict[str, object]] = []
@@ -80,40 +99,43 @@ def main(argv: Optional[List[str]] = None) -> None:
     for bacteria in sorted(by_bacteria.keys()):
         rows = sorted(
             by_bacteria[bacteria],
-            key=lambda r: (-float(r["score_logreg_isotonic"]), r["phage"]),
+            key=lambda r: (-float(r[args.score_column]), r["phage"]),
         )
-        family_counts: Counter[str] = Counter()
-        selected: List[Dict[str, str]] = []
-        skipped_due_to_diversity: List[Dict[str, str]] = []
-
-        for row in rows:
-            if len(selected) >= args.top_k:
-                break
-            family = row["phage_family"] or "missing_family"
-            if family_counts[family] < args.max_per_family:
-                selected.append(row)
-                family_counts[family] += 1
-            else:
-                skipped_due_to_diversity.append(row)
-
-        relaxed_used = False
-        if len(selected) < args.top_k:
-            relaxed_used = True
-            for row in skipped_due_to_diversity:
-                if len(selected) >= args.top_k:
-                    break
-                selected.append(row)
-
-        if len(selected) < args.top_k:
+        if args.max_per_family == 0:
+            selected = rows[: args.top_k]
+            relaxed_used = False
+        else:
+            family_counts = Counter()
+            selected = []
+            skipped_due_to_diversity: List[Dict[str, str]] = []
             for row in rows:
                 if len(selected) >= args.top_k:
                     break
-                if row in selected:
-                    continue
-                selected.append(row)
+                family = row["phage_family"] or "missing_family"
+                if family_counts[family] < args.max_per_family:
+                    selected.append(row)
+                    family_counts[family] += 1
+                else:
+                    skipped_due_to_diversity.append(row)
 
-        if relaxed_used:
-            relaxed_strain_count += 1
+            relaxed_used = False
+            if len(selected) < args.top_k:
+                relaxed_used = True
+                for row in skipped_due_to_diversity:
+                    if len(selected) >= args.top_k:
+                        break
+                    selected.append(row)
+
+            if len(selected) < args.top_k:
+                for row in rows:
+                    if len(selected) >= args.top_k:
+                        break
+                    if row in selected:
+                        continue
+                    selected.append(row)
+
+            if relaxed_used:
+                relaxed_strain_count += 1
 
         for rank, row in enumerate(selected[: args.top_k], start=1):
             recommendation_rows.append(
@@ -122,7 +144,11 @@ def main(argv: Optional[List[str]] = None) -> None:
                     "recommendation_rank": rank,
                     "phage": row["phage"],
                     "phage_family": row["phage_family"],
-                    "score_logreg_isotonic": row["score_logreg_isotonic"],
+                    "score_column": args.score_column,
+                    "score_value": row[args.score_column],
+                    "score_logreg_raw": row.get("pred_logreg_raw", ""),
+                    "score_logreg_platt": row.get("pred_logreg_platt", ""),
+                    "score_logreg_isotonic": row.get("pred_logreg_isotonic", ""),
                     "split_holdout": row["split_holdout"],
                     "label_hard_binary": row["label_hard_binary"],
                     "label_strict_confidence_tier": row["label_strict_confidence_tier"],
@@ -134,7 +160,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     output_recs = args.output_dir / "st06_top3_recommendations.csv"
     write_csv(output_recs, fieldnames=list(recommendation_rows[0].keys()), rows=recommendation_rows)
 
-    holdout_rows = [row for row in ranked_rows if row["split_holdout"] == "holdout_test"]
+    holdout_rows = [row for row in prediction_rows if row["split_holdout"] == "holdout_test"]
     holdout_by_bacteria: Dict[str, List[Dict[str, str]]] = defaultdict(list)
     for row in holdout_rows:
         holdout_by_bacteria[row["bacteria"]].append(row)
@@ -166,10 +192,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     summary = {
         "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
         "step_name": "st06_recommend_top3",
-        "input_ranked_predictions_path": str(args.st05_ranked_predictions_path),
+        "input_predictions_path": str(args.st05_predictions_path),
         "parameters": {
             "top_k": args.top_k,
+            "score_column": args.score_column,
             "max_per_family": args.max_per_family,
+            "diversity_mode": "none" if args.max_per_family == 0 else f"max_family_{args.max_per_family}",
         },
         "recommendation_summary": {
             "recommended_strain_count": len({row["bacteria"] for row in recommendation_rows}),
