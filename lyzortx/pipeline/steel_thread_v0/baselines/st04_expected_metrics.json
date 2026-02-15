@@ -1,0 +1,54 @@
+{
+  "artifact_summary": {
+    "logreg_intercept": -0.097218,
+    "logreg_n_iter": 18,
+    "predictions_csv_sha256": "8f1c5fc8135cd5d8078c37031b85bd35dc63db4c0cbe7f6ad798e63dde15f79c"
+  },
+  "feature_summary": {
+    "categorical_feature_count": 19,
+    "n_vectorized_features": 425,
+    "numeric_feature_count": 9
+  },
+  "model_quality_summary": {
+    "dummy_holdout_binary_metrics": {
+      "average_precision": 0.251965,
+      "brier_score": 0.189304,
+      "log_loss": 0.566574,
+      "n": 6235.0,
+      "positive_rate": 0.251965,
+      "roc_auc": 0.5
+    },
+    "dummy_holdout_top3_metrics": {
+      "hit_count": 1,
+      "strain_count": 65,
+      "susceptible_hit_count": 1,
+      "susceptible_strain_count": 63,
+      "top3_hit_rate_all_strains": 0.015385,
+      "top3_hit_rate_susceptible_only": 0.015873
+    },
+    "logreg_holdout_binary_metrics": {
+      "average_precision": 0.613953,
+      "brier_score": 0.171223,
+      "log_loss": 0.521944,
+      "n": 6235.0,
+      "positive_rate": 0.251965,
+      "roc_auc": 0.826948
+    },
+    "logreg_holdout_top3_metrics": {
+      "hit_count": 55,
+      "strain_count": 65,
+      "susceptible_hit_count": 55,
+      "susceptible_strain_count": 63,
+      "top3_hit_rate_all_strains": 0.846154,
+      "top3_hit_rate_susceptible_only": 0.873016
+    }
+  },
+  "train_summary": {
+    "holdout_hard_rows": 6235,
+    "holdout_negative_count": 4664,
+    "holdout_positive_count": 1571,
+    "train_negative_count": 20882,
+    "train_non_holdout_hard_rows": 29031,
+    "train_positive_count": 8149
+  }
+}

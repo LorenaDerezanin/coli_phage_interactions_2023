@@ -15,12 +15,14 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.1b` strict confidence tiers: `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`.
   - `ST0.2` canonical pair table builder: `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`.
   - `ST0.3` split builder: `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`.
+  - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
   - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
   - Regression gate for ST0.3: `lyzortx/pipeline/steel_thread_v0/checks/check_st03_regression.py`.
+  - Regression gate for ST0.4: `lyzortx/pipeline/steel_thread_v0/checks/check_st04_regression.py`.
 - Planned next:
-  - `ST0.4` through `ST0.7` (currently placeholders).
+  - `ST0.5` through `ST0.7` (currently placeholders).
 
 ## Step Map
 
@@ -83,6 +85,18 @@ Run the ST0.3 regression gate (recomputes ST0.1, ST0.1b, ST0.2, and ST0.3 then c
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st03_regression --run-st01 --run-st01b --run-st02 --run-st03
 ```
 
+Run ST0.4 baseline training:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st04
+```
+
+Run the ST0.4 regression gate (recomputes ST0.1 through ST0.4 then compares against baseline):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st04_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st04
+```
+
 Alternative via orchestrator:
 
 ```bash
@@ -99,6 +113,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st02
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st03
+```
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st04
 ```
 
 ## Outputs
@@ -120,11 +138,16 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st03
   - `st03_split_assignments.csv`
   - `st03_split_protocol.json`
   - `st03_split_audit.json`
+- ST0.4 files:
+  - `st04_pair_predictions_raw.csv`
+  - `st04_model_metrics_raw.json`
+  - `st04_model_artifacts.json`
 - Baseline snapshots used by regression checks:
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`
   - `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`
+  - `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`
 
 ## CI
 

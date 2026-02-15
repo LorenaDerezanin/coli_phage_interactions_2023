@@ -1,3 +1,41 @@
+### 2026-02-15: ST0.4 implemented (baseline training)
+
+#### What we implemented in ST0.4
+
+1. Added ST0.4 step: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
+2. Added ST0.4 regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st04_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`.
+4. Extended CI workflow to run ST0.4 regression and install `scikit-learn` explicitly.
+
+#### ST0.4 output summary on current internal data
+
+- Train rows (non-holdout hard-labeled): `29,031`.
+- Holdout eval rows (hard-labeled): `6,235`.
+- Vectorized feature count: `425`.
+- Comparator model: `DummyClassifier(strategy='prior')`.
+- Strong baseline: `LogisticRegression(class_weight='balanced', solver='liblinear')`.
+
+#### Holdout metrics
+
+- Dummy baseline:
+  - Brier: `0.189304`
+  - Log loss: `0.566574`
+  - ROC-AUC: `0.500000`
+  - Top-3 hit rate (all strains): `0.015385`
+- Logistic baseline:
+  - Brier: `0.171223`
+  - Log loss: `0.521944`
+  - ROC-AUC: `0.826948`
+  - Top-3 hit rate (all strains): `0.846154`
+
+#### ST0.4 Interpretation
+
+1. The strong baseline materially outperforms the comparator on every tracked holdout metric, so ST0.4 clears the
+   minimum "better than naive" bar for steel-thread viability.
+2. Top-3 hit rate is substantially below the Tier 1 benchmark target; this is expected at this stage and motivates ST0.5
+   calibration plus ST0.6 recommendation logic.
+3. The feature-space and model artifact files are now stable inputs for downstream calibration/ranking.
+
 ### 2026-02-15: ST0.3 implemented (leakage-safe split protocol)
 
 #### What we implemented in ST0.3

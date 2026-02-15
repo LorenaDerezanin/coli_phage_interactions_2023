@@ -29,3 +29,11 @@ st03:
   holdout_group_fraction: 0.2
   n_cv_folds: 5
   split_salt: steel_thread_v0_st03_split_v1
+
+st04:
+  st02_pair_table_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st02_pair_table.csv
+  st03_split_assignments_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st03_split_assignments.csv
+  output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
+  random_state: 42
+  logreg_c: 1.0
+  logreg_max_iter: 2000
