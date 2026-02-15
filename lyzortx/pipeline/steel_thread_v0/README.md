@@ -18,6 +18,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
   - `ST0.5` calibrator and ranker: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
   - `ST0.6` recommender: `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`.
+  - `ST0.6b` ranking-policy comparator: `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
   - `ST0.7` report artifact builder: `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
@@ -37,6 +38,8 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 - `ST0.4`: Train baseline models.
 - `ST0.5`: Calibrate probabilities and generate rankings.
 - `ST0.6`: Produce top-3 recommendations.
+- `ST0.6b`: Compare recommendation ranking policies side-by-side (`raw`, `platt`, `isotonic`; with and without diversity
+  cap).
 - `ST0.7`: Emit reproducible report artifacts.
 
 ## How To Run
@@ -134,6 +137,12 @@ Run ST0.7 report build:
 python -m lyzortx.pipeline.steel_thread_v0.steps.st07_build_report
 ```
 
+Run ST0.6b ranking-policy comparison:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.steps.st06b_compare_ranking_policies
+```
+
 Run the ST0.7 regression gate (recomputes ST0.1 through ST0.7 then compares against baseline):
 
 ```bash
@@ -175,6 +184,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st06
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st07
 ```
 
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06b
+```
+
 ## Outputs
 
 - Intermediate outputs: `lyzortx/generated_outputs/steel_thread_v0/intermediate/`.
@@ -206,6 +219,11 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st07
 - ST0.6 files:
   - `st06_top3_recommendations.csv`
   - `st06_recommendation_summary.json`
+- ST0.6b files:
+  - `st06b_policy_comparison.csv`
+  - `st06b_recommendations_all_policies.csv`
+  - `st06b_top3_recommendations_best.csv`
+  - `st06b_summary.json`
 - ST0.7 files (`lyzortx/generated_outputs/steel_thread_v0/`):
   - `metrics_summary.csv`
   - `top3_recommendations.csv`

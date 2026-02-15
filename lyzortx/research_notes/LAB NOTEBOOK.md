@@ -1,3 +1,33 @@
+### 2026-02-15: ST0.6b implemented (ranking-policy comparison)
+
+#### What we implemented in ST0.6b
+
+1. Added ST0.6b step: `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
+2. Compared six recommendation policies on the same holdout set: raw, platt, and isotonic scores; each with and without
+   family-cap diversity.
+3. Wrote outputs:
+   - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st06b_policy_comparison.csv`
+   - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st06b_recommendations_all_policies.csv`
+   - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st06b_top3_recommendations_best.csv`
+   - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st06b_summary.json`
+
+#### ST0.6b holdout results
+
+- `logreg_platt__none`: top-3 all `0.846154`, susceptible-only `0.873016` (best; tied with `logreg_raw__none`)
+- `logreg_raw__none`: top-3 all `0.846154`, susceptible-only `0.873016`
+- `logreg_platt__max_family_2`: top-3 all `0.815385`, susceptible-only `0.841270`
+- `logreg_raw__max_family_2`: top-3 all `0.815385`, susceptible-only `0.841270`
+- `logreg_isotonic__none`: top-3 all `0.800000`, susceptible-only `0.825397`
+- `logreg_isotonic__max_family_2` (current ST0.6 policy): top-3 all `0.784615`, susceptible-only `0.809524`
+
+#### ST0.6b Interpretation
+
+1. The ST0.6 drop versus ST0.4 is primarily policy choice, not an implementation bug.
+2. In this dataset/split, isotonic ranking is weaker than raw or platt ranking for top-3 hit-rate.
+3. Family-cap diversity (`max_per_family=2`) reduces hit-rate for all three score variants in current holdout.
+4. Next change should be to switch operational ranking from isotonic to platt (or raw), while keeping calibration
+   outputs for probability-quality reporting.
+
 ### 2026-02-15: ST0.7 implemented (final report artifacts)
 
 #### What we implemented in ST0.7
