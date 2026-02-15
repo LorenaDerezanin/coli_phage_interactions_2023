@@ -45,3 +45,9 @@ st05:
   calibration_fold: 0
   ece_bins: 10
   platt_random_state: 42
+
+st06:
+  st05_ranked_predictions_path: lyzortx/generated_outputs/steel_thread_v0/intermediate/st05_ranked_predictions.csv
+  output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
+  top_k: 3
+  max_per_family: 2

@@ -1,3 +1,29 @@
+### 2026-02-15: ST0.6 implemented (top-3 recommendation generation)
+
+#### What we implemented in ST0.6
+
+1. Added ST0.6 step: `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`.
+2. Added ST0.6 regression check: `lyzortx/pipeline/steel_thread_v0/checks/check_st06_regression.py`.
+3. Added baseline snapshot: `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
+4. Extended CI workflow to run ST0.6 regression in addition to ST0.1 through ST0.5.
+
+#### ST0.6 output summary on current internal data
+
+- Recommended strains: `369`.
+- Recommendation rows: `1,107` (`3` per strain).
+- Diversity relaxation needed: `0` strains under current `max_per_family=2`.
+- Holdout top-3 hit rate (all strains): `0.784615`.
+- Holdout top-3 hit rate (susceptible strains only): `0.809524`.
+
+#### ST0.6 Interpretation
+
+1. The current simple recommendation layer underperforms the ST0.4 raw top-3 benchmark, indicating that ranking and
+   recommendation objectives are not yet aligned end-to-end.
+2. Diversity constraint did not bind in this dataset configuration (`0` relaxed strains), so current performance is not
+   being driven by diversity tradeoffs.
+3. ST0.7 should expose this gap explicitly in final reporting so the next iteration can focus on recommendation-quality
+   optimization rather than only calibration quality.
+
 ### 2026-02-15: ST0.5 implemented (calibration and ranking)
 
 #### What we implemented in ST0.5

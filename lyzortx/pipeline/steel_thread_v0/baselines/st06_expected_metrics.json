@@ -1,0 +1,22 @@
+{
+  "diversity_summary": {
+    "diversity_relaxed_strain_count": 0,
+    "max_per_family": 2,
+    "top_k": 3
+  },
+  "hashes": {
+    "recommendations_csv_sha256": "0ddaa8a5e282766d944588338195459c6d849dddd9a0a094f360a28ce78ff18d"
+  },
+  "row_counts": {
+    "recommendation_rows": 1107,
+    "recommended_strain_count": 369
+  },
+  "summary_metrics": {
+    "holdout_hit_count": 51,
+    "holdout_strain_count": 65,
+    "holdout_susceptible_hit_count": 51,
+    "holdout_susceptible_strain_count": 63,
+    "topk_hit_rate_all_strains": 0.784615,
+    "topk_hit_rate_susceptible_only": 0.809524
+  }
+}

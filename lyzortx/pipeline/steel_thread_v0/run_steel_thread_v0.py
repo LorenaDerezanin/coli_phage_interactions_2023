@@ -11,6 +11,7 @@ from lyzortx.pipeline.steel_thread_v0.checks import check_st02_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st03_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st04_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st05_regression
+from lyzortx.pipeline.steel_thread_v0.checks import check_st06_regression
 from lyzortx.pipeline.steel_thread_v0.steps import (
     st01_label_policy,
     st01b_confidence_tiers,
@@ -18,6 +19,7 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
     st03_build_splits,
     st04_train_baselines,
     st05_calibrate_rank,
+    st06_recommend_top3,
 )
 
 
@@ -32,12 +34,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "st03",
             "st04",
             "st05",
+            "st06",
             "check-st01",
             "check-st01b",
             "check-st02",
             "check-st03",
             "check-st04",
             "check-st05",
+            "check-st06",
         ],
         default="st01",
         help="Steel-thread step to run.",
@@ -59,6 +63,8 @@ def main(argv: list[str] | None = None) -> None:
         st04_train_baselines.main([])
     elif args.step == "st05":
         st05_calibrate_rank.main([])
+    elif args.step == "st06":
+        st06_recommend_top3.main([])
     elif args.step == "check-st01":
         check_st01_regression.main([])
     elif args.step == "check-st01b":
@@ -71,6 +77,8 @@ def main(argv: list[str] | None = None) -> None:
         check_st04_regression.main([])
     elif args.step == "check-st05":
         check_st05_regression.main([])
+    elif args.step == "check-st06":
+        check_st06_regression.main([])
     else:
         raise ValueError(f"Unsupported step: {args.step}")
 
