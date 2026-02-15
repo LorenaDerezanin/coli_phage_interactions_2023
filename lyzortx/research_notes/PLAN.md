@@ -15,6 +15,65 @@ Last updated: 2026-02-15
 - Link every major code change or note update to one or more items here.
 - Keep methods reproducible and auditable (deterministic where possible).
 
+## Parallel Execution View
+- Use this view for planning workstreams.
+- Tracks in the same stage box can run in parallel unless blocked by their own incoming dependencies.
+- Keep the dependency DAG above as the source of truth for strict ordering.
+
+```mermaid
+graph LR
+  subgraph s0["Stage 0 (Serial Foundation)"]
+    ta["Track A: Data Integrity and Labeling"]
+  end
+
+  subgraph s1["Stage 1 (Parallelizable Build-Out)"]
+    tb["Track B: Exploratory Analysis and Signal Discovery"]
+    tc["Track C: Feature Engineering (Host)"]
+    td["Track D: Feature Engineering (Phage)"]
+    tf["Track F: Splits, Evaluation Protocol, and Leakage Control"]
+    ti["Track I: External Data and Literature Integration"]
+  end
+
+  subgraph s2["Stage 2 (Parallelizable Integration)"]
+    te["Track E: Pairwise Compatibility Features"]
+    tg["Track G: Modeling Pipeline"]
+    th["Track H: In-Silico Cocktail Recommendation"]
+    tk["Track K: Sentinel Benchmarks"]
+  end
+
+  subgraph s3["Stage 3 (Release and Audit)"]
+    tj["Track J: Reproducibility and Release Quality"]
+  end
+
+  ta --> tb
+  ta --> tc
+  ta --> td
+  ta --> tf
+  ta --> ti
+
+  tb --> te
+  tc --> te
+  td --> te
+
+  tc --> tg
+  td --> tg
+  te --> tg
+  tf --> tg
+  ti --> tg
+
+  tf --> th
+  tg --> th
+
+  tf --> tk
+  tg --> tk
+
+  th --> tj
+  tk --> tj
+  tg --> tj
+  tf --> tj
+  ti --> tj
+```
+
 ## Track A: Data Integrity and Labeling
 - [ ] Build a canonical ID map for bacteria and phages across all tables.
 - [ ] Resolve naming/alias mismatches (for example legacy phage names).
@@ -93,6 +152,7 @@ Last updated: 2026-02-15
 - [ ] Add recommendation explanations at per-strain and per-cocktail levels.
 
 ## Track I: External Data and Literature Integration
+- [ ] Systematically query public databases (Virus-Host DB, NCBI BioSample) to compile an expanded set of phage-host interaction pairs.
 - [ ] Create a curated reading list of closely related phage-host prediction papers.
 - [ ] Extract reusable methods and feature ideas into a structured note table.
 - [ ] Search for compatible external interaction datasets and assess merge feasibility.

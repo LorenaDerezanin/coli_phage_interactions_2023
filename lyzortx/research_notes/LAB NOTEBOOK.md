@@ -1,4 +1,3 @@
----
 ### 2026-02-15: Defining a Meaningful Model and Product-Oriented Benchmarks
 
 Based on a review of the project plan and the available data, we've established a strategic framework for what constitutes a "meaningful model" and how to evaluate its utility for a clinical product that recommends phage cocktails for new *E. coli* strains.
