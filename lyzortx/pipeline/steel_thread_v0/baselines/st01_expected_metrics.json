@@ -1,0 +1,38 @@
+{
+  "label_policy": {
+    "policy_name": "steel_thread_v0_st01_label_policy",
+    "policy_version": "v1",
+    "thresholds": {
+      "expected_observations_per_pair": 9,
+      "high_uninterpretable_fraction_threshold": 0.25,
+      "min_interpretable_obs_for_hard_negative": 5
+    }
+  },
+  "raw_input_summary": {
+    "distinct_bacteria_count": 369,
+    "distinct_phage_count": 96,
+    "expected_full_grid_pair_count": 35424,
+    "observed_pair_count": 35424,
+    "raw_row_count": 318816
+  },
+  "label_summary": {
+    "hard_label_counts": {
+      "negative_0": 25546,
+      "positive_1": 9720,
+      "unresolved": 158
+    },
+    "hard_label_coverage_fraction": 0.99554
+  },
+  "uncertainty_summary": {
+    "uncertainty_flag_counts": {
+      "conflicting_interpretable_observations": 8917,
+      "has_uninterpretable": 4537,
+      "high_uninterpretable_fraction": 1444,
+      "low_interpretable_support": 192,
+      "unresolved_label": 158
+    }
+  },
+  "artifacts": {
+    "pair_label_audit_csv_sha256": "a2d29ecbcd05653c9f22ff396337877a27d5e99b3a5b53ff5acdb10de6591992"
+  }
+}

@@ -1,3 +1,45 @@
+### 2026-02-15: ST0.1 diagnostics, CI regression gate, and ST0.1b decision
+
+#### What we implemented
+
+1. Implemented ST0.1 label-policy step: `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`.
+2. Added ST0.1 regression checker and baseline: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`,
+   `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
+3. Added CI workflow to run the regression gate on push and pull request:
+   `.github/workflows/steel-thread-st01-regression.yml`.
+
+#### ST0.1 findings from current internal data
+
+- Raw rows: `318,816`.
+- Observed bacteria-phage pairs: `35,424` (full 369 x 96 grid).
+- Hard labels:
+  - Positive: `9,720` (`27.44%`).
+  - Negative: `25,546` (`72.12%`).
+  - Unresolved: `158` (`0.45%`).
+- Hard-label coverage: `99.554%`.
+- Uncertainty flags:
+  - Conflicting interpretable observations: `8,917` pairs (`25.17%`).
+  - Has uninterpretable (`score='n'`): `4,537` pairs (`12.81%`).
+  - High uninterpretable fraction: `1,444` pairs (`4.08%`).
+
+#### Conflict interpretation summary
+
+- Not all conflicts imply pure replicate noise.
+- `2,359` conflicting pairs (`6.66%` of all pairs) are clean cross-dilution shifts.
+- `6,558` conflicting pairs (`18.51%` of all pairs) include within-dilution replicate disagreement.
+- Current positive rule (`any 1`) captures weak positives; `23.21%` of positives are single-hit (`1/9`).
+
+#### Decision and plan impact
+
+We will add **ST0.1b** as a parallel stricter label view with confidence tiers: `high_conf_pos`, `high_conf_neg`, and
+`ambiguous`.
+
+Why:
+
+1. Preserve high recall behavior from ST0.1 for candidate generation.
+2. Add a higher-trust slice for model debugging and honest early benchmarking.
+3. Report metrics on both full-label and high-confidence slices to avoid noise-driven false gains.
+
 ### 2026-02-15: PLAN update after external-data literature deep dive
 
 #### Summary
@@ -89,11 +131,14 @@ The choice of a 3-phage cocktail is a deliberate trade-off between efficacy and 
   - **Diminishing Returns:** The marginal benefit of adding a fourth or fifth phage is often small and does not justify
     the significant increase in complexity and cost.
 
-## A 3-phage cocktail is therefore considered the current industry "sweet spot," providing a robust defense against bacterial resistance while remaining tractable from a manufacturing and regulatory perspective.
+#### 3-phage cocktail rationale note
+
+A 3-phage cocktail is considered the current industry "sweet spot," providing robust defense against bacterial
+resistance while remaining tractable from a manufacturing and regulatory perspective.
 
 ### 2026-02-15: Research on External Phage-Host Interaction Datasets
 
-#### Summary
+#### External Data Summary
 
 To improve model performance, we must expand our training data beyond the internal `raw_interactions.csv`. Research was
 conducted to identify public databases that contain phage-host interaction data. The findings indicate that while a
@@ -102,34 +147,33 @@ various sources.
 
 #### Key Data Sources Identified
 
-1.  **Dedicated Phage-Host Databases:** These are the highest-value targets for finding experimentally confirmed
-    interaction pairs.
+1. **Dedicated Phage-Host Databases:** These are the highest-value targets for finding experimentally confirmed
+   interaction pairs.
 
-    - **Relevant Databases:** `Virus-Host DB`, `ViralHostRangeDB`.
-    - **Content:** Aggregate interaction data from literature, providing "Phage X infects Bacterium Y" pairs. They
-      typically lack the fine-grained dilution/replicate data but are excellent for expanding our core training set.
+   - **Relevant Databases:** `Virus-Host DB`, `ViralHostRangeDB`.
+   - **Content:** Aggregate interaction data from literature, providing "Phage X infects Bacterium Y" pairs. They
+     typically lack the fine-grained dilution/replicate data but are excellent for expanding our core training set.
 
-2.  **Public Sequence Archives (NCBI, CNCB):** These contain the raw data from sequencing experiments and associated
-    metadata.
+2. **Public Sequence Archives (NCBI, CNCB):** These contain the raw data from sequencing experiments and associated
+   metadata.
 
-    - **NCBI BioSample Database:** A good source for "known positive" interactions. The `isolation_host` field in a
-      phage's BioSample record provides a confirmed host. This is a low-effort way to augment our dataset with thousands
-      of positive examples.
-    - **NCBI Sequence Read Archive (SRA) / China National Center for Bioinformation (CNCB) Genome Warehouse (GWH):** A
-      potential goldmine, but high-effort. These archives contain raw data from high-throughput screening projects.
-      Extracting an interaction matrix would require a significant bioinformatics effort (re-processing raw reads,
-      mapping metadata), making it a long-term strategic goal.
+   - **NCBI BioSample Database:** A good source for "known positive" interactions. The `isolation_host` field in a
+     phage's BioSample record provides a confirmed host. This is a low-effort way to augment our dataset with thousands
+     of positive examples.
+   - **NCBI Sequence Read Archive (SRA) / China National Center for Bioinformation (CNCB) Genome Warehouse (GWH):** A
+     potential goldmine, but high-effort. These archives contain raw data from high-throughput screening projects.
+     Extracting an interaction matrix would require a significant bioinformatics effort (re-processing raw reads,
+     mapping metadata), making it a long-term strategic goal.
 
-3.  **International Databases (Focus on China):**
-    - **China National Center for Bioinformation (CNCB):** This is a key resource, hosting databases like the **Virus &
-      Host (V&H) database**, which aggregates data from Chinese research and is a priority for exploration.
+3. **International Databases (Focus on China):**
+   - **China National Center for Bioinformation (CNCB):** This is a key resource, hosting databases like the **Virus &
+     Host (V&H) database**, which aggregates data from Chinese research and is a priority for exploration.
 
 #### Next Steps & Strategy
 
 The most pragmatic approach is to start with the lowest-effort, highest-value tasks.
 
-1.  **Short-Term:** Systematically query the APIs of **Virus-Host DB** and the **NCBI BioSample database**. The goal is
-    to script a process to download all available phage-host pairs and integrate them as "known positive" in our
-    dataset.
-2.  **Mid-Term:** Investigate the curated databases at the CNCB.
-3.  **Long-Term:** Scope the effort required to re-process a full screening project from the SRA or GWH.
+1. **Short-Term:** Systematically query the APIs of **Virus-Host DB** and the **NCBI BioSample database**. The goal is
+   to script a process to download all available phage-host pairs and integrate them as "known positive" in our dataset.
+2. **Mid-Term:** Investigate the curated databases at the CNCB.
+3. **Long-Term:** Scope the effort required to re-process a full screening project from the SRA or GWH.

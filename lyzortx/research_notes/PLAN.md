@@ -35,7 +35,11 @@ Last updated: 2026-02-15
 
 ### Execution Checklist
 
-- [ ] ST0.1 Define v0 label policy and uncertainty flags from raw interactions (`score='n'` included).
+- [x] ST0.1 Define v0 label policy and uncertainty flags from raw interactions (`score='n'` included). Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
+- [ ] ST0.1b Add strict confidence tiering (`high_conf_pos`, `high_conf_neg`, `ambiguous`) as a parallel output from
+      ST0.1 to support dual-slice evaluation.
 - [ ] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks.
 - [ ] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0.
 - [ ] ST0.4 Train one strong tabular baseline and one simple comparator baseline.
@@ -56,6 +60,7 @@ Last updated: 2026-02-15
 - [ ] End-to-end command completes on a clean environment without manual patching.
 - [ ] No leakage violations detected by the v0 checks.
 - [ ] Top-3 hit-rate and calibration metrics are reported for the locked protocol.
+- [ ] Top-3 and calibration metrics are reported on both slices: full-label and high-confidence (ST0.1b).
 - [ ] v0 model materially outperforms a naive baseline on the same split.
 - [ ] Failure cases are documented with at least one concrete hypothesis per major error bucket.
 
@@ -248,8 +253,9 @@ graph LR
 
 ## Immediate Next Tasks
 
-- [ ] Start Steel Thread v0 and complete ST0.1 through ST0.3 before any external-data ingest work.
+- [ ] Start Steel Thread v0 and complete ST0.1b through ST0.3 before any external-data ingest work.
 - [ ] Finalize `score='n'` handling policy and document aggregation rules.
+- [ ] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.
 - [ ] Build canonical ID normalization and mismatch report script.
 - [ ] Implement label builder for binary/strength/potency targets from raw interactions.

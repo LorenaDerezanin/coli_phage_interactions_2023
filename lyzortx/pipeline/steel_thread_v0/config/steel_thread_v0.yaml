@@ -1,0 +1,7 @@
+# Steel thread v0 defaults
+st01:
+  raw_interactions_path: data/interactions/raw/raw_interactions.csv
+  output_dir: lyzortx/generated_outputs/steel_thread_v0/intermediate
+  expected_observations_per_pair: 9
+  min_interpretable_obs_for_hard_negative: 5
+  high_uninterpretable_fraction_threshold: 0.25
