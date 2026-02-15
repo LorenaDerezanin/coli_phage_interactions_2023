@@ -18,6 +18,23 @@ python -m ipykernel install --user --name phage_env --display-name phage_env
 
 Now when you run notebooks in `jupyter lab`, make sure to select the `phage_env` kernel.
 
+## Optional: automatic env activation with direnv
+
+This repository includes a tracked `.envrc` that activates `phage_env` when you enter the repository directory.
+
+1. Install `direnv` and enable its shell integration.
+2. For `zsh`, add the hook to `~/.zshrc` if needed:
+
+```bash
+eval "$(direnv hook zsh)"
+```
+
+3. Reload your shell and allow the repo env file:
+
+```bash
+direnv allow
+```
+
 ## Markdown formatting + linting
 
 This repository uses `pre-commit` with:
