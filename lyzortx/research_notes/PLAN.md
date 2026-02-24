@@ -172,16 +172,28 @@ graph LR
 
 ## Track A: Data Integrity and Labeling
 
-- [ ] Build a canonical ID map for bacteria and phages across all tables.
-- [ ] Resolve naming/alias mismatches (for example legacy phage names).
-- [ ] Add automated data integrity checks for row/column consistency.
-- [ ] Define and document handling policy for uninterpretable labels (`score='n'`).
-- [ ] Add plaque-image-assisted QC pass for ambiguous/conflicting pairs using the core study raw image release.
-- [ ] Define cohort contracts and denominator rules (`raw369`, `matrix402`, `features404`) for all reports.
-- [ ] Preserve replicate and dilution structure in intermediate tables.
-- [ ] Create label set v1: `any_lysis`, `lysis_strength`, `dilution_potency`, `uncertainty_flags`.
-- [ ] Create label set v2 with alternative aggregation assumptions and compare impact.
-- [ ] Add scripts that regenerate all derived labels from raw data in one command.
+- [x] Build a canonical ID map for bacteria and phages across all tables. Implemented in
+      `lyzortx/generated_outputs/track_a/id_map/{bacteria_id_map.csv,phage_id_map.csv}`.
+- [x] Resolve naming/alias mismatches (for example legacy phage names). Implemented in
+      `lyzortx/generated_outputs/track_a/id_map/{bacteria_alias_resolution.csv,phage_alias_resolution.csv}` and
+      candidate reports.
+- [x] Add automated data integrity checks for row/column consistency. Implemented in
+      `lyzortx/generated_outputs/track_a/integrity/{integrity_checks.csv,integrity_report.json}` and
+      `lyzortx/pipeline/track_a/checks/check_track_a_integrity.py`.
+- [x] Define and document handling policy for uninterpretable labels (`score='n'`). Implemented in
+      `lyzortx/generated_outputs/track_a/labels/{label_set_v1_policy.json,label_set_v2_policy.json}`.
+- [x] Add plaque-image-assisted QC pass for ambiguous/conflicting pairs using the core study raw image release.
+      Implemented in `lyzortx/generated_outputs/track_a/qc/{plaque_image_qc_queue.csv,plaque_image_qc_summary.json}`.
+- [x] Define cohort contracts and denominator rules (`raw369`, `matrix402`, `features404`) for all reports. Implemented
+      in `lyzortx/generated_outputs/track_a/cohort/{cohort_contracts.csv,cohort_contracts.json}`.
+- [x] Preserve replicate and dilution structure in intermediate tables. Implemented in
+      `lyzortx/generated_outputs/track_a/labels/{track_a_observations_with_ids.csv,track_a_pair_dilution_summary.csv,     track_a_pair_observation_grid.csv}`.
+- [x] Create label set v1: `any_lysis`, `lysis_strength`, `dilution_potency`, `uncertainty_flags`. Implemented in
+      `lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv`.
+- [x] Create label set v2 with alternative aggregation assumptions and compare impact. Implemented in
+      `lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}`.
+- [x] Add scripts that regenerate all derived labels from raw data in one command. Implemented in
+      `lyzortx/pipeline/track_a/run_track_a.py` (plus docs in `lyzortx/pipeline/track_a/README.md`).
 
 ## Track B: Exploratory Analysis and Signal Discovery
 
@@ -313,14 +325,19 @@ graph LR
 ## Immediate Next Tasks
 
 - [x] Start Steel Thread v0 and complete ST0.7 before any external-data ingest work.
-- [ ] Finalize `score='n'` handling policy and document aggregation rules.
+- [x] Finalize `score='n'` handling policy and document aggregation rules. Implemented via Track A label policy
+      artifacts in `lyzortx/generated_outputs/track_a/labels/`.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
 - [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.
-- [ ] Build canonical ID normalization and mismatch report script.
+- [x] Build canonical ID normalization and mismatch report script. Implemented in
+      `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with outputs under
+      `lyzortx/generated_outputs/track_a/id_map/`.
 - [ ] Implement ST0.3b split suite with explicit phage-family holdout and host+phage dual-axis stress tests.
 - [ ] Implement ST0.4b ablations (host-only, phage-only, no-identity controls) to quantify true signal sources.
 - [ ] Implement ST0.5b/ST0.6c reporting on both slices (full-label and strict-confidence) with bootstrap CIs.
-- [ ] Implement label builder for binary/strength/potency targets from raw interactions.
+- [x] Implement label builder for binary/strength/potency targets from raw interactions. Implemented in
+      `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with v1/v2 outputs under
+      `lyzortx/generated_outputs/track_a/labels/`.
 - [ ] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
       RBP/depolymerase/domain proxies.
 - [ ] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
