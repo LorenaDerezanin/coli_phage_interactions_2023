@@ -187,7 +187,8 @@ graph LR
 - [x] Define cohort contracts and denominator rules (`raw369`, `matrix402`, `features404`) for all reports. Implemented
       in `lyzortx/generated_outputs/track_a/cohort/{cohort_contracts.csv,cohort_contracts.json}`.
 - [x] Preserve replicate and dilution structure in intermediate tables. Implemented in
-      `lyzortx/generated_outputs/track_a/labels/{track_a_observations_with_ids.csv,track_a_pair_dilution_summary.csv,     track_a_pair_observation_grid.csv}`.
+      `lyzortx/generated_outputs/track_a/labels/{track_a_observations_with_ids.csv,`
+      `track_a_pair_dilution_summary.csv,track_a_pair_observation_grid.csv}`.
 - [x] Create label set v1: `any_lysis`, `lysis_strength`, `dilution_potency`, `uncertainty_flags`. Implemented in
       `lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv`.
 - [x] Create label set v2 with alternative aggregation assumptions and compare impact. Implemented in
@@ -325,6 +326,9 @@ graph LR
 ## Immediate Next Tasks
 
 - [x] Start Steel Thread v0 and complete ST0.7 before any external-data ingest work.
+- [x] Bootstrap PLAN orchestration scaffold (task registry + runtime state + CLI + CI trigger workflow). Implemented in
+      `lyzortx/orchestration/{tasks.json,orchestrator.py,README.md}`,
+      `lyzortx/generated_outputs/orchestration/runtime_state.json`, and `.github/workflows/orchestrator.yml`.
 - [x] Finalize `score='n'` handling policy and document aggregation rules. Implemented via Track A label policy
       artifacts in `lyzortx/generated_outputs/track_a/labels/`.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.

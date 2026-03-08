@@ -1,0 +1,163 @@
+name: PLAN Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Orchestrator command"
+        required: true
+        default: "run_once"
+        type: choice
+        options:
+          - run_once
+          - status
+          - pause
+          - resume
+          - set_task_status
+          - suggest_plan_sync
+      task_id:
+        description: "Task id (for set_task_status)"
+        required: false
+        type: string
+      status:
+        description: "Task status (for set_task_status)"
+        required: false
+        type: choice
+        options:
+          - pending
+          - in_progress
+          - completed
+          - blocked
+      note:
+        description: "Optional event note"
+        required: false
+        type: string
+      max_active_tasks:
+        description: "Maximum concurrent in-progress tasks"
+        required: false
+        default: "1"
+        type: string
+  repository_dispatch:
+    types:
+      - orchestrator_cmd
+  issues:
+    types:
+      - closed
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  orchestrator-tick:
+    name: Orchestrator Tick
+    if: ${{ github.event_name != 'issues' || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.12"
+
+      - name: Resolve command payload
+        id: payload
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          event_name = os.environ["GITHUB_EVENT_NAME"]
+          event_path = os.environ["GITHUB_EVENT_PATH"]
+          with open(event_path, "r", encoding="utf-8") as handle:
+              event = json.load(handle)
+
+          command = "run_once"
+          task_id = ""
+          task_status = ""
+          note = ""
+          max_active_tasks = "1"
+
+          if event_name == "workflow_dispatch":
+              inputs = event.get("inputs", {})
+              command = inputs.get("command") or command
+              task_id = inputs.get("task_id", "")
+              task_status = inputs.get("status", "")
+              note = inputs.get("note", "")
+              max_active_tasks = inputs.get("max_active_tasks") or max_active_tasks
+          elif event_name == "repository_dispatch":
+              payload = event.get("client_payload", {})
+              command = payload.get("command") or command
+              task_id = payload.get("task_id", "")
+              task_status = payload.get("status", "")
+              note = payload.get("note", "")
+              max_active_tasks = str(payload.get("max_active_tasks", max_active_tasks))
+          elif event_name == "issues":
+              issue_number = event.get("issue", {}).get("number")
+              command = "run_once"
+              note = f"Triggered by close of orchestrator issue #{issue_number}" if issue_number else "Triggered by issue close"
+
+          output_path = os.environ["GITHUB_OUTPUT"]
+          with open(output_path, "a", encoding="utf-8") as out:
+              out.write(f"command={command}\n")
+              out.write(f"task_id={task_id}\n")
+              out.write(f"task_status={task_status}\n")
+              out.write(f"note={note}\n")
+              out.write(f"max_active_tasks={max_active_tasks}\n")
+          PY
+
+      - name: Run orchestrator command
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          args=(
+            --command "${{ steps.payload.outputs.command }}"
+            --tasks-path lyzortx/orchestration/tasks.json
+            --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
+            --max-active-tasks "${{ steps.payload.outputs.max_active_tasks }}"
+          )
+
+          if [[ -n "${{ steps.payload.outputs.task_id }}" ]]; then
+            args+=(--task-id "${{ steps.payload.outputs.task_id }}")
+          fi
+          if [[ -n "${{ steps.payload.outputs.task_status }}" ]]; then
+            args+=(--status "${{ steps.payload.outputs.task_status }}")
+          fi
+          if [[ -n "${{ steps.payload.outputs.note }}" ]]; then
+            args+=(--note "${{ steps.payload.outputs.note }}")
+          fi
+
+          python -m lyzortx.orchestration.orchestrator "${args[@]}"
+
+      - name: Emit current status
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python -m lyzortx.orchestration.orchestrator \
+            --command status \
+            --tasks-path lyzortx/orchestration/tasks.json \
+            --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
+
+      - name: Emit PLAN sync suggestions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python -m lyzortx.orchestration.orchestrator \
+            --command suggest_plan_sync \
+            --tasks-path lyzortx/orchestration/tasks.json \
+            --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
+
+      - name: Upload orchestration state artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestrator-state
+          path: lyzortx/generated_outputs/orchestration/runtime_state.json
