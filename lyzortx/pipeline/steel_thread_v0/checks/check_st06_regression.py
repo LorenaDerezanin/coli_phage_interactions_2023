@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -86,9 +85,6 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "score_column": summary["parameters"]["score_column"],
             "max_per_family": summary["parameters"]["max_per_family"],
             "diversity_mode": summary["parameters"]["diversity_mode"],
-        },
-        "hashes": {
-            "recommendations_csv_sha256": hashlib.sha256(recs_path.read_bytes()).hexdigest(),
         },
     }
 

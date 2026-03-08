@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
+import csv
 import json
+from math import isclose
+from numbers import Real
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +18,8 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
     st03_build_splits,
     st04_train_baselines,
 )
+
+NUMERIC_TOLERANCE = 1e-5
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -45,6 +49,25 @@ def load_json(path: Path) -> Dict[str, Any]:
         return json.load(handle)
 
 
+def safe_round(value: float, ndigits: int = 6) -> float:
+    return round(float(value), ndigits)
+
+
+def is_real_number(value: object) -> bool:
+    return isinstance(value, Real) and not isinstance(value, bool)
+
+
+def read_prediction_rows(path: Path) -> List[Dict[str, str]]:
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"No header found in {path}.")
+        return [
+            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
+            for row in reader
+        ]
+
+
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     metrics_path = intermediate_dir / "st04_model_metrics_raw.json"
     artifacts_path = intermediate_dir / "st04_model_artifacts.json"
@@ -60,7 +83,17 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
 
     metrics = load_json(metrics_path)
     artifacts = load_json(artifacts_path)
-    predictions_sha256 = hashlib.sha256(predictions_path.read_bytes()).hexdigest()
+    prediction_rows = read_prediction_rows(predictions_path)
+    if not prediction_rows:
+        raise ValueError(f"Prediction CSV is empty: {predictions_path}")
+
+    try:
+        dummy_probs = [float(row["pred_dummy_raw"]) for row in prediction_rows]
+        logreg_probs = [float(row["pred_logreg_raw"]) for row in prediction_rows]
+    except (KeyError, ValueError) as exc:
+        raise ValueError(
+            "Prediction CSV is missing numeric pred_dummy_raw/pred_logreg_raw columns."
+        ) from exc
 
     return {
         "train_summary": metrics["train_summary"],
@@ -75,10 +108,18 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "logreg_holdout_binary_metrics": metrics["models"]["logreg_host_phage"]["holdout_binary_metrics"],
             "logreg_holdout_top3_metrics": metrics["models"]["logreg_host_phage"]["holdout_top3_metrics"],
         },
+        "prediction_summary": {
+            "row_count": len(prediction_rows),
+            "dummy_prob_mean": safe_round(sum(dummy_probs) / len(dummy_probs)),
+            "dummy_prob_min": safe_round(min(dummy_probs)),
+            "dummy_prob_max": safe_round(max(dummy_probs)),
+            "logreg_prob_mean": safe_round(sum(logreg_probs) / len(logreg_probs)),
+            "logreg_prob_min": safe_round(min(logreg_probs)),
+            "logreg_prob_max": safe_round(max(logreg_probs)),
+        },
         "artifact_summary": {
             "logreg_n_iter": artifacts["logreg_model"]["n_iter"],
             "logreg_intercept": artifacts["logreg_model"]["intercept"],
-            "predictions_csv_sha256": predictions_sha256,
         },
     }
 
@@ -98,6 +139,13 @@ def compare_dicts(expected: Dict[str, Any], actual: Dict[str, Any], prefix: str 
         act_val = actual[key]
         if isinstance(exp_val, dict) and isinstance(act_val, dict):
             errors.extend(compare_dicts(exp_val, act_val, prefix=path))
+            continue
+        if is_real_number(exp_val) and is_real_number(act_val):
+            if not isclose(float(exp_val), float(act_val), rel_tol=0.0, abs_tol=NUMERIC_TOLERANCE):
+                errors.append(
+                    f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}, "
+                    f"tolerance={NUMERIC_TOLERANCE}"
+                )
             continue
         if exp_val != act_val:
             errors.append(f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}")

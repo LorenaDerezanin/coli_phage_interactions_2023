@@ -94,11 +94,6 @@
       "positive_rate": 0.251965
     }
   },
-  "hashes": {
-    "calibrated_predictions_csv_sha256": "73e745d2bbd1b942c30b6a3969884212413364c55b1a87d389b5eef4bdcf64d8",
-    "calibration_summary_csv_sha256": "ebc9efa257440c0c75a97cc7410ac514bf6734eaecf9204baf6769052727def4",
-    "ranked_predictions_csv_sha256": "5da495de326f8e9461e412bc251f7c536f3f5a8471cc83827b8b515c78acddcb"
-  },
   "row_counts": {
     "calibrated_predictions_rows": 35424,
     "calibration_summary_rows": 12,

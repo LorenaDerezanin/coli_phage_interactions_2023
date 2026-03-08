@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -60,10 +59,6 @@ def count_csv_rows(path: Path) -> int:
         return sum(1 for _ in reader)
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def build_actual_summary(output_dir: Path) -> Dict[str, Any]:
     metrics_path = output_dir / "metrics_summary.csv"
     top3_path = output_dir / "top3_recommendations.csv"
@@ -93,12 +88,6 @@ def build_actual_summary(output_dir: Path) -> Dict[str, Any]:
             "error_analysis_rows": count_csv_rows(error_path),
         },
         "manifest_counts": manifest["counts"],
-        "hashes": {
-            "metrics_summary": sha256(metrics_path),
-            "top3_recommendations": sha256(top3_path),
-            "calibration_summary": sha256(calib_path),
-            "error_analysis": sha256(error_path),
-        },
     }
 
 

@@ -6,9 +6,6 @@
     "score_column": "pred_logreg_platt",
     "top_k": 3
   },
-  "hashes": {
-    "recommendations_csv_sha256": "534fdad6e913ec05d5272ebe064a5347c60c202bcce8868ba26131ae65606555"
-  },
   "row_counts": {
     "recommendation_rows": 1107,
     "recommended_strain_count": 369

@@ -15,7 +15,7 @@ on:
 jobs:
   st-regression:
     name: Steel Thread Regression Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -25,11 +25,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.12"
 
       - name: Install ML dependencies
         run: |
-          pip install scikit-learn==1.8.0
+          pip install -r requirements.txt
 
       - name: Run ST0.1 regression check
         run: |

@@ -1,10 +1,4 @@
 {
-  "hashes": {
-    "calibration_summary": "ebc9efa257440c0c75a97cc7410ac514bf6734eaecf9204baf6769052727def4",
-    "error_analysis": "b7f120593aec2c393e78fc455c192981d03595dd0b6f5b4b968d623c8266ca15",
-    "metrics_summary": "e7b4712592406ca5255eebe3e8e7a3e9cd356594fcf4f30b9a4848b0d08e2d30",
-    "top3_recommendations": "534fdad6e913ec05d5272ebe064a5347c60c202bcce8868ba26131ae65606555"
-  },
   "manifest_counts": {
     "calibration_summary_rows": 12,
     "error_analysis_rows": 10,

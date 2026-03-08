@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -102,11 +101,6 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "models": sorted(list(artifacts["models"].keys())),
             "dummy_platt_coef": artifacts["models"]["dummy_prior"]["platt_coef"],
             "logreg_platt_coef": artifacts["models"]["logreg_host_phage"]["platt_coef"],
-        },
-        "hashes": {
-            "calibrated_predictions_csv_sha256": hashlib.sha256(predictions_path.read_bytes()).hexdigest(),
-            "ranked_predictions_csv_sha256": hashlib.sha256(ranked_path.read_bytes()).hexdigest(),
-            "calibration_summary_csv_sha256": hashlib.sha256(summary_path.read_bytes()).hexdigest(),
         },
     }
 

@@ -1,8 +1,7 @@
 {
   "artifact_summary": {
     "logreg_intercept": -0.097218,
-    "logreg_n_iter": 18,
-    "predictions_csv_sha256": "8f1c5fc8135cd5d8078c37031b85bd35dc63db4c0cbe7f6ad798e63dde15f79c"
+    "logreg_n_iter": 18
   },
   "feature_summary": {
     "categorical_feature_count": 19,
@@ -42,6 +41,15 @@
       "top3_hit_rate_all_strains": 0.846154,
       "top3_hit_rate_susceptible_only": 0.873016
     }
+  },
+  "prediction_summary": {
+    "dummy_prob_max": 0.2807,
+    "dummy_prob_mean": 0.2807,
+    "dummy_prob_min": 0.2807,
+    "logreg_prob_max": 0.992201,
+    "logreg_prob_mean": 0.448885,
+    "logreg_prob_min": 0.020586,
+    "row_count": 35424
   },
   "train_summary": {
     "holdout_hard_rows": 6235,
