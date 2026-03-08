@@ -19,6 +19,7 @@
   the library-based approach.
 - If adding dependencies is needed for the technically better implementation, update CI/environment setup accordingly
   rather than degrading the implementation.
+- Keep `requirements.txt` alphabetically sorted by package name.
 
 # Agent Scratch Space
 
@@ -48,6 +49,12 @@
 - Follow that plan for task sequencing and update its checklist states as work progresses.
 - When scope decisions are ambiguous, prefer alignment with the plan unless the user overrides it.
 
+# PR and Issue Linkage Policy
+
+- Any PR that addresses a tracked GitHub issue must include `Closes #<issue_number>` in its description.
+- Use one `Closes #...` line per issue when a PR intentionally resolves multiple issues.
+- Keep closure references explicit so orchestration and audit flows can advance automatically on merge.
+
 # Requirement Challenge Policy
 
 - For any non-trivial user request, first question the requirement before implementing.
@@ -66,6 +73,14 @@
 - Store generated analysis outputs (CSVs, figures, reports) under `lyzortx/generated_outputs/`.
 - Organize outputs by analysis name, for example `lyzortx/generated_outputs/raw_interactions_summary/`.
 - Do not write new generated artifacts to top-level directories like `figures/` for `lyzortx` analyses.
+
+# Function Design and Testing Policy
+
+- Prefer pure functions as the default design for new logic where practical.
+- Keep side effects (I/O, network, subprocesses, global state mutation) at module boundaries.
+- For new or changed pure logic, add unit tests that cover core behavior and edge cases.
+- Place tests under `lyzortx/tests/` unless the user explicitly requests a different location.
+- Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
 
 # Commit Shortcut
 

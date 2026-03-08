@@ -1,12 +1,13 @@
 ipykernel
+joblib==1.5.3
 jupyter>=1.0.0
 matplotlib>=3.4.0
 notebook>=6.4.0
+numpy==2.4.2
 pandas>=1.3.0
 pre-commit
-seaborn>=0.11.0
+pytest>=8.3.0
 scikit-learn==1.8.0
-numpy==2.4.2
 scipy==1.17.0
-joblib==1.5.3
+seaborn>=0.11.0
 threadpoolctl==3.6.0
