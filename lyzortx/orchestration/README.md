@@ -78,7 +78,7 @@ Workflow: `.github/workflows/orchestrator.yml`
 - `repository_dispatch`: API/CLI command trigger.
 - `issues.closed`: when a labeled orchestrator task issue is closed, run a new tick to dispatch the next ready task.
 
-No cron trigger is used in this mode. Default `max_active_tasks` in workflow dispatch is `1`. The `orchestrator-task`
+No cron trigger is used in this mode. Default `max_active_tasks` in workflow dispatch is `3`. The `orchestrator-task`
 label is created automatically on first dispatch if missing.
 
 ## Dispatch Payload Example
@@ -91,7 +91,7 @@ label is created automatically on first dispatch if missing.
     "task_id": "IM01_LOCK_DENOMINATOR_POLICY",
     "status": "blocked",
     "note": "Waiting for benchmark definitions",
-    "max_active_tasks": 1
+    "max_active_tasks": 3
   }
 }
 ```
