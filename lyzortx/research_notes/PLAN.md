@@ -332,7 +332,8 @@ graph LR
 - [x] Finalize `score='n'` handling policy and document aggregation rules. Implemented via Track A label policy
       artifacts in `lyzortx/generated_outputs/track_a/labels/`.
 - [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
-- [ ] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks.
+- [x] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks. Implemented in
+      `lyzortx/research_notes/TIER_BENCHMARK_DENOMINATOR_POLICY.md`.
 - [x] Build canonical ID normalization and mismatch report script. Implemented in
       `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with outputs under
       `lyzortx/generated_outputs/track_a/id_map/`.
