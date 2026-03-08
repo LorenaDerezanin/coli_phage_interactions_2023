@@ -120,6 +120,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "matrix402": 402,
         "features404": 404,
     }
+    expected_phage_panel_count = 96
     actual_counts = {
         row["cohort_name"]: as_int(row["bacteria_count"], f"bacteria_count[{row['cohort_name']}]")
         for row in cohort_rows
@@ -132,6 +133,26 @@ def main(argv: Optional[List[str]] = None) -> None:
             raise SystemExit(
                 f"Track A cohort size mismatch for {cohort_name}: expected={expected_count}, actual={actual}"
             )
+
+    phage_counts = {
+        row["cohort_name"]: as_int(
+            row.get("phage_panel_count"),
+            f"phage_panel_count[{row['cohort_name']}]",
+        )
+        for row in cohort_rows
+    }
+    unique_phage_counts = set(phage_counts.values())
+    if len(unique_phage_counts) != 1:
+        raise SystemExit(
+            "Track A phage panel count mismatch across cohorts: "
+            + ", ".join(f"{cohort}={count}" for cohort, count in sorted(phage_counts.items()))
+        )
+    actual_phage_panel_count = next(iter(unique_phage_counts))
+    if actual_phage_panel_count != expected_phage_panel_count:
+        raise SystemExit(
+            "Track A phage panel size mismatch: "
+            f"expected={expected_phage_panel_count}, actual={actual_phage_panel_count}"
+        )
 
     v1_rows = load_csv_rows(labels_dir / "label_set_v1_pairs.csv")
     v2_rows = load_csv_rows(labels_dir / "label_set_v2_pairs.csv")
@@ -162,6 +183,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     print(f"- Warning failures: {warning_failures}")
     print(f"- Pair labels: {len(v1_rows)}")
     print("- Cohorts: raw369=369, matrix402=402, features404=404")
+    print(f"- Phage panel: phage96={actual_phage_panel_count}")
 
 
 if __name__ == "__main__":
