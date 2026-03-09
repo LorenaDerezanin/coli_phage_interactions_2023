@@ -344,9 +344,11 @@ graph LR
       `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with v1/v2 outputs under
       `lyzortx/generated_outputs/track_a/labels/`.
 - [x] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
-      RBP/depolymerase/domain proxies. Implemented in `lyzortx/pipeline/track_a/steps/build_mechanistic_proxy_features.py`
-      with outputs under `lyzortx/generated_outputs/track_a/mechanistic_proxy_features/`.
-- [ ] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
-      features.
+      RBP/depolymerase/domain proxies. Implemented in
+      `lyzortx/pipeline/track_a/steps/build_mechanistic_proxy_features.py` with outputs under
+      `lyzortx/generated_outputs/track_a/mechanistic_proxy_features/`.
+- [x] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
+      features. Implemented in `lyzortx/pipeline/track_a/steps/run_phistruct_rbp_pilot.py` with outputs under
+      `lyzortx/generated_outputs/track_a/phistruct_pilot/`.
 - [ ] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
 - [ ] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.
