@@ -15,6 +15,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.1b` strict confidence tiers: `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`.
   - `ST0.2` canonical pair table builder: `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`.
   - `ST0.3` split builder: `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`.
+  - `ST0.3b` split-suite builder: `lyzortx/pipeline/steel_thread_v0/steps/st03b_build_split_suite.py`.
   - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
   - `ST0.5` calibrator and ranker: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
   - `ST0.6` recommender: `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`.
@@ -24,6 +25,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
   - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
   - Regression gate for ST0.3: `lyzortx/pipeline/steel_thread_v0/checks/check_st03_regression.py`.
+  - Regression gate for ST0.3b: `lyzortx/pipeline/steel_thread_v0/checks/check_st03b_regression.py`.
   - Regression gate for ST0.4: `lyzortx/pipeline/steel_thread_v0/checks/check_st04_regression.py`.
   - Regression gate for ST0.5: `lyzortx/pipeline/steel_thread_v0/checks/check_st05_regression.py`.
   - Regression gate for ST0.6: `lyzortx/pipeline/steel_thread_v0/checks/check_st06_regression.py`.
@@ -34,7 +36,8 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 - `ST0.1`: Aggregate replicate/dilution observations into hard labels and uncertainty flags.
 - `ST0.1b`: Add stricter confidence tiers as a parallel label view for dual-slice evaluation.
 - `ST0.2`: Build canonical pair table with IDs, labels, uncertainty, and v0 features.
-- `ST0.3`: Build fixed leakage-safe splits.
+- `ST0.3`: Build fixed leakage-safe host-group splits.
+- `ST0.3b`: Build split-suite artifacts for phage-family holdout and host+phage dual-axis stress tests.
 - `ST0.4`: Train baseline models.
 - `ST0.5`: Calibrate probabilities and generate rankings.
 - `ST0.6`: Produce top-3 recommendations.
@@ -90,6 +93,18 @@ Run the ST0.3 regression gate (recomputes ST0.1, ST0.1b, ST0.2, and ST0.3 then c
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st03_regression --run-st01 --run-st01b --run-st02 --run-st03
+```
+
+Run ST0.3b split-suite builder:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st03b
+```
+
+Run the ST0.3b regression gate (recomputes ST0.1, ST0.1b, ST0.2, ST0.3, and ST0.3b then compares against baseline):
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st03b_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st03b
 ```
 
 Run ST0.4 baseline training:
@@ -171,6 +186,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st03
 ```
 
 ```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st03b
+```
+
+```bash
 python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step check-st04
 ```
 
@@ -209,6 +228,10 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06b
   - `st03_split_assignments.csv`
   - `st03_split_protocol.json`
   - `st03_split_audit.json`
+- ST0.3b files:
+  - `st03b_split_suite_assignments.csv`
+  - `st03b_split_suite_protocol.json`
+  - `st03b_split_suite_audit.json`
 - ST0.4 files:
   - `st04_pair_predictions_raw.csv`
   - `st04_model_metrics_raw.json`
