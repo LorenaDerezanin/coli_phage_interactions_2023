@@ -357,4 +357,4 @@ graph LR
       `lyzortx/generated_outputs/track_a/phistruct_pilot/`.
 - [x] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
       Implemented in `lyzortx/research_notes/external_data/source_registry.csv`.
-- [ ] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.
+- [x] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.

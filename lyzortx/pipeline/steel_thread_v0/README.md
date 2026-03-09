@@ -22,6 +22,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.6` recommender: `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`.
   - `ST0.6b` ranking-policy comparator: `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
   - `ST0.7` report artifact builder: `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`.
+  - `ST0.8` VHRdb ingest and ablation summaries: `lyzortx/pipeline/steel_thread_v0/steps/st08_vhrdb_ingest_ablation.py`.
   - Regression gate for ST0.1: `lyzortx/pipeline/steel_thread_v0/checks/check_st01_regression.py`.
   - Regression gate for ST0.1b: `lyzortx/pipeline/steel_thread_v0/checks/check_st01b_regression.py`.
   - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
@@ -46,6 +47,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 - `ST0.6b`: Compare recommendation ranking policies side-by-side (`raw`, `platt`, `isotonic`; with and without diversity
   cap).
 - `ST0.7`: Emit reproducible report artifacts.
+- `ST0.8`: Ingest VHRdb with source-fidelity fields and run internal-only vs +VHRdb ablation summaries.
 
 ## How To Run
 
@@ -168,6 +170,12 @@ Run ST0.6b ranking-policy comparison:
 python -m lyzortx.pipeline.steel_thread_v0.steps.st06b_compare_ranking_policies
 ```
 
+Run ST0.8 VHRdb ingest and ablation summary:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st08
+```
+
 Run the ST0.7 regression gate (recomputes ST0.1 through ST0.7 then compares against baseline):
 
 ```bash
@@ -260,6 +268,11 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06b
   - `st06b_recommendations_all_policies.csv`
   - `st06b_top3_recommendations_best.csv`
   - `st06b_summary.json`
+- ST0.8 files:
+  - `st08_vhrdb_ingested_pairs.csv`
+  - `st08_ablation_summary.csv`
+  - `st08_lift_failure_slices.csv`
+  - `st08_vhrdb_manifest.json`
 - ST0.7 files (`lyzortx/generated_outputs/steel_thread_v0/`):
   - `metrics_summary.csv`
   - `top3_recommendations.csv`
