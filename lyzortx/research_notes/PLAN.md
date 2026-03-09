@@ -339,7 +339,7 @@ graph LR
       `lyzortx/generated_outputs/track_a/id_map/`.
 - [x] Implement ST0.3b split suite with explicit phage-family holdout and host+phage dual-axis stress tests.
 - [x] Implement ST0.4b ablations (host-only, phage-only, no-identity controls) to quantify true signal sources.
-- [ ] Implement ST0.5b/ST0.6c reporting on both slices (full-label and strict-confidence) with bootstrap CIs.
+- [x] Implement ST0.5b/ST0.6c reporting on both slices (full-label and strict-confidence) with bootstrap CIs.
 - [x] Implement label builder for binary/strength/potency targets from raw interactions. Implemented in
       `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with v1/v2 outputs under
       `lyzortx/generated_outputs/track_a/labels/`.

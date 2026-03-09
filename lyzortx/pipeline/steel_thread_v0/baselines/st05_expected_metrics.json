@@ -9,94 +9,178 @@
     ]
   },
   "calibration_metrics": {
-    "dummy_prior|calibration|isotonic": {
+    "dummy_prior|calibration|full_label|isotonic": {
       "brier_score": 0.214095,
       "ece": 0.0,
       "log_loss": 0.61951,
       "n": 5755,
       "positive_rate": 0.310513
     },
-    "dummy_prior|calibration|platt": {
+    "dummy_prior|calibration|full_label|platt": {
       "brier_score": 0.214095,
       "ece": 8e-06,
       "log_loss": 0.61951,
       "n": 5755,
       "positive_rate": 0.310513
     },
-    "dummy_prior|calibration|raw": {
+    "dummy_prior|calibration|full_label|raw": {
       "brier_score": 0.214983,
       "ece": 0.029813,
       "log_loss": 0.621667,
       "n": 5755,
       "positive_rate": 0.310513
     },
-    "dummy_prior|holdout|isotonic": {
+    "dummy_prior|calibration|strict_confidence|isotonic": {
+      "brier_score": 0.158555,
+      "ece": 0.146553,
+      "log_loss": 0.502601,
+      "n": 4556,
+      "positive_rate": 0.16396
+    },
+    "dummy_prior|calibration|strict_confidence|platt": {
+      "brier_score": 0.158557,
+      "ece": 0.146561,
+      "log_loss": 0.502607,
+      "n": 4556,
+      "positive_rate": 0.16396
+    },
+    "dummy_prior|calibration|strict_confidence|raw": {
+      "brier_score": 0.150705,
+      "ece": 0.11674,
+      "log_loss": 0.483761,
+      "n": 4556,
+      "positive_rate": 0.16396
+    },
+    "dummy_prior|holdout|full_label|isotonic": {
       "brier_score": 0.191906,
       "ece": 0.058548,
       "log_loss": 0.572805,
       "n": 6235,
       "positive_rate": 0.251965
     },
-    "dummy_prior|holdout|platt": {
+    "dummy_prior|holdout|full_label|platt": {
       "brier_score": 0.191907,
       "ece": 0.058556,
       "log_loss": 0.572807,
       "n": 6235,
       "positive_rate": 0.251965
     },
-    "dummy_prior|holdout|raw": {
+    "dummy_prior|holdout|full_label|raw": {
       "brier_score": 0.189304,
       "ece": 0.028735,
       "log_loss": 0.566574,
       "n": 6235,
       "positive_rate": 0.251965
     },
-    "logreg_host_phage|calibration|isotonic": {
+    "dummy_prior|holdout|strict_confidence|isotonic": {
+      "brier_score": 0.143698,
+      "ece": 0.185756,
+      "log_loss": 0.471328,
+      "n": 5130,
+      "positive_rate": 0.124756
+    },
+    "dummy_prior|holdout|strict_confidence|platt": {
+      "brier_score": 0.143701,
+      "ece": 0.185764,
+      "log_loss": 0.471335,
+      "n": 5130,
+      "positive_rate": 0.124756
+    },
+    "dummy_prior|holdout|strict_confidence|raw": {
+      "brier_score": 0.133511,
+      "ece": 0.155944,
+      "log_loss": 0.446871,
+      "n": 5130,
+      "positive_rate": 0.124756
+    },
+    "logreg_host_phage|calibration|full_label|isotonic": {
       "brier_score": 0.153626,
       "ece": 0.0,
       "log_loss": 0.470887,
       "n": 5755,
       "positive_rate": 0.310513
     },
-    "logreg_host_phage|calibration|platt": {
+    "logreg_host_phage|calibration|full_label|platt": {
       "brier_score": 0.156518,
       "ece": 0.015367,
       "log_loss": 0.480955,
       "n": 5755,
       "positive_rate": 0.310513
     },
-    "logreg_host_phage|calibration|raw": {
+    "logreg_host_phage|calibration|full_label|raw": {
       "brier_score": 0.183129,
       "ece": 0.150541,
       "log_loss": 0.547032,
       "n": 5755,
       "positive_rate": 0.310513
     },
-    "logreg_host_phage|holdout|isotonic": {
+    "logreg_host_phage|calibration|strict_confidence|isotonic": {
+      "brier_score": 0.107971,
+      "ece": 0.121312,
+      "log_loss": 0.355284,
+      "n": 4556,
+      "positive_rate": 0.16396
+    },
+    "logreg_host_phage|calibration|strict_confidence|platt": {
+      "brier_score": 0.111626,
+      "ece": 0.122487,
+      "log_loss": 0.364374,
+      "n": 4556,
+      "positive_rate": 0.16396
+    },
+    "logreg_host_phage|calibration|strict_confidence|raw": {
+      "brier_score": 0.178775,
+      "ece": 0.268186,
+      "log_loss": 0.536795,
+      "n": 4556,
+      "positive_rate": 0.16396
+    },
+    "logreg_host_phage|holdout|full_label|isotonic": {
       "brier_score": 0.140218,
       "ece": 0.031802,
       "log_loss": 0.500302,
       "n": 6235,
       "positive_rate": 0.251965
     },
-    "logreg_host_phage|holdout|platt": {
+    "logreg_host_phage|holdout|full_label|platt": {
       "brier_score": 0.137795,
       "ece": 0.029253,
       "log_loss": 0.430845,
       "n": 6235,
       "positive_rate": 0.251965
     },
-    "logreg_host_phage|holdout|raw": {
+    "logreg_host_phage|holdout|full_label|raw": {
       "brier_score": 0.171223,
       "ece": 0.176341,
       "log_loss": 0.521944,
       "n": 6235,
       "positive_rate": 0.251965
+    },
+    "logreg_host_phage|holdout|strict_confidence|isotonic": {
+      "brier_score": 0.095202,
+      "ece": 0.126064,
+      "log_loss": 0.359092,
+      "n": 5130,
+      "positive_rate": 0.124756
+    },
+    "logreg_host_phage|holdout|strict_confidence|platt": {
+      "brier_score": 0.094406,
+      "ece": 0.124291,
+      "log_loss": 0.323007,
+      "n": 5130,
+      "positive_rate": 0.124756
+    },
+    "logreg_host_phage|holdout|strict_confidence|raw": {
+      "brier_score": 0.160978,
+      "ece": 0.268562,
+      "log_loss": 0.498516,
+      "n": 5130,
+      "positive_rate": 0.124756
     }
   },
   "row_counts": {
     "calibrated_predictions_rows": 35424,
-    "calibration_summary_rows": 12,
+    "calibration_summary_rows": 24,
     "ranked_predictions_rows": 35424
   }
 }

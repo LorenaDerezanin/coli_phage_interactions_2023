@@ -22,6 +22,11 @@ MODEL_COLUMNS = {
     "logreg_host_phage": "pred_logreg_raw",
 }
 
+SLICE_FILTERS = {
+    "full_label": lambda row: row["label_hard_binary"] != "",
+    "strict_confidence": lambda row: row["label_hard_binary"] != "" and row["is_strict_trainable"] == "1",
+}
+
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -118,6 +123,12 @@ def binary_metrics(y_true: List[int], y_prob: List[float], ece_bins: int) -> Dic
     }
 
 
+def rows_for_slice(rows: List[Dict[str, str]], slice_name: str) -> List[Dict[str, str]]:
+    if slice_name not in SLICE_FILTERS:
+        raise ValueError(f"Unknown slice name: {slice_name}")
+    return [row for row in rows if SLICE_FILTERS[slice_name](row)]
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     ensure_directory(args.output_dir)
@@ -200,31 +211,31 @@ def main(argv: Optional[List[str]] = None) -> None:
         y_calib_list = [int(row["label_hard_binary"]) for row in calibration_rows]
         y_holdout_list = [int(row["label_hard_binary"]) for row in holdout_eval_rows]
 
-        for dataset_name, idxs, y_true in [
-            ("calibration", calib_idx, y_calib_list),
-            ("holdout", holdout_idx, y_holdout_list),
-        ]:
-            probs_raw = [float(all_raw[idx]) for idx in idxs]
-            probs_iso = [float(all_iso[idx]) for idx in idxs]
-            probs_platt = [float(all_platt[idx]) for idx in idxs]
-            for variant_name, probs in [
-                ("raw", probs_raw),
-                ("isotonic", probs_iso),
-                ("platt", probs_platt),
-            ]:
-                m = binary_metrics(y_true, probs, ece_bins=args.ece_bins)
-                summary_rows.append(
-                    {
-                        "model": model_name,
-                        "dataset": dataset_name,
-                        "variant": variant_name,
-                        "n": int(m["n"]),
-                        "positive_rate": m["positive_rate"],
-                        "brier_score": m["brier_score"],
-                        "log_loss": m["log_loss"],
-                        "ece": m["ece"],
-                    }
-                )
+        for dataset_name, dataset_rows in [("calibration", calibration_rows), ("holdout", holdout_eval_rows)]:
+            for slice_name in ("full_label", "strict_confidence"):
+                sliced_rows = rows_for_slice(dataset_rows, slice_name=slice_name)
+                if not sliced_rows:
+                    continue
+                sliced_idxs = [st04_rows.index(row) for row in sliced_rows]
+                y_true = [int(row["label_hard_binary"]) for row in sliced_rows]
+                probs_raw = [float(all_raw[idx]) for idx in sliced_idxs]
+                probs_iso = [float(all_iso[idx]) for idx in sliced_idxs]
+                probs_platt = [float(all_platt[idx]) for idx in sliced_idxs]
+                for variant_name, probs in [("raw", probs_raw), ("isotonic", probs_iso), ("platt", probs_platt)]:
+                    m = binary_metrics(y_true, probs, ece_bins=args.ece_bins)
+                    summary_rows.append(
+                        {
+                            "model": model_name,
+                            "dataset": dataset_name,
+                            "label_slice": slice_name,
+                            "variant": variant_name,
+                            "n": int(m["n"]),
+                            "positive_rate": m["positive_rate"],
+                            "brier_score": m["brier_score"],
+                            "log_loss": m["log_loss"],
+                            "ece": m["ece"],
+                        }
+                    )
 
     output_rows: List[Dict[str, object]] = []
     for idx, row in enumerate(st04_rows):
