@@ -21,6 +21,7 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
     st03_build_splits,
     st03b_build_split_suite,
     st04_train_baselines,
+    st04b_ablation_suite,
     st05_calibrate_rank,
     st06_recommend_top3,
     st06b_compare_ranking_policies,
@@ -39,6 +40,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "st03",
             "st03b",
             "st04",
+            "st04b",
             "st05",
             "st06",
             "st06b",
@@ -73,6 +75,8 @@ def main(argv: list[str] | None = None) -> None:
         st03b_build_split_suite.main([])
     elif args.step == "st04":
         st04_train_baselines.main([])
+    elif args.step == "st04b":
+        st04b_ablation_suite.main([])
     elif args.step == "st05":
         st05_calibrate_rank.main([])
     elif args.step == "st06":

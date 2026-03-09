@@ -17,6 +17,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.3` split builder: `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`.
   - `ST0.3b` split-suite builder: `lyzortx/pipeline/steel_thread_v0/steps/st03b_build_split_suite.py`.
   - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
+  - `ST0.4b` ablation suite: `lyzortx/pipeline/steel_thread_v0/steps/st04b_ablation_suite.py`.
   - `ST0.5` calibrator and ranker: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
   - `ST0.6` recommender: `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`.
   - `ST0.6b` ranking-policy comparator: `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
@@ -39,6 +40,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 - `ST0.3`: Build fixed leakage-safe host-group splits.
 - `ST0.3b`: Build split-suite artifacts for phage-family holdout and host+phage dual-axis stress tests.
 - `ST0.4`: Train baseline models.
+- `ST0.4b`: Run host-only, phage-only, and no-identity ablations on locked ST0.3b splits.
 - `ST0.5`: Calibrate probabilities and generate rankings.
 - `ST0.6`: Produce top-3 recommendations.
 - `ST0.6b`: Compare recommendation ranking policies side-by-side (`raw`, `platt`, `isotonic`; with and without diversity
@@ -118,6 +120,12 @@ Run the ST0.4 regression gate (recomputes ST0.1 through ST0.4 then compares agai
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st04_regression \
   --run-st01 --run-st01b --run-st02 --run-st03 --run-st04
+```
+
+Run ST0.4b ablation suite:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st04b
 ```
 
 Run ST0.5 calibration and ranking:
@@ -236,6 +244,9 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06b
   - `st04_pair_predictions_raw.csv`
   - `st04_model_metrics_raw.json`
   - `st04_model_artifacts.json`
+- ST0.4b files:
+  - `st04b_ablation_matrix.csv`
+  - `st04b_signal_summary.json`
 - ST0.5 files:
   - `st05_calibration_summary.csv`
   - `st05_pair_predictions_calibrated.csv`
