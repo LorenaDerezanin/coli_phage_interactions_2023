@@ -141,6 +141,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise ValueError("ST0.2 input is empty.")
 
     st02_by_pair = {row["pair_id"]: row for row in st02_rows}
+    row_index_by_pair_id = {row["pair_id"]: idx for idx, row in enumerate(st04_rows)}
     if len(st02_by_pair) != len(st04_rows):
         missing_pairs = [row["pair_id"] for row in st04_rows if row["pair_id"] not in st02_by_pair]
         if missing_pairs:
@@ -206,17 +207,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             "platt_intercept": safe_round(float(platt.intercept_[0])),
         }
 
-        calib_idx = [st04_rows.index(row) for row in calibration_rows]
-        holdout_idx = [st04_rows.index(row) for row in holdout_eval_rows]
-        y_calib_list = [int(row["label_hard_binary"]) for row in calibration_rows]
-        y_holdout_list = [int(row["label_hard_binary"]) for row in holdout_eval_rows]
-
         for dataset_name, dataset_rows in [("calibration", calibration_rows), ("holdout", holdout_eval_rows)]:
             for slice_name in ("full_label", "strict_confidence"):
                 sliced_rows = rows_for_slice(dataset_rows, slice_name=slice_name)
                 if not sliced_rows:
                     continue
-                sliced_idxs = [st04_rows.index(row) for row in sliced_rows]
+                sliced_idxs = [row_index_by_pair_id[row["pair_id"]] for row in sliced_rows]
                 y_true = [int(row["label_hard_binary"]) for row in sliced_rows]
                 probs_raw = [float(all_raw[idx]) for idx in sliced_idxs]
                 probs_iso = [float(all_iso[idx]) for idx in sliced_idxs]

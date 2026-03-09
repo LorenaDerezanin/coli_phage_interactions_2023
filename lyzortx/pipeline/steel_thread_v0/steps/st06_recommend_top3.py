@@ -78,36 +78,43 @@ def safe_round(value: float) -> float:
 
 
 
+def _slice_available_rows(rows: List[Dict[str, str]], slice_name: str) -> List[Dict[str, str]]:
+    if slice_name == "full_label":
+        return [row for row in rows if row["label_hard_binary"] != ""]
+    if slice_name == "strict_confidence":
+        return [row for row in rows if row["is_strict_trainable"] == "1" and row["label_hard_binary"] != ""]
+    raise ValueError(f"Unknown slice: {slice_name}")
+
+
+def _slice_recommendations(rows: List[Dict[str, object]], slice_name: str) -> List[Dict[str, object]]:
+    if slice_name == "full_label":
+        return rows
+    if slice_name == "strict_confidence":
+        return [row for row in rows if str(row["label_strict_confidence_tier"]) in {"high_conf_pos", "high_conf_neg"}]
+    raise ValueError(f"Unknown slice: {slice_name}")
+
+
 def evaluate_holdout_slice(
     holdout_by_bacteria: Dict[str, List[Dict[str, str]]],
     recs_by_bacteria: Dict[str, List[Dict[str, object]]],
     slice_name: str,
 ) -> Dict[str, float]:
-    if slice_name not in {"full_label", "strict_confidence"}:
-        raise ValueError(f"Unknown slice: {slice_name}")
-
     holdout_total = 0
     holdout_hits = 0
     susceptible_total = 0
     susceptible_hits = 0
 
     for bacteria in sorted(holdout_by_bacteria.keys()):
-        available_all = holdout_by_bacteria[bacteria]
-        if slice_name == "strict_confidence":
-            available = [row for row in available_all if row["is_strict_trainable"] == "1"]
-            recs = [row for row in recs_by_bacteria.get(bacteria, []) if str(row["label_strict_confidence_tier"]) in {"high_conf_pos", "high_conf_neg"}]
-        else:
-            available = available_all
-            recs = recs_by_bacteria.get(bacteria, [])
-
-        if not recs:
+        available = _slice_available_rows(holdout_by_bacteria[bacteria], slice_name=slice_name)
+        if not available:
             continue
 
         holdout_total += 1
+        recs = _slice_recommendations(recs_by_bacteria.get(bacteria, []), slice_name=slice_name)
         rec_hit = any(str(row["label_hard_binary"]) == "1" for row in recs)
         holdout_hits += 1 if rec_hit else 0
 
-        susceptible = any(row["label_hard_binary"] == "1" for row in available if row["label_hard_binary"] != "")
+        susceptible = any(row["label_hard_binary"] == "1" for row in available)
         if susceptible:
             susceptible_total += 1
             susceptible_hits += 1 if rec_hit else 0
@@ -131,25 +138,41 @@ def bootstrap_topk_ci(
     bootstrap_samples: int,
     bootstrap_random_state: int,
 ) -> Dict[str, float]:
-    bacteria_ids = sorted(holdout_by_bacteria.keys())
-    if not bacteria_ids:
-        return {"bootstrap_samples": bootstrap_samples, "ci_low": 0.0, "ci_high": 0.0}
+    eligible_strains = [
+        bacteria
+        for bacteria, rows in sorted(holdout_by_bacteria.items())
+        if _slice_available_rows(rows, slice_name=slice_name)
+    ]
+    if not eligible_strains:
+        return {
+            "bootstrap_samples": bootstrap_samples,
+            "ci_low_topk_hit_rate_all_strains": 0.0,
+            "ci_high_topk_hit_rate_all_strains": 0.0,
+            "ci_low_topk_hit_rate_susceptible_only": 0.0,
+            "ci_high_topk_hit_rate_susceptible_only": 0.0,
+        }
 
     rng = np.random.default_rng(bootstrap_random_state)
-    rates = []
+    all_strain_rates = []
+    susceptible_rates = []
     for _ in range(bootstrap_samples):
-        sampled_ids = rng.choice(bacteria_ids, size=len(bacteria_ids), replace=True)
+        sampled_ids = rng.choice(eligible_strains, size=len(eligible_strains), replace=True)
         sampled_holdout = {f"sample_{i}": holdout_by_bacteria[b] for i, b in enumerate(sampled_ids)}
         sampled_recs = {f"sample_{i}": recs_by_bacteria.get(b, []) for i, b in enumerate(sampled_ids)}
         metrics = evaluate_holdout_slice(sampled_holdout, sampled_recs, slice_name=slice_name)
-        rates.append(float(metrics["topk_hit_rate_all_strains"]))
+        all_strain_rates.append(float(metrics["topk_hit_rate_all_strains"]))
+        susceptible_rates.append(float(metrics["topk_hit_rate_susceptible_only"]))
 
-    low, high = np.quantile(np.asarray(rates, dtype=float), [0.025, 0.975])
+    all_low, all_high = np.quantile(np.asarray(all_strain_rates, dtype=float), [0.025, 0.975])
+    sus_low, sus_high = np.quantile(np.asarray(susceptible_rates, dtype=float), [0.025, 0.975])
     return {
         "bootstrap_samples": bootstrap_samples,
-        "ci_low": safe_round(float(low)),
-        "ci_high": safe_round(float(high)),
+        "ci_low_topk_hit_rate_all_strains": safe_round(float(all_low)),
+        "ci_high_topk_hit_rate_all_strains": safe_round(float(all_high)),
+        "ci_low_topk_hit_rate_susceptible_only": safe_round(float(sus_low)),
+        "ci_high_topk_hit_rate_susceptible_only": safe_round(float(sus_high)),
     }
+
 
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
@@ -159,6 +182,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise ValueError("top-k must be >= 1")
     if args.max_per_family < 0:
         raise ValueError("max-per-family must be >= 0")
+    if args.bootstrap_samples < 1:
+        raise ValueError("bootstrap-samples must be >= 1")
 
     prediction_rows = read_csv_rows(args.st05_predictions_path)
     if not prediction_rows:

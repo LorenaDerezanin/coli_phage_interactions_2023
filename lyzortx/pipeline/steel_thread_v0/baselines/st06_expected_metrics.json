@@ -2,13 +2,17 @@
   "bootstrap_ci": {
     "full_label": {
       "bootstrap_samples": 1000,
-      "ci_high": 0.923077,
-      "ci_low": 0.753846
+      "ci_high_topk_hit_rate_all_strains": 0.923077,
+      "ci_high_topk_hit_rate_susceptible_only": 0.952381,
+      "ci_low_topk_hit_rate_all_strains": 0.753846,
+      "ci_low_topk_hit_rate_susceptible_only": 0.78125
     },
     "strict_confidence": {
       "bootstrap_samples": 1000,
-      "ci_high": 0.766667,
-      "ci_low": 0.539584
+      "ci_high_topk_hit_rate_all_strains": 0.734375,
+      "ci_high_topk_hit_rate_susceptible_only": 0.79661,
+      "ci_low_topk_hit_rate_all_strains": 0.5,
+      "ci_low_topk_hit_rate_susceptible_only": 0.553525
     }
   },
   "diversity_summary": {
@@ -33,11 +37,11 @@
     },
     "strict_confidence": {
       "holdout_hit_count": 40,
-      "holdout_strain_count": 61,
+      "holdout_strain_count": 64,
       "holdout_susceptible_hit_count": 40,
-      "holdout_susceptible_strain_count": 56,
-      "topk_hit_rate_all_strains": 0.655738,
-      "topk_hit_rate_susceptible_only": 0.714286
+      "holdout_susceptible_strain_count": 59,
+      "topk_hit_rate_all_strains": 0.625,
+      "topk_hit_rate_susceptible_only": 0.677966
     }
   }
 }

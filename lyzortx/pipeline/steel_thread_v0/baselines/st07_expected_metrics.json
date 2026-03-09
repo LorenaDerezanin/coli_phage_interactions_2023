@@ -2,13 +2,13 @@
   "manifest_counts": {
     "calibration_summary_rows": 24,
     "error_analysis_rows": 10,
-    "metrics_summary_rows": 78,
+    "metrics_summary_rows": 82,
     "top3_recommendations_rows": 1107
   },
   "row_counts": {
     "calibration_summary_rows": 24,
     "error_analysis_rows": 10,
-    "metrics_summary_rows": 78,
+    "metrics_summary_rows": 82,
     "top3_recommendations_rows": 1107
   }
 }
