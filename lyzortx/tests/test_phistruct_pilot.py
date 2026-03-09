@@ -1,19 +1,48 @@
+from pathlib import Path
+
 from lyzortx.pipeline.track_a.steps.run_phistruct_rbp_pilot import (
+    build_phistruct_style_embeddings,
     expected_calibration_error,
-    phistruct_style_embedding,
     top_k_hit_rate,
 )
 
 
-def test_phistruct_style_embedding_is_deterministic_and_normalized() -> None:
-    row = {"Family": "Siphoviridae", "Genus": "Tequintavirus"}
-    emb_a = phistruct_style_embedding(row, dim=8)
-    emb_b = phistruct_style_embedding(row, dim=8)
+def test_build_phistruct_style_embeddings_from_fasta_is_deterministic(tmp_path: Path) -> None:
+    (tmp_path / "P1.fna").write_text(">P1\nACGTACGTACGTACGT\n", encoding="utf-8")
+    (tmp_path / "P2.fna").write_text(">P2\nAAAACCCCGGGGTTTT\n", encoding="utf-8")
 
-    assert emb_a == emb_b
-    assert len(emb_a) == 8
-    sq_norm = sum(float(v) * float(v) for v in emb_a.values())
-    assert 0.99 <= sq_norm <= 1.01
+    emb_a = build_phistruct_style_embeddings(
+        phage_names=["P1", "P2"],
+        phage_fna_dir=tmp_path,
+        embedding_dim=4,
+        kmer_size=2,
+        random_state=42,
+    )
+    emb_b = build_phistruct_style_embeddings(
+        phage_names=["P1", "P2"],
+        phage_fna_dir=tmp_path,
+        embedding_dim=4,
+        kmer_size=2,
+        random_state=42,
+    )
+
+    assert emb_a["P1"] == emb_b["P1"]
+    assert emb_a["P2"] == emb_b["P2"]
+    assert len(emb_a["P1"]) == 4
+
+
+def test_build_phistruct_style_embeddings_tracks_missing_genomes(tmp_path: Path) -> None:
+    (tmp_path / "P1.fna").write_text(">P1\nACGTACGT\n", encoding="utf-8")
+
+    emb = build_phistruct_style_embeddings(
+        phage_names=["P1", "P_MISSING"],
+        phage_fna_dir=tmp_path,
+        embedding_dim=3,
+        kmer_size=2,
+        random_state=42,
+    )
+
+    assert emb["__metadata__"]["missing_genome_count"] == 1.0
 
 
 def test_expected_calibration_error_simple_case() -> None:

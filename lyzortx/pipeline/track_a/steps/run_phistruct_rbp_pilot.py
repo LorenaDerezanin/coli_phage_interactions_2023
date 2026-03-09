@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Run a PHIStruct-style RBP embedding pilot on the phage-family holdout split."""
+"""Run a PHIStruct-style RBP embedding pilot on the phage-family holdout split.
+
+This pilot compares two feature variants on the same phage-family holdout protocol:
+1) non_structural_rbp: mechanistic RBP/depolymerase/domain proxy features.
+2) structural_rbp_embedding: sequence-derived phage embedding (k-mer + SVD) used
+   as a PHIStruct-style structural proxy when explicit RBP structures are unavailable.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +13,14 @@ import argparse
 import csv
 import hashlib
 import json
-import math
 from collections import defaultdict
 from datetime import datetime, timezone
+from itertools import product
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+import numpy as np
+from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
@@ -20,14 +28,9 @@ from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_s
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.track_a.steps.build_mechanistic_proxy_features import build_phage_proxy_rows
 
-REQUIRED_ST02_COLUMNS: Sequence[str] = (
-    "pair_id",
-    "bacteria",
-    "phage",
-    "phage_family",
-    "label_hard_any_lysis",
-)
+REQUIRED_ST02_COLUMNS: Sequence[str] = ("pair_id", "bacteria", "phage", "phage_family", "label_hard_any_lysis")
 REQUIRED_ST03B_COLUMNS: Sequence[str] = ("pair_id", "split_phage_family_holdout")
+DNA_ALPHABET: Sequence[str] = ("A", "C", "G", "T")
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -48,11 +51,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=Path("data/genomics/phages/guelin_collection.csv"),
     )
     parser.add_argument(
+        "--phage-fna-dir",
+        type=Path,
+        default=Path("data/genomics/phages/FNA"),
+        help="Directory with per-phage genome FASTA files named <phage>.fna.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("lyzortx/generated_outputs/track_a/phistruct_pilot"),
     )
     parser.add_argument("--embedding-dim", type=int, default=16)
+    parser.add_argument("--kmer-size", type=int, default=4)
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--random-state", type=int, default=42)
     return parser.parse_args(argv)
@@ -78,24 +88,76 @@ def parse_float(value: str) -> Optional[float]:
         return None
 
 
-def phistruct_style_embedding(phage_row: Mapping[str, str], dim: int) -> Dict[str, float]:
-    fields = ["Morphotype", "Family", "Subfamily", "Genus", "Species"]
-    tokens = [str(phage_row.get(field, "")).lower() for field in fields if str(phage_row.get(field, "")).strip()]
-    if not tokens:
-        tokens = ["missing_phage_metadata"]
+def _read_fasta_sequence(path: Path) -> str:
+    if not path.exists():
+        return ""
+    pieces: List[str] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped or stripped.startswith(">"):
+                continue
+            pieces.append(stripped.upper())
+    return "".join(pieces)
 
-    vector = [0.0 for _ in range(dim)]
-    for token in tokens:
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        for idx in range(dim):
-            value = digest[idx % len(digest)]
-            vector[idx] += (value / 255.0) * 2.0 - 1.0
 
-    norm = math.sqrt(sum(v * v for v in vector))
-    if norm > 0:
-        vector = [v / norm for v in vector]
+def _all_kmers(k: int) -> List[str]:
+    return ["".join(chars) for chars in product(DNA_ALPHABET, repeat=k)]
 
-    return {f"phage_struct_rbp_emb_{idx:02d}": round(val, 8) for idx, val in enumerate(vector)}
+
+def _kmer_frequency_vector(sequence: str, kmer_list: Sequence[str], k: int) -> np.ndarray:
+    valid_chars = set(DNA_ALPHABET)
+    total = 0
+    counts = {kmer: 0 for kmer in kmer_list}
+    for idx in range(0, max(len(sequence) - k + 1, 0)):
+        kmer = sequence[idx : idx + k]
+        if all(ch in valid_chars for ch in kmer):
+            counts[kmer] += 1
+            total += 1
+
+    if total == 0:
+        return np.zeros(len(kmer_list), dtype=float)
+    return np.array([counts[kmer] / total for kmer in kmer_list], dtype=float)
+
+
+def build_phistruct_style_embeddings(
+    *,
+    phage_names: Sequence[str],
+    phage_fna_dir: Path,
+    embedding_dim: int,
+    kmer_size: int,
+    random_state: int,
+) -> Dict[str, Dict[str, float]]:
+    kmers = _all_kmers(kmer_size)
+    vectors: List[np.ndarray] = []
+    missing: List[str] = []
+    for phage in phage_names:
+        sequence = _read_fasta_sequence(phage_fna_dir / f"{phage}.fna")
+        if not sequence:
+            missing.append(phage)
+            vectors.append(np.zeros(len(kmers), dtype=float))
+            continue
+        vectors.append(_kmer_frequency_vector(sequence, kmers, kmer_size))
+
+    matrix = np.vstack(vectors)
+    n_samples, n_features = matrix.shape
+    svd_dim = max(1, min(embedding_dim, n_samples - 1, n_features))
+    svd = TruncatedSVD(n_components=svd_dim, random_state=random_state)
+    reduced = svd.fit_transform(matrix)
+
+    if svd_dim < embedding_dim:
+        padded = np.zeros((n_samples, embedding_dim), dtype=float)
+        padded[:, :svd_dim] = reduced
+        reduced = padded
+
+    by_phage: Dict[str, Dict[str, float]] = {}
+    for idx, phage in enumerate(phage_names):
+        by_phage[phage] = {f"phage_struct_rbp_emb_{col:02d}": round(float(reduced[idx, col]), 8) for col in range(embedding_dim)}
+    by_phage["__metadata__"] = {
+        "missing_genome_count": float(len(missing)),
+        "svd_dim_effective": float(svd_dim),
+    }
+    return by_phage
 
 
 def expected_calibration_error(y_true: Sequence[int], y_prob: Sequence[float], n_bins: int = 10) -> float:
@@ -132,8 +194,7 @@ def top_k_hit_rate(rows: Sequence[Mapping[str, object]], top_k: int) -> float:
         by_host[str(row["bacteria"])].append(row)
 
     hits = 0
-    for host, host_rows in by_host.items():
-        del host
+    for host_rows in by_host.values():
         ranked = sorted(host_rows, key=lambda item: float(item["pred_prob"]), reverse=True)[:top_k]
         if any(int(item["label"]) == 1 for item in ranked):
             hits += 1
@@ -150,6 +211,22 @@ def _to_feature_dict(row: Mapping[str, str], columns: Iterable[str]) -> Dict[str
         as_float = parse_float(raw)
         out[col] = as_float if as_float is not None else raw
     return out
+
+
+def _safe_metric_binary(
+    metric_name: str,
+    y_true: Sequence[int],
+    y_prob: Sequence[float],
+) -> float:
+    if metric_name == "average_precision":
+        if len(set(y_true)) < 2:
+            return float(sum(y_true) / len(y_true))
+        return float(average_precision_score(y_true, y_prob))
+    if metric_name == "roc_auc":
+        if len(set(y_true)) < 2:
+            return 0.5
+        return float(roc_auc_score(y_true, y_prob))
+    raise ValueError(metric_name)
 
 
 def evaluate_variant(
@@ -189,8 +266,8 @@ def evaluate_variant(
         "variant": variant_name,
         "n_eval": len(y_eval),
         "positive_rate_eval": round(sum(y_eval) / len(y_eval), 6),
-        "average_precision": round(float(average_precision_score(y_eval, probs)), 6),
-        "roc_auc": round(float(roc_auc_score(y_eval, probs)), 6),
+        "average_precision": round(_safe_metric_binary("average_precision", y_eval, probs), 6),
+        "roc_auc": round(_safe_metric_binary("roc_auc", y_eval, probs), 6),
         "brier_score": round(float(brier_score_loss(y_eval, probs)), 6),
         "ece": expected_calibration_error(y_eval, probs, n_bins=10),
         "topk_hit_rate": top_k_hit_rate(prediction_rows, top_k=top_k),
@@ -223,21 +300,24 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     st03b_by_pair = {row["pair_id"]: row for row in st03b_rows}
     phage_proxy_by_name = {row["phage"]: row for row in build_phage_proxy_rows(phage_rows)}
-    phage_metadata_by_name = {row["phage"]: row for row in phage_rows}
+    phage_names = sorted({row["phage"] for row in phage_rows if row.get("phage")})
+    struct_embeddings = build_phistruct_style_embeddings(
+        phage_names=phage_names,
+        phage_fna_dir=args.phage_fna_dir,
+        embedding_dim=args.embedding_dim,
+        kmer_size=args.kmer_size,
+        random_state=args.random_state,
+    )
 
     enriched_rows: List[Dict[str, str]] = []
     for row in st02_rows:
-        if row["pair_id"] not in st03b_by_pair:
-            continue
-        if row["label_hard_any_lysis"] not in {"0", "1"}:
+        if row["pair_id"] not in st03b_by_pair or row["label_hard_any_lysis"] not in {"0", "1"}:
             continue
 
         merged = dict(row)
         merged.update(st03b_by_pair[row["pair_id"]])
         merged.update({k: str(v) for k, v in phage_proxy_by_name.get(row["phage"], {}).items()})
-
-        emb = phistruct_style_embedding(phage_metadata_by_name.get(row["phage"], {}), dim=args.embedding_dim)
-        merged.update({k: str(v) for k, v in emb.items()})
+        merged.update({k: str(v) for k, v in struct_embeddings.get(row["phage"], {}).items()})
         enriched_rows.append(merged)
 
     train_rows = [row for row in enriched_rows if row["split_phage_family_holdout"] == "train_non_holdout"]
@@ -268,6 +348,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     )
 
     metric_by_variant = {str(row["variant"]): row for row in metric_rows_sorted}
+    metadata = struct_embeddings.get("__metadata__", {})
     delta_summary = {
         "delta_structural_minus_non_structural": {
             "average_precision": round(
@@ -297,11 +378,17 @@ def main(argv: Optional[List[str]] = None) -> None:
             "st02_pair_table": str(args.st02_pair_table_path),
             "st03b_split_suite": str(args.st03b_split_suite_path),
             "phage_metadata": str(args.phage_metadata_path),
+            "phage_fna_dir": str(args.phage_fna_dir),
         },
         "config": {
             "embedding_dim": args.embedding_dim,
+            "kmer_size": args.kmer_size,
             "top_k": args.top_k,
             "random_state": args.random_state,
+        },
+        "embedding_audit": {
+            "missing_genome_count": int(metadata.get("missing_genome_count", 0.0)),
+            "svd_dim_effective": int(metadata.get("svd_dim_effective", 0.0)),
         },
         "row_counts": {
             "train_rows": len(train_rows),
