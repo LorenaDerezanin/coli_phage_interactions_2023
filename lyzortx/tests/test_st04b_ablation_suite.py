@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lyzortx.pipeline.steel_thread_v0.steps.st04b_ablation_suite import build_split_ap_snapshot
 from lyzortx.pipeline.steel_thread_v0.steps.st04b_ablation_suite import infer_feature_columns
 from lyzortx.pipeline.steel_thread_v0.steps.st04b_ablation_suite import summarize_signal_sources
 
@@ -40,3 +41,17 @@ def test_summarize_signal_sources_reports_dominant_axis() -> None:
 
     assert any("Dominant single-axis signal is host identity" in line for line in lines)
     assert any("No-identity control AP=0.490" in line for line in lines)
+
+
+def test_build_split_ap_snapshot_handles_missing_average_precision() -> None:
+    rows = [
+        {"split": "all_eval", "model": "host_only_logreg", "average_precision": 0.7},
+        {"split": "all_eval", "model": "dummy_prior", "average_precision": 0.4},
+        {"split": "dual_holdout_test", "model": "host_only_logreg", "average_precision": None},
+    ]
+
+    out = build_split_ap_snapshot(rows)
+
+    assert out["all_eval"]["host_only_logreg"] == 0.7
+    assert out["all_eval"]["dummy_prior"] == 0.4
+    assert out["dual_holdout_test"]["host_only_logreg"] is None

@@ -6,11 +6,10 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sklearn.dummy import DummyClassifier
 from sklearn.feature_extraction import DictVectorizer
@@ -154,6 +153,16 @@ def summarize_signal_sources(matrix_rows: List[Dict[str, object]]) -> List[str]:
     return lines
 
 
+def build_split_ap_snapshot(matrix_rows: List[Dict[str, object]]) -> Dict[str, Dict[str, Optional[float]]]:
+    split_ap: Dict[str, Dict[str, Optional[float]]] = {}
+    for row in matrix_rows:
+        split = str(row["split"])
+        split_ap.setdefault(split, {})[str(row["model"])] = (
+            None if row["average_precision"] in ("", None) else float(row["average_precision"])
+        )
+    return split_ap
+
+
 def split_membership(split_name: str) -> bool:
     return split_name in {"dual_holdout_test", "host_only_holdout", "phage_only_holdout"}
 
@@ -190,8 +199,6 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     feature_sets = infer_feature_columns(joined_rows[0].keys())
     matrix_rows: List[Dict[str, object]] = []
-    model_predictions: Dict[str, List[float]] = {}
-
     for name, columns in feature_sets.items():
         vectorizer = DictVectorizer(sparse=True, sort=True)
         train_dicts = [build_feature_dict(row, columns) for row in train_rows]
@@ -210,7 +217,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         model.fit(X_train, y_train)
         probs = [float(p) for p in model.predict_proba(X_eval)[:, 1]]
         model_key = f"{name}_logreg"
-        model_predictions[model_key] = probs
 
         by_split_probs: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
         for row, prob in zip(eval_rows, probs):
@@ -232,6 +238,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     matrix_rows.append({"model": "dummy_prior", "split": "all_eval", **compute_binary_metrics(y_eval_dummy, dummy_probs)})
 
     signal_summary = summarize_signal_sources(matrix_rows)
+    split_ap_snapshot = build_split_ap_snapshot(matrix_rows)
 
     matrix_rows_sorted = sorted(matrix_rows, key=lambda row: (str(row["split"]), str(row["model"])))
     matrix_path = args.output_dir / "st04b_ablation_matrix.csv"
@@ -247,7 +254,16 @@ def main(argv: Optional[List[str]] = None) -> None:
             "st03b_split_suite_protocol": str(args.st03b_split_suite_protocol_path),
         },
         "input_hashes_sha256": {
+            "st02_pair_table": hashlib.sha256(args.st02_pair_table_path.read_bytes()).hexdigest(),
+            "st03b_split_suite": hashlib.sha256(args.st03b_split_suite_path.read_bytes()).hexdigest(),
             "st03b_split_suite_protocol": protocol_sha,
+        },
+        "model_hyperparameters": {
+            "random_state": args.random_state,
+            "logreg_c": args.logreg_c,
+            "logreg_max_iter": args.logreg_max_iter,
+            "logreg_solver": "liblinear",
+            "logreg_class_weight": "balanced",
         },
         "split_protocol_lock": {
             "split_column": "split_dual_axis",
@@ -255,6 +271,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "evaluation_values": ["dual_holdout_test", "host_only_holdout", "phage_only_holdout"],
         },
         "feature_sets": feature_sets,
+        "average_precision_by_split": split_ap_snapshot,
         "signal_summary_lines": signal_summary,
         "row_counts": {
             "train_rows": len(train_rows),
