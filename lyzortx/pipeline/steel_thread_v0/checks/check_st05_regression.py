@@ -80,7 +80,8 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     artifacts = load_json(artifacts_path)
     summary_by_key = {}
     for row in summary_rows:
-        key = f"{row['model']}|{row['dataset']}|{row['variant']}"
+        label_slice = row.get('label_slice', 'full_label')
+        key = f"{row['model']}|{row['dataset']}|{label_slice}|{row['variant']}"
         summary_by_key[key] = {
             "n": int(row["n"]),
             "positive_rate": float(row["positive_rate"]),

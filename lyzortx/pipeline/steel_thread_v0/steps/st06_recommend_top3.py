@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import numpy as np
+
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 
 
@@ -45,6 +47,18 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=0,
         help="Maximum recommendations from one phage family. Set to 0 to disable diversity cap.",
     )
+    parser.add_argument(
+        "--bootstrap-samples",
+        type=int,
+        default=1000,
+        help="Number of bootstrap resamples for holdout top-k CI estimates.",
+    )
+    parser.add_argument(
+        "--bootstrap-random-state",
+        type=int,
+        default=42,
+        help="Random seed for bootstrap CI sampling.",
+    )
     return parser.parse_args(argv)
 
 
@@ -63,6 +77,103 @@ def safe_round(value: float) -> float:
     return round(float(value), 6)
 
 
+
+def _slice_available_rows(rows: List[Dict[str, str]], slice_name: str) -> List[Dict[str, str]]:
+    if slice_name == "full_label":
+        return [row for row in rows if row["label_hard_binary"] != ""]
+    if slice_name == "strict_confidence":
+        return [row for row in rows if row["is_strict_trainable"] == "1" and row["label_hard_binary"] != ""]
+    raise ValueError(f"Unknown slice: {slice_name}")
+
+
+def _slice_recommendations(rows: List[Dict[str, object]], slice_name: str) -> List[Dict[str, object]]:
+    if slice_name == "full_label":
+        return rows
+    if slice_name == "strict_confidence":
+        return [row for row in rows if str(row["label_strict_confidence_tier"]) in {"high_conf_pos", "high_conf_neg"}]
+    raise ValueError(f"Unknown slice: {slice_name}")
+
+
+def evaluate_holdout_slice(
+    holdout_by_bacteria: Dict[str, List[Dict[str, str]]],
+    recs_by_bacteria: Dict[str, List[Dict[str, object]]],
+    slice_name: str,
+) -> Dict[str, float]:
+    holdout_total = 0
+    holdout_hits = 0
+    susceptible_total = 0
+    susceptible_hits = 0
+
+    for bacteria in sorted(holdout_by_bacteria.keys()):
+        available = _slice_available_rows(holdout_by_bacteria[bacteria], slice_name=slice_name)
+        if not available:
+            continue
+
+        holdout_total += 1
+        recs = _slice_recommendations(recs_by_bacteria.get(bacteria, []), slice_name=slice_name)
+        rec_hit = any(str(row["label_hard_binary"]) == "1" for row in recs)
+        holdout_hits += 1 if rec_hit else 0
+
+        susceptible = any(row["label_hard_binary"] == "1" for row in available)
+        if susceptible:
+            susceptible_total += 1
+            susceptible_hits += 1 if rec_hit else 0
+
+    return {
+        "holdout_strain_count": holdout_total,
+        "holdout_hit_count": holdout_hits,
+        "topk_hit_rate_all_strains": safe_round(holdout_hits / holdout_total if holdout_total else 0.0),
+        "holdout_susceptible_strain_count": susceptible_total,
+        "holdout_susceptible_hit_count": susceptible_hits,
+        "topk_hit_rate_susceptible_only": safe_round(
+            susceptible_hits / susceptible_total if susceptible_total else 0.0
+        ),
+    }
+
+
+def bootstrap_topk_ci(
+    holdout_by_bacteria: Dict[str, List[Dict[str, str]]],
+    recs_by_bacteria: Dict[str, List[Dict[str, object]]],
+    slice_name: str,
+    bootstrap_samples: int,
+    bootstrap_random_state: int,
+) -> Dict[str, float]:
+    eligible_strains = [
+        bacteria
+        for bacteria, rows in sorted(holdout_by_bacteria.items())
+        if _slice_available_rows(rows, slice_name=slice_name)
+    ]
+    if not eligible_strains:
+        return {
+            "bootstrap_samples": bootstrap_samples,
+            "ci_low_topk_hit_rate_all_strains": 0.0,
+            "ci_high_topk_hit_rate_all_strains": 0.0,
+            "ci_low_topk_hit_rate_susceptible_only": 0.0,
+            "ci_high_topk_hit_rate_susceptible_only": 0.0,
+        }
+
+    rng = np.random.default_rng(bootstrap_random_state)
+    all_strain_rates = []
+    susceptible_rates = []
+    for _ in range(bootstrap_samples):
+        sampled_ids = rng.choice(eligible_strains, size=len(eligible_strains), replace=True)
+        sampled_holdout = {f"sample_{i}": holdout_by_bacteria[b] for i, b in enumerate(sampled_ids)}
+        sampled_recs = {f"sample_{i}": recs_by_bacteria.get(b, []) for i, b in enumerate(sampled_ids)}
+        metrics = evaluate_holdout_slice(sampled_holdout, sampled_recs, slice_name=slice_name)
+        all_strain_rates.append(float(metrics["topk_hit_rate_all_strains"]))
+        susceptible_rates.append(float(metrics["topk_hit_rate_susceptible_only"]))
+
+    all_low, all_high = np.quantile(np.asarray(all_strain_rates, dtype=float), [0.025, 0.975])
+    sus_low, sus_high = np.quantile(np.asarray(susceptible_rates, dtype=float), [0.025, 0.975])
+    return {
+        "bootstrap_samples": bootstrap_samples,
+        "ci_low_topk_hit_rate_all_strains": safe_round(float(all_low)),
+        "ci_high_topk_hit_rate_all_strains": safe_round(float(all_high)),
+        "ci_low_topk_hit_rate_susceptible_only": safe_round(float(sus_low)),
+        "ci_high_topk_hit_rate_susceptible_only": safe_round(float(sus_high)),
+    }
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     ensure_directory(args.output_dir)
@@ -71,6 +182,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise ValueError("top-k must be >= 1")
     if args.max_per_family < 0:
         raise ValueError("max-per-family must be >= 0")
+    if args.bootstrap_samples < 1:
+        raise ValueError("bootstrap-samples must be >= 1")
 
     prediction_rows = read_csv_rows(args.st05_predictions_path)
     if not prediction_rows:
@@ -169,25 +282,21 @@ def main(argv: Optional[List[str]] = None) -> None:
     for row in recommendation_rows:
         recs_by_bacteria[str(row["bacteria"])].append(row)
 
-    holdout_total = 0
-    holdout_hits = 0
-    susceptible_total = 0
-    susceptible_hits = 0
-
-    for bacteria in sorted(holdout_by_bacteria.keys()):
-        available = holdout_by_bacteria[bacteria]
-        recs = recs_by_bacteria.get(bacteria, [])
-        if not recs:
-            continue
-
-        holdout_total += 1
-        rec_hit = any(row["label_hard_binary"] == "1" for row in recs)
-        holdout_hits += 1 if rec_hit else 0
-
-        susceptible = any(row["label_hard_binary"] == "1" for row in available if row["label_hard_binary"] != "")
-        if susceptible:
-            susceptible_total += 1
-            susceptible_hits += 1 if rec_hit else 0
+    holdout_topk_metrics_by_slice: Dict[str, Dict[str, float]] = {}
+    bootstrap_ci_by_slice: Dict[str, Dict[str, float]] = {}
+    for slice_name in ("full_label", "strict_confidence"):
+        holdout_topk_metrics_by_slice[slice_name] = evaluate_holdout_slice(
+            holdout_by_bacteria=holdout_by_bacteria,
+            recs_by_bacteria=recs_by_bacteria,
+            slice_name=slice_name,
+        )
+        bootstrap_ci_by_slice[slice_name] = bootstrap_topk_ci(
+            holdout_by_bacteria=holdout_by_bacteria,
+            recs_by_bacteria=recs_by_bacteria,
+            slice_name=slice_name,
+            bootstrap_samples=args.bootstrap_samples,
+            bootstrap_random_state=args.bootstrap_random_state,
+        )
 
     summary = {
         "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
@@ -204,16 +313,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             "recommended_row_count": len(recommendation_rows),
             "diversity_relaxed_strain_count": relaxed_strain_count,
         },
-        "holdout_topk_metrics": {
-            "holdout_strain_count": holdout_total,
-            "holdout_hit_count": holdout_hits,
-            "topk_hit_rate_all_strains": safe_round(holdout_hits / holdout_total if holdout_total else 0.0),
-            "holdout_susceptible_strain_count": susceptible_total,
-            "holdout_susceptible_hit_count": susceptible_hits,
-            "topk_hit_rate_susceptible_only": safe_round(
-                susceptible_hits / susceptible_total if susceptible_total else 0.0
-            ),
-        },
+        "holdout_topk_metrics": holdout_topk_metrics_by_slice,
+        "holdout_topk_bootstrap_ci": bootstrap_ci_by_slice,
     }
 
     write_json(args.output_dir / "st06_recommendation_summary.json", summary)
@@ -221,7 +322,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     print("ST0.6 completed.")
     print(f"- Recommended strains: {summary['recommendation_summary']['recommended_strain_count']}")
     print(f"- Recommendation rows: {summary['recommendation_summary']['recommended_row_count']}")
-    print(f"- Holdout top-{args.top_k} hit rate: {summary['holdout_topk_metrics']['topk_hit_rate_all_strains']}")
+    print(f"- Holdout top-{args.top_k} hit rate: {summary['holdout_topk_metrics']['full_label']['topk_hit_rate_all_strains']}")
     print(f"- Output recommendations: {output_recs}")
 
 

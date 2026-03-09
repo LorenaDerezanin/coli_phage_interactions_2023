@@ -171,27 +171,41 @@ def main(argv: Optional[List[str]] = None) -> None:
     for row in st05_summary_rows:
         if row["dataset"] != "holdout":
             continue
+        label_slice = row.get("label_slice", "full_label")
         for metric_name in ("brier_score", "log_loss", "ece"):
             metrics_rows.append(
                 {
                     "metric_group": "st05_holdout_calibration",
-                    "metric_name": metric_name,
+                    "metric_name": f"{metric_name}__{label_slice}",
                     "model": f"{row['model']}:{row['variant']}",
                     "split": "holdout",
                     "value": row[metric_name],
                 }
             )
 
-    for metric_name, metric_value in st06_summary["holdout_topk_metrics"].items():
-        metrics_rows.append(
-            {
-                "metric_group": "st06_holdout_recommendation",
-                "metric_name": metric_name,
-                "model": "st06_policy",
-                "split": "holdout",
-                "value": metric_value,
-            }
-        )
+    for label_slice, metric_block in st06_summary["holdout_topk_metrics"].items():
+        for metric_name, metric_value in metric_block.items():
+            metrics_rows.append(
+                {
+                    "metric_group": "st06_holdout_recommendation",
+                    "metric_name": f"{metric_name}__{label_slice}",
+                    "model": "st06_policy",
+                    "split": "holdout",
+                    "value": metric_value,
+                }
+            )
+
+    for label_slice, ci_block in st06_summary.get("holdout_topk_bootstrap_ci", {}).items():
+        for metric_name, metric_value in ci_block.items():
+            metrics_rows.append(
+                {
+                    "metric_group": "st06_holdout_bootstrap_ci",
+                    "metric_name": f"{metric_name}__{label_slice}",
+                    "model": "st06_policy",
+                    "split": "holdout",
+                    "value": metric_value,
+                }
+            )
 
     metrics_rows.sort(key=lambda r: (str(r["metric_group"]), str(r["model"]), str(r["metric_name"])))
     top3_rows_sorted = sorted(

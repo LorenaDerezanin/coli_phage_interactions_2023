@@ -79,6 +79,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "recommended_strain_count": summary["recommendation_summary"]["recommended_strain_count"],
         },
         "summary_metrics": summary["holdout_topk_metrics"],
+        "bootstrap_ci": summary.get("holdout_topk_bootstrap_ci", {}),
         "diversity_summary": {
             "diversity_relaxed_strain_count": summary["recommendation_summary"]["diversity_relaxed_strain_count"],
             "top_k": summary["parameters"]["top_k"],

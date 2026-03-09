@@ -254,7 +254,7 @@ python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st06b
   - `st05_calibration_artifacts.json`
 - ST0.6 files:
   - `st06_top3_recommendations.csv`
-  - `st06_recommendation_summary.json`
+  - `st06_recommendation_summary.json` (includes dual-slice metrics + bootstrap CIs)
 - ST0.6b files:
   - `st06b_policy_comparison.csv`
   - `st06b_recommendations_all_policies.csv`
