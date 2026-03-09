@@ -1,0 +1,98 @@
+name: Codex PR Lifecycle
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  trigger-review:
+    name: Request Codex Review
+    if: >-
+      github.event_name == 'pull_request_target'
+      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check review round
+        id: round
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ROUND=$(gh pr view ${{ github.event.pull_request.number }} \
+            --repo "${{ github.repository }}" \
+            --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
+          echo "round=${ROUND:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: Cap reached -- request human review
+        if: fromJSON(steps.round.outputs.round) >= 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Maximum automated review rounds (3) reached. Requesting human review."
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-label "needs-human-review"
+
+      - name: Post review request
+        if: fromJSON(steps.round.outputs.round) < 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "@codex review this PR thoroughly. Check code quality, test coverage, and alignment with the acceptance criteria in the linked issue. If it looks good, approve the PR. If changes are needed, submit a review with specific actionable comments."
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-label "codex-review-round-${NEXT_ROUND}"
+
+  handle-review-result:
+    name: Handle Review Result
+    if: >-
+      github.event_name == 'pull_request_review'
+      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Approved -- enable auto-merge
+        if: github.event.review.state == 'approved'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --squash \
+            --auto
+
+      - name: Changes requested -- trigger fix or escalate
+        if: github.event.review.state == 'changes_requested'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ROUND=$(gh pr view "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
+
+          if [ "$ROUND" -ge 3 ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" \
+              --body "Maximum review rounds reached after ${ROUND} iterations. Human review required."
+            gh pr edit "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" \
+              --add-label "needs-human-review"
+          else
+            gh pr comment "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" \
+              --body "@codex address all review feedback on this PR. Fix every issue raised in the review comments and push a new commit."
+          fi

@@ -332,8 +332,15 @@ class GitHubClient:
 
         body_parts.extend(
             [
+                "## Agent Instructions",
+                "",
+                "1. Implement the task described above, following `AGENTS.md` policies.",
+                "2. Create the PR using `gh pr create` (NOT any built-in PR tool).",
+                "3. PR body MUST include `Closes #<this-issue-number>` for auto-close on merge.",
+                "4. Add `--label orchestrator-task` to the `gh pr create` command.",
+                "",
                 "## Completion",
-                "Close this issue once implementation and verification are complete.",
+                "This issue closes automatically when the linked PR merges.",
             ]
         )
         body = "\n".join(body_parts)
@@ -355,6 +362,17 @@ class GitHubClient:
             html_url=str(created.get("html_url", "")),
             updated_at=str(created.get("updated_at", utc_now_iso())),
         )
+
+    def add_comment_to_issue(self, issue_number: int, body: str) -> dict[str, Any]:
+        """Post a comment on an existing issue."""
+        result = self._request(
+            "POST",
+            f"/repos/{self.repo}/issues/{issue_number}/comments",
+            {"body": body},
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError(f"Unexpected payload while commenting on issue #{issue_number}")
+        return result
 
 
 def sync_status_from_issues(
@@ -590,6 +608,19 @@ def run_once(
         "title": created_issue.title,
         "updated_at": created_issue.updated_at,
     }
+
+    github_client.add_comment_to_issue(
+        created_issue.number,
+        "@codex implement this task. Create a PR using the `gh` CLI:\n\n"
+        "```\n"
+        f'gh pr create --title "[ORCH][{next_task.task_id}] <brief description>" '
+        f'--body "Closes #{created_issue.number}\\n\\n<summary of changes>" '
+        f"--label orchestrator-task\n"
+        "```\n\n"
+        "Do NOT use any built-in PR creation tool. Only use `gh pr create`.\n"
+        f"The PR body MUST include `Closes #{created_issue.number}`.",
+    )
+
     append_history(
         state,
         "task_dispatched_new_issue",
