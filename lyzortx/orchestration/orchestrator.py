@@ -474,6 +474,7 @@ def run_once(
     issues_by_task: dict[str, IssueRef],
     github_client: GitHubClient | None,
     max_active_tasks: int,
+    codex_trigger_client: GitHubClient | None = None,
 ) -> dict[str, Any]:
     task_status = state["task_status"]
     if state.get("paused"):
@@ -609,7 +610,8 @@ def run_once(
         "updated_at": created_issue.updated_at,
     }
 
-    github_client.add_comment_to_issue(
+    comment_client = codex_trigger_client or github_client
+    comment_client.add_comment_to_issue(
         created_issue.number,
         "@codex implement this task. Create a PR using the `gh` CLI:\n\n"
         "```\n"
@@ -713,6 +715,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=os.environ.get("GITHUB_API_URL", "https://api.github.com"),
         help="GitHub API base URL.",
     )
+    parser.add_argument(
+        "--codex-trigger-token",
+        type=str,
+        default=os.environ.get("CODEX_TRIGGER_TOKEN", ""),
+        help="PAT used for @codex comments so they appear from a real user.",
+    )
     return parser.parse_args(argv)
 
 
@@ -727,6 +735,7 @@ def main(argv: list[str] | None = None) -> None:
     state = initialize_state(tasks, args.state_path)
 
     github_client: GitHubClient | None = None
+    codex_trigger_client: GitHubClient | None = None
     issues_by_task: dict[str, IssueRef] = {}
     if args.github_repo and args.github_token:
         github_client = GitHubClient(
@@ -736,6 +745,12 @@ def main(argv: list[str] | None = None) -> None:
         )
         issues_by_task = github_client.list_task_issues()
         state["issue_index"] = sync_status_from_issues(tasks, state["task_status"], issues_by_task)
+        if args.codex_trigger_token:
+            codex_trigger_client = GitHubClient(
+                token=args.codex_trigger_token,
+                repo=args.github_repo,
+                api_base=args.github_api_url,
+            )
 
     result: dict[str, Any]
     if args.command == "status":
@@ -778,6 +793,7 @@ def main(argv: list[str] | None = None) -> None:
             issues_by_task=issues_by_task,
             github_client=github_client,
             max_active_tasks=args.max_active_tasks,
+            codex_trigger_client=codex_trigger_client,
         )
     else:
         raise ValueError(f"Unsupported command: {args.command}")

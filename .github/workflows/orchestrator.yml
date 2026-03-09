@@ -114,6 +114,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          CODEX_TRIGGER_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
         run: |
           set -euo pipefail
 
