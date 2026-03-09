@@ -343,8 +343,9 @@ graph LR
 - [x] Implement label builder for binary/strength/potency targets from raw interactions. Implemented in
       `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with v1/v2 outputs under
       `lyzortx/generated_outputs/track_a/labels/`.
-- [ ] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
-      RBP/depolymerase/domain proxies.
+- [x] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
+      RBP/depolymerase/domain proxies. Implemented in `lyzortx/pipeline/track_a/steps/build_mechanistic_proxy_features.py`
+      with outputs under `lyzortx/generated_outputs/track_a/mechanistic_proxy_features/`.
 - [ ] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
       features.
 - [ ] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
