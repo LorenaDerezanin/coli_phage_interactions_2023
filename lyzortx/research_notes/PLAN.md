@@ -292,8 +292,8 @@ graph LR
 
 - [x] Create a curated reading list of closely related phage-host prediction papers. Reference:
       `lyzortx/research_notes/LITERATURE.md`.
-- [ ] Build `source_registry.csv` for all external sources: source type, label kind, host resolution, assay type,
-      license, access path, last checked.
+- [x] Build `source_registry.csv` for all external sources: source type, label kind, host resolution, assay type,
+      license, access path, last checked. Implemented in `lyzortx/research_notes/external_data/source_registry.csv`.
 - [ ] For VHRdb ingest, keep source-fidelity fields: global response, datasource response, disagreement flag, and
       source-native reference link.
 - [ ] Tier A supervised ingestion priority:
@@ -350,5 +350,6 @@ graph LR
 - [x] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
       features. Implemented in `lyzortx/pipeline/track_a/steps/run_phistruct_rbp_pilot.py` with outputs under
       `lyzortx/generated_outputs/track_a/phistruct_pilot/`.
-- [ ] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
+- [x] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
+      Implemented in `lyzortx/research_notes/external_data/source_registry.csv`.
 - [ ] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.
