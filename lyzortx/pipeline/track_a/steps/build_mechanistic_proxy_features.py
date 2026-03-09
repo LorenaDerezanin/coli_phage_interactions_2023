@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build v1 mechanistic host/phage proxy features from internal metadata."""
+"""Build mechanistic host/phage proxy features from internal metadata.
+
+The output is intentionally versioned and accompanied by a manifest that captures
+schema, provenance, missingness, and confidence metadata for downstream auditing.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +14,7 @@ import json
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import mean
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
@@ -27,12 +32,71 @@ HOST_SURFACE_COLUMNS: Sequence[str] = (
 )
 
 KNOWN_DEPOLYMERASE_HINTS: Sequence[str] = (
+    "depolymerase",
     "podovir",
     "autographivir",
     "k1",
     "k5",
     "capsule",
 )
+
+HOST_CONFIDENCE_FIELDS: Sequence[str] = ("host_receptor_confidence", "host_defense_confidence")
+PHAGE_CONFIDENCE_FIELDS: Sequence[str] = ("phage_rbp_confidence", "phage_depolymerase_confidence")
+
+FEATURE_DEFINITIONS: Dict[str, Dict[str, Dict[str, object]]] = {
+    "host": {
+        "host_receptor_surface_fields_observed": {
+            "description": "Count of non-empty host surface structure fields used as receptor proxies.",
+            "source_columns": list(HOST_SURFACE_COLUMNS),
+        },
+        "host_receptor_proxy_available": {
+            "description": "Binary indicator for whether at least one receptor-related host surface field is known.",
+            "source_columns": list(HOST_SURFACE_COLUMNS),
+        },
+        "host_receptor_surface_proxy_score": {
+            "description": "Fraction of receptor-related host surface fields that are observed.",
+            "source_columns": list(HOST_SURFACE_COLUMNS),
+        },
+        "host_defense_system_count": {
+            "description": "Reported number of defense systems in host metadata.",
+            "source_columns": ["n_defense_systems"],
+        },
+        "host_defense_per_infection_proxy": {
+            "description": "Defense-system count divided by infections count when both are present and denominator > 0.",
+            "source_columns": ["n_defense_systems", "n_infections"],
+        },
+        "host_receptor_confidence": {
+            "description": "Heuristic confidence score for receptor proxy completeness based on observed surface fields.",
+            "source_columns": list(HOST_SURFACE_COLUMNS),
+        },
+        "host_defense_confidence": {
+            "description": "Heuristic confidence score for defense proxies based on availability of defense count metadata.",
+            "source_columns": ["n_defense_systems"],
+        },
+    },
+    "phage": {
+        "phage_rbp_tail_associated_proxy": {
+            "description": "Binary proxy for presence of tail-associated receptor-binding machinery metadata.",
+            "source_columns": ["Morphotype", "Family", "Genus"],
+        },
+        "phage_depolymerase_proxy": {
+            "description": "Binary proxy based on keyword hints related to depolymerase/capsule tropism in taxonomy fields.",
+            "source_columns": ["Morphotype", "Family", "Subfamily", "Genus", "Species"],
+        },
+        "phage_domain_complexity_proxy": {
+            "description": "Coarse genome-size bin (1/2/3) used as a proxy for protein-domain complexity.",
+            "source_columns": ["Genome_size"],
+        },
+        "phage_rbp_confidence": {
+            "description": "Heuristic confidence score for RBP proxy based on tail-associated metadata presence.",
+            "source_columns": ["Morphotype", "Family", "Genus"],
+        },
+        "phage_depolymerase_confidence": {
+            "description": "Heuristic confidence score for depolymerase proxy based on keyword evidence.",
+            "source_columns": ["Morphotype", "Family", "Subfamily", "Genus", "Species"],
+        },
+    },
+}
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -67,6 +131,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 def _read_semicolon_csv(path: Path) -> List[Dict[str, str]]:
     with path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle, delimiter=";")
+        if reader.fieldnames is None:
+            raise ValueError(f"No header found in {path}")
         return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
@@ -83,6 +149,12 @@ def _any_present(row: Mapping[str, str], columns: Iterable[str]) -> bool:
     return any((row.get(col) or "") != "" for col in columns)
 
 
+def _to_missing_or_int(value: Optional[float]) -> object:
+    if value is None:
+        return ""
+    return int(value)
+
+
 def build_host_proxy_rows(host_rows: Sequence[Mapping[str, str]]) -> List[Dict[str, object]]:
     out: List[Dict[str, object]] = []
     for row in host_rows:
@@ -97,7 +169,7 @@ def build_host_proxy_rows(host_rows: Sequence[Mapping[str, str]]) -> List[Dict[s
         receptor_conf = 0.85 if known_surface_count >= 3 else (0.65 if known_surface_count > 0 else 0.2)
         defense_conf = 0.9 if n_defense is not None else 0.25
 
-        defense_per_infection = ""
+        defense_per_infection: object = ""
         if n_defense is not None and n_infections is not None and n_infections > 0:
             defense_per_infection = round(n_defense / n_infections, 6)
 
@@ -107,7 +179,7 @@ def build_host_proxy_rows(host_rows: Sequence[Mapping[str, str]]) -> List[Dict[s
                 "host_receptor_surface_fields_observed": known_surface_count,
                 "host_receptor_proxy_available": 1 if known_surface_count > 0 else 0,
                 "host_receptor_surface_proxy_score": round(known_surface_count / len(HOST_SURFACE_COLUMNS), 6),
-                "host_defense_system_count": "" if n_defense is None else int(n_defense),
+                "host_defense_system_count": _to_missing_or_int(n_defense),
                 "host_defense_per_infection_proxy": defense_per_infection,
                 "host_receptor_confidence": round(receptor_conf, 3),
                 "host_defense_confidence": round(defense_conf, 3),
@@ -128,11 +200,11 @@ def build_phage_proxy_rows(phage_rows: Sequence[Mapping[str, str]]) -> List[Dict
             continue
 
         genome_size = _safe_float(row.get("Genome_size", "") or "")
-        tokens = _row_tokens(row, ["Morphotype", "Family", "Subfamily", "Genus", "Species"])
+        tokenized = _row_tokens(row, ["Morphotype", "Family", "Subfamily", "Genus", "Species"])
 
         has_tail = 1 if _any_present(row, ["Morphotype", "Family", "Genus"]) else 0
-        depolymerase_proxy = 1 if any(hint in tokens for hint in KNOWN_DEPOLYMERASE_HINTS) else 0
-        domain_complexity = ""
+        depolymerase_proxy = 1 if any(hint in tokenized for hint in KNOWN_DEPOLYMERASE_HINTS) else 0
+        domain_complexity: object = ""
         if genome_size is not None:
             domain_complexity = 1 if genome_size < 45000 else (2 if genome_size < 100000 else 3)
 
@@ -152,16 +224,43 @@ def build_phage_proxy_rows(phage_rows: Sequence[Mapping[str, str]]) -> List[Dict
     return sorted(out, key=lambda row: str(row["phage"]))
 
 
-def _missingness(rows: Sequence[Mapping[str, object]], columns: Sequence[str]) -> Dict[str, float]:
+def _missingness(rows: Sequence[Mapping[str, object]], columns: Sequence[str]) -> Dict[str, Dict[str, float]]:
     if not rows:
-        return {col: 1.0 for col in columns}
+        return {col: {"missing_count": 0, "missing_rate": 1.0} for col in columns}
+
     missing = Counter()
     for row in rows:
         for col in columns:
             if row.get(col, "") == "":
                 missing[col] += 1
+
     n = len(rows)
-    return {col: round(missing[col] / n, 6) for col in columns}
+    return {
+        col: {
+            "missing_count": int(missing[col]),
+            "missing_rate": round(missing[col] / n, 6),
+        }
+        for col in columns
+    }
+
+
+def _confidence_summary(rows: Sequence[Mapping[str, object]], fields: Sequence[str]) -> Dict[str, Dict[str, float]]:
+    summary: Dict[str, Dict[str, float]] = {}
+    for field in fields:
+        values: List[float] = []
+        for row in rows:
+            raw = row.get(field, "")
+            if isinstance(raw, float):
+                values.append(raw)
+            elif isinstance(raw, int):
+                values.append(float(raw))
+        if values:
+            summary[field] = {
+                "min": round(min(values), 6),
+                "mean": round(mean(values), 6),
+                "max": round(max(values), 6),
+            }
+    return summary
 
 
 def _sha256(path: Path) -> str:
@@ -180,6 +279,7 @@ def build_manifest(
 ) -> Dict[str, object]:
     host_columns = list(host_rows[0].keys()) if host_rows else []
     phage_columns = list(phage_rows[0].keys()) if phage_rows else []
+
     return {
         "step_name": "build_mechanistic_proxy_features",
         "version": version,
@@ -198,13 +298,18 @@ def build_manifest(
             "host_columns": host_columns,
             "phage_columns": phage_columns,
             "confidence_fields": {
-                "host": ["host_receptor_confidence", "host_defense_confidence"],
-                "phage": ["phage_rbp_confidence", "phage_depolymerase_confidence"],
+                "host": list(HOST_CONFIDENCE_FIELDS),
+                "phage": list(PHAGE_CONFIDENCE_FIELDS),
             },
+            "feature_definitions": FEATURE_DEFINITIONS,
         },
         "missingness": {
             "host": _missingness(host_rows, host_columns),
             "phage": _missingness(phage_rows, phage_columns),
+        },
+        "confidence_summary": {
+            "host": _confidence_summary(host_rows, HOST_CONFIDENCE_FIELDS),
+            "phage": _confidence_summary(phage_rows, PHAGE_CONFIDENCE_FIELDS),
         },
         "counts": {
             "n_hosts": len(host_rows),
@@ -229,6 +334,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     write_csv(host_output, list(host_rows[0].keys()) if host_rows else [], host_rows)
     write_csv(phage_output, list(phage_rows[0].keys()) if phage_rows else [], phage_rows)
+
     manifest = build_manifest(
         version=args.version,
         host_rows=host_rows,

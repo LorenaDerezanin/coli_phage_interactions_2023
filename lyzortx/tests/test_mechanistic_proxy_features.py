@@ -43,14 +43,27 @@ def test_build_phage_proxy_rows_keyword_proxy() -> None:
     assert out[1]["phage_domain_complexity_proxy"] == ""
 
 
-def test_build_manifest_has_missingness_and_confidence_fields(tmp_path: Path) -> None:
+def test_build_manifest_has_missingness_and_feature_definitions(tmp_path: Path) -> None:
     host_in = tmp_path / "host.csv"
     phage_in = tmp_path / "phage.csv"
     host_in.write_text("h", encoding="utf-8")
     phage_in.write_text("p", encoding="utf-8")
 
-    host_rows = [{"bacteria": "B1", "host_receptor_confidence": 0.5, "host_defense_confidence": 0.5}]
-    phage_rows = [{"phage": "P1", "phage_rbp_confidence": 0.5, "phage_depolymerase_confidence": 0.5}]
+    host_rows = [
+        {
+            "bacteria": "B1",
+            "host_receptor_confidence": 0.5,
+            "host_defense_confidence": 0.5,
+            "host_defense_per_infection_proxy": "",
+        }
+    ]
+    phage_rows = [
+        {
+            "phage": "P1",
+            "phage_rbp_confidence": 0.5,
+            "phage_depolymerase_confidence": 0.5,
+        }
+    ]
 
     manifest = build_manifest(
         version="v1",
@@ -63,5 +76,9 @@ def test_build_manifest_has_missingness_and_confidence_fields(tmp_path: Path) ->
     )
 
     assert "missingness" in manifest
+    assert manifest["missingness"]["host"]["host_defense_per_infection_proxy"]["missing_count"] == 1
     assert manifest["schema"]["confidence_fields"]["host"] == ["host_receptor_confidence", "host_defense_confidence"]
     assert manifest["schema"]["confidence_fields"]["phage"] == ["phage_rbp_confidence", "phage_depolymerase_confidence"]
+    assert "feature_definitions" in manifest["schema"]
+    assert "host_receptor_surface_proxy_score" in manifest["schema"]["feature_definitions"]["host"]
+    assert manifest["confidence_summary"]["host"]["host_receptor_confidence"]["mean"] == 0.5
