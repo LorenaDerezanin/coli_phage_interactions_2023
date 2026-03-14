@@ -42,12 +42,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.CODEX_TRIGGER_PAT || github.token }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12.12"
 
@@ -131,7 +131,7 @@ jobs:
           git diff --cached --quiet || (git commit -m "Update plan: mark completed task" && git push)
 
       - name: Upload orchestration state artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: orchestrator-state
           path: lyzortx/generated_outputs/orchestration/runtime_state.json
