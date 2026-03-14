@@ -316,12 +316,17 @@ graph LR
 - [ ] Keep generated outputs under `lyzortx/generated_outputs/` only.
 - [ ] Keep one-off scripts that feed notes under `lyzortx/research_notes/ad_hoc_analysis_code/`.
 
-## Track K: Sentinel Benchmarks
+## Track K: Validation Benchmarks and Wet-Lab Readiness
 
-- [ ] Define a set of sentinel tailored cases (hard but biologically plausible hits).
-- [ ] **Sentinel Strain Recovery = 100%:** Model must correctly identify known solutions for all sentinel strains.
-- [ ] Require each major model version to report sentinel recovery performance.
-- [ ] Track regressions in sentinel behavior across pipeline updates.
+- [ ] Define a set of held-out validation cases: known-answer pairs withheld from training that the model must recover
+      convincingly before predictions are sent for external wet-lab testing.
+- [ ] Report validation recovery rate and calibrated confidence for each model version — predictions below a confidence
+      threshold are flagged as not ready for production/testing.
+- [ ] Prepare a small batch of novel _E. coli_ strain predictions (strains unseen during training) formatted for
+      external CDMO production and plaque-assay validation.
+- [ ] Define a feedback protocol: wet-lab validation results feed back into the pipeline as ground-truth labels for the
+      next training cycle.
+- [ ] Track prediction-vs-reality concordance across validation batches to build empirical credibility.
 
 ## Immediate Next Tasks
 
