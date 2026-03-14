@@ -46,13 +46,13 @@ jobs:
         with:
           token: ${{ secrets.CODEX_TRIGGER_PAT || github.token }}
 
-      - name: Install PyYAML
-        run: pip install pyyaml
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
       - name: Resolve command payload
         id: payload
