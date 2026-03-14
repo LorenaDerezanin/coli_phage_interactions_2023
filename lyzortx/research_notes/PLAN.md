@@ -1,121 +1,8 @@
 # Lyzor Tx In-Silico Pipeline Plan
 
-Last updated: 2026-02-15
-
-## Mission
-
-- Build the best possible phage-lysis prediction pipeline for _E. coli_ using only in-silico methods.
-- Primary local data source: `data/interactions/raw/raw_interactions.csv` and related repo metadata/features.
-- No wet-lab access is assumed for this project.
-- External data and literature can be added when they improve model quality or rigor.
-
-## Operating Rules
-
-- Treat this file as the main execution driver for the repo.
-- Update checklist status in this file as work progresses.
-- Link every major code change or note update to one or more items here.
-- Keep methods reproducible and auditable (deterministic where possible).
-- Use two KPI tiers:
-  - **Tier 1 (Current Panel, Feasible):** evaluation with current 96-phage panel and current interaction matrix.
-  - **Tier 2 (North-Star):** aspirational targets that may require panel expansion and external data.
-
-## Steel Thread v0 (Start Small)
-
-- Goal: prove end-to-end viability quickly with a minimal but honest pipeline.
-- Philosophy: internal paper data first; external data only after the end-to-end path is proven.
-- Success condition: one command runs data prep -> training -> calibration -> recommendation -> report.
-
-### Scope Guardrails
-
-- Use only local internal inputs for v0: `data/interactions/raw/raw_interactions.csv`,
-  `data/interactions/interaction_matrix.csv`, `data/genomics/bacteria/picard_collection.csv`,
-  `data/genomics/phages/guelin_collection.csv`, `data/metadata/370+host_cross_validation_groups_1e-4.csv`.
-- Exclude for v0: external datasets, mechanistic Stage A/B decomposition, and complex optimization recommender logic.
-- Keep features simple: existing host metadata, phage metadata, and lightweight pairwise flags only.
-
-### Execution Checklist
-
-- [x] ST0.1 Define v0 label policy and uncertainty flags from raw interactions (`score='n'` included). Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
-- [x] ST0.1b Add strict confidence tiering (`high_conf_pos`, `high_conf_neg`, `ambiguous`) as a parallel output from
-      ST0.1 to support dual-slice evaluation. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`.
-- [x] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
-- [x] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`.
-- [x] ST0.4 Train one strong tabular baseline and one simple comparator baseline. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`.
-- [x] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
-- [x] ST0.6 Generate top-3 recommendations with policy-tuned defaults (`pred_logreg_platt`, no family cap). Implemented
-      in `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
-- [x] ST0.6b Compare ranking policy variants (`raw`, `platt`, `isotonic`; with/without family cap) to avoid
-      recommendation-policy regressions. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
-- [x] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`. Implemented in
-      `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline:
-      `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
-
-### Required Artifacts
-
-- `lyzortx/generated_outputs/steel_thread_v0/metrics_summary.csv`
-- `lyzortx/generated_outputs/steel_thread_v0/top3_recommendations.csv`
-- `lyzortx/generated_outputs/steel_thread_v0/calibration_summary.csv`
-- `lyzortx/generated_outputs/steel_thread_v0/error_analysis.csv`
-- `lyzortx/generated_outputs/steel_thread_v0/run_manifest.json`
-
-### Go / No-Go Gates
-
-- [ ] End-to-end command completes on a clean environment without manual patching.
-- [x] No leakage violations detected by the v0 checks.
-- [x] Top-3 hit-rate and calibration metrics are reported for the locked protocol.
-- [ ] Top-3 and calibration metrics are reported on both slices: full-label and high-confidence (ST0.1b).
-- [x] v0 model materially outperforms a naive baseline on the same split.
-- [ ] Failure cases are documented with at least one concrete hypothesis per major error bucket.
-
-### Expansion Rule After v0
-
-- Only after v0 passes: add Track I Tier A datasets in strict order (`VHRdb -> BASEL -> KlebPhaCol -> GPB`) with
-  one-source-at-a-time ablations.
-
-### Steel Thread Findings (2026-02-15)
-
-- Signal exists in current internal data: ST0.4 logistic baseline reached holdout ROC-AUC `0.826948` and top-3 hit rate
-  `0.846154` (`55/65` strains), far above naive baseline (`0.015385` top-3).
-- Label noise is a first-order issue: `8,917 / 35,424` pairs (`25.17%`) show conflicting interpretable observations.
-- Strict-confidence filtering keeps `28,338 / 35,424` pairs (`79.9966%`) but remains class-imbalanced (`4,135` strict
-  positives vs `24,203` strict negatives).
-- Calibration quality improved materially at ST0.5 (logreg ECE: raw `0.176341`, isotonic `0.031802`, Platt `0.029253`),
-  but best recommendation ranking was `platt/raw`, not isotonic.
-- Raw and Platt top-3 tie by construction in current setup (monotonic remapping of the same raw model score), so top-k
-  lift must come from new model signal, better labels, or new data, not calibration-only ranking changes.
-- Recommendation policy choice is high-impact: `logreg_platt__none` yields top-3 `0.846154` vs prior
-  `logreg_isotonic__max_family_2` at `0.784615`.
-- ST0.7 error analysis now isolates `10` holdout miss strains for targeted follow-up, making next work item clear.
-
-### Steel Thread Risks
-
-- High replicate/dilution disagreement can cap achievable performance unless label uncertainty is modeled explicitly.
-- Current v0 split mainly stress-tests host generalization; phage-family generalization risk is still under-tested.
-- Current v0 features are metadata-heavy; missing mechanistic host/phage features may cap ceiling performance.
-- Holdout denominator at strain level is modest (`65`), so metric variance can be non-trivial without confidence
-  intervals.
-- Tier 1 KPI targets remain stretch relative to current v0 (`84.6%` all-strain top-3), so short-cycle lift tracking is
-  needed before major external-data integration.
-
 ## Parallel Execution View
 
-- Use this view for planning workstreams.
 - Tracks in the same stage box can run in parallel unless blocked by their own incoming dependencies.
-- Keep the dependency DAG above as the source of truth for strict ordering.
 
 ```mermaid
 graph LR
@@ -135,7 +22,7 @@ graph LR
     te["Track E: Pairwise Compatibility Features"]
     tg["Track G: Modeling Pipeline"]
     th["Track H: In-Silico Cocktail Recommendation"]
-    tk["Track K: Sentinel Benchmarks"]
+    tk["Track K: Validation Benchmarks and Wet-Lab Readiness"]
   end
 
   subgraph s3["Stage 3 (Release and Audit)"]
@@ -169,6 +56,48 @@ graph LR
   tf --> tj
   ti --> tj
 ```
+
+## Steel Thread v0
+
+### Execution Checklist
+
+- [x] ST0.1 Define v0 label policy and uncertainty flags from raw interactions (`score='n'` included). Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
+- [x] ST0.1b Add strict confidence tiering (`high_conf_pos`, `high_conf_neg`, `ambiguous`) as a parallel output from
+      ST0.1 to support dual-slice evaluation. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`.
+- [x] ST0.2 Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
+- [x] ST0.3 Lock one leakage-safe split protocol and one fixed holdout benchmark for v0. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`.
+- [x] ST0.4 Train one strong tabular baseline and one simple comparator baseline. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`.
+- [x] ST0.5 Calibrate probabilities and export ranked per-strain phage predictions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
+- [x] ST0.6 Generate top-3 recommendations with policy-tuned defaults (`pred_logreg_platt`, no family cap). Implemented
+      in `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
+- [x] ST0.6b Compare ranking policy variants (`raw`, `platt`, `isotonic`; with/without family cap) to avoid
+      recommendation-policy regressions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
+- [x] ST0.7 Emit one reproducible report to `lyzortx/generated_outputs/steel_thread_v0/`. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
+
+### Go / No-Go Gates
+
+- [ ] End-to-end command completes on a clean environment without manual patching.
+- [x] No leakage violations detected by the v0 checks.
+- [x] Top-3 hit-rate and calibration metrics are reported for the locked protocol.
+- [ ] Top-3 and calibration metrics are reported on both slices: full-label and high-confidence (ST0.1b).
+- [x] v0 model materially outperforms a naive baseline on the same split.
+- [ ] Failure cases are documented with at least one concrete hypothesis per major error bucket.
 
 ## Track A: Data Integrity and Labeling
 
@@ -327,34 +256,3 @@ graph LR
 - [ ] Define a feedback protocol: wet-lab validation results feed back into the pipeline as ground-truth labels for the
       next training cycle.
 - [ ] Track prediction-vs-reality concordance across validation batches to build empirical credibility.
-
-## Immediate Next Tasks
-
-- [x] Start Steel Thread v0 and complete ST0.7 before any external-data ingest work.
-- [x] Bootstrap PLAN orchestration scaffold (task registry + runtime state + CLI + CI trigger workflow). Implemented in
-      `lyzortx/orchestration/{tasks.json,orchestrator.py,README.md}`,
-      `lyzortx/generated_outputs/orchestration/runtime_state.json`, and `.github/workflows/orchestrator.yml`.
-- [x] Finalize `score='n'` handling policy and document aggregation rules. Implemented via Track A label policy
-      artifacts in `lyzortx/generated_outputs/track_a/labels/`.
-- [x] Define strict-confidence policy for ST0.1b and quantify retained coverage vs noise reduction.
-- [x] Lock denominator/cohort policy and publish metric definitions for Tier 1 vs Tier 2 benchmarks. Implemented in
-      `lyzortx/research_notes/TIER_BENCHMARK_DENOMINATOR_POLICY.md`.
-- [x] Build canonical ID normalization and mismatch report script. Implemented in
-      `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with outputs under
-      `lyzortx/generated_outputs/track_a/id_map/`.
-- [x] Implement ST0.3b split suite with explicit phage-family holdout and host+phage dual-axis stress tests.
-- [x] Implement ST0.4b ablations (host-only, phage-only, no-identity controls) to quantify true signal sources.
-- [x] Implement ST0.5b/ST0.6c reporting on both slices (full-label and strict-confidence) with bootstrap CIs.
-- [x] Implement label builder for binary/strength/potency targets from raw interactions. Implemented in
-      `lyzortx/pipeline/track_a/steps/build_track_a_foundation.py` with v1/v2 outputs under
-      `lyzortx/generated_outputs/track_a/labels/`.
-- [x] Implement first mechanistic signal block from internal data: host receptor/defense proxies + phage
-      RBP/depolymerase/domain proxies. Implemented in
-      `lyzortx/pipeline/track_a/steps/build_mechanistic_proxy_features.py` with outputs under
-      `lyzortx/generated_outputs/track_a/mechanistic_proxy_features/`.
-- [x] Run first PHIStruct-style RBP embedding pilot on phage-family holdout split and compare to non-structural RBP
-      features. Implemented in `lyzortx/pipeline/track_a/steps/run_phistruct_rbp_pilot.py` with outputs under
-      `lyzortx/generated_outputs/track_a/phistruct_pilot/`.
-- [x] Create `source_registry.csv` and populate initial entries for VHRdb, BASEL, KlebPhaCol, GPB, Virus-Host DB, NCBI.
-      Implemented in `lyzortx/research_notes/external_data/source_registry.csv`.
-- [x] Implement first Tier A ingest path (VHRdb) and run internal-only vs +VHRdb ablation.

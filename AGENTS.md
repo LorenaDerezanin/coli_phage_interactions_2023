@@ -45,8 +45,9 @@
 
 # Plan-Driven Execution
 
-- The main driver for project execution is `lyzortx/research_notes/PLAN.md`.
-- Follow that plan for task sequencing and update its checklist states as work progresses.
+- The main driver for project execution is `lyzortx/orchestration/plan.yml`, rendered to
+  `lyzortx/research_notes/PLAN.md`.
+- Follow that plan for task sequencing; the orchestrator updates checklist states automatically.
 - When scope decisions are ambiguous, prefer alignment with the plan unless the user overrides it.
 
 # PR and Issue Linkage Policy
