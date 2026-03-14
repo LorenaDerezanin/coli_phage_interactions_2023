@@ -23,6 +23,13 @@ REQUIRED_VHRDB_COLUMNS = (
     "uncertainty",
 )
 
+DATASOURCE_IDENTIFIER_COLUMNS = (
+    "datasource",
+    "datasource_id",
+    "source_datasource_id",
+    "source_id",
+)
+
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -60,20 +67,30 @@ def key_for_pair(row: Dict[str, str]) -> Tuple[str, str]:
 
 
 def normalize_vhrdb_row(row: Dict[str, str]) -> Dict[str, str]:
-    global_response = row.get("global_response", "").lower()
-    datasource_response = row.get("datasource_response", "").lower()
-    disagreement = "1" if global_response and datasource_response and global_response != datasource_response else "0"
+    global_response_raw = row.get("global_response", "")
+    datasource_response_raw = row.get("datasource_response", "")
+    global_response_normalized = global_response_raw.lower()
+    datasource_response_normalized = datasource_response_raw.lower()
+    disagreement = (
+        "1"
+        if global_response_normalized
+        and datasource_response_normalized
+        and global_response_normalized != datasource_response_normalized
+        else "0"
+    )
+    datasource_identifier = next((row.get(col, "") for col in DATASOURCE_IDENTIFIER_COLUMNS if row.get(col, "")), "")
     pair_id = f"{row['bacteria']}__{row['phage']}"
     return {
         "pair_id": pair_id,
         "bacteria": row["bacteria"],
         "phage": row["phage"],
-        "label_hard_any_lysis": global_response,
+        "label_hard_any_lysis": global_response_normalized,
         "label_strict_confidence_tier": row.get("uncertainty", ""),
         "source_system": "vhrdb",
+        "source_datasource_id": datasource_identifier,
         "source_native_record_id": row.get("source_native_record_id", ""),
-        "source_global_response": global_response,
-        "source_datasource_response": datasource_response,
+        "source_global_response": global_response_raw,
+        "source_datasource_response": datasource_response_raw,
         "source_disagreement_flag": disagreement,
         "source_uncertainty": row.get("uncertainty", ""),
     }
@@ -88,6 +105,7 @@ def build_internal_rows(internal_rows: List[Dict[str, str]]) -> List[Dict[str, s
             "label_hard_any_lysis": row["label_hard_any_lysis"],
             "label_strict_confidence_tier": row["label_strict_confidence_tier"],
             "source_system": "internal",
+            "source_datasource_id": "",
             "source_native_record_id": "",
             "source_global_response": "",
             "source_datasource_response": "",
@@ -117,7 +135,7 @@ def compute_ablation_summary(merged_rows: List[Dict[str, str]]) -> List[Dict[str
 def compute_lift_failure_rows(merged_rows: List[Dict[str, str]]) -> List[Dict[str, object]]:
     output: List[Dict[str, object]] = []
     vhrdb_rows = [row for row in merged_rows if row["source_system"] == "vhrdb"]
-    by_datasource: Counter[str] = Counter(row["source_datasource_response"] or "unknown" for row in vhrdb_rows)
+    by_datasource: Counter[str] = Counter(row.get("source_datasource_id", "") or "unknown" for row in vhrdb_rows)
     by_tier: Counter[str] = Counter(row["source_uncertainty"] or "unknown" for row in vhrdb_rows)
 
     for datasource, count in sorted(by_datasource.items()):
@@ -158,6 +176,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "label_hard_any_lysis",
         "label_strict_confidence_tier",
         "source_system",
+        "source_datasource_id",
         "source_native_record_id",
         "source_global_response",
         "source_datasource_response",
