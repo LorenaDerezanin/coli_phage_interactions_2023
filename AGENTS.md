@@ -107,6 +107,8 @@
 - For new or changed pure logic, add concise unit tests that cover the most important functionality pragmatically.
 - Do not over-cement with tests when there is a lot of code in flux — cover core behavior and critical edge cases, not
   every line.
+- When fixing a bug, write a failing test first that proves the regression, then implement the fix to make it pass
+  (TDD-style).
 - Place tests under `lyzortx/tests/` unless the user explicitly requests a different location.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
 

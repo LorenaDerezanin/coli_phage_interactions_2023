@@ -398,16 +398,6 @@ def sync_status_from_issues(
     return issue_index
 
 
-def select_next_ready_task(tasks: list[Task], task_status: dict[str, str]) -> Task | None:
-    for task in tasks:
-        if task_status.get(task.task_id) != "pending":
-            continue
-        if any(task_status.get(dependency) != "completed" for dependency in task.dependencies):
-            continue
-        return task
-    return None
-
-
 def validate_expected_paths(task: Task) -> list[str]:
     missing_paths: list[str] = []
     for expected_path in task.expected_paths:
