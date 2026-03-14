@@ -25,6 +25,19 @@ def test_normalize_vhrdb_row_preserves_source_fidelity_fields() -> None:
     assert normalized["source_uncertainty"] == "A"
 
 
+def test_normalize_vhrdb_row_defaults_datasource_id_to_vhrdb() -> None:
+    row = {
+        "source_native_record_id": "VH999",
+        "bacteria": "b9",
+        "phage": "p9",
+        "global_response": "1",
+        "datasource_response": "1",
+        "uncertainty": "A",
+    }
+    normalized = normalize_vhrdb_row(row)
+    assert normalized["source_datasource_id"] == "vhrdb"
+
+
 def test_ablation_arm_sizing_and_novel_pair_count() -> None:
     merged_rows = [
         {
@@ -56,19 +69,19 @@ def test_lift_failure_counts_by_datasource_tier_and_disagreement() -> None:
     merged_rows = [
         {
             "source_system": "vhrdb",
-            "source_datasource_response": "source_a",
+            "source_datasource_id": "source_a",
             "source_uncertainty": "A",
             "source_disagreement_flag": "1",
         },
         {
             "source_system": "vhrdb",
-            "source_datasource_response": "source_a",
+            "source_datasource_id": "source_a",
             "source_uncertainty": "B",
             "source_disagreement_flag": "0",
         },
         {
             "source_system": "vhrdb",
-            "source_datasource_response": "source_b",
+            "source_datasource_id": "source_b",
             "source_uncertainty": "A",
             "source_disagreement_flag": "0",
         },

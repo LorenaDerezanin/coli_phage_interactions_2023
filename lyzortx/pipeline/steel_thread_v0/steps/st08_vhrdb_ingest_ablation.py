@@ -29,6 +29,7 @@ DATASOURCE_IDENTIFIER_COLUMNS = (
     "source_datasource_id",
     "source_id",
 )
+DEFAULT_VHRDB_DATASOURCE_ID = "vhrdb"
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -78,7 +79,10 @@ def normalize_vhrdb_row(row: Dict[str, str]) -> Dict[str, str]:
         and global_response_normalized != datasource_response_normalized
         else "0"
     )
-    datasource_identifier = next((row.get(col, "") for col in DATASOURCE_IDENTIFIER_COLUMNS if row.get(col, "")), "")
+    datasource_identifier = next(
+        (row.get(col, "") for col in DATASOURCE_IDENTIFIER_COLUMNS if row.get(col, "")),
+        DEFAULT_VHRDB_DATASOURCE_ID,
+    )
     pair_id = f"{row['bacteria']}__{row['phage']}"
     return {
         "pair_id": pair_id,
@@ -135,7 +139,12 @@ def compute_ablation_summary(merged_rows: List[Dict[str, str]]) -> List[Dict[str
 def compute_lift_failure_rows(merged_rows: List[Dict[str, str]]) -> List[Dict[str, object]]:
     output: List[Dict[str, object]] = []
     vhrdb_rows = [row for row in merged_rows if row["source_system"] == "vhrdb"]
-    by_datasource: Counter[str] = Counter(row.get("source_datasource_id", "") or "unknown" for row in vhrdb_rows)
+    by_datasource: Counter[str] = Counter(
+        row.get("source_datasource_id", "")
+        or row.get("source_system", "")
+        or DEFAULT_VHRDB_DATASOURCE_ID
+        for row in vhrdb_rows
+    )
     by_tier: Counter[str] = Counter(row["source_uncertainty"] or "unknown" for row in vhrdb_rows)
 
     for datasource, count in sorted(by_datasource.items()):
