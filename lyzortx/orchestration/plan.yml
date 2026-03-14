@@ -49,30 +49,14 @@ tracks:
         status: done
         implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py
         baseline: lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json
-    gates:
-      - id: GNG01
-        title: End-to-end command completes on a clean environment without manual patching
-        status: pending
-        acceptance_criteria:
-          - run_steel_thread_v0.py completes without error on a fresh clone with only phage_env dependencies
-          - All regression checks pass (ST0.1 through ST0.7)
-      - id: GNG02
-        title: No leakage violations detected by the v0 checks
-        status: done
-      - id: GNG03
-        title: Top-3 hit-rate and calibration metrics are reported for the locked protocol
-        status: done
-      - id: GNG04
-        title: Top-3 and calibration metrics are reported on both slices (full-label and high-confidence)
+      - id: ST08
+        title: Add dual-slice reporting (full-label and strict-confidence) to ST0.7
         status: pending
         acceptance_criteria:
           - ST0.7 report includes separate metric rows for full-label and strict-confidence slices
           - Both slices report top-3 hit rate, calibration ECE, and Brier score
-      - id: GNG05
-        title: v0 model materially outperforms a naive baseline on the same split
-        status: done
-      - id: GNG06
-        title: Failure cases are documented with at least one concrete hypothesis per major error bucket
+      - id: ST09
+        title: Document failure case hypotheses for each major holdout miss error bucket
         status: pending
         acceptance_criteria:
           - Each holdout miss strain in error_analysis.csv has at least one documented hypothesis

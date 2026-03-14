@@ -121,18 +121,9 @@ def render_plan(plan: dict[str, Any]) -> str:
         if description:
             sections.append(f"- **Guiding Principle:** {description}")
 
-        tasks = track.get("tasks", [])
-        for task in tasks:
+        for task in track.get("tasks", []):
             sections.append(_render_task_line(task))
         sections.append("")
-
-        gates = track.get("gates", [])
-        if gates:
-            sections.append(f"### Go / No-Go Gates")
-            sections.append("")
-            for gate in gates:
-                sections.append(_render_task_line(gate))
-            sections.append("")
 
     return "\n".join(sections)
 

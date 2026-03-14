@@ -1,97 +1,69 @@
-# PLAN Orchestrator (Issue-Driven)
+# PLAN Orchestrator
 
-This directory contains an event-driven orchestrator for executing [PLAN.md](../research_notes/PLAN.md) tasks with
-GitHub Issues as the authoritative sequencing state.
+This directory contains an event-driven orchestrator that executes tasks from `plan.yml` using GitHub Issues for
+sequencing and agent dispatch.
 
-## What Is Authoritative
+## Architecture
 
-- Source of truth for task progression: GitHub issue state (`open`/`closed`) on issues labeled `orchestrator-task`.
-- Local convenience state: `lyzortx/generated_outputs/orchestration/runtime_state.json`.
-- Task catalog and DAG: `lyzortx/orchestration/tasks.json`.
-
-In GitHub Actions, `runtime_state.json` is ephemeral per run and uploaded only as an artifact. It is not used as durable
-sequencing state.
+- **Source of truth:** `lyzortx/orchestration/plan.yml` — all tracks, tasks, dependencies, status, and acceptance
+  criteria.
+- **Rendered view:** `lyzortx/research_notes/PLAN.md` — auto-generated from `plan.yml` by `render_plan.py`. CI verifies
+  it stays in sync.
+- **Issue state:** GitHub issues labeled `orchestrator-task` are the authoritative progression signal. When an issue
+  closes, the orchestrator marks the task `done` in `plan.yml` and regenerates `PLAN.md`.
+- **Runtime state:** `lyzortx/generated_outputs/orchestration/runtime_state.json` — ephemeral per CI run, uploaded as
+  artifact.
 
 ## Components
 
-- CLI runner: `lyzortx/orchestration/orchestrator.py`.
-- Task registry: `lyzortx/orchestration/tasks.json`.
-- CI trigger workflow: `.github/workflows/orchestrator.yml`.
+- `plan.yml` — task definitions (source of truth).
+- `plan_parser.py` — pure functions: `load_plan`, `is_task_ready`, `select_ready_tasks`, `mark_task_done`.
+- `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
+- `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
+- `.github/workflows/orchestrator.yml` — CI trigger workflow.
+
+## Task Readiness
+
+A task is ready when:
+
+1. All prior tasks in the same track are `done` (sequential within track).
+2. All tasks in all prerequisite tracks (from `depends_on`) are `done`.
+
+Task IDs are derived from track letter + ordinal (e.g., `TB03`, `TF01`). Gates use `GNG` prefix.
 
 ## CLI Usage
 
-Run from repository root.
-
 ```bash
-python -m lyzortx.orchestration.orchestrator --command status
-```
+# Show status with ready tasks
+python -m lyzortx.orchestration.orchestrator --command status --plan-path lyzortx/orchestration/plan.yml
 
-Dispatch one ready task (`executor="agent"` creates/uses a GitHub issue when `GITHUB_TOKEN` and `GITHUB_REPOSITORY` are
-set):
+# Dispatch one ready task (creates GitHub issue when GITHUB_TOKEN is set)
+python -m lyzortx.orchestration.orchestrator --command run_once --plan-path lyzortx/orchestration/plan.yml
 
-```bash
-python -m lyzortx.orchestration.orchestrator --command run_once
-```
-
-Pause/resume orchestration:
-
-```bash
+# Pause/resume
 python -m lyzortx.orchestration.orchestrator --command pause --note "maintenance"
 python -m lyzortx.orchestration.orchestrator --command resume
+
+# Regenerate PLAN.md from plan.yml
+python -m lyzortx.orchestration.render_plan
 ```
-
-Manual override (local convenience only; issue state remains authoritative):
-
-```bash
-python -m lyzortx.orchestration.orchestrator \
-  --command set_task_status \
-  --task-id IM01_LOCK_DENOMINATOR_POLICY \
-  --status blocked \
-  --note "Waiting on data"
-```
-
-Emit PLAN checkbox suggestions (does not edit files):
-
-```bash
-python -m lyzortx.orchestration.orchestrator --command suggest_plan_sync
-```
-
-## Task Registry Schema (v2)
-
-Each task entry in `tasks.json` supports:
-
-- `id`: stable task id.
-- `title`: short task title.
-- `description`: execution context.
-- `dependencies`: upstream task ids that must be completed.
-- `executor`: `agent` or `shell`.
-- `command`: optional `list[str]` for shell tasks.
-- `expected_paths`: optional output path checks (primarily for `shell` tasks).
-- `acceptance_criteria`: checklist included in dispatched issues.
-- `plan_checkbox_text`: human-facing checkbox text for PLAN sync suggestion.
 
 ## GitHub Actions Trigger Model
 
 Workflow: `.github/workflows/orchestrator.yml`
 
-- `workflow_dispatch`: manual commands.
+- `workflow_dispatch`: manual commands (`run_once`, `status`, `pause`, `resume`).
 - `repository_dispatch`: API/CLI command trigger.
-- `issues.closed`: when a labeled orchestrator task issue is closed, run a new tick to dispatch the next ready task.
+- `issues.closed`: when an `orchestrator-task` issue closes, runs a tick to mark the task done and dispatch the next.
 
-No cron trigger is used in this mode. Default `max_active_tasks` in workflow dispatch is `3`. The `orchestrator-task`
-label is created automatically on first dispatch if missing.
+On each tick the workflow commits `plan.yml` and `PLAN.md` changes back to the repo.
 
-## Dispatch Payload Example
+Default `max_active_tasks` is `3`. The `orchestrator-task` label is created automatically on first dispatch.
 
-```json
-{
-  "event_type": "orchestrator_cmd",
-  "client_payload": {
-    "command": "set_task_status",
-    "task_id": "IM01_LOCK_DENOMINATOR_POLICY",
-    "status": "blocked",
-    "note": "Waiting for benchmark definitions",
-    "max_active_tasks": 3
-  }
-}
-```
+## Agent Instructions in Dispatched Issues
+
+Each dispatched issue includes:
+
+- Task description and acceptance criteria (from `plan.yml`).
+- Instruction to append findings to `lyzortx/research_notes/LAB NOTEBOOK.md`.
+- PR creation instructions using `gh pr create` with `Closes #<issue>`.

@@ -26,3 +26,9 @@ jobs:
       - name: Run pytest
         run: |
           pytest -q lyzortx/tests
+
+      - name: Verify PLAN.md is up to date with plan.yml
+        run: |
+          python -m lyzortx.orchestration.render_plan --stdout > /tmp/PLAN_generated.md
+          diff lyzortx/research_notes/PLAN.md /tmp/PLAN_generated.md || \
+            (echo "::error::PLAN.md is out of sync with plan.yml. Run: python -m lyzortx.orchestration.render_plan" && exit 1)

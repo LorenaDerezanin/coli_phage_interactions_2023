@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +19,7 @@ class PlanTask:
     track: str
     title: str
     status: str  # "done" | "pending"
-    ordinal: int  # 1-based position within track (tasks then gates)
-    is_gate: bool = False
+    ordinal: int  # 1-based position within track
     implemented_in: str | None = None
     baseline: str | None = None
 
@@ -40,26 +39,6 @@ class PlanGraph:
         return list(seen)
 
 
-def _parse_task_list(
-    raw_tasks: list[dict[str, Any]], track_key: str, start_ordinal: int, is_gate: bool
-) -> list[PlanTask]:
-    result: list[PlanTask] = []
-    for i, raw in enumerate(raw_tasks):
-        result.append(
-            PlanTask(
-                task_id=raw["id"],
-                track=track_key,
-                title=raw["title"],
-                status=raw.get("status", "pending"),
-                ordinal=start_ordinal + i,
-                is_gate=is_gate,
-                implemented_in=raw.get("implemented_in"),
-                baseline=raw.get("baseline"),
-            )
-        )
-    return result
-
-
 def load_plan(plan_path: Path) -> PlanGraph:
     text = plan_path.read_text(encoding="utf-8")
     if yaml is None:
@@ -72,12 +51,18 @@ def load_plan(plan_path: Path) -> PlanGraph:
 
     for key, track in tracks_raw.items():
         track_deps[key] = list(track.get("depends_on", []))
-        tasks = _parse_task_list(track.get("tasks", []), key, 1, is_gate=False)
-        gates = _parse_task_list(
-            track.get("gates", []), key, len(tasks) + 1, is_gate=True
-        )
-        all_tasks.extend(tasks)
-        all_tasks.extend(gates)
+        for i, raw in enumerate(track.get("tasks", [])):
+            all_tasks.append(
+                PlanTask(
+                    task_id=raw["id"],
+                    track=key,
+                    title=raw["title"],
+                    status=raw.get("status", "pending"),
+                    ordinal=i + 1,
+                    implemented_in=raw.get("implemented_in"),
+                    baseline=raw.get("baseline"),
+                )
+            )
 
     return PlanGraph(tasks=all_tasks, track_deps=track_deps)
 
@@ -115,15 +100,11 @@ def mark_task_done(plan_path: Path, task_id: str) -> None:
     data = yaml.safe_load(text)
 
     for track in data.get("tracks", {}).values():
-        for task_list in [track.get("tasks", []), track.get("gates", [])]:
-            for task in task_list:
-                if task["id"] == task_id:
-                    task["status"] = "done"
-                    # Preserve YAML formatting by doing a targeted string replacement
-                    # rather than a full yaml.dump (which destroys formatting).
-                    # Fall back to yaml.dump if the simple approach fails.
-                    _write_plan_yaml(plan_path, data)
-                    return
+        for task in track.get("tasks", []):
+            if task["id"] == task_id:
+                task["status"] = "done"
+                _write_plan_yaml(plan_path, data)
+                return
 
     raise ValueError(f"Task {task_id!r} not found in {plan_path}")
 
