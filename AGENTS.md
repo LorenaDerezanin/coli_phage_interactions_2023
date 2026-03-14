@@ -21,10 +21,17 @@
   rather than degrading the implementation.
 - Keep `requirements.txt` alphabetically sorted by package name.
 
+# AGENTS.md and CLAUDE.md Pairing
+
+- Whenever you create an `AGENTS.md` in a directory, also create an accompanying `CLAUDE.md` in the same directory that
+  imports it with `@AGENTS.md`.
+
 # Agent Scratch Space
 
-- Use `.scratch/` for temporary agent-generated files (draft commit messages, notes, and intermediate artifacts).
+- Use `.scratch/` for temporary agent-generated files (draft commit messages, notes, intermediate artifacts, and diff
+  comparisons).
 - Treat `.scratch/` as non-source workspace; it is ignored by git and should not contain canonical project content.
+- Prefer `.scratch/` over `/tmp/` for temporary files so sandbox permissions are not needed.
 
 # Paper Availability
 
@@ -97,7 +104,9 @@
 
 - Prefer pure functions as the default design for new logic where practical.
 - Keep side effects (I/O, network, subprocesses, global state mutation) at module boundaries.
-- For new or changed pure logic, add unit tests that cover core behavior and edge cases.
+- For new or changed pure logic, add concise unit tests that cover the most important functionality pragmatically.
+- Do not over-cement with tests when there is a lot of code in flux — cover core behavior and critical edge cases, not
+  every line.
 - Place tests under `lyzortx/tests/` unless the user explicitly requests a different location.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
 
