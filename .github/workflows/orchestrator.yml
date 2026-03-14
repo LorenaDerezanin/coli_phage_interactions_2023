@@ -13,21 +13,6 @@ on:
           - status
           - pause
           - resume
-          - set_task_status
-          - suggest_plan_sync
-      task_id:
-        description: "Task id (for set_task_status)"
-        required: false
-        type: string
-      status:
-        description: "Task status (for set_task_status)"
-        required: false
-        type: choice
-        options:
-          - pending
-          - in_progress
-          - completed
-          - blocked
       note:
         description: "Optional event note"
         required: false
@@ -45,7 +30,7 @@ on:
       - closed
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
@@ -58,6 +43,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CODEX_TRIGGER_PAT || github.token }}
+
+      - name: Install PyYAML
+        run: pip install pyyaml
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -77,23 +67,17 @@ jobs:
               event = json.load(handle)
 
           command = "run_once"
-          task_id = ""
-          task_status = ""
           note = ""
           max_active_tasks = "3"
 
           if event_name == "workflow_dispatch":
               inputs = event.get("inputs", {})
               command = inputs.get("command") or command
-              task_id = inputs.get("task_id", "")
-              task_status = inputs.get("status", "")
               note = inputs.get("note", "")
               max_active_tasks = inputs.get("max_active_tasks") or max_active_tasks
           elif event_name == "repository_dispatch":
               payload = event.get("client_payload", {})
               command = payload.get("command") or command
-              task_id = payload.get("task_id", "")
-              task_status = payload.get("status", "")
               note = payload.get("note", "")
               max_active_tasks = str(payload.get("max_active_tasks", max_active_tasks))
           elif event_name == "issues":
@@ -104,8 +88,6 @@ jobs:
           output_path = os.environ["GITHUB_OUTPUT"]
           with open(output_path, "a", encoding="utf-8") as out:
               out.write(f"command={command}\n")
-              out.write(f"task_id={task_id}\n")
-              out.write(f"task_status={task_status}\n")
               out.write(f"note={note}\n")
               out.write(f"max_active_tasks={max_active_tasks}\n")
           PY
@@ -120,17 +102,11 @@ jobs:
 
           args=(
             --command "${{ steps.payload.outputs.command }}"
-            --tasks-path lyzortx/orchestration/tasks.json
+            --plan-path lyzortx/orchestration/plan.yml
             --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
             --max-active-tasks "${{ steps.payload.outputs.max_active_tasks }}"
           )
 
-          if [[ -n "${{ steps.payload.outputs.task_id }}" ]]; then
-            args+=(--task-id "${{ steps.payload.outputs.task_id }}")
-          fi
-          if [[ -n "${{ steps.payload.outputs.task_status }}" ]]; then
-            args+=(--status "${{ steps.payload.outputs.task_status }}")
-          fi
           if [[ -n "${{ steps.payload.outputs.note }}" ]]; then
             args+=(--note "${{ steps.payload.outputs.note }}")
           fi
@@ -144,18 +120,15 @@ jobs:
         run: |
           python -m lyzortx.orchestration.orchestrator \
             --command status \
-            --tasks-path lyzortx/orchestration/tasks.json \
+            --plan-path lyzortx/orchestration/plan.yml \
             --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
 
-      - name: Emit PLAN sync suggestions
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+      - name: Commit plan updates
         run: |
-          python -m lyzortx.orchestration.orchestrator \
-            --command suggest_plan_sync \
-            --tasks-path lyzortx/orchestration/tasks.json \
-            --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lyzortx/orchestration/plan.yml lyzortx/research_notes/PLAN.md
+          git diff --cached --quiet || (git commit -m "Update plan: mark completed task" && git push)
 
       - name: Upload orchestration state artifact
         uses: actions/upload-artifact@v4

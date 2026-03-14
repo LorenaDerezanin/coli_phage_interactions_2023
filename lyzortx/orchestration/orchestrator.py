@@ -18,10 +18,11 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_TASKS_PATH = REPO_ROOT / "lyzortx/orchestration/tasks.json"
+DEFAULT_PLAN_PATH = REPO_ROOT / "lyzortx/orchestration/plan.yml"
+DEFAULT_PLAN_MD_PATH = REPO_ROOT / "lyzortx/research_notes/PLAN.md"
 DEFAULT_STATE_PATH = REPO_ROOT / "lyzortx/generated_outputs/orchestration/runtime_state.json"
 VALID_STATUSES = {"pending", "in_progress", "completed", "blocked"}
-READ_ONLY_COMMANDS = {"status", "suggest_plan_sync"}
+READ_ONLY_COMMANDS = {"status"}
 ISSUE_LABEL = "orchestrator-task"
 TASK_ID_MARKER = "ORCH_TASK_ID"
 ISSUE_TITLE_PATTERN = re.compile(r"^\[ORCH\]\[([A-Za-z0-9_.-]+)\]")
@@ -75,69 +76,72 @@ def save_json(path: Path, payload: dict[str, Any]) -> None:
         handle.write("\n")
 
 
-def parse_tasks(tasks_path: Path) -> list[Task]:
-    data = load_json(tasks_path)
-    raw_tasks = data.get("tasks")
-    if not isinstance(raw_tasks, list):
-        raise ValueError("Task registry must define a top-level 'tasks' array")
+def _load_acceptance_criteria(plan_path: Path, task_id: str) -> list[str]:
+    """Load acceptance criteria for a task from plan.yml."""
+    import yaml
 
-    tasks: list[Task] = []
-    task_ids: set[str] = set()
-    for item in raw_tasks:
-        if not isinstance(item, dict):
-            raise ValueError("Each task entry must be a JSON object")
+    data = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+    for track in data.get("tracks", {}).values():
+        for task_list in [track.get("tasks", []), track.get("gates", [])]:
+            for task in task_list:
+                if task["id"] == task_id:
+                    return task.get("acceptance_criteria", [])
+    return []
 
-        task_id = str(item.get("id", "")).strip()
-        if not task_id:
-            raise ValueError("Task is missing required 'id'")
-        if task_id in task_ids:
-            raise ValueError(f"Duplicate task id detected: {task_id}")
-        task_ids.add(task_id)
 
-        dependencies = item.get("dependencies", [])
-        if not isinstance(dependencies, list):
-            raise ValueError(f"Task {task_id} has non-list 'dependencies'")
+def select_next_ready_task(plan_path: Path, in_progress_ids: set[str]) -> Task | None:
+    """Select the next ready task using plan.yml dependency logic."""
+    from lyzortx.orchestration.plan_parser import load_plan, select_ready_tasks
 
-        command = item.get("command")
-        if command is not None:
-            if not isinstance(command, list) or not all(isinstance(arg, str) for arg in command):
-                raise ValueError(f"Task {task_id} has invalid 'command'; expected list[str]")
-
-        expected_paths = item.get("expected_paths", [])
-        if not isinstance(expected_paths, list) or not all(isinstance(path, str) for path in expected_paths):
-            raise ValueError(f"Task {task_id} has invalid 'expected_paths'; expected list[str]")
-
-        acceptance_criteria = item.get("acceptance_criteria", [])
-        if not isinstance(acceptance_criteria, list) or not all(
-            isinstance(criterion, str) for criterion in acceptance_criteria
-        ):
-            raise ValueError(f"Task {task_id} has invalid 'acceptance_criteria'; expected list[str]")
-
-        plan_checkbox_text = item.get("plan_checkbox_text")
-        if plan_checkbox_text is not None and not isinstance(plan_checkbox_text, str):
-            raise ValueError(f"Task {task_id} has invalid 'plan_checkbox_text'; expected string")
-
-        tasks.append(
-            Task(
-                task_id=task_id,
-                title=str(item.get("title", "")).strip() or task_id,
-                description=str(item.get("description", "")).strip(),
-                dependencies=[str(dep) for dep in dependencies],
-                executor=str(item.get("executor", "agent")).strip() or "agent",
-                command=command,
-                expected_paths=expected_paths,
-                acceptance_criteria=[criterion.strip() for criterion in acceptance_criteria if criterion.strip()],
-                plan_checkbox_text=plan_checkbox_text.strip() if isinstance(plan_checkbox_text, str) else None,
-            )
+    graph = load_plan(plan_path)
+    for pt in select_ready_tasks(graph):
+        if pt.task_id in in_progress_ids:
+            continue
+        criteria = _load_acceptance_criteria(plan_path, pt.task_id)
+        return Task(
+            task_id=pt.task_id,
+            title=pt.title,
+            description=f"Track {pt.track} task. {pt.title}",
+            dependencies=[],
+            executor="agent",
+            command=None,
+            expected_paths=[],
+            acceptance_criteria=criteria,
+            plan_checkbox_text=pt.title,
         )
+    return None
 
-    known_task_ids = {task.task_id for task in tasks}
-    unknown_dependencies = {dep for task in tasks for dep in task.dependencies if dep not in known_task_ids}
-    if unknown_dependencies:
-        missing = ", ".join(sorted(unknown_dependencies))
-        raise ValueError(f"Task registry contains unknown dependencies: {missing}")
 
-    return tasks
+def load_pending_tasks(plan_path: Path) -> list[Task]:
+    """Load all pending tasks from plan.yml as Task objects."""
+    from lyzortx.orchestration.plan_parser import load_plan
+
+    graph = load_plan(plan_path)
+    return [
+        Task(
+            task_id=pt.task_id,
+            title=pt.title,
+            description=f"Track {pt.track} task. {pt.title}",
+            dependencies=[],
+            executor="agent",
+            command=None,
+            expected_paths=[],
+            acceptance_criteria=_load_acceptance_criteria(plan_path, pt.task_id),
+            plan_checkbox_text=pt.title,
+        )
+        for pt in graph.tasks
+        if pt.status != "done"
+    ]
+
+
+def mark_task_done_in_plan(plan_path: Path, plan_md_path: Path, task_id: str) -> None:
+    """Mark a task done in plan.yml and regenerate PLAN.md."""
+    from lyzortx.orchestration.plan_parser import mark_task_done
+    from lyzortx.orchestration.render_plan import load_plan_yaml, render_plan
+
+    mark_task_done(plan_path, task_id)
+    plan = load_plan_yaml(plan_path)
+    plan_md_path.write_text(render_plan(plan), encoding="utf-8")
 
 
 def initialize_state(tasks: list[Task], state_path: Path) -> dict[str, Any]:
@@ -307,42 +311,34 @@ class GitHubClient:
     def create_agent_task_issue(self, task: Task) -> IssueRef:
         title = f"[ORCH][{task.task_id}] {task.title}"
 
-        dependencies = "\n".join(f"- `{dependency}`" for dependency in task.dependencies) or "- None"
-        acceptance = "\n".join(f"- {criterion}" for criterion in task.acceptance_criteria) or "- Define in implementation PR"
+        acceptance = (
+            "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
+        )
         body_parts = [
             f"<!-- {TASK_ID_MARKER}: {task.task_id} -->",
             "## Orchestrator Task",
             f"- Task ID: `{task.task_id}`",
             f"- Executor: `{task.executor}`",
-            "- Plan Source: `lyzortx/research_notes/PLAN.md`",
+            f"- Plan Source: `lyzortx/orchestration/plan.yml`",
             "",
             "## Description",
             task.description or "No description provided.",
             "",
-            "## Dependencies",
-            dependencies,
-            "",
             "## Acceptance Criteria",
             acceptance,
             "",
+            "## Agent Instructions",
+            "",
+            "1. Implement the task described above, following `AGENTS.md` policies.",
+            "2. Append findings and interpretation to `lyzortx/research_notes/LAB NOTEBOOK.md`"
+            " following the existing entry format.",
+            "3. Create the PR using `gh pr create` (NOT any built-in PR tool).",
+            "4. PR body MUST include `Closes #<this-issue-number>` for auto-close on merge.",
+            "5. Add `--label orchestrator-task` to the `gh pr create` command.",
+            "",
+            "## Completion",
+            "This issue closes automatically when the linked PR merges.",
         ]
-        if task.expected_paths:
-            expected = "\n".join(f"- `{path}`" for path in task.expected_paths)
-            body_parts.extend(["## Expected Paths", expected, ""])
-
-        body_parts.extend(
-            [
-                "## Agent Instructions",
-                "",
-                "1. Implement the task described above, following `AGENTS.md` policies.",
-                "2. Create the PR using `gh pr create` (NOT any built-in PR tool).",
-                "3. PR body MUST include `Closes #<this-issue-number>` for auto-close on merge.",
-                "4. Add `--label orchestrator-task` to the `gh pr create` command.",
-                "",
-                "## Completion",
-                "This issue closes automatically when the linked PR merges.",
-            ]
-        )
         body = "\n".join(body_parts)
 
         payload = {
@@ -445,19 +441,29 @@ def run_shell_task(task: Task) -> tuple[bool, str]:
     return success, "\n\n".join(message_parts)
 
 
-def summarize(tasks: list[Task], task_status: dict[str, str], paused: bool) -> dict[str, Any]:
+def summarize(
+    tasks: list[Task], task_status: dict[str, str], paused: bool, plan_path: Path | None = None
+) -> dict[str, Any]:
     counts = {status: 0 for status in VALID_STATUSES}
     for task in tasks:
         status = task_status.get(task.task_id, "pending")
         counts[status] = counts.get(status, 0) + 1
 
     in_progress = [task.task_id for task in tasks if task_status.get(task.task_id) == "in_progress"]
-    ready = [
-        task.task_id
-        for task in tasks
-        if task_status.get(task.task_id) == "pending"
-        and all(task_status.get(dependency) == "completed" for dependency in task.dependencies)
-    ]
+
+    # Use plan graph for accurate readiness if available.
+    if plan_path is not None:
+        from lyzortx.orchestration.plan_parser import load_plan, select_ready_tasks
+
+        graph = load_plan(plan_path)
+        ready = [t.task_id for t in select_ready_tasks(graph)]
+    else:
+        ready = [
+            task.task_id
+            for task in tasks
+            if task_status.get(task.task_id) == "pending"
+            and all(task_status.get(dep) == "completed" for dep in task.dependencies)
+        ]
 
     return {
         "paused": paused,
@@ -475,6 +481,7 @@ def run_once(
     github_client: GitHubClient | None,
     max_active_tasks: int,
     codex_trigger_client: GitHubClient | None = None,
+    plan_path: Path | None = None,
 ) -> dict[str, Any]:
     task_status = state["task_status"]
     if state.get("paused"):
@@ -497,7 +504,8 @@ def run_once(
             "max_active_tasks": max_active_tasks,
         }
 
-    next_task = select_next_ready_task(tasks, task_status)
+    in_progress_ids = set(active_tasks)
+    next_task = select_next_ready_task(plan_path or DEFAULT_PLAN_PATH, in_progress_ids)
     if next_task is None:
         append_history(state, "run_once_skipped", reason="no_ready_tasks")
         return {"action": "skipped", "reason": "no_ready_tasks"}
@@ -638,24 +646,6 @@ def run_once(
     }
 
 
-def suggest_plan_sync(tasks: list[Task], task_status: dict[str, str]) -> dict[str, Any]:
-    suggestions: list[dict[str, str]] = []
-    for task in tasks:
-        if task.plan_checkbox_text and task_status.get(task.task_id) == "completed":
-            suggestions.append(
-                {
-                    "task_id": task.task_id,
-                    "checkbox_text": task.plan_checkbox_text,
-                }
-            )
-
-    return {
-        "action": "suggest_plan_sync",
-        "completed_task_count": len(suggestions),
-        "suggestions": suggestions,
-    }
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -665,17 +655,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "run_once",
             "pause",
             "resume",
-            "set_task_status",
-            "suggest_plan_sync",
         ],
         default="status",
         help="Command to execute.",
     )
     parser.add_argument(
-        "--tasks-path",
+        "--plan-path",
         type=Path,
-        default=DEFAULT_TASKS_PATH,
-        help="Path to the static task registry JSON.",
+        default=DEFAULT_PLAN_PATH,
+        help="Path to plan.yml.",
     )
     parser.add_argument(
         "--state-path",
@@ -729,8 +717,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.max_active_tasks < 1:
         raise ValueError("--max-active-tasks must be >= 1")
 
-    tasks = parse_tasks(args.tasks_path)
-    task_ids = {task.task_id for task in tasks}
+    plan_path: Path = args.plan_path
+    plan_md_path = plan_path.parent.parent / "research_notes" / "PLAN.md"
+    tasks = load_pending_tasks(plan_path)
     state_path_exists = args.state_path.exists()
     state = initialize_state(tasks, args.state_path)
 
@@ -744,7 +733,17 @@ def main(argv: list[str] | None = None) -> None:
             api_base=args.github_api_url,
         )
         issues_by_task = github_client.list_task_issues()
-        state["issue_index"] = sync_status_from_issues(tasks, state["task_status"], issues_by_task)
+        issue_index = sync_status_from_issues(tasks, state["task_status"], issues_by_task)
+        state["issue_index"] = issue_index
+
+        # Mark tasks done in plan.yml when their issues are closed.
+        for task_id, status in list(state["task_status"].items()):
+            if status == "completed":
+                try:
+                    mark_task_done_in_plan(plan_path, plan_md_path, task_id)
+                except (ValueError, KeyError):
+                    pass  # Task may already be done or not found in plan.
+
         if args.codex_trigger_token:
             codex_trigger_client = GitHubClient(
                 token=args.codex_trigger_token,
@@ -756,10 +755,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "status":
         result = {
             "action": "status",
-            "summary": summarize(tasks, state["task_status"], bool(state.get("paused"))),
+            "summary": summarize(tasks, state["task_status"], bool(state.get("paused")), plan_path),
         }
-    elif args.command == "suggest_plan_sync":
-        result = suggest_plan_sync(tasks, state["task_status"])
     elif args.command == "pause":
         state["paused"] = True
         append_history(state, "orchestrator_paused", note=args.note)
@@ -768,24 +765,6 @@ def main(argv: list[str] | None = None) -> None:
         state["paused"] = False
         append_history(state, "orchestrator_resumed", note=args.note)
         result = {"action": "resumed"}
-    elif args.command == "set_task_status":
-        if not args.task_id or not args.status:
-            raise ValueError("set_task_status requires both --task-id and --status")
-        if args.task_id not in task_ids:
-            raise ValueError(f"Unknown task id: {args.task_id}")
-        state["task_status"][args.task_id] = args.status
-        append_history(
-            state,
-            "task_status_overridden",
-            task_id=args.task_id,
-            status=args.status,
-            note=args.note,
-        )
-        result = {
-            "action": "task_status_updated",
-            "task_id": args.task_id,
-            "status": args.status,
-        }
     elif args.command == "run_once":
         result = run_once(
             tasks=tasks,
@@ -794,6 +773,7 @@ def main(argv: list[str] | None = None) -> None:
             github_client=github_client,
             max_active_tasks=args.max_active_tasks,
             codex_trigger_client=codex_trigger_client,
+            plan_path=plan_path,
         )
     else:
         raise ValueError(f"Unsupported command: {args.command}")
