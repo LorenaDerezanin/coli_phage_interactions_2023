@@ -3,6 +3,12 @@ name: Codex Implement Task
 on:
   issues:
     types: [opened, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to implement"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,11 +18,22 @@ permissions:
 jobs:
   implement:
     name: Implement Task
-    if: contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
+      - name: Resolve issue number
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ github.event.inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -36,7 +53,7 @@ jobs:
           prompt: |
             You are implementing an orchestrator task from a GitHub issue.
 
-            Read issue #${{ github.event.issue.number }} in this repository.
+            Read issue #${{ steps.issue.outputs.number }} in this repository.
             The issue contains a task description, acceptance criteria, and agent instructions.
 
             Follow the policies in AGENTS.md and lyzortx/AGENTS.md.
@@ -48,5 +65,5 @@ jobs:
             4. Create a PR:
                gh pr create \
                  --title "[ORCH][TASK_ID] Brief description" \
-                 --body "Closes #${{ github.event.issue.number }}" \
+                 --body "Closes #${{ steps.issue.outputs.number }}" \
                  --label orchestrator-task
