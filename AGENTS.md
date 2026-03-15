@@ -100,6 +100,11 @@
 - Organize outputs by analysis name, for example `lyzortx/generated_outputs/raw_interactions_summary/`.
 - Do not write new generated artifacts to top-level directories like `figures/` for `lyzortx` analyses.
 
+# Dead Code Policy
+
+- Err heavily on the side of deleting unused code. All callers are within this repo — there are no external consumers.
+- If a function, class, or import has no callers, delete it immediately. Do not keep it "just in case."
+
 # Function Design and Testing Policy
 
 - Prefer pure functions as the default design for new logic where practical.
@@ -111,6 +116,11 @@
   (TDD-style).
 - Place tests under `lyzortx/tests/` unless the user explicitly requests a different location.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
+
+# Commit Granularity
+
+- One kind of change per commit. Do not mix unrelated changes (e.g., feature + policy update + dead code cleanup).
+- If multiple changes are in flight, commit them separately with focused messages.
 
 # Commit Shortcut
 
