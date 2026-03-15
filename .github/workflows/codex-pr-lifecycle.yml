@@ -43,7 +43,7 @@ jobs:
           BRANCH=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
 
-      - name: Check for inline review comments
+      - name: Check for review feedback
         id: comments
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,20 +51,33 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           REVIEW_ID="${{ github.event.review.id }}"
 
+          # Check inline comments
           if [ -n "$REVIEW_ID" ]; then
-            # Triggered by review: scope to comments from this specific review
-            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
               --jq "[.[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID})] | length")
           else
-            # Manual trigger: count all unresolved Codex comments
-            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
               --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
           fi
+
+          # Check review body for substantive feedback (not just boilerplate)
+          REVIEW_BODY_HAS_FEEDBACK=0
+          if [ -n "$REVIEW_ID" ]; then
+            BODY=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews/${REVIEW_ID}" --jq '.body')
+            # Codex "no issues" reviews contain "Didn't find any major issues" or are empty
+            if [ -n "$BODY" ] && ! echo "$BODY" | grep -qi "didn't find any major issues"; then
+              REVIEW_BODY_HAS_FEEDBACK=1
+            fi
+          fi
+
+          TOTAL=$((INLINE_COUNT + REVIEW_BODY_HAS_FEEDBACK))
           echo "inline_count=${INLINE_COUNT}" >> "$GITHUB_OUTPUT"
-          echo "Codex inline review comments (this review): ${INLINE_COUNT}"
+          echo "review_body_has_feedback=${REVIEW_BODY_HAS_FEEDBACK}" >> "$GITHUB_OUTPUT"
+          echo "has_feedback=$([[ $TOTAL -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "Inline: ${INLINE_COUNT}, Review body feedback: ${REVIEW_BODY_HAS_FEEDBACK}"
 
       - name: No feedback — label as clean
-        if: fromJSON(steps.comments.outputs.inline_count) == 0
+        if: steps.comments.outputs.has_feedback == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -74,7 +87,7 @@ jobs:
             --body "Codex review passed with no issues. Ready for human review and merge."
 
       - name: Check review round cap
-        if: fromJSON(steps.comments.outputs.inline_count) > 0
+        if: steps.comments.outputs.has_feedback == 'true'
         id: round
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,7 +104,7 @@ jobs:
           fi
 
       - name: Collect review feedback
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -124,24 +137,24 @@ jobs:
           } > /tmp/codex_feedback.txt
 
       - name: Checkout PR branch
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: actions/checkout@v6
         with:
           ref: ${{ steps.pr.outputs.branch }}
           fetch-depth: 0
 
       - name: Set up Python
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: actions/setup-python@v6
         with:
           python-version: "3.12.12"
 
       - name: Install dependencies
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: pip install -r requirements.txt
 
       - name: Fix with Codex
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -150,7 +163,7 @@ jobs:
           prompt-file: /tmp/codex_feedback.txt
 
       - name: Push fixes
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -167,7 +180,7 @@ jobs:
           git push origin "HEAD:${BRANCH}"
 
       - name: Request re-review
-        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
         run: |
