@@ -412,7 +412,6 @@ def _dispatch_one_agent_task(
     state: dict[str, Any],
     issues_by_task: dict[str, IssueRef],
     github_client: GitHubClient,
-    codex_trigger_client: GitHubClient | None,
 ) -> dict[str, Any]:
     """Dispatch a single agent task as a GitHub issue. Returns a result dict."""
     task_status = state["task_status"]
@@ -436,19 +435,6 @@ def _dispatch_one_agent_task(
         "updated_at": created_issue.updated_at,
     }
 
-    comment_client = codex_trigger_client or github_client
-    comment_client.add_comment_to_issue(
-        created_issue.number,
-        "@codex implement this task. Create a PR using the `gh` CLI:\n\n"
-        "```\n"
-        f'gh pr create --title "[ORCH][{task.task_id}] <brief description>" '
-        f'--body "Closes #{created_issue.number}\\n\\n<summary of changes>" '
-        f"--label orchestrator-task\n"
-        "```\n\n"
-        "Do NOT use any built-in PR creation tool. Only use `gh pr create`.\n"
-        f"The PR body MUST include `Closes #{created_issue.number}`.",
-    )
-
     append_history(
         state, "task_dispatched_new_issue",
         task_id=task.task_id, issue_number=created_issue.number, issue_url=created_issue.html_url,
@@ -462,7 +448,6 @@ def run_once(
     issues_by_task: dict[str, IssueRef],
     github_client: GitHubClient | None,
     max_active_tasks: int,
-    codex_trigger_client: GitHubClient | None = None,
     plan_path: Path | None = None,
 ) -> dict[str, Any]:
     task_status = state["task_status"]
@@ -520,7 +505,7 @@ def run_once(
             acceptance_criteria=criteria,
             plan_checkbox_text=pt.title,
         )
-        result = _dispatch_one_agent_task(task, state, issues_by_task, github_client, codex_trigger_client)
+        result = _dispatch_one_agent_task(task, state, issues_by_task, github_client)
         dispatched.append(result)
 
     return {"action": "tasks_dispatched", "dispatched": dispatched}
@@ -583,12 +568,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=os.environ.get("GITHUB_API_URL", "https://api.github.com"),
         help="GitHub API base URL.",
     )
-    parser.add_argument(
-        "--codex-trigger-token",
-        type=str,
-        default=os.environ.get("CODEX_TRIGGER_TOKEN", ""),
-        help="PAT used for @codex comments so they appear from a real user.",
-    )
     return parser.parse_args(argv)
 
 
@@ -604,7 +583,6 @@ def main(argv: list[str] | None = None) -> None:
     state = initialize_state(tasks, args.state_path)
 
     github_client: GitHubClient | None = None
-    codex_trigger_client: GitHubClient | None = None
     issues_by_task: dict[str, IssueRef] = {}
     if args.github_repo and args.github_token:
         github_client = GitHubClient(
@@ -623,13 +601,6 @@ def main(argv: list[str] | None = None) -> None:
                     mark_task_done_in_plan(plan_path, plan_md_path, task_id)
                 except (ValueError, KeyError):
                     pass  # Task may already be done or not found in plan.
-
-        if args.codex_trigger_token:
-            codex_trigger_client = GitHubClient(
-                token=args.codex_trigger_token,
-                repo=args.github_repo,
-                api_base=args.github_api_url,
-            )
 
     result: dict[str, Any]
     if args.command == "status":
@@ -652,7 +623,6 @@ def main(argv: list[str] | None = None) -> None:
             issues_by_task=issues_by_task,
             github_client=github_client,
             max_active_tasks=args.max_active_tasks,
-            codex_trigger_client=codex_trigger_client,
             plan_path=plan_path,
         )
     else:

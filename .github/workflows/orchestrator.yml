@@ -44,7 +44,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.CODEX_TRIGGER_PAT || github.token }}
+          token: ${{ github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -96,7 +96,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          CODEX_TRIGGER_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
         run: |
           set -euo pipefail
 
