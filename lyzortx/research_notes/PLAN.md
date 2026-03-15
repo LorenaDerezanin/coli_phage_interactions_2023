@@ -65,7 +65,7 @@ graph LR
 - [x] Generate top-3 recommendations with policy-tuned defaults. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
 - [x] Compare ranking policy variants to avoid recommendation-policy regressions. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
 - [x] Emit one reproducible report to generated_outputs/steel_thread_v0/. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
-- [x] Add dual-slice reporting (full-label and strict-confidence) to ST0.7. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py` with regression coverage in `lyzortx/tests/test_st07_dual_slice_report.py`.
+- [x] Add dual-slice reporting (full-label and strict-confidence) to ST0.7
 - [ ] Document failure case hypotheses for each major holdout miss error bucket
 
 ## Track A: Data Integrity and Labeling
