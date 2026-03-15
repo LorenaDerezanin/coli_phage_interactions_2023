@@ -63,6 +63,11 @@
 - Use one `Closes #...` line per issue when a PR intentionally resolves multiple issues.
 - Keep closure references explicit so orchestration and audit flows can advance automatically on merge.
 
+# PR Review Policy
+
+- Do not approve a PR unless all CI checks pass. A branch with failing tests is not mergeable regardless of code quality.
+- Review must verify: code quality, test coverage, alignment with acceptance criteria, and adherence to AGENTS.md policies.
+
 # PR Creation for Orchestrator Tasks
 
 - When implementing an orchestrator task, create the PR using `gh pr create` from the CLI.
