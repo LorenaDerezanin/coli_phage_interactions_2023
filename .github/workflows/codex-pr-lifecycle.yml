@@ -51,13 +51,15 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           REVIEW_ID="${{ github.event.review.id }}"
 
-          # Check inline comments
+          # Check inline comments (--slurp combines paginated pages before counting)
           if [ -n "$REVIEW_ID" ]; then
             INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
-              --jq "[.[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID})] | length")
+              --jq "[.[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID})]" \
+              | jq -s 'add | length')
           else
             INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
-              --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
+              --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")]' \
+              | jq -s 'add | length')
           fi
 
           # Check review body for substantive feedback (not just boilerplate)
@@ -117,16 +119,16 @@ jobs:
             echo "## Inline review comments (on specific lines)"
             echo ""
             if [ -n "$REVIEW_ID" ]; then
-              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
                 --jq ".[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID}) | \"### \" + .path + \":\" + (.line // .original_line | tostring) + \"\n\n\" + .body + \"\n\""
             else
-              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
                 --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "### " + .path + ":" + (.line // .original_line | tostring) + "\n\n" + .body + "\n"'
             fi
             echo ""
             echo "## General PR comments"
             echo ""
-            gh api "repos/${{ github.repository }}/issues/${PR_NUM}/comments" \
+            gh api "repos/${{ github.repository }}/issues/${PR_NUM}/comments" --paginate \
               --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | .body + "\n"'
             echo ""
             echo "# Instructions"
