@@ -1,0 +1,52 @@
+name: Codex Implement Task
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  implement:
+    name: Implement Task
+    if: contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Implement task with Codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4
+          prompt: |
+            You are implementing an orchestrator task from a GitHub issue.
+
+            Read issue #${{ github.event.issue.number }} in this repository.
+            The issue contains a task description, acceptance criteria, and agent instructions.
+
+            Follow the policies in AGENTS.md and lyzortx/AGENTS.md.
+
+            Steps:
+            1. Implement the task as described in the issue.
+            2. Run tests: pytest -q lyzortx/tests/
+            3. Append findings to lyzortx/research_notes/LAB NOTEBOOK.md following the existing entry format.
+            4. Create a PR:
+               gh pr create \
+                 --title "[ORCH][TASK_ID] Brief description" \
+                 --body "Closes #${{ github.event.issue.number }}" \
+                 --label orchestrator-task
