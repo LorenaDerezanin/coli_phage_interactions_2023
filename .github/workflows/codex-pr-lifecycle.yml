@@ -59,9 +59,11 @@ jobs:
             Review PR #${{ github.event.pull_request.number }} in this repository.
 
             Check: code quality, test coverage, alignment with acceptance criteria in the linked issue,
-            and adherence to AGENTS.md policies.
+            and adherence to AGENTS.md policies. Run tests with: pytest -q lyzortx/tests/
 
-            If the PR looks good, approve it:
+            Do NOT approve if tests fail. A branch with failing tests is not mergeable.
+
+            If the PR looks good and tests pass, approve it:
               gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"
 
             If changes are needed, request changes with specific actionable comments:
