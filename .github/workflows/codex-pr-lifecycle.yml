@@ -1,8 +1,6 @@
 name: Codex PR Lifecycle
 
 on:
-  pull_request_target:
-    types: [opened, synchronize]
   pull_request_review:
     types: [submitted]
 
@@ -12,65 +10,125 @@ permissions:
   issues: write
 
 jobs:
-  review:
-    name: Codex Review
+  address-feedback:
+    name: Address Review Feedback
     if: >-
-      github.event_name == 'pull_request_target'
+      github.event.review.state == 'commented'
+      && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
       && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
-      - name: Check review round
+      - name: Check for inline review comments
+        id: comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+
+          # Count inline review comments from Codex on this PR
+          INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+            --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
+
+          echo "inline_count=${INLINE_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "Codex inline review comments: ${INLINE_COUNT}"
+
+          if [ "$INLINE_COUNT" -eq 0 ]; then
+            echo "No inline comments — Codex approves. Nothing to fix."
+          fi
+
+      - name: Check review round cap
+        if: fromJSON(steps.comments.outputs.inline_count) > 0
         id: round
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ROUND=$(gh pr view ${{ github.event.pull_request.number }} \
+          ROUND=$(gh pr view "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
             --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
           echo "round=${ROUND:-0}" >> "$GITHUB_OUTPUT"
 
-      - name: Cap reached -- request human review
-        if: fromJSON(steps.round.outputs.round) >= 3
+          if [ "${ROUND:-0}" -ge 3 ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" \
+              --body "Maximum automated fix rounds (3) reached. Requesting human review."
+            gh pr edit "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" \
+              --add-label "needs-human-review"
+          fi
+
+      - name: Collect all review feedback
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "Maximum automated review rounds (3) reached. Requesting human review."
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --add-label "needs-human-review"
+          PR_NUM="${{ github.event.pull_request.number }}"
 
-      - name: Checkout for Codex review
-        if: fromJSON(steps.round.outputs.round) < 3
+          {
+            echo "# Review feedback to address for PR #${PR_NUM}"
+            echo ""
+            echo "## Inline review comments (on specific lines)"
+            echo ""
+            gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+              --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "### " + .path + ":" + (.line // .original_line | tostring) + "\n\n" + .body + "\n"'
+            echo ""
+            echo "## General PR comments"
+            echo ""
+            gh api "repos/${{ github.repository }}/issues/${PR_NUM}/comments" \
+              --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | .body + "\n"'
+            echo ""
+            echo "# Instructions"
+            echo ""
+            echo "Address every issue raised above. Follow AGENTS.md policies."
+            echo "Run tests: pytest -q lyzortx/tests/"
+            echo "Commit fixes with detailed messages — they will be used in the PR description."
+          } > /tmp/codex_feedback.txt
+
+      - name: Checkout PR branch
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
-      - name: Review with Codex
-        if: fromJSON(steps.round.outputs.round) < 3
+      - name: Set up Python
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.12"
+
+      - name: Install dependencies
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        run: pip install -r requirements.txt
+
+      - name: Fix with Codex
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
-          prompt: |
-            Review PR #${{ github.event.pull_request.number }} in this repository.
+          codex-args: --full-auto
+          prompt-file: /tmp/codex_feedback.txt
 
-            Check: code quality, test coverage, alignment with acceptance criteria in the linked issue,
-            and adherence to AGENTS.md policies. Run tests with: pytest -q lyzortx/tests/
+      - name: Push fixes
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet origin/${{ github.event.pull_request.head.ref }} && git diff --quiet && git diff --cached --quiet; then
+            echo "No changes after fix attempt."
+            exit 0
+          fi
 
-            Do NOT approve if tests fail. A branch with failing tests is not mergeable.
-
-            If the PR looks good and tests pass, approve it:
-              gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"
-
-            If changes are needed, request changes with specific actionable comments:
-              gh pr review ${{ github.event.pull_request.number }} --request-changes --body "..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Address Codex review feedback (round $((${ROUND:-0} + 1)))"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Add review round label
-        if: fromJSON(steps.round.outputs.round) < 3
+        if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -79,61 +137,27 @@ jobs:
             --repo "${{ github.repository }}" \
             --add-label "codex-review-round-${NEXT_ROUND}"
 
-  handle-review-result:
-    name: Handle Review Result
+  label-if-clean:
+    name: Label Clean PR
     if: >-
-      github.event_name == 'pull_request_review'
+      github.event.review.state == 'commented'
+      && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
       && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
+    needs: address-feedback
 
     steps:
-      - name: Approved -- label for human review
-        if: github.event.review.state == 'approved'
+      - name: Check if Codex had no feedback
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --add-label "ready-for-human-review"
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "Codex review passed. Ready for human review and merge."
+          PR_NUM="${{ github.event.pull_request.number }}"
+          INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+            --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
 
-      - name: Changes requested -- fix with Codex
-        if: github.event.review.state == 'changes_requested'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ROUND=$(gh pr view "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
-
-          if [ "$ROUND" -ge 3 ]; then
-            gh pr comment "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
-              --body "Maximum review rounds reached after ${ROUND} iterations. Human review required."
-            gh pr edit "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
-              --add-label "needs-human-review"
-            exit 0
+          if [ "$INLINE_COUNT" -eq 0 ]; then
+            gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
+            gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
+              --body "Codex review passed with no issues. Ready for human review and merge."
           fi
-
-      - name: Checkout for Codex fix
-        if: github.event.review.state == 'changes_requested'
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Fix with Codex
-        if: github.event.review.state == 'changes_requested'
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.4
-          prompt: |
-            PR #${{ github.event.pull_request.number }} received review feedback requesting changes.
-
-            Read the review comments on this PR and address every issue raised.
-            Run tests: pytest -q lyzortx/tests/
-            Push a new commit with the fixes.
