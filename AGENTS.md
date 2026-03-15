@@ -63,20 +63,9 @@
 - Use one `Closes #...` line per issue when a PR intentionally resolves multiple issues.
 - Keep closure references explicit so orchestration and audit flows can advance automatically on merge.
 
-# Agent Invocation and PR Automation Policy
-
-- When an agent is invoked from a GitHub issue (for example `@codex implement`), it should automatically open a PR after
-  preparing changes.
-- Do not stop at \"changes ready\" while waiting for manual \"Open PR\" clicks unless blocked by permissions or platform
-  limits.
-- If automatic PR creation is blocked, post a clear blocker note with the exact command or permission needed to finish.
-- When writing PR feedback intended for Codex follow-up, prepend actionable lines with `@codex` followed by a space so
-  Codex can pick them up automatically.
-
 # PR Creation for Orchestrator Tasks
 
 - When implementing an orchestrator task, create the PR using `gh pr create` from the CLI.
-- Do NOT use any built-in PR creation tool -- only `gh pr create`.
 - PR title pattern: `[ORCH][TASK_ID] Brief description`.
 - PR body MUST include `Closes #<issue_number>` (the orchestrator issue that dispatched the task).
 - Add the `orchestrator-task` label: `gh pr create --label orchestrator-task`.
