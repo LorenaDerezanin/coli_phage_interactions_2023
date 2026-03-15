@@ -455,3 +455,25 @@ The most pragmatic approach is to start with the lowest-effort, highest-value ta
    to script a process to download all available phage-host pairs and integrate them as "known positive" in our dataset.
 2. **Mid-Term:** Investigate the curated databases at the CNCB.
 3. **Long-Term:** Scope the effort required to re-process a full screening project from the SRA or GWH.
+
+### 2026-03-15: ST08 Dual-Slice Reporting Verification (ST0.7)
+
+#### What was implemented
+
+- Added a dedicated regression test for ST0.7 report generation to verify that `metrics_summary.csv` contains separate
+  holdout metric rows for both `full_label` and `strict_confidence` slices.
+- The test enforces presence of the required acceptance metrics by slice:
+  - `topk_hit_rate_all_strains`
+  - `brier_score`
+  - `ece`
+
+#### Findings
+
+- ST0.7 now has explicit test-level guarantees that dual-slice reporting is present in report outputs and keyed by
+  `__full_label` / `__strict_confidence` suffixes for downstream parsing.
+
+#### Interpretation
+
+- This closes a reporting-audit gap between ST0.5/ST0.6 and ST0.7 by ensuring the final exported report preserves slice
+  separation for recommendation quality and calibration quality metrics.
+

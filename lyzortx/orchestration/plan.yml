@@ -51,7 +51,7 @@ tracks:
         baseline: lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json
       - id: ST08
         title: Add dual-slice reporting (full-label and strict-confidence) to ST0.7
-        status: pending
+        status: done
         acceptance_criteria:
           - ST0.7 report includes separate metric rows for full-label and strict-confidence slices
           - Both slices report top-3 hit rate, calibration ECE, and Brier score
