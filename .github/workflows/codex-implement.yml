@@ -2,7 +2,7 @@ name: Codex Implement Task
 
 on:
   issues:
-    types: [opened]
+    types: [opened, reopened]
 
 permissions:
   contents: write
