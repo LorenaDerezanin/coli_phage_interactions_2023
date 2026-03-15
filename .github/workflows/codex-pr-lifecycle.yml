@@ -3,6 +3,12 @@ name: Codex PR Lifecycle
 on:
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to address feedback on"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,30 +19,50 @@ jobs:
   address-feedback:
     name: Address Review Feedback
     if: >-
-      github.event.review.state == 'commented'
-      && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
+      github.event_name == 'workflow_dispatch'
+      || (
+        github.event.review.state == 'commented'
+        && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+        && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
+      - name: Resolve PR number and branch
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUM="${{ inputs.pr_number }}"
+          else
+            PR_NUM="${{ github.event.pull_request.number }}"
+          fi
+          echo "number=${PR_NUM}" >> "$GITHUB_OUTPUT"
+          BRANCH=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
       - name: Check for inline review comments
         id: comments
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-
-          # Count inline review comments from Codex on this PR
+          PR_NUM="${{ steps.pr.outputs.number }}"
           INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
             --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
-
           echo "inline_count=${INLINE_COUNT}" >> "$GITHUB_OUTPUT"
           echo "Codex inline review comments: ${INLINE_COUNT}"
 
-          if [ "$INLINE_COUNT" -eq 0 ]; then
-            echo "No inline comments — Codex approves. Nothing to fix."
-          fi
+      - name: No feedback — label as clean
+        if: fromJSON(steps.comments.outputs.inline_count) == 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
+            --body "Codex review passed with no issues. Ready for human review and merge."
 
       - name: Check review round cap
         if: fromJSON(steps.comments.outputs.inline_count) > 0
@@ -44,18 +70,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ROUND=$(gh pr view "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          ROUND=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
             --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
           echo "round=${ROUND:-0}" >> "$GITHUB_OUTPUT"
 
           if [ "${ROUND:-0}" -ge 3 ]; then
-            gh pr comment "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
+            gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
               --body "Maximum automated fix rounds (3) reached. Requesting human review."
-            gh pr edit "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
-              --add-label "needs-human-review"
+            gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "needs-human-review"
           fi
 
       - name: Collect all review feedback
@@ -63,8 +86,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-
+          PR_NUM="${{ steps.pr.outputs.number }}"
           {
             echo "# Review feedback to address for PR #${PR_NUM}"
             echo ""
@@ -89,7 +111,7 @@ jobs:
         if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.pr.outputs.branch }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -116,7 +138,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet origin/${{ github.event.pull_request.head.ref }} && git diff --quiet && git diff --cached --quiet; then
+          BRANCH="${{ steps.pr.outputs.branch }}"
+          if git diff --quiet "origin/${BRANCH}" && git diff --quiet && git diff --cached --quiet; then
             echo "No changes after fix attempt."
             exit 0
           fi
@@ -124,40 +147,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --cached --quiet || git commit -m "Address Codex review feedback (round $((${ROUND:-0} + 1)))"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git diff --cached --quiet || git commit -m "Address Codex review feedback"
+          git push origin "HEAD:${BRANCH}"
 
-      - name: Add review round label and request re-review
+      - name: Request re-review
         if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
         run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
+          PR_NUM="${{ steps.pr.outputs.number }}"
           NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))
           gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "codex-review-round-${NEXT_ROUND}"
           gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "@codex review"
-
-  label-if-clean:
-    name: Label Clean PR
-    if: >-
-      github.event.review.state == 'commented'
-      && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    needs: address-feedback
-
-    steps:
-      - name: Check if Codex had no feedback
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-          INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
-            --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
-
-          if [ "$INLINE_COUNT" -eq 0 ]; then
-            gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
-            gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
-              --body "Codex review passed with no issues. Ready for human review and merge."
-          fi
