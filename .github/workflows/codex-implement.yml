@@ -96,7 +96,8 @@ jobs:
           TASK_ID="${{ steps.task.outputs.id }}"
           BRANCH="codex/implement-${TASK_ID,,}"
 
-          if git diff --quiet HEAD; then
+          # Check for changes: either uncommitted files or new commits beyond origin/main
+          if git diff --quiet origin/main && git diff --quiet && git diff --cached --quiet; then
             echo "No changes detected. Skipping PR creation."
             exit 0
           fi
@@ -104,9 +105,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -b "$BRANCH"
+          # Stage any uncommitted changes (Codex may or may not have committed)
           git add -A
           git diff --cached --quiet || git commit -m "[ORCH][${TASK_ID}] Implement task from issue #${ISSUE_NUM}"
+
+          # Create branch from current state (which includes Codex's commits)
+          git checkout -b "$BRANCH"
           git push origin "$BRANCH"
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUM" --json title --jq '.title' | sed 's/\[ORCH\]\[[^]]*\] //')
