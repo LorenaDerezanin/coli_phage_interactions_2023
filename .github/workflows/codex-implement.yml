@@ -39,6 +39,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Extract task ID from issue title
+        id: task
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE=$(gh issue view "${{ steps.issue.outputs.number }}" --json title --jq '.title')
+          TASK_ID=$(echo "$TITLE" | grep -oP '(?<=\[ORCH\]\[)[A-Za-z0-9_.-]+(?=\])' || echo "UNKNOWN")
+          echo "id=${TASK_ID}" >> "$GITHUB_OUTPUT"
+
       - name: Build prompt
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,19 +60,16 @@ jobs:
             echo ""
             echo "# Instructions"
             echo ""
-            echo "Implement the task described above. This is issue #${ISSUE_NUM}."
-            echo ""
+            echo "Implement the task described above."
             echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
             echo ""
             echo "Steps:"
             echo "1. Implement the task as described."
             echo "2. Run tests: pytest -q lyzortx/tests/"
-            echo "3. Append findings to lyzortx/research_notes/LAB NOTEBOOK.md following the existing entry format."
-            echo "4. Create a PR:"
-            echo "   gh pr create \\"
-            echo "     --title \"[ORCH][TASK_ID] Brief description\" \\"
-            echo "     --body \"Closes #${ISSUE_NUM}\" \\"
-            echo "     --label orchestrator-task"
+            echo "3. Commit your changes with a descriptive message."
+            echo ""
+            echo "Do NOT attempt git push or gh pr create — the sandbox has no network access."
+            echo "The workflow will handle pushing and PR creation after you finish."
           } > /tmp/codex_prompt.txt
 
       - name: Set up Python
@@ -76,11 +82,36 @@ jobs:
 
       - name: Implement task with Codex
         uses: openai/codex-action@v1
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
           codex-args: --full-auto
           prompt-file: /tmp/codex_prompt.txt
+
+      - name: Push and create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ steps.issue.outputs.number }}"
+          TASK_ID="${{ steps.task.outputs.id }}"
+          BRANCH="codex/implement-${TASK_ID,,}"
+
+          if git diff --quiet HEAD; then
+            echo "No changes detected. Skipping PR creation."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+          git add -A
+          git diff --cached --quiet || git commit -m "[ORCH][${TASK_ID}] Implement task from issue #${ISSUE_NUM}"
+          git push origin "$BRANCH"
+
+          ISSUE_TITLE=$(gh issue view "$ISSUE_NUM" --json title --jq '.title' | sed 's/\[ORCH\]\[[^]]*\] //')
+          gh pr create \
+            --title "[ORCH][${TASK_ID}] ${ISSUE_TITLE}" \
+            --body "Closes #${ISSUE_NUM}" \
+            --label orchestrator-task \
+            --head "$BRANCH"
