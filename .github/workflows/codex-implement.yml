@@ -39,16 +39,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch issue body
-        id: body
+      - name: Build prompt
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          BODY=$(gh issue view "$ISSUE_NUM" --json title,body --jq '"# " + .title + "\n\n" + .body')
-          # Write to file since issue body can be large
-          echo "$BODY" > /tmp/issue_body.txt
-          echo "file=/tmp/issue_body.txt" >> "$GITHUB_OUTPUT"
+          {
+            echo "# Task"
+            echo ""
+            gh issue view "$ISSUE_NUM" --json title,body --jq '"## " + .title + "\n\n" + .body'
+            echo ""
+            echo "# Instructions"
+            echo ""
+            echo "Implement the task described above. This is issue #${ISSUE_NUM}."
+            echo ""
+            echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
+            echo ""
+            echo "Steps:"
+            echo "1. Implement the task as described."
+            echo "2. Run tests: pytest -q lyzortx/tests/"
+            echo "3. Append findings to lyzortx/research_notes/LAB NOTEBOOK.md following the existing entry format."
+            echo "4. Create a PR:"
+            echo "   gh pr create \\"
+            echo "     --title \"[ORCH][TASK_ID] Brief description\" \\"
+            echo "     --body \"Closes #${ISSUE_NUM}\" \\"
+            echo "     --label orchestrator-task"
+          } > /tmp/codex_prompt.txt
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -66,20 +82,5 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
-          prompt-file: /tmp/issue_body.txt
-          codex-args: >-
-            --full-auto
-          prompt: |
-            Implement the task described above. This is issue #${{ steps.issue.outputs.number }}.
-
-            Follow the policies in AGENTS.md and lyzortx/AGENTS.md.
-
-            Steps:
-            1. Implement the task as described.
-            2. Run tests: pytest -q lyzortx/tests/
-            3. Append findings to lyzortx/research_notes/LAB NOTEBOOK.md following the existing entry format.
-            4. Create a PR:
-               gh pr create \
-                 --title "[ORCH][TASK_ID] Brief description" \
-                 --body "Closes #${{ steps.issue.outputs.number }}" \
-                 --label orchestrator-task
+          codex-args: --full-auto
+          prompt-file: /tmp/codex_prompt.txt
