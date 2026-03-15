@@ -12,13 +12,13 @@ permissions:
   issues: write
 
 jobs:
-  trigger-review:
-    name: Request Codex Review
+  review:
+    name: Codex Review
     if: >-
       github.event_name == 'pull_request_target'
       && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
       - name: Check review round
@@ -43,14 +43,29 @@ jobs:
             --repo "${{ github.repository }}" \
             --add-label "needs-human-review"
 
-      - name: Post review request
+      - name: Checkout for Codex review
         if: fromJSON(steps.round.outputs.round) < 3
-        env:
-          GH_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
-        run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "@codex review this PR thoroughly. Check code quality, test coverage, and alignment with the acceptance criteria in the linked issue. If it looks good, approve the PR. If changes are needed, submit a review with specific actionable comments."
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Review with Codex
+        if: fromJSON(steps.round.outputs.round) < 3
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} in this repository.
+
+            Check: code quality, test coverage, alignment with acceptance criteria in the linked issue,
+            and adherence to AGENTS.md policies.
+
+            If the PR looks good, approve it:
+              gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"
+
+            If changes are needed, request changes with specific actionable comments:
+              gh pr review ${{ github.event.pull_request.number }} --request-changes --body "..."
 
       - name: Add review round label
         if: fromJSON(steps.round.outputs.round) < 3
@@ -68,24 +83,25 @@ jobs:
       github.event_name == 'pull_request_review'
       && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
-      - name: Approved -- enable auto-merge
+      - name: Approved -- label for human review
         if: github.event.review.state == 'approved'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr merge "${{ github.event.pull_request.number }}" \
+          gh pr edit "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
-            --squash \
-            --auto
+            --add-label "ready-for-human-review"
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Codex review passed. Ready for human review and merge."
 
-      - name: Changes requested -- trigger fix or escalate
+      - name: Changes requested -- fix with Codex
         if: github.event.review.state == 'changes_requested'
         env:
           GH_TOKEN: ${{ github.token }}
-          CODEX_PAT: ${{ secrets.CODEX_TRIGGER_PAT }}
         run: |
           ROUND=$(gh pr view "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
@@ -98,10 +114,24 @@ jobs:
             gh pr edit "${{ github.event.pull_request.number }}" \
               --repo "${{ github.repository }}" \
               --add-label "needs-human-review"
-          else
-            # Switch to PAT so the @codex mention comes from a real user
-            export GH_TOKEN="${CODEX_PAT}"
-            gh pr comment "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
-              --body "@codex address all review feedback on this PR. Fix every issue raised in the review comments and push a new commit."
+            exit 0
           fi
+
+      - name: Checkout for Codex fix
+        if: github.event.review.state == 'changes_requested'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Fix with Codex
+        if: github.event.review.state == 'changes_requested'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4
+          prompt: |
+            PR #${{ github.event.pull_request.number }} received review feedback requesting changes.
+
+            Read the review comments on this PR and address every issue raised.
+            Run tests: pytest -q lyzortx/tests/
+            Push a new commit with the fixes.
