@@ -1,10 +1,14 @@
 name: Codex PR Lifecycle
 
 on:
-  pull_request_target:
-    types: [opened, synchronize]
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to address feedback on"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,128 +16,177 @@ permissions:
   issues: write
 
 jobs:
-  review:
-    name: Codex Review
+  address-feedback:
+    name: Address Review Feedback
     if: >-
-      github.event_name == 'pull_request_target'
-      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
+      github.event_name == 'workflow_dispatch'
+      || (
+        github.event.review.state == 'commented'
+        && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+        && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
+      )
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
-      - name: Check review round
+      - name: Resolve PR number and branch
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUM="${{ inputs.pr_number }}"
+          else
+            PR_NUM="${{ github.event.pull_request.number }}"
+          fi
+          echo "number=${PR_NUM}" >> "$GITHUB_OUTPUT"
+          BRANCH=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Check for review feedback
+        id: comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          REVIEW_ID="${{ github.event.review.id }}"
+
+          # Check inline comments (--slurp combines paginated pages before counting)
+          if [ -n "$REVIEW_ID" ]; then
+            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
+              --jq "[.[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID})]" \
+              | jq -s 'add | length')
+          else
+            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
+              --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")]' \
+              | jq -s 'add | length')
+          fi
+
+          # Check review body for substantive feedback (not just boilerplate)
+          REVIEW_BODY_HAS_FEEDBACK=0
+          if [ -n "$REVIEW_ID" ]; then
+            BODY=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews/${REVIEW_ID}" --jq '.body')
+            # Codex "no issues" reviews contain "Didn't find any major issues" or are empty
+            if [ -n "$BODY" ] && ! echo "$BODY" | grep -qi "didn't find any major issues"; then
+              REVIEW_BODY_HAS_FEEDBACK=1
+            fi
+          fi
+
+          TOTAL=$((INLINE_COUNT + REVIEW_BODY_HAS_FEEDBACK))
+          echo "inline_count=${INLINE_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "review_body_has_feedback=${REVIEW_BODY_HAS_FEEDBACK}" >> "$GITHUB_OUTPUT"
+          echo "has_feedback=$([[ $TOTAL -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "Inline: ${INLINE_COUNT}, Review body feedback: ${REVIEW_BODY_HAS_FEEDBACK}"
+
+      - name: No feedback — label as clean
+        if: steps.comments.outputs.has_feedback == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
+            --body "Codex review passed with no issues. Ready for human review and merge."
+
+      - name: Check review round cap
+        if: steps.comments.outputs.has_feedback == 'true'
         id: round
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ROUND=$(gh pr view ${{ github.event.pull_request.number }} \
-            --repo "${{ github.repository }}" \
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          ROUND=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
             --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
           echo "round=${ROUND:-0}" >> "$GITHUB_OUTPUT"
 
-      - name: Cap reached -- request human review
-        if: fromJSON(steps.round.outputs.round) >= 3
+          if [ "${ROUND:-0}" -ge 3 ]; then
+            gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
+              --body "Maximum automated fix rounds (3) reached. Requesting human review."
+            gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "needs-human-review"
+          fi
+
+      - name: Collect review feedback
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "Maximum automated review rounds (3) reached. Requesting human review."
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --add-label "needs-human-review"
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          REVIEW_ID="${{ github.event.review.id }}"
 
-      - name: Checkout for Codex review
-        if: fromJSON(steps.round.outputs.round) < 3
+          {
+            echo "# Review feedback to address for PR #${PR_NUM}"
+            echo ""
+            echo "## Inline review comments (on specific lines)"
+            echo ""
+            if [ -n "$REVIEW_ID" ]; then
+              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
+                --jq ".[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID}) | \"### \" + .path + \":\" + (.line // .original_line | tostring) + \"\n\n\" + .body + \"\n\""
+            else
+              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
+                --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "### " + .path + ":" + (.line // .original_line | tostring) + "\n\n" + .body + "\n"'
+            fi
+            echo ""
+            echo "## General PR comments"
+            echo ""
+            gh api "repos/${{ github.repository }}/issues/${PR_NUM}/comments" --paginate \
+              --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | .body + "\n"'
+            echo ""
+            echo "# Instructions"
+            echo ""
+            echo "Address every issue raised above. Follow AGENTS.md policies."
+            echo "Run tests: pytest -q lyzortx/tests/"
+            echo "Commit fixes with detailed messages — they will be used in the PR description."
+          } > /tmp/codex_feedback.txt
+
+      - name: Checkout PR branch
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.pr.outputs.branch }}
+          fetch-depth: 0
 
-      - name: Review with Codex
-        if: fromJSON(steps.round.outputs.round) < 3
+      - name: Set up Python
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.12"
+
+      - name: Install dependencies
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        run: pip install -r requirements.txt
+
+      - name: Fix with Codex
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
-          prompt: |
-            Review PR #${{ github.event.pull_request.number }} in this repository.
+          codex-args: --full-auto
+          prompt-file: /tmp/codex_feedback.txt
 
-            Check: code quality, test coverage, alignment with acceptance criteria in the linked issue,
-            and adherence to AGENTS.md policies. Run tests with: pytest -q lyzortx/tests/
-
-            Do NOT approve if tests fail. A branch with failing tests is not mergeable.
-
-            If the PR looks good and tests pass, approve it:
-              gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"
-
-            If changes are needed, request changes with specific actionable comments:
-              gh pr review ${{ github.event.pull_request.number }} --request-changes --body "..."
-
-      - name: Add review round label
-        if: fromJSON(steps.round.outputs.round) < 3
+      - name: Push fixes
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --add-label "codex-review-round-${NEXT_ROUND}"
-
-  handle-review-result:
-    name: Handle Review Result
-    if: >-
-      github.event_name == 'pull_request_review'
-      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-
-    steps:
-      - name: Approved -- label for human review
-        if: github.event.review.state == 'approved'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --add-label "ready-for-human-review"
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "Codex review passed. Ready for human review and merge."
-
-      - name: Changes requested -- fix with Codex
-        if: github.event.review.state == 'changes_requested'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ROUND=$(gh pr view "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
-
-          if [ "$ROUND" -ge 3 ]; then
-            gh pr comment "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
-              --body "Maximum review rounds reached after ${ROUND} iterations. Human review required."
-            gh pr edit "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" \
-              --add-label "needs-human-review"
+          BRANCH="${{ steps.pr.outputs.branch }}"
+          if git diff --quiet "origin/${BRANCH}" && git diff --quiet && git diff --cached --quiet; then
+            echo "No changes after fix attempt."
             exit 0
           fi
 
-      - name: Checkout for Codex fix
-        if: github.event.review.state == 'changes_requested'
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Address Codex review feedback"
+          git push origin "HEAD:${BRANCH}"
 
-      - name: Fix with Codex
-        if: github.event.review.state == 'changes_requested'
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.4
-          prompt: |
-            PR #${{ github.event.pull_request.number }} received review feedback requesting changes.
-
-            Read the review comments on this PR and address every issue raised.
-            Run tests: pytest -q lyzortx/tests/
-            Push a new commit with the fixes.
+      - name: Request re-review
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "codex-review-round-${NEXT_ROUND}"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "@codex review"

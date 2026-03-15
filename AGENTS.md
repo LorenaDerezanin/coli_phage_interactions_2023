@@ -57,6 +57,11 @@
 - Follow that plan for task sequencing; the orchestrator updates checklist states automatically.
 - When scope decisions are ambiguous, prefer alignment with the plan unless the user overrides it.
 
+# Branch Protection
+
+- Never push directly to main. All changes go through pull requests.
+- Create a feature branch, push it, and open a PR.
+
 # PR and Issue Linkage Policy
 
 - Any PR that addresses a tracked GitHub issue must include `Closes #<issue_number>` in its description.
