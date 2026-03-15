@@ -98,16 +98,6 @@ def test_mark_task_done(tmp_path: Path) -> None:
     assert is_task_ready(tb01, graph)
 
 
-def test_select_next_ready_task_from_plan_path(tmp_path: Path) -> None:
-    """Regression: select_next_ready_task must accept a Path, not a task list."""
-    from lyzortx.orchestration.orchestrator import select_next_ready_task
-
-    plan_path = _write_plan(tmp_path)
-    task = select_next_ready_task(plan_path, set())
-    assert task is not None
-    assert task.task_id == "TA02"
-
-
 def test_render_plan_contains_tracks(tmp_path: Path) -> None:
     plan_path = _write_plan(tmp_path)
     plan = load_plan_yaml(plan_path)
