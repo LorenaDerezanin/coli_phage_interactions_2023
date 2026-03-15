@@ -20,7 +20,7 @@ on:
       max_active_tasks:
         description: "Maximum concurrent in-progress tasks"
         required: false
-        default: "3"
+        default: "50"
         type: string
   repository_dispatch:
     types:
@@ -68,7 +68,7 @@ jobs:
 
           command = "run_once"
           note = ""
-          max_active_tasks = "3"
+          max_active_tasks = "50"
 
           if event_name == "workflow_dispatch":
               inputs = event.get("inputs", {})
