@@ -114,8 +114,20 @@ jobs:
           git push origin "$BRANCH"
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUM" --json title --jq '.title' | sed 's/\[ORCH\]\[[^]]*\] //')
+
+          # Build PR body from commit messages
+          COMMITS=$(git log origin/main..HEAD --pretty=format:'- %s%n%n%b' | sed '/^$/d')
+          PR_BODY=$(cat <<BODY
+          ## Changes
+
+          ${COMMITS}
+
+          Closes #${ISSUE_NUM}
+          BODY
+          )
+
           gh pr create \
             --title "[ORCH][${TASK_ID}] ${ISSUE_TITLE}" \
-            --body "Closes #${ISSUE_NUM}" \
+            --body "$PR_BODY" \
             --label orchestrator-task \
             --head "$BRANCH"
