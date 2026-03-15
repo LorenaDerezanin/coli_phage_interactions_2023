@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -87,29 +86,6 @@ def _load_acceptance_criteria(plan_path: Path, task_id: str) -> list[str]:
                 if task["id"] == task_id:
                     return task.get("acceptance_criteria", [])
     return []
-
-
-def select_next_ready_task(plan_path: Path, in_progress_ids: set[str]) -> Task | None:
-    """Select the next ready task using plan.yml dependency logic."""
-    from lyzortx.orchestration.plan_parser import load_plan, select_ready_tasks
-
-    graph = load_plan(plan_path)
-    for pt in select_ready_tasks(graph):
-        if pt.task_id in in_progress_ids:
-            continue
-        criteria = _load_acceptance_criteria(plan_path, pt.task_id)
-        return Task(
-            task_id=pt.task_id,
-            title=pt.title,
-            description=f"Track {pt.track} task. {pt.title}",
-            dependencies=[],
-            executor="agent",
-            command=None,
-            expected_paths=[],
-            acceptance_criteria=criteria,
-            plan_checkbox_text=pt.title,
-        )
-    return None
 
 
 def load_pending_tasks(plan_path: Path) -> list[Task]:
@@ -398,39 +374,6 @@ def sync_status_from_issues(
     return issue_index
 
 
-def validate_expected_paths(task: Task) -> list[str]:
-    missing_paths: list[str] = []
-    for expected_path in task.expected_paths:
-        resolved = REPO_ROOT / expected_path
-        if not resolved.exists():
-            missing_paths.append(expected_path)
-    return missing_paths
-
-
-def run_shell_task(task: Task) -> tuple[bool, str]:
-    if not task.command:
-        return False, "Task is configured for shell execution but has no command"
-
-    completed = subprocess.run(
-        task.command,
-        cwd=str(REPO_ROOT),
-        check=False,
-        text=True,
-        capture_output=True,
-    )
-    stdout_tail = "\n".join(completed.stdout.strip().splitlines()[-10:]) if completed.stdout else ""
-    stderr_tail = "\n".join(completed.stderr.strip().splitlines()[-10:]) if completed.stderr else ""
-
-    message_parts = [f"command_exit_code={completed.returncode}"]
-    if stdout_tail:
-        message_parts.append(f"stdout_tail=\n{stdout_tail}")
-    if stderr_tail:
-        message_parts.append(f"stderr_tail=\n{stderr_tail}")
-
-    success = completed.returncode == 0
-    return success, "\n\n".join(message_parts)
-
-
 def summarize(
     tasks: list[Task], task_status: dict[str, str], paused: bool, plan_path: Path | None = None
 ) -> dict[str, Any]:
@@ -464,6 +407,55 @@ def summarize(
     }
 
 
+def _dispatch_one_agent_task(
+    task: Task,
+    state: dict[str, Any],
+    issues_by_task: dict[str, IssueRef],
+    github_client: GitHubClient,
+    codex_trigger_client: GitHubClient | None,
+) -> dict[str, Any]:
+    """Dispatch a single agent task as a GitHub issue. Returns a result dict."""
+    task_status = state["task_status"]
+
+    existing_issue = issues_by_task.get(task.task_id)
+    if existing_issue is not None and existing_issue.state == "open":
+        task_status[task.task_id] = "in_progress"
+        append_history(
+            state, "task_dispatched_existing_issue",
+            task_id=task.task_id, issue_number=existing_issue.number, issue_url=existing_issue.html_url,
+        )
+        return {"task_id": task.task_id, "issue_number": existing_issue.number, "reused": True}
+
+    created_issue = github_client.create_agent_task_issue(task)
+    task_status[task.task_id] = "in_progress"
+    state.setdefault("issue_index", {})[task.task_id] = {
+        "number": created_issue.number,
+        "state": created_issue.state,
+        "url": created_issue.html_url,
+        "title": created_issue.title,
+        "updated_at": created_issue.updated_at,
+    }
+
+    comment_client = codex_trigger_client or github_client
+    comment_client.add_comment_to_issue(
+        created_issue.number,
+        "@codex implement this task. Create a PR using the `gh` CLI:\n\n"
+        "```\n"
+        f'gh pr create --title "[ORCH][{task.task_id}] <brief description>" '
+        f'--body "Closes #{created_issue.number}\\n\\n<summary of changes>" '
+        f"--label orchestrator-task\n"
+        "```\n\n"
+        "Do NOT use any built-in PR creation tool. Only use `gh pr create`.\n"
+        f"The PR body MUST include `Closes #{created_issue.number}`.",
+    )
+
+    append_history(
+        state, "task_dispatched_new_issue",
+        task_id=task.task_id, issue_number=created_issue.number, issue_url=created_issue.html_url,
+    )
+    return {"task_id": task.task_id, "issue_number": created_issue.number, "reused": False}
+
+
 def run_once(
     tasks: list[Task],
     state: dict[str, Any],
@@ -478,162 +470,60 @@ def run_once(
         append_history(state, "run_once_skipped", reason="paused")
         return {"action": "skipped", "reason": "paused"}
 
-    active_tasks = [task_id for task_id, status in task_status.items() if status == "in_progress"]
-    if len(active_tasks) >= max_active_tasks:
-        append_history(
-            state,
-            "run_once_skipped",
-            reason="max_active_tasks_reached",
-            active_tasks=active_tasks,
-            max_active_tasks=max_active_tasks,
-        )
-        return {
-            "action": "skipped",
-            "reason": "max_active_tasks_reached",
-            "active_tasks": active_tasks,
-            "max_active_tasks": max_active_tasks,
-        }
+    active_count = sum(1 for s in task_status.values() if s == "in_progress")
+    slots = max_active_tasks - active_count
+    if slots <= 0:
+        append_history(state, "run_once_skipped", reason="max_active_tasks_reached")
+        return {"action": "skipped", "reason": "max_active_tasks_reached"}
 
-    in_progress_ids = set(active_tasks)
-    next_task = select_next_ready_task(plan_path or DEFAULT_PLAN_PATH, in_progress_ids)
-    if next_task is None:
+    # Get all ready tasks from the plan graph.
+    from lyzortx.orchestration.plan_parser import load_plan, select_ready_tasks
+
+    effective_plan_path = plan_path or DEFAULT_PLAN_PATH
+    graph = load_plan(effective_plan_path)
+    ready = select_ready_tasks(graph)
+
+    # Filter out tasks already in progress.
+    in_progress_ids = {tid for tid, s in task_status.items() if s == "in_progress"}
+    candidates = [pt for pt in ready if pt.task_id not in in_progress_ids][:slots]
+
+    if not candidates:
         append_history(state, "run_once_skipped", reason="no_ready_tasks")
         return {"action": "skipped", "reason": "no_ready_tasks"}
 
-    append_history(state, "task_started", task_id=next_task.task_id, executor=next_task.executor)
-
-    if next_task.executor == "shell":
-        task_status[next_task.task_id] = "in_progress"
-        success, execution_note = run_shell_task(next_task)
-        if not success:
-            task_status[next_task.task_id] = "blocked"
-            append_history(
-                state,
-                "task_blocked",
-                task_id=next_task.task_id,
-                reason="shell_command_failed",
-                note=execution_note,
-            )
-            return {
-                "action": "task_blocked",
-                "task_id": next_task.task_id,
-                "reason": "shell_command_failed",
-                "note": execution_note,
-            }
-
-        missing_paths = validate_expected_paths(next_task)
-        if missing_paths:
-            task_status[next_task.task_id] = "blocked"
-            append_history(
-                state,
-                "task_blocked",
-                task_id=next_task.task_id,
-                reason="missing_expected_paths",
-                missing_paths=missing_paths,
-                note=execution_note,
-            )
-            return {
-                "action": "task_blocked",
-                "task_id": next_task.task_id,
-                "reason": "missing_expected_paths",
-                "missing_paths": missing_paths,
-                "note": execution_note,
-            }
-
-        task_status[next_task.task_id] = "completed"
-        append_history(state, "task_completed", task_id=next_task.task_id, note=execution_note)
-        return {
-            "action": "task_completed",
-            "task_id": next_task.task_id,
-            "note": execution_note,
-        }
-
     if github_client is None:
-        task_status[next_task.task_id] = "in_progress"
-        append_history(
-            state,
-            "task_waiting_for_agent",
-            task_id=next_task.task_id,
-            note="No GitHub token/repo configured; issue dispatch skipped.",
-        )
-        return {
-            "action": "task_waiting_for_agent",
-            "task_id": next_task.task_id,
-            "executor": next_task.executor,
-            "warning": "No GitHub token/repo configured",
-        }
-
-    existing_issue = issues_by_task.get(next_task.task_id)
-    if existing_issue is not None and existing_issue.state == "open":
-        task_status[next_task.task_id] = "in_progress"
-        append_history(
-            state,
-            "task_dispatched_existing_issue",
-            task_id=next_task.task_id,
-            issue_number=existing_issue.number,
-            issue_url=existing_issue.html_url,
-        )
-        return {
-            "action": "task_dispatched_existing_issue",
-            "task_id": next_task.task_id,
-            "issue_number": existing_issue.number,
-            "issue_url": existing_issue.html_url,
-        }
+        dispatched = []
+        for pt in candidates:
+            task_status[pt.task_id] = "in_progress"
+            append_history(state, "task_waiting_for_agent", task_id=pt.task_id,
+                           note="No GitHub token/repo configured; issue dispatch skipped.")
+            dispatched.append(pt.task_id)
+        return {"action": "tasks_waiting_for_agent", "task_ids": dispatched, "warning": "No GitHub token/repo configured"}
 
     try:
         github_client.ensure_task_label_exists()
     except Exception as exc:
-        task_status[next_task.task_id] = "blocked"
-        append_history(
-            state,
-            "task_blocked",
-            task_id=next_task.task_id,
-            reason="label_setup_failed",
-            note=str(exc),
+        append_history(state, "run_once_skipped", reason="label_setup_failed", note=str(exc))
+        return {"action": "skipped", "reason": "label_setup_failed", "note": str(exc)}
+
+    dispatched: list[dict[str, Any]] = []
+    for pt in candidates:
+        criteria = _load_acceptance_criteria(effective_plan_path, pt.task_id)
+        task = Task(
+            task_id=pt.task_id,
+            title=pt.title,
+            description=f"Track {pt.track} task. {pt.title}",
+            dependencies=[],
+            executor="agent",
+            command=None,
+            expected_paths=[],
+            acceptance_criteria=criteria,
+            plan_checkbox_text=pt.title,
         )
-        return {
-            "action": "task_blocked",
-            "task_id": next_task.task_id,
-            "reason": "label_setup_failed",
-            "note": str(exc),
-        }
+        result = _dispatch_one_agent_task(task, state, issues_by_task, github_client, codex_trigger_client)
+        dispatched.append(result)
 
-    created_issue = github_client.create_agent_task_issue(next_task)
-    task_status[next_task.task_id] = "in_progress"
-    state.setdefault("issue_index", {})[next_task.task_id] = {
-        "number": created_issue.number,
-        "state": created_issue.state,
-        "url": created_issue.html_url,
-        "title": created_issue.title,
-        "updated_at": created_issue.updated_at,
-    }
-
-    comment_client = codex_trigger_client or github_client
-    comment_client.add_comment_to_issue(
-        created_issue.number,
-        "@codex implement this task. Create a PR using the `gh` CLI:\n\n"
-        "```\n"
-        f'gh pr create --title "[ORCH][{next_task.task_id}] <brief description>" '
-        f'--body "Closes #{created_issue.number}\\n\\n<summary of changes>" '
-        f"--label orchestrator-task\n"
-        "```\n\n"
-        "Do NOT use any built-in PR creation tool. Only use `gh pr create`.\n"
-        f"The PR body MUST include `Closes #{created_issue.number}`.",
-    )
-
-    append_history(
-        state,
-        "task_dispatched_new_issue",
-        task_id=next_task.task_id,
-        issue_number=created_issue.number,
-        issue_url=created_issue.html_url,
-    )
-    return {
-        "action": "task_dispatched_new_issue",
-        "task_id": next_task.task_id,
-        "issue_number": created_issue.number,
-        "issue_url": created_issue.html_url,
-    }
+    return {"action": "tasks_dispatched", "dispatched": dispatched}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
