@@ -49,10 +49,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
-          INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
-            --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
+          REVIEW_ID="${{ github.event.review.id }}"
+
+          if [ -n "$REVIEW_ID" ]; then
+            # Triggered by review: scope to comments from this specific review
+            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+              --jq "[.[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID})] | length")
+          else
+            # Manual trigger: count all unresolved Codex comments
+            INLINE_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+              --jq '[.[] | select(.user.login == "chatgpt-codex-connector[bot]")] | length')
+          fi
           echo "inline_count=${INLINE_COUNT}" >> "$GITHUB_OUTPUT"
-          echo "Codex inline review comments: ${INLINE_COUNT}"
+          echo "Codex inline review comments (this review): ${INLINE_COUNT}"
 
       - name: No feedback — label as clean
         if: fromJSON(steps.comments.outputs.inline_count) == 0
@@ -81,19 +90,26 @@ jobs:
             gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "needs-human-review"
           fi
 
-      - name: Collect all review feedback
+      - name: Collect review feedback
         if: fromJSON(steps.comments.outputs.inline_count) > 0 && fromJSON(steps.round.outputs.round) < 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
+          REVIEW_ID="${{ github.event.review.id }}"
+
           {
             echo "# Review feedback to address for PR #${PR_NUM}"
             echo ""
             echo "## Inline review comments (on specific lines)"
             echo ""
-            gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
-              --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "### " + .path + ":" + (.line // .original_line | tostring) + "\n\n" + .body + "\n"'
+            if [ -n "$REVIEW_ID" ]; then
+              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+                --jq ".[] | select(.user.login == \"chatgpt-codex-connector[bot]\" and .pull_request_review_id == ${REVIEW_ID}) | \"### \" + .path + \":\" + (.line // .original_line | tostring) + \"\n\n\" + .body + \"\n\""
+            else
+              gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" \
+                --jq '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "### " + .path + ":" + (.line // .original_line | tostring) + "\n\n" + .body + "\n"'
+            fi
             echo ""
             echo "## General PR comments"
             echo ""
