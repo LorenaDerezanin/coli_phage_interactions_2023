@@ -94,7 +94,7 @@ jobs:
 
       - name: Run orchestrator command
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
