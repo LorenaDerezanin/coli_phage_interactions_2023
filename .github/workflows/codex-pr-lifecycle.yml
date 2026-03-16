@@ -126,8 +126,10 @@ jobs:
             echo "# Instructions"
             echo ""
             echo "Address every issue raised above. Follow AGENTS.md policies."
+            echo "You MUST reply to every review comment using gh api to post a reply."
+            echo "For each comment: either fix the issue and explain what you changed, or push back explaining why the feedback is wrong or unnecessary."
             echo "Run tests: pytest -q lyzortx/tests/"
-            echo "Commit fixes with detailed messages — they will be used in the PR description."
+            echo "Commit and push fixes to the current branch."
           } > /tmp/codex_feedback.txt
 
       - name: Checkout PR branch
@@ -161,23 +163,21 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
-          codex-args: --full-auto
+          allow-bots: true
+          codex-args: --full-auto -c 'sandbox_workspace_write.network_access=true'
           prompt-file: /tmp/codex_feedback.txt
 
-      - name: Push fixes
+      - name: Verify all comments were answered
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: |
-          BRANCH="${{ steps.pr.outputs.branch }}"
-          if git diff --quiet "origin/${BRANCH}" && git diff --quiet && git diff --cached --quiet; then
-            echo "No changes after fix attempt — Codex may have pushed back on the feedback."
-            exit 0
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          REVIEW_ID="${{ github.event.review.id }}"
+          ARGS=""
+          if [ -n "$REVIEW_ID" ]; then
+            ARGS="--review-id ${REVIEW_ID}"
           fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "Address Codex review feedback"
-          git push origin "HEAD:${BRANCH}"
+          gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
+            | python -m lyzortx.orchestration.verify_review_replies $ARGS
 
       - name: Request re-review
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
