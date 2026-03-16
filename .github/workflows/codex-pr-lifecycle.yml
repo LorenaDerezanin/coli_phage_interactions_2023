@@ -23,16 +23,16 @@ jobs:
       || (
         github.event.review.state == 'commented'
         && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-        && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
+    env:
+      GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
 
     steps:
       - name: Resolve PR number and branch
         id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PR_NUM="${{ inputs.pr_number }}"
@@ -45,8 +45,6 @@ jobs:
 
       - name: Check for review feedback
         id: comments
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           REVIEW_ID="${{ github.event.review.id }}"
@@ -80,8 +78,6 @@ jobs:
 
       - name: No feedback — label as clean
         if: steps.comments.outputs.has_feedback == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
@@ -91,8 +87,6 @@ jobs:
       - name: Check review round cap
         if: steps.comments.outputs.has_feedback == 'true'
         id: round
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           ROUND=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
@@ -107,8 +101,6 @@ jobs:
 
       - name: Collect review feedback
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           REVIEW_ID="${{ github.event.review.id }}"
@@ -166,8 +158,6 @@ jobs:
 
       - name: Push fixes
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="${{ steps.pr.outputs.branch }}"
           if git diff --quiet "origin/${BRANCH}" && git diff --quiet && git diff --cached --quiet; then
@@ -183,8 +173,6 @@ jobs:
 
       - name: Request re-review
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        env:
-          GH_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))

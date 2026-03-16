@@ -23,6 +23,9 @@ jobs:
       || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
+    env:
+      GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
 
     steps:
       - name: Resolve issue number
@@ -37,20 +40,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          token: ${{ secrets.CODEX_TRIGGER_PAT }}
           fetch-depth: 0
 
       - name: Extract task ID from issue title
         id: task
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           TITLE=$(gh issue view "${{ steps.issue.outputs.number }}" --json title --jq '.title')
           TASK_ID=$(echo "$TITLE" | grep -oP '(?<=\[ORCH\]\[)[A-Za-z0-9_.-]+(?=\])' || echo "UNKNOWN")
           echo "id=${TASK_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Build prompt
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           {
@@ -89,8 +89,6 @@ jobs:
           prompt-file: /tmp/codex_prompt.txt
 
       - name: Push and create PR
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           TASK_ID="${{ steps.task.outputs.id }}"
