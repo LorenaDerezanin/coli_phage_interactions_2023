@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
     # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
     env:
-      GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
+      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
 
     steps:
       - name: Resolve issue number
@@ -40,7 +40,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.CODEX_TRIGGER_PAT }}
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
           fetch-depth: 0
 
       - name: Extract task ID from issue title
@@ -103,8 +103,8 @@ jobs:
 
           # Check for changes: either uncommitted files or new commits beyond origin/main
           if git diff --quiet origin/main && git diff --quiet && git diff --cached --quiet; then
-            echo "No changes detected. Skipping PR creation."
-            exit 0
+            echo "::error::Codex produced no changes. Implementation failed."
+            exit 1
           fi
 
           git config user.name "github-actions[bot]"

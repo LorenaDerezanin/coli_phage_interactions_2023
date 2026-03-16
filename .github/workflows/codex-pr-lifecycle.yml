@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 30
     # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
     env:
-      GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
+      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
 
     steps:
       - name: Resolve PR number and branch
@@ -169,7 +169,7 @@ jobs:
         run: |
           BRANCH="${{ steps.pr.outputs.branch }}"
           if git diff --quiet "origin/${BRANCH}" && git diff --quiet && git diff --cached --quiet; then
-            echo "No changes after fix attempt."
+            echo "No changes after fix attempt — Codex may have pushed back on the feedback."
             exit 0
           fi
 
