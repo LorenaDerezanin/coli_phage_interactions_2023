@@ -126,7 +126,8 @@ jobs:
             echo "# Instructions"
             echo ""
             echo "Address every issue raised above. Follow AGENTS.md policies."
-            echo "If the feedback is wrong or overcomplicated, push back by posting a reply comment using gh."
+            echo "You MUST reply to every review comment using gh api to post a reply."
+            echo "For each comment: either fix the issue and explain what you changed, or push back explaining why the feedback is wrong or unnecessary."
             echo "Run tests: pytest -q lyzortx/tests/"
             echo "Commit and push fixes to the current branch."
           } > /tmp/codex_feedback.txt
@@ -164,6 +165,18 @@ jobs:
           model: gpt-5.4
           codex-args: --full-auto -c 'sandbox_workspace_write.network_access=true'
           prompt-file: /tmp/codex_feedback.txt
+
+      - name: Verify all comments were answered
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          REVIEW_ID="${{ github.event.review.id }}"
+          ARGS=""
+          if [ -n "$REVIEW_ID" ]; then
+            ARGS="--review-id ${REVIEW_ID}"
+          fi
+          gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/comments" --paginate \
+            | python -m lyzortx.orchestration.verify_review_replies $ARGS
 
       - name: Request re-review
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
