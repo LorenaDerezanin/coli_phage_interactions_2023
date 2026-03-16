@@ -121,12 +121,17 @@ jobs:
             --plan-path lyzortx/orchestration/plan.yml \
             --state-path lyzortx/generated_outputs/orchestration/runtime_state.json
 
+      # Deliberately fails if push is rejected (e.g. by branch protection).
+      # Plan updates must land on main for the orchestrator to stay in sync.
       - name: Commit plan updates
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add lyzortx/orchestration/plan.yml lyzortx/research_notes/PLAN.md
-          git diff --cached --quiet || (git commit -m "Update plan: mark completed task" && git push)
+          if ! git diff --cached --quiet; then
+            git commit -m "Update plan: mark completed task"
+            git push
+          fi
 
       - name: Upload orchestration state artifact
         uses: actions/upload-artifact@v6
