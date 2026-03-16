@@ -477,3 +477,64 @@ The most pragmatic approach is to start with the lowest-effort, highest-value ta
 - This closes a reporting-audit gap between ST0.5/ST0.6 and ST0.7 by ensuring the final exported report preserves slice
   separation for recommendation quality and calibration quality metrics.
 
+### 2026-03-16: ST09 holdout miss failure hypotheses
+
+#### What we analyzed
+
+1. Re-ran ST0.1 through ST0.7 and confirmed `lyzortx/generated_outputs/steel_thread_v0/error_analysis.csv` contains
+   `10` current holdout misses under the active `logreg_platt__none` recommendation policy.
+2. Ran ST0.6b and confirmed none of the `10` missed strains become hits under the six compared policy variants
+   (`raw/platt/isotonic`, with and without family cap), so these are not simple monotonic-calibration or family-cap
+   policy issues.
+3. Reviewed miss context from `error_analysis.csv`, `st05_pair_predictions_calibrated.csv`,
+   `st06_top3_recommendations.csv`, `st06b_recommendations_all_policies.csv`, and `st02_pair_table.csv`.
+
+#### Error buckets
+
+1. **No-susceptibility / abstention failure:** `FN-B4`, `NILS24`.
+   These strains have zero labeled positive holdout phages, so the current always-return-top-3 policy is guaranteed to
+   emit false positives.
+2. **Single-weak-positive strains buried under broad-host-range priors:** `ECOR-06`, `H1-002-0060-C-T`.
+   Each strain has exactly one positive holdout phage, and that positive sits below a dense block of higher-scored
+   `Straboviridae` negatives.
+3. **Within-family ordering misses among crowded `Straboviridae` candidates:** `ECOR-14`, `NILS41`, `NILS70`,
+   `ROAR205`.
+   At least one true positive is already near the top, but top-3 truncation inside a dense same-family score band still
+   excludes it.
+4. **Cross-family blind spot / `Straboviridae` collapse:** `ECOR-69`, `NILS53`.
+   The recommender top-3 remains entirely `Straboviridae`, while most true positives for these strains live in
+   `Other` or `Autographiviridae`.
+
+#### Quantitative notes
+
+- Miss strains are much narrower than hit strains: mean holdout positive count `5.8` vs `27.5` for holdout hits.
+- `4/10` miss strains have `host_n_infections = 0`; none of the `55` holdout-hit strains do.
+- Current ST0.6 recommendations are `Straboviridae` for every holdout strain, not just the missed ones.
+- Among true-positive pairs from the `10` missed strains, family counts are `Other = 40`, `Autographiviridae = 9`,
+  `Straboviridae = 9`.
+
+#### Strain-level hypotheses and next steps
+
+| Strain | Bucket | Failure hypothesis | Actionable next step |
+| --- | --- | --- | --- |
+| `ECOR-06` | Single-weak-positive | Only one holdout positive (`AL505_Ev3`) exists, and it is buried under a broad `Straboviridae` block of slightly higher-scored negatives. This looks like narrow-susceptibility recall failure rather than a recommendation-policy bug. | Add a narrow-susceptibility audit slice (`n_true_positive_phages_holdout <= 3`) and test whether reweighting these strains or adding a recall-oriented reranker lifts single-positive recovery. |
+| `ECOR-14` | Within-family ordering | Multiple true positives exist, but the best one lands just outside top-3 behind same-family negatives. The model appears to know the right family but not the right phage within that family. | Add a second-stage within-family reranker using per-phage precision / empirical host-range features and check whether `LF73_P1` and related positives move into top-3. |
+| `ECOR-69` | Cross-family blind spot | This strain has many positives, but the top ranks are dominated by `Straboviridae` negatives while most true positives are `Other`. That pattern suggests family-level prior collapse is overpowering host-specific compatibility. | Run a targeted ablation that weakens phage-family identity features, then measure whether non-`Straboviridae` positives recover on this strain and on the full miss bucket. |
+| `FN-B4` | No-susceptibility / abstention | Holdout has zero positives, so the model should have abstained instead of forcing three phages. This is a product-contract gap, not just a ranking gap. | Prototype a no-recommend / low-confidence threshold using max score and score-margin features, then evaluate false-abstain vs false-positive tradeoffs on holdout. |
+| `H1-002-0060-C-T` | Single-weak-positive | The only positive (`DIJ07_P1`) is a low-support singleton far below a `Straboviridae` block. With `host_n_infections = 0` and `host_n_defense_systems = 10`, the current feature set likely misses a rare host-compatibility signal. | Prioritize receptor/defense feature work for zero-infection, high-defense strains and test whether `DIJ07_P1` retrieval improves after those host features are added. |
+| `NILS24` | No-susceptibility / abstention | Like `FN-B4`, this strain has zero holdout positives, so any fixed top-3 output is necessarily wrong. Its zero prior infections and high defense burden make it a plausible genuinely hard-negative strain. | Include `NILS24` in the abstention-threshold benchmark set and require any future recommendation layer to permit an explicit no-match outcome. |
+| `NILS41` | Within-family ordering | This strain is broadly susceptible, but positives sit inside a large, nearly saturated score band where many `Straboviridae` phages receive similarly high scores. The failure is phage selection inside the right region, not gross family misspecification. | Audit score ties / near-ties around ranks 1-10 and test a tie-aware reranker that uses within-family host-range evidence instead of pure score ordering. |
+| `NILS53` | Cross-family blind spot | Despite many positives, especially outside `Straboviridae`, the model still pushes a `Straboviridae`-only top-3. Its very high defense burden (`15`) suggests missing host-surface / defense context may be hiding the compatible non-`Straboviridae` phages. | Prioritize host receptor + defense features, then re-evaluate whether `Other` / `Autographiviridae` positives move upward for this strain and the rest of the family-collapse bucket. |
+| `NILS70` | Within-family ordering | This is a narrow near-miss: at least one true positive is very close to the cutoff, but top-3 truncation still favors nearby negatives. This looks like ranking-resolution failure around the decision boundary. | Measure score margins for ranks 3-6 on holdout and test whether a boundary-aware reranker or expanded candidate set before reranking improves top-3 hit rate. |
+| `ROAR205` | Within-family ordering | The top region already contains the correct family and a true positive sits just beyond the cutoff, but sparse prior infection history suggests weak host evidence for choosing the correct member. | Add a host-neighbor retrieval diagnostic for zero-infection strains and test whether nearest-neighbor host evidence can rerank `BCH953_P4` into the recommended set. |
+
+#### ST09 interpretation
+
+1. The remaining `10` misses are primarily model/data failures, not recommendation-policy failures; ST0.6b does not
+   rescue any of them.
+2. The most important structural issue is family collapse toward `Straboviridae`, which suppresses many true positives
+   from `Other` and `Autographiviridae`.
+3. The second issue is lack of abstention: two misses are guaranteed errors because the current interface always emits
+   three phages even when no labeled susceptible phage exists.
+4. The next technically highest-value iteration is not more calibration tuning; it is adding host-compatibility signal
+   plus an abstention/no-match mechanism, then re-checking this exact 10-strain bucket.
