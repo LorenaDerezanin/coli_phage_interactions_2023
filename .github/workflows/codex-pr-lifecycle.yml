@@ -23,7 +23,6 @@ jobs:
       || (
         github.event.review.state == 'commented'
         && github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-        && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
