@@ -61,6 +61,7 @@
 
 - Never push directly to main. All changes go through pull requests.
 - Create a feature branch, push it, and open a PR.
+- Always rebase on main before starting work — whether implementing a new task or addressing review feedback.
 
 # PR and Issue Linkage Policy
 
@@ -68,10 +69,12 @@
 - Use one `Closes #...` line per issue when a PR intentionally resolves multiple issues.
 - Keep closure references explicit so orchestration and audit flows can advance automatically on merge.
 
-# PR Review Policy
+# Review guidelines
 
 - Do not approve a PR unless all CI checks pass. A branch with failing tests is not mergeable regardless of code quality.
 - Review must verify: code quality, test coverage, alignment with acceptance criteria, and adherence to AGENTS.md policies.
+- When addressing review feedback, apply the Requirement Challenge Policy: push back on comments that are wrong,
+  overcomplicated, or low-value rather than blindly implementing every suggestion.
 
 # PR Creation for Orchestrator Tasks
 
@@ -80,6 +83,12 @@
 - PR body MUST include `Closes #<issue_number>` (the orchestrator issue that dispatched the task).
 - Add the `orchestrator-task` label: `gh pr create --label orchestrator-task`.
 
+# Agent Transparency
+
+- When an agent posts comments on GitHub (PR reviews, issue comments, etc.) using a human's credentials or a shared PAT,
+  it must identify itself as an agent, including the model name and version (e.g., "Posted by Claude Opus 4.6" or
+  "Posted by Codex gpt-5.4").
+
 # Requirement Challenge Policy
 
 - For any non-trivial user request, first question the requirement before implementing.
@@ -87,6 +96,8 @@
 - Suggest deletion or simplification when that is the better technical path.
 - Only comply directly when the requirement is technically reasonable after this check.
 - Apply this policy to all plan decisions, including whether to keep, change, or remove planned work.
+- This policy applies equally to PR review feedback: do not blindly address every comment. Push back on feedback that is
+  wrong, overcomplicated, or low-value. Explain why in the reply.
 
 # One-Off Analyses
 
