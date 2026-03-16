@@ -80,6 +80,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Workaround for https://github.com/openai/codex/issues/12572
+      # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
+      - name: Fix sandbox compatibility with Ubuntu 24.04 AppArmor
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Implement task with Codex
         uses: openai/codex-action@v1
         with:
