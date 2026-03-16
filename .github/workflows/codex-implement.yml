@@ -92,15 +92,17 @@ jobs:
       - name: Verify Codex created a PR
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          # Check that HEAD moved beyond origin/main (Codex committed and pushed)
-          if git diff --quiet origin/main; then
-            echo "::error::No commits beyond origin/main. Codex did not push changes."
-            exit 1
-          fi
-          # Check that a PR exists for this issue (created in this or a prior run)
-          PR_COUNT=$(gh pr list --search "Closes #${ISSUE_NUM}" --json number --jq 'length')
-          if [ "$PR_COUNT" -eq 0 ]; then
+          # Verify a PR exists whose head branch has commits beyond main (remote state)
+          PR_JSON=$(gh pr list --search "Closes #${ISSUE_NUM}" --json number,headRefName --jq '.[0]')
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
             echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
             exit 1
           fi
-          echo "PR created successfully for issue #${ISSUE_NUM}."
+          PR_NUM=$(echo "$PR_JSON" | jq -r '.number')
+          BRANCH=$(echo "$PR_JSON" | jq -r '.headRefName')
+          # Verify the branch actually exists on the remote
+          if ! git ls-remote --exit-code origin "refs/heads/${BRANCH}" > /dev/null 2>&1; then
+            echo "::error::PR #${PR_NUM} references branch '${BRANCH}' but it was not pushed."
+            exit 1
+          fi
+          echo "PR #${PR_NUM} created on branch '${BRANCH}' for issue #${ISSUE_NUM}."
