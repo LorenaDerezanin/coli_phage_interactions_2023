@@ -1,444 +1,499 @@
 tracks:
   ST:
     name: Steel Thread v0
-    description: Prove end-to-end viability with a minimal but honest pipeline using internal data only.
+    description: Prove end-to-end viability with a minimal but honest pipeline using
+      internal data only.
     stage: 0
     depends_on: []
     tasks:
-      - id: ST01
-        title: Define v0 label policy and uncertainty flags from raw interactions
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json
-      - id: ST01B
-        title: Add strict confidence tiering as a parallel output from ST0.1 to support dual-slice evaluation
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json
-      - id: ST02
-        title: Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json
-      - id: ST03
-        title: Lock one leakage-safe split protocol and one fixed holdout benchmark for v0
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json
-      - id: ST04
-        title: Train one strong tabular baseline and one simple comparator baseline
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json
-      - id: ST05
-        title: Calibrate probabilities and export ranked per-strain phage predictions
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json
-      - id: ST06
-        title: Generate top-3 recommendations with policy-tuned defaults
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json
-      - id: ST06B
-        title: Compare ranking policy variants to avoid recommendation-policy regressions
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py
-      - id: ST07
-        title: Emit one reproducible report to generated_outputs/steel_thread_v0/
-        status: done
-        implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py
-        baseline: lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json
-      - id: ST08
-        title: Add dual-slice reporting (full-label and strict-confidence) to ST0.7
-        status: done
-        acceptance_criteria:
-          - ST0.7 report includes separate metric rows for full-label and strict-confidence slices
-          - Both slices report top-3 hit rate, calibration ECE, and Brier score
-      - id: ST09
-        title: Document failure case hypotheses for each major holdout miss error bucket
-        status: pending
-        acceptance_criteria:
-          - Each holdout miss strain in error_analysis.csv has at least one documented hypothesis
-          - Hypotheses are written to the lab notebook with actionable next steps
-
+    - id: ST01
+      title: Define v0 label policy and uncertainty flags from raw interactions
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json
+    - id: ST01B
+      title: Add strict confidence tiering as a parallel output from ST0.1 to support
+        dual-slice evaluation
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json
+    - id: ST02
+      title: Build one canonical pair table with IDs, labels, uncertainty, and v0
+        feature blocks
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json
+    - id: ST03
+      title: Lock one leakage-safe split protocol and one fixed holdout benchmark
+        for v0
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json
+    - id: ST04
+      title: Train one strong tabular baseline and one simple comparator baseline
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json
+    - id: ST05
+      title: Calibrate probabilities and export ranked per-strain phage predictions
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json
+    - id: ST06
+      title: Generate top-3 recommendations with policy-tuned defaults
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json
+    - id: ST06B
+      title: Compare ranking policy variants to avoid recommendation-policy regressions
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py
+    - id: ST07
+      title: Emit one reproducible report to generated_outputs/steel_thread_v0/
+      status: done
+      implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py
+      baseline: lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json
+    - id: ST08
+      title: Add dual-slice reporting (full-label and strict-confidence) to ST0.7
+      status: done
+      acceptance_criteria:
+      - ST0.7 report includes separate metric rows for full-label and strict-confidence
+        slices
+      - Both slices report top-3 hit rate, calibration ECE, and Brier score
+    - id: ST09
+      title: Document failure case hypotheses for each major holdout miss error bucket
+      status: done
+      acceptance_criteria:
+      - Each holdout miss strain in error_analysis.csv has at least one documented
+        hypothesis
+      - Hypotheses are written to the lab notebook with actionable next steps
   A:
     name: Data Integrity and Labeling
-    description: Canonical IDs, label policies, cohort contracts, and replicate-aware label sets from raw data.
+    description: Canonical IDs, label policies, cohort contracts, and replicate-aware
+      label sets from raw data.
     stage: 0
     depends_on: []
     tasks:
-      - id: TA01
-        title: Build a canonical ID map for bacteria and phages across all tables
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/id_map/{bacteria_id_map.csv,phage_id_map.csv}
-      - id: TA02
-        title: Resolve naming/alias mismatches (for example legacy phage names)
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/id_map/{bacteria_alias_resolution.csv,phage_alias_resolution.csv}
-      - id: TA03
-        title: Add automated data integrity checks for row/column consistency
-        status: done
-        implemented_in: lyzortx/pipeline/track_a/checks/check_track_a_integrity.py
-      - id: TA04
-        title: "Define and document handling policy for uninterpretable labels (score='n')"
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/labels/{label_set_v1_policy.json,label_set_v2_policy.json}
-      - id: TA05
-        title: Add plaque-image-assisted QC pass for ambiguous/conflicting pairs
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/qc/{plaque_image_qc_queue.csv,plaque_image_qc_summary.json}
-      - id: TA06
-        title: Define cohort contracts and denominator rules for all reports
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/cohort/{cohort_contracts.csv,cohort_contracts.json}
-      - id: TA07
-        title: Preserve replicate and dilution structure in intermediate tables
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/labels/track_a_observations_with_ids.csv
-      - id: TA08
-        title: "Create label set v1: any_lysis, lysis_strength, dilution_potency, uncertainty_flags"
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv
-      - id: TA09
-        title: Create label set v2 with alternative aggregation assumptions and compare impact
-        status: done
-        implemented_in: lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}
-      - id: TA10
-        title: Add scripts that regenerate all derived labels from raw data in one command
-        status: done
-        implemented_in: lyzortx/pipeline/track_a/run_track_a.py
-
+    - id: TA01
+      title: Build a canonical ID map for bacteria and phages across all tables
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/id_map/{bacteria_id_map.csv,phage_id_map.csv}
+    - id: TA02
+      title: Resolve naming/alias mismatches (for example legacy phage names)
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/id_map/{bacteria_alias_resolution.csv,phage_alias_resolution.csv}
+    - id: TA03
+      title: Add automated data integrity checks for row/column consistency
+      status: done
+      implemented_in: lyzortx/pipeline/track_a/checks/check_track_a_integrity.py
+    - id: TA04
+      title: Define and document handling policy for uninterpretable labels (score='n')
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/labels/{label_set_v1_policy.json,label_set_v2_policy.json}
+    - id: TA05
+      title: Add plaque-image-assisted QC pass for ambiguous/conflicting pairs
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/qc/{plaque_image_qc_queue.csv,plaque_image_qc_summary.json}
+    - id: TA06
+      title: Define cohort contracts and denominator rules for all reports
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/cohort/{cohort_contracts.csv,cohort_contracts.json}
+    - id: TA07
+      title: Preserve replicate and dilution structure in intermediate tables
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/labels/track_a_observations_with_ids.csv
+    - id: TA08
+      title: 'Create label set v1: any_lysis, lysis_strength, dilution_potency, uncertainty_flags'
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv
+    - id: TA09
+      title: Create label set v2 with alternative aggregation assumptions and compare
+        impact
+      status: done
+      implemented_in: lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}
+    - id: TA10
+      title: Add scripts that regenerate all derived labels from raw data in one command
+      status: done
+      implemented_in: lyzortx/pipeline/track_a/run_track_a.py
   B:
     name: Exploratory Analysis and Signal Discovery
-    description: Profile interactions, identify hard-to-lyse strains, rescuer phages, and uncertainty hotspots.
+    description: Profile interactions, identify hard-to-lyse strains, rescuer phages,
+      and uncertainty hotspots.
     stage: 1
-    depends_on: [A]
+    depends_on:
+    - A
     tasks:
-      - id: TB01
-        title: Profile raw interaction matrix composition and replicate consistency
-        status: done
-      - id: TB02
-        title: Quantify morphotype breadth and narrow-susceptibility patterns
-        status: done
-      - id: TB03
-        title: Characterize hard-to-lyse strains by known host traits
-        status: pending
-        acceptance_criteria:
-          - Identify strains with zero or very few lytic phages in the interaction matrix
-          - Report which host metadata fields (serotype, phylogroup, ST) correlate with low susceptibility
-          - Output a summary CSV and findings in the lab notebook
-      - id: TB04
-        title: Characterize rescuer phages for narrow-susceptibility strains
-        status: pending
-      - id: TB05
-        title: Analyze dilution-response patterns per phage and per bacterial subgroup
-        status: pending
-      - id: TB06
-        title: "Build uncertainty map: where annotation conflicts are concentrated"
-        status: pending
-      - id: TB07
-        title: Prioritize candidate mechanistic feature hypotheses from EDA findings
-        status: pending
-
+    - id: TB01
+      title: Profile raw interaction matrix composition and replicate consistency
+      status: done
+    - id: TB02
+      title: Quantify morphotype breadth and narrow-susceptibility patterns
+      status: done
+    - id: TB03
+      title: Characterize hard-to-lyse strains by known host traits
+      status: pending
+      acceptance_criteria:
+      - Identify strains with zero or very few lytic phages in the interaction matrix
+      - Report which host metadata fields (serotype, phylogroup, ST) correlate with
+        low susceptibility
+      - Output a summary CSV and findings in the lab notebook
+    - id: TB04
+      title: Characterize rescuer phages for narrow-susceptibility strains
+      status: pending
+    - id: TB05
+      title: Analyze dilution-response patterns per phage and per bacterial subgroup
+      status: pending
+    - id: TB06
+      title: 'Build uncertainty map: where annotation conflicts are concentrated'
+      status: pending
+    - id: TB07
+      title: Prioritize candidate mechanistic feature hypotheses from EDA findings
+      status: pending
   C:
     name: Feature Engineering (Host)
-    description: Receptor/surface features, defense-system context, phylogeny-aware embeddings for host strains.
+    description: Receptor/surface features, defense-system context, phylogeny-aware
+      embeddings for host strains.
     stage: 1
-    depends_on: [A]
+    depends_on:
+    - A
     tasks:
-      - id: TC01
-        title: "Build receptor/surface feature block: O/K/LPS-related loci and known receptor proxies"
-        status: pending
-        acceptance_criteria:
-          - Feature matrix covers all 369 host strains with O-antigen, K-antigen, and LPS core type columns
-          - Known phage receptor loci (FhuA, BtuB, OmpA, OmpC, LamB, TonB) encoded as presence/variant features
-          - Missingness rate and provenance documented per feature column
-      - id: TC02
-        title: Add outer membrane receptor variant features
-        status: pending
-      - id: TC03
-        title: Encode phylogeny-aware host embeddings with leakage-safe generation
-        status: pending
-      - id: TC04
-        title: Build defense-system context block (presence, subtype, burden, co-occurrence)
-        status: pending
-      - id: TC05
-        title: Add missingness indicators and confidence scores for host features
-        status: pending
-      - id: TC06
-        title: Version host feature matrix with schema and provenance manifest
-        status: pending
-
+    - id: TC01
+      title: 'Build receptor/surface feature block: O/K/LPS-related loci and known
+        receptor proxies'
+      status: pending
+      acceptance_criteria:
+      - Feature matrix covers all 369 host strains with O-antigen, K-antigen, and
+        LPS core type columns
+      - Known phage receptor loci (FhuA, BtuB, OmpA, OmpC, LamB, TonB) encoded as
+        presence/variant features
+      - Missingness rate and provenance documented per feature column
+    - id: TC02
+      title: Add outer membrane receptor variant features
+      status: pending
+    - id: TC03
+      title: Encode phylogeny-aware host embeddings with leakage-safe generation
+      status: pending
+    - id: TC04
+      title: Build defense-system context block (presence, subtype, burden, co-occurrence)
+      status: pending
+    - id: TC05
+      title: Add missingness indicators and confidence scores for host features
+      status: pending
+    - id: TC06
+      title: Version host feature matrix with schema and provenance manifest
+      status: pending
   D:
     name: Feature Engineering (Phage)
-    description: RBP/depolymerase features, structure-aware embeddings, phage architecture and taxonomy signals.
+    description: RBP/depolymerase features, structure-aware embeddings, phage architecture
+      and taxonomy signals.
     stage: 1
-    depends_on: [A]
+    depends_on:
+    - A
     tasks:
-      - id: TD01
-        title: Build phage sequence processing pipeline from genome/protein files
-        status: pending
-        acceptance_criteria:
-          - Pipeline reads phage genome FASTA/GenBank from data/genomics/phages/ and outputs per-phage protein sets
-          - All 96 panel phages processed without error
-          - Output format documented and reproducible from one command
-      - id: TD02
-        title: Extract RBP/depolymerase/domain features (HMM/domain and structure-aware proxies)
-        status: pending
-      - id: TD03
-        title: Pilot structure-aware RBP embeddings (PHIStruct-style) for low-similarity generalization
-        status: pending
-      - id: TD04
-        title: Build phage protein family embeddings or pangenome cluster features
-        status: pending
-      - id: TD05
-        title: Add phage architecture/taxonomy/module features
-        status: pending
-      - id: TD06
-        title: Add isolation-host and lineage priors as weak features (not dominant)
-        status: pending
-      - id: TD07
-        title: Version phage feature matrix with schema and provenance manifest
-        status: pending
-
+    - id: TD01
+      title: Build phage sequence processing pipeline from genome/protein files
+      status: pending
+      acceptance_criteria:
+      - Pipeline reads phage genome FASTA/GenBank from data/genomics/phages/ and outputs
+        per-phage protein sets
+      - All 96 panel phages processed without error
+      - Output format documented and reproducible from one command
+    - id: TD02
+      title: Extract RBP/depolymerase/domain features (HMM/domain and structure-aware
+        proxies)
+      status: pending
+    - id: TD03
+      title: Pilot structure-aware RBP embeddings (PHIStruct-style) for low-similarity
+        generalization
+      status: pending
+    - id: TD04
+      title: Build phage protein family embeddings or pangenome cluster features
+      status: pending
+    - id: TD05
+      title: Add phage architecture/taxonomy/module features
+      status: pending
+    - id: TD06
+      title: Add isolation-host and lineage priors as weak features (not dominant)
+      status: pending
+    - id: TD07
+      title: Version phage feature matrix with schema and provenance manifest
+      status: pending
   E:
     name: Pairwise Compatibility Features
-    description: RBP-vs-receptor compatibility scores, domain-level interactions, and uncertainty-aware pair features.
+    description: RBP-vs-receptor compatibility scores, domain-level interactions,
+      and uncertainty-aware pair features.
     stage: 2
-    depends_on: [B, C, D]
+    depends_on:
+    - B
+    - C
+    - D
     tasks:
-      - id: TE01
-        title: Design phage-host compatibility features (RBP family vs host receptor proxies)
-        status: pending
-      - id: TE02
-        title: Add domain-level compatibility scores
-        status: pending
-      - id: TE03
-        title: Add feature interactions for adsorption-relevant host/phage pairs
-        status: pending
-      - id: TE04
-        title: Add uncertainty-aware pairwise features (confidence-weighted signals)
-        status: pending
-
+    - id: TE01
+      title: Design phage-host compatibility features (RBP family vs host receptor
+        proxies)
+      status: pending
+    - id: TE02
+      title: Add domain-level compatibility scores
+      status: pending
+    - id: TE03
+      title: Add feature interactions for adsorption-relevant host/phage pairs
+      status: pending
+    - id: TE04
+      title: Add uncertainty-aware pairwise features (confidence-weighted signals)
+      status: pending
   F:
     name: Splits, Evaluation Protocol, and Leakage Control
-    description: Leakage-safe splits, grouped CV, bootstrap CIs, source-aware evaluation, and Tier 1/2 benchmarks.
+    description: Leakage-safe splits, grouped CV, bootstrap CIs, source-aware evaluation,
+      and Tier 1/2 benchmarks.
     stage: 1
-    depends_on: [A]
+    depends_on:
+    - A
     tasks:
-      - id: TF01
-        title: "Define fixed split protocol: leave-cluster-out host splits and phage-clade holdouts"
-        status: pending
-        acceptance_criteria:
-          - Split protocol defined with deterministic assignment using host CV groups and phage clade labels
-          - Leakage check confirms zero overlap of host clusters and phage clades across train/test
-          - Split assignments exported as a versioned CSV with protocol documentation
-      - id: TF02
-        title: Keep a strict untouched external test benchmark for final validation
-        status: pending
-      - id: TF03
-        title: Add leakage checks for all split strategies
-        status: pending
-      - id: TF04
-        title: Add LOGOCV-style grouped validation and mean-hit-ratio@k reporting
-        status: pending
-      - id: TF05
-        title: Add bootstrap confidence intervals for strain-level top-k metrics
-        status: pending
-      - id: TF06
-        title: "Add dual-slice reporting for all benchmarks: full-label and strict-confidence"
-        status: pending
-      - id: TF07
-        title: "Add source-aware evaluation: leave-one-datasource-out and cross-source transfer benchmarks"
-        status: pending
-      - id: TF08
-        title: Add source-aware leakage checks across datasource boundaries
-        status: pending
-      - id: TF09
-        title: Add pre-Tier-1 progress gates (delta vs locked ST0.6 baseline)
-        status: pending
-      - id: TF10
-        title: Define Tier 1 (current-panel feasible) benchmark suite
-        status: pending
-      - id: TF11
-        title: Define Tier 2 (north-star) benchmark suite
-        status: pending
-      - id: TF12
-        title: Add benchmark report template for fair model-to-model comparison
-        status: pending
-
+    - id: TF01
+      title: 'Define fixed split protocol: leave-cluster-out host splits and phage-clade
+        holdouts'
+      status: pending
+      acceptance_criteria:
+      - Split protocol defined with deterministic assignment using host CV groups
+        and phage clade labels
+      - Leakage check confirms zero overlap of host clusters and phage clades across
+        train/test
+      - Split assignments exported as a versioned CSV with protocol documentation
+    - id: TF02
+      title: Keep a strict untouched external test benchmark for final validation
+      status: pending
+    - id: TF03
+      title: Add leakage checks for all split strategies
+      status: pending
+    - id: TF04
+      title: Add LOGOCV-style grouped validation and mean-hit-ratio@k reporting
+      status: pending
+    - id: TF05
+      title: Add bootstrap confidence intervals for strain-level top-k metrics
+      status: pending
+    - id: TF06
+      title: 'Add dual-slice reporting for all benchmarks: full-label and strict-confidence'
+      status: pending
+    - id: TF07
+      title: 'Add source-aware evaluation: leave-one-datasource-out and cross-source
+        transfer benchmarks'
+      status: pending
+    - id: TF08
+      title: Add source-aware leakage checks across datasource boundaries
+      status: pending
+    - id: TF09
+      title: Add pre-Tier-1 progress gates (delta vs locked ST0.6 baseline)
+      status: pending
+    - id: TF10
+      title: Define Tier 1 (current-panel feasible) benchmark suite
+      status: pending
+    - id: TF11
+      title: Define Tier 2 (north-star) benchmark suite
+      status: pending
+    - id: TF12
+      title: Add benchmark report template for fair model-to-model comparison
+      status: pending
   G:
     name: Modeling Pipeline
     stage: 2
-    depends_on: [C, D, E, F]
-    description: >-
-      A "meaningful model" for this project is one that produces a calibrated probability of lysis
-      for any given phage-bacterium pair, enabling nuanced downstream cocktail recommendations.
+    depends_on:
+    - C
+    - D
+    - E
+    - F
+    description: A "meaningful model" for this project is one that produces a calibrated
+      probability of lysis for any given phage-bacterium pair, enabling nuanced downstream
+      cocktail recommendations.
     tasks:
-      - id: TG01
-        title: "Baseline 1: strong tabular binary model on existing host-only features"
-        status: pending
-      - id: TG02
-        title: "Baseline 2: joint host+phage feature model without pairwise interactions"
-        status: pending
-      - id: TG03
-        title: "Milestone G0: ship calibrated Baseline 2 with leakage-safe protocol"
-        status: pending
-      - id: TG04
-        title: "Milestone G0.1: ship receptor-first enriched baseline"
-        status: pending
-      - id: TG05
-        title: "External-data training order: internal-only -> +Tier A -> +Tier B"
-        status: pending
-      - id: TG06
-        title: "Stretch: Stage A model P(adsorption) from host-surface + phage-RBP + compatibility features"
-        status: pending
-      - id: TG07
-        title: "Stretch: Stage B model P(productive_lysis | adsorption) from post-entry features"
-        status: pending
-      - id: TG08
-        title: "Stretch: compose P(lysis) = P(adsorption) * P(productive_lysis | adsorption)"
-        status: pending
-      - id: TG09
-        title: Add multi-task formulation for binary + strength + potency targets
-        status: pending
-      - id: TG10
-        title: Add calibrated outputs (isotonic/Platt) and uncertainty intervals
-        status: pending
-      - id: TG11
-        title: Add label-noise-aware training variants
-        status: pending
-      - id: TG12
-        title: "Add ablation matrix: host-only, phage-only, pairwise-only, and no-identity controls"
-        status: pending
-      - id: TG13
-        title: Add robust handling of class imbalance and label uncertainty
-        status: pending
-      - id: TG14
-        title: Add model interpretation outputs (global and per-sample)
-        status: pending
-
+    - id: TG01
+      title: 'Baseline 1: strong tabular binary model on existing host-only features'
+      status: pending
+    - id: TG02
+      title: 'Baseline 2: joint host+phage feature model without pairwise interactions'
+      status: pending
+    - id: TG03
+      title: 'Milestone G0: ship calibrated Baseline 2 with leakage-safe protocol'
+      status: pending
+    - id: TG04
+      title: 'Milestone G0.1: ship receptor-first enriched baseline'
+      status: pending
+    - id: TG05
+      title: 'External-data training order: internal-only -> +Tier A -> +Tier B'
+      status: pending
+    - id: TG06
+      title: 'Stretch: Stage A model P(adsorption) from host-surface + phage-RBP +
+        compatibility features'
+      status: pending
+    - id: TG07
+      title: 'Stretch: Stage B model P(productive_lysis | adsorption) from post-entry
+        features'
+      status: pending
+    - id: TG08
+      title: 'Stretch: compose P(lysis) = P(adsorption) * P(productive_lysis | adsorption)'
+      status: pending
+    - id: TG09
+      title: Add multi-task formulation for binary + strength + potency targets
+      status: pending
+    - id: TG10
+      title: Add calibrated outputs (isotonic/Platt) and uncertainty intervals
+      status: pending
+    - id: TG11
+      title: Add label-noise-aware training variants
+      status: pending
+    - id: TG12
+      title: 'Add ablation matrix: host-only, phage-only, pairwise-only, and no-identity
+        controls'
+      status: pending
+    - id: TG13
+      title: Add robust handling of class imbalance and label uncertainty
+      status: pending
+    - id: TG14
+      title: Add model interpretation outputs (global and per-sample)
+      status: pending
   H:
     name: In-Silico Cocktail Recommendation
-    description: Optimization-based cocktail recommender with diversity, potency, and uncertainty-aware objectives.
+    description: Optimization-based cocktail recommender with diversity, potency,
+      and uncertainty-aware objectives.
     stage: 2
-    depends_on: [F, G]
+    depends_on:
+    - F
+    - G
     tasks:
-      - id: TH01
-        title: Benchmark policy variants for top-k recommendation and lock a non-regressing default
-        status: done
-      - id: TH02
-        title: Add policy guardrail against monotonic-recalibration-only top-k gains
-        status: pending
-      - id: TH03
-        title: Replace heuristic-only recommender with optimization-based recommender
-        status: pending
-      - id: TH04
-        title: "Define objective: maximize expected coverage and potency under uncertainty"
-        status: pending
-      - id: TH05
-        title: "Add constraints: diversity, redundancy penalties, and risk-aware terms"
-        status: pending
-      - id: TH06
-        title: Compare against baseline and generic recipes on held-out evaluation sets
-        status: pending
-      - id: TH07
-        title: Evaluate robustness under perturbations of uncertain interactions
-        status: pending
-      - id: TH08
-        title: Add recommendation explanations at per-strain and per-cocktail levels
-        status: pending
-
+    - id: TH01
+      title: Benchmark policy variants for top-k recommendation and lock a non-regressing
+        default
+      status: done
+    - id: TH02
+      title: Add policy guardrail against monotonic-recalibration-only top-k gains
+      status: pending
+    - id: TH03
+      title: Replace heuristic-only recommender with optimization-based recommender
+      status: pending
+    - id: TH04
+      title: 'Define objective: maximize expected coverage and potency under uncertainty'
+      status: pending
+    - id: TH05
+      title: 'Add constraints: diversity, redundancy penalties, and risk-aware terms'
+      status: pending
+    - id: TH06
+      title: Compare against baseline and generic recipes on held-out evaluation sets
+      status: pending
+    - id: TH07
+      title: Evaluate robustness under perturbations of uncertain interactions
+      status: pending
+    - id: TH08
+      title: Add recommendation explanations at per-strain and per-cocktail levels
+      status: pending
   I:
     name: External Data and Literature Integration
-    description: Tier A supervised and Tier B weak-label ingestion with source-fidelity, ablations, and lift tracking.
+    description: Tier A supervised and Tier B weak-label ingestion with source-fidelity,
+      ablations, and lift tracking.
     stage: 1
-    depends_on: [A]
+    depends_on:
+    - A
     tasks:
-      - id: TI01
-        title: Create a curated reading list of closely related phage-host prediction papers
-        status: done
-        implemented_in: lyzortx/research_notes/LITERATURE.md
-      - id: TI02
-        title: Build source_registry.csv for all external sources
-        status: done
-        implemented_in: lyzortx/research_notes/external_data/source_registry.csv
-      - id: TI03
-        title: "For VHRdb ingest, keep source-fidelity fields"
-        status: pending
-        acceptance_criteria:
-          - Ingested VHRdb rows preserve raw global_response and datasource_response without case folding
-          - source_datasource_id, source_disagreement_flag, and source_native_record_id columns populated
-          - Unit tests verify source-fidelity preservation
-      - id: TI04
-        title: "Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB"
-        status: pending
-      - id: TI05
-        title: Define harmonization protocol for Tier A datasets
-        status: pending
-      - id: TI06
-        title: "Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata"
-        status: pending
-      - id: TI07
-        title: Define confidence tiers for external labels
-        status: pending
-      - id: TI08
-        title: "Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable"
-        status: pending
-      - id: TI09
-        title: "Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B"
-        status: pending
-      - id: TI10
-        title: Track incremental lift and failure modes by datasource and confidence tier
-        status: pending
-
+    - id: TI01
+      title: Create a curated reading list of closely related phage-host prediction
+        papers
+      status: done
+      implemented_in: lyzortx/research_notes/LITERATURE.md
+    - id: TI02
+      title: Build source_registry.csv for all external sources
+      status: done
+      implemented_in: lyzortx/research_notes/external_data/source_registry.csv
+    - id: TI03
+      title: For VHRdb ingest, keep source-fidelity fields
+      status: pending
+      acceptance_criteria:
+      - Ingested VHRdb rows preserve raw global_response and datasource_response without
+        case folding
+      - source_datasource_id, source_disagreement_flag, and source_native_record_id
+        columns populated
+      - Unit tests verify source-fidelity preservation
+    - id: TI04
+      title: 'Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB'
+      status: pending
+    - id: TI05
+      title: Define harmonization protocol for Tier A datasets
+      status: pending
+    - id: TI06
+      title: 'Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample
+        metadata'
+      status: pending
+    - id: TI07
+      title: Define confidence tiers for external labels
+      status: pending
+    - id: TI08
+      title: 'Integrate external data as non-blocking enhancer: internal-only baseline
+        must remain runnable'
+      status: pending
+    - id: TI09
+      title: 'Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL
+        -> +KlebPhaCol -> +GPB -> +Tier B'
+      status: pending
+    - id: TI10
+      title: Track incremental lift and failure modes by datasource and confidence
+        tier
+      status: pending
   J:
     name: Reproducibility and Release Quality
-    description: One-command regeneration, environment freezing, manifests with checksums, and CI drift checks.
+    description: One-command regeneration, environment freezing, manifests with checksums,
+      and CI drift checks.
     stage: 3
-    depends_on: [F, G, H, I, K]
+    depends_on:
+    - F
+    - G
+    - H
+    - I
+    - K
     tasks:
-      - id: TJ01
-        title: One command to regenerate core figures/tables from raw and versioned inputs
-        status: pending
-      - id: TJ02
-        title: Freeze environment specs and seeds for each benchmark run
-        status: pending
-      - id: TJ03
-        title: Publish data/feature/model manifests with checksums
-        status: pending
-      - id: TJ04
-        title: Add CI checks for schema drift, reproducibility scripts, and key metrics
-        status: pending
-      - id: TJ05
-        title: Track external data-use restrictions and license terms in manifests and release notes
-        status: pending
-      - id: TJ06
-        title: Keep generated outputs under lyzortx/generated_outputs/ only
-        status: pending
-      - id: TJ07
-        title: Keep one-off scripts under lyzortx/research_notes/ad_hoc_analysis_code/
-        status: pending
-
+    - id: TJ01
+      title: One command to regenerate core figures/tables from raw and versioned
+        inputs
+      status: pending
+    - id: TJ02
+      title: Freeze environment specs and seeds for each benchmark run
+      status: pending
+    - id: TJ03
+      title: Publish data/feature/model manifests with checksums
+      status: pending
+    - id: TJ04
+      title: Add CI checks for schema drift, reproducibility scripts, and key metrics
+      status: pending
+    - id: TJ05
+      title: Track external data-use restrictions and license terms in manifests and
+        release notes
+      status: pending
+    - id: TJ06
+      title: Keep generated outputs under lyzortx/generated_outputs/ only
+      status: pending
+    - id: TJ07
+      title: Keep one-off scripts under lyzortx/research_notes/ad_hoc_analysis_code/
+      status: pending
   K:
     name: Validation Benchmarks and Wet-Lab Readiness
-    description: Held-out validation, CDMO-ready predictions, wet-lab feedback loop, and concordance tracking.
+    description: Held-out validation, CDMO-ready predictions, wet-lab feedback loop,
+      and concordance tracking.
     stage: 2
-    depends_on: [F, G]
+    depends_on:
+    - F
+    - G
     tasks:
-      - id: TK01
-        title: Define a set of held-out validation cases withheld from training
-        status: pending
-      - id: TK02
-        title: Report validation recovery rate and calibrated confidence for each model version
-        status: pending
-      - id: TK03
-        title: Prepare a small batch of novel E. coli strain predictions for external CDMO validation
-        status: pending
-      - id: TK04
-        title: "Define feedback protocol: wet-lab results feed back as ground-truth labels"
-        status: pending
-      - id: TK05
-        title: Track prediction-vs-reality concordance across validation batches
-        status: pending
+    - id: TK01
+      title: Define a set of held-out validation cases withheld from training
+      status: pending
+    - id: TK02
+      title: Report validation recovery rate and calibrated confidence for each model
+        version
+      status: pending
+    - id: TK03
+      title: Prepare a small batch of novel E. coli strain predictions for external
+        CDMO validation
+      status: pending
+    - id: TK04
+      title: 'Define feedback protocol: wet-lab results feed back as ground-truth
+        labels'
+      status: pending
+    - id: TK05
+      title: Track prediction-vs-reality concordance across validation batches
+      status: pending
