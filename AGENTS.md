@@ -75,6 +75,8 @@
 - Review must verify: code quality, test coverage, alignment with acceptance criteria, and adherence to AGENTS.md policies.
 - When addressing review feedback, apply the Requirement Challenge Policy: push back on comments that are wrong,
   overcomplicated, or low-value rather than blindly implementing every suggestion.
+- Before raising an issue, check existing review threads and replies on the PR. Do not re-raise concerns that have
+  already been addressed with a code fix or explicitly pushed back on with a reasoned explanation.
 
 # PR Creation for Orchestrator Tasks
 
