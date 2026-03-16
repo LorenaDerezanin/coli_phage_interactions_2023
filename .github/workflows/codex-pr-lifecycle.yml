@@ -163,6 +163,7 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
+          allow-bots: true
           codex-args: --full-auto -c 'sandbox_workspace_write.network_access=true'
           prompt-file: /tmp/codex_feedback.txt
 
