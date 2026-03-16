@@ -147,6 +147,14 @@ jobs:
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: pip install -r requirements.txt
 
+      # Workaround for https://github.com/openai/codex/issues/12572
+      # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
+      - name: Fix sandbox compatibility with Ubuntu 24.04 AppArmor
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Fix with Codex
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: openai/codex-action@v1
