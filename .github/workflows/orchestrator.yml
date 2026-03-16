@@ -39,12 +39,17 @@ jobs:
     if: ${{ github.event_name != 'issues' || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
+    # Both gh CLI and Python orchestrator read GITHUB_TOKEN.
+    env:
+      GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ github.token }}
+          token: ${{ secrets.CODEX_TRIGGER_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -93,9 +98,6 @@ jobs:
           PY
 
       - name: Run orchestrator command
-        env:
-          GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -113,9 +115,6 @@ jobs:
           python -m lyzortx.orchestration.orchestrator "${args[@]}"
 
       - name: Emit current status
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python -m lyzortx.orchestration.orchestrator \
             --command status \
