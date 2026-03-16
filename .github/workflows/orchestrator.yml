@@ -42,14 +42,14 @@ jobs:
     # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
     # Both gh CLI and Python orchestrator read GITHUB_TOKEN.
     env:
-      GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_PAT }}
+      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
       GITHUB_REPOSITORY: ${{ github.repository }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.CODEX_TRIGGER_PAT }}
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
