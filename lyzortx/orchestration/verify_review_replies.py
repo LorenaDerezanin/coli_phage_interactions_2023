@@ -10,6 +10,29 @@ from typing import Any
 CODEX_BOT = "chatgpt-codex-connector[bot]"
 
 
+def parse_paginated_json(raw: str) -> list[dict[str, Any]]:
+    """Parse potentially paginated JSON output (multiple arrays concatenated).
+
+    gh api --paginate outputs one JSON array per page, concatenated without
+    separators. This function handles both single-page and multi-page output.
+    """
+    decoder = json.JSONDecoder()
+    results: list[dict[str, Any]] = []
+    idx = 0
+    raw = raw.strip()
+    while idx < len(raw):
+        obj, end = decoder.raw_decode(raw, idx)
+        if isinstance(obj, list):
+            results.extend(obj)
+        else:
+            results.append(obj)
+        idx = end
+        # Skip whitespace between documents
+        while idx < len(raw) and raw[idx] in " \t\n\r":
+            idx += 1
+    return results
+
+
 def find_unanswered_comments(
     review_comments: list[dict[str, Any]],
     review_id: int | None = None,
@@ -49,7 +72,10 @@ def main() -> None:
     parser.add_argument("--review-id", type=int, default=None, help="Scope to a specific review ID")
     args = parser.parse_args()
 
-    comments = json.load(sys.stdin)
+    # gh api --paginate may output multiple JSON arrays (one per page).
+    # Concatenate them into a single list.
+    raw = sys.stdin.read()
+    comments = parse_paginated_json(raw)
     unanswered = find_unanswered_comments(comments, review_id=args.review_id)
 
     if unanswered:

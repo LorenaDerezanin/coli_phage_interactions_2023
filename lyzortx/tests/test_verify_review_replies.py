@@ -1,6 +1,8 @@
 """Tests for verify_review_replies."""
 
-from lyzortx.orchestration.verify_review_replies import find_unanswered_comments
+import json
+
+from lyzortx.orchestration.verify_review_replies import find_unanswered_comments, parse_paginated_json
 
 
 def _comment(id: int, user: str = "chatgpt-codex-connector[bot]", reply_to: int | None = None,
@@ -61,3 +63,19 @@ def test_reply_from_any_user_counts() -> None:
         _comment(2, user="codex-action-bot", reply_to=1),
     ]
     assert find_unanswered_comments(comments) == []
+
+
+def test_parse_single_page() -> None:
+    raw = json.dumps([_comment(1), _comment(2)])
+    assert len(parse_paginated_json(raw)) == 2
+
+
+def test_parse_multi_page() -> None:
+    page1 = json.dumps([_comment(1)])
+    page2 = json.dumps([_comment(2), _comment(3)])
+    raw = page1 + "\n" + page2
+    assert len(parse_paginated_json(raw)) == 3
+
+
+def test_parse_empty() -> None:
+    assert parse_paginated_json("") == []
