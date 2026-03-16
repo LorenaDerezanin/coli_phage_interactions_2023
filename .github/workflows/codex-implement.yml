@@ -43,13 +43,6 @@ jobs:
           token: ${{ secrets.ORCHESTRATOR_PAT }}
           fetch-depth: 0
 
-      - name: Extract task ID from issue title
-        id: task
-        run: |
-          TITLE=$(gh issue view "${{ steps.issue.outputs.number }}" --json title --jq '.title')
-          TASK_ID=$(echo "$TITLE" | grep -oP '(?<=\[ORCH\]\[)[A-Za-z0-9_.-]+(?=\])' || echo "UNKNOWN")
-          echo "id=${TASK_ID}" >> "$GITHUB_OUTPUT"
-
       - name: Build prompt
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
@@ -60,16 +53,17 @@ jobs:
             echo ""
             echo "# Instructions"
             echo ""
-            echo "Implement the task described above."
+            echo "Implement the task described above. This is issue #${ISSUE_NUM}."
             echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
             echo ""
             echo "Steps:"
             echo "1. Implement the task as described."
             echo "2. Run tests: pytest -q lyzortx/tests/"
-            echo "3. Commit your changes with detailed, descriptive commit messages — they will be used as the PR description."
-            echo ""
-            echo "Do NOT attempt git push or gh pr create — the sandbox has no network access."
-            echo "The workflow will handle pushing and PR creation after you finish."
+            echo "3. Commit your changes with detailed, descriptive commit messages."
+            echo "4. Push your branch and create a PR with gh pr create."
+            echo "   The PR title must follow the pattern: [ORCH][TASK_ID] Brief description"
+            echo "   The PR body must include a detailed description of changes AND 'Closes #${ISSUE_NUM}' at the end."
+            echo "   Add --label orchestrator-task to the gh pr create command."
           } > /tmp/codex_prompt.txt
 
       - name: Set up Python
@@ -92,47 +86,15 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
-          codex-args: --full-auto
+          codex-args: --full-auto -c 'sandbox_workspace_write.network_access=true'
           prompt-file: /tmp/codex_prompt.txt
 
-      - name: Push and create PR
+      - name: Verify Codex created a PR
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          TASK_ID="${{ steps.task.outputs.id }}"
-          BRANCH="codex/implement-${TASK_ID,,}"
-
-          # Check for changes: either uncommitted files or new commits beyond origin/main
-          if git diff --quiet origin/main && git diff --quiet && git diff --cached --quiet; then
-            echo "::error::Codex produced no changes. Implementation failed."
+          PR_COUNT=$(gh pr list --search "Closes #${ISSUE_NUM}" --json number --jq 'length')
+          if [ "$PR_COUNT" -eq 0 ]; then
+            echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
             exit 1
           fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Stage any uncommitted changes (Codex may or may not have committed)
-          git add -A
-          git diff --cached --quiet || git commit -m "[ORCH][${TASK_ID}] Implement task from issue #${ISSUE_NUM}"
-
-          # Create branch from current state (which includes Codex's commits)
-          git checkout -b "$BRANCH"
-          git push origin "$BRANCH"
-
-          ISSUE_TITLE=$(gh issue view "$ISSUE_NUM" --json title --jq '.title' | sed 's/\[ORCH\]\[[^]]*\] //')
-
-          # Build PR body from commit messages
-          COMMITS=$(git log origin/main..HEAD --pretty=format:'- %s%n%n%b' | sed '/^$/d')
-          PR_BODY=$(cat <<BODY
-          ## Changes
-
-          ${COMMITS}
-
-          Closes #${ISSUE_NUM}
-          BODY
-          )
-
-          gh pr create \
-            --title "[ORCH][${TASK_ID}] ${ISSUE_TITLE}" \
-            --body "$PR_BODY" \
-            --label orchestrator-task \
-            --head "$BRANCH"
+          echo "PR created successfully for issue #${ISSUE_NUM}."
