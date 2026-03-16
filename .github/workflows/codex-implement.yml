@@ -92,6 +92,12 @@ jobs:
       - name: Verify Codex created a PR
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
+          # Check that HEAD moved beyond origin/main (Codex committed and pushed)
+          if git diff --quiet origin/main; then
+            echo "::error::No commits beyond origin/main. Codex did not push changes."
+            exit 1
+          fi
+          # Check that a PR exists for this issue (created in this or a prior run)
           PR_COUNT=$(gh pr list --search "Closes #${ISSUE_NUM}" --json number --jq 'length')
           if [ "$PR_COUNT" -eq 0 ]; then
             echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
