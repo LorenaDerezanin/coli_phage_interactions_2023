@@ -138,6 +138,7 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.branch }}
           fetch-depth: 0
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
 
       - name: Set up Python
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
