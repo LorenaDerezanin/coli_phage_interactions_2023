@@ -5,6 +5,7 @@ from scipy.stats import kruskal
 from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (
     benjamini_hochberg,
     build_per_strain_summary,
+    clean_trait_value,
     classify_susceptibility_bucket,
     derive_serotype,
     summarize_trait_field,
@@ -15,6 +16,10 @@ def test_derive_serotype_prefers_o_h_pair_and_handles_missing() -> None:
     assert derive_serotype("O8", "H9") == "O8:H9"
     assert derive_serotype("O8", "") == "O8"
     assert derive_serotype("", "") == "Missing"
+
+
+def test_clean_trait_value_treats_pd_na_as_missing() -> None:
+    assert clean_trait_value(pd.NA) == "Missing"
 
 
 def test_classify_susceptibility_bucket_distinguishes_zero_low_and_broad() -> None:
@@ -85,10 +90,43 @@ def test_build_per_strain_summary_preserves_missing_assays_in_lysis_counts() -> 
     b2 = out.loc[out["bacteria"] == "B2"].iloc[0]
 
     assert pd.isna(b1["n_lytic_phages"])
-    assert pd.isna(b1["is_zero_lysis"])
+    assert b1["is_zero_lysis"] == False
     assert pd.isna(b1["is_low_susceptibility"])
     assert b1["susceptibility_bucket"] == "unknown_missing_assays"
     assert b2["n_lytic_phages"] == 1
+
+
+def test_build_per_strain_summary_marks_definitely_broad_rows_despite_missing_assays() -> None:
+    interaction_matrix = pd.DataFrame(
+        {
+            "P1": [1, 0],
+            "P2": [1, 0],
+            "P3": [1, 0],
+            "P4": [1, 1],
+            "P5": [pd.NA, 0],
+        },
+        index=["B1", "B2"],
+    )
+    interaction_matrix.index.name = "bacteria"
+    host_metadata = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2"],
+            "ABC_serotype": ["K1", "K2"],
+            "Clermont_Phylo": ["B2", "A"],
+            "ST_Warwick": ["95", "10"],
+            "O-type": ["O8", "O89"],
+            "H-type": ["H9", "H9"],
+        }
+    )
+
+    out = build_per_strain_summary(interaction_matrix, host_metadata, low_threshold=3)
+
+    b1 = out.loc[out["bacteria"] == "B1"].iloc[0]
+
+    assert pd.isna(b1["n_lytic_phages"])
+    assert b1["is_zero_lysis"] == False
+    assert b1["is_low_susceptibility"] == False
+    assert b1["susceptibility_bucket"] == "broad"
 
 
 def test_summarize_trait_field_reports_field_and_value_rows() -> None:
@@ -146,6 +184,33 @@ def test_summarize_trait_field_excludes_unknown_low_status_from_rates() -> None:
     assert a_row["low_susceptibility_count"] == 1
     assert a_row["low_susceptibility_rate"] == 0.5
     assert a_row["tested_for_enrichment"] is True
+
+
+def test_summarize_trait_field_returns_missing_rate_when_no_statuses_are_observed() -> None:
+    strain_summary = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2", "B3"],
+            "n_lytic_phages": [pd.NA, pd.NA, 5],
+            "is_zero_lysis": [pd.NA, pd.NA, False],
+            "is_low_susceptibility": [pd.NA, pd.NA, False],
+            "host_serotype": ["O1:H1", "O1:H1", "O2:H2"],
+        }
+    )
+
+    rows = summarize_trait_field(
+        strain_summary=strain_summary,
+        field_name="host_serotype",
+        field_label="serotype",
+        low_threshold=3,
+        min_group_size=2,
+    )
+
+    unknown_row = next(row for row in rows if row["summary_level"] == "trait_value" and row["trait_value"] == "O1:H1")
+
+    assert unknown_row["low_susceptibility_count"] == 0
+    assert unknown_row["low_susceptibility_rate"] is None
+    assert unknown_row["mean_lytic_phages"] is None
+    assert unknown_row["tested_for_enrichment"] is False
 
 
 def test_summarize_trait_field_includes_singletons_in_kruskal_test() -> None:

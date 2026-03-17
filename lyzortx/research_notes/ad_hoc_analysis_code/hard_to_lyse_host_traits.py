@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -65,7 +64,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def clean_trait_value(value: object) -> str:
-    if value is None or (isinstance(value, float) and math.isnan(value)):
+    if value is None or pd.isna(value):
         return "Missing"
     text = str(value).strip()
     return text if text else "Missing"
@@ -98,6 +97,16 @@ def count_lytic_phages(interaction_matrix: pd.DataFrame) -> pd.Series:
     return binary_matrix.sum(axis=1, min_count=binary_matrix.shape[1]).astype("Int64").rename("n_lytic_phages")
 
 
+def count_known_lytic_phages(interaction_matrix: pd.DataFrame) -> pd.Series:
+    return interaction_matrix.gt(0).where(interaction_matrix.notna(), False).sum(axis=1).astype(int).rename(
+        "known_lytic_phages"
+    )
+
+
+def count_missing_assays(interaction_matrix: pd.DataFrame) -> pd.Series:
+    return interaction_matrix.isna().sum(axis=1).astype(int).rename("missing_assay_count")
+
+
 def true_count(values: pd.Series) -> int:
     return int(values.eq(True).sum())
 
@@ -106,9 +115,9 @@ def false_count(values: pd.Series) -> int:
     return int(values.eq(False).sum())
 
 
-def observed_rate(values: pd.Series) -> float:
+def observed_rate(values: pd.Series) -> float | None:
     observed_total = int(values.notna().sum())
-    return true_count(values) / observed_total if observed_total else 0.0
+    return true_count(values) / observed_total if observed_total else None
 
 
 def optional_float(value: object) -> float | None:
@@ -139,8 +148,11 @@ def build_per_strain_summary(
     low_threshold: int,
 ) -> pd.DataFrame:
     n_lytic_phages = count_lytic_phages(interaction_matrix)
+    known_lytic_phages = count_known_lytic_phages(interaction_matrix)
+    missing_assay_count = count_missing_assays(interaction_matrix)
 
-    strain_summary = n_lytic_phages.reset_index().rename(columns={"index": "bacteria"})
+    strain_summary = pd.concat([n_lytic_phages, known_lytic_phages, missing_assay_count], axis=1)
+    strain_summary = strain_summary.reset_index().rename(columns={"index": "bacteria"})
     host_columns = [
         "bacteria",
         "ABC_serotype",
@@ -157,11 +169,29 @@ def build_per_strain_summary(
     strain_summary["host_abc_serotype"] = strain_summary["ABC_serotype"].map(clean_trait_value)
     strain_summary["host_phylogroup"] = strain_summary["Clermont_Phylo"].map(clean_trait_value)
     strain_summary["host_st"] = strain_summary["ST_Warwick"].map(clean_trait_value)
-    strain_summary["is_zero_lysis"] = strain_summary["n_lytic_phages"].eq(0)
-    strain_summary["is_low_susceptibility"] = strain_summary["n_lytic_phages"].le(low_threshold)
-    strain_summary["susceptibility_bucket"] = [
-        classify_susceptibility_bucket(None if pd.isna(count) else int(count), low_threshold)
-        for count in strain_summary["n_lytic_phages"]
+    has_missing_assays = strain_summary["missing_assay_count"].gt(0)
+    strain_summary["is_zero_lysis"] = pd.Series(pd.NA, index=strain_summary.index, dtype="boolean")
+    strain_summary["is_low_susceptibility"] = pd.Series(pd.NA, index=strain_summary.index, dtype="boolean")
+    strain_summary["is_zero_lysis"] = strain_summary["is_zero_lysis"].mask(strain_summary["known_lytic_phages"].gt(0), False)
+    strain_summary["is_low_susceptibility"] = strain_summary["is_low_susceptibility"].mask(
+        strain_summary["known_lytic_phages"].gt(low_threshold), False
+    )
+    no_missing_assays = ~has_missing_assays
+    strain_summary["is_zero_lysis"] = strain_summary["is_zero_lysis"].mask(
+        no_missing_assays, strain_summary["known_lytic_phages"].eq(0)
+    )
+    strain_summary["is_low_susceptibility"] = strain_summary["is_low_susceptibility"].mask(
+        no_missing_assays, strain_summary["known_lytic_phages"].le(low_threshold)
+    )
+
+    strain_summary["susceptibility_bucket"] = UNKNOWN_SUSCEPTIBILITY_BUCKET
+    strain_summary["susceptibility_bucket"] = strain_summary["susceptibility_bucket"].mask(
+        strain_summary["known_lytic_phages"].gt(low_threshold), "broad"
+    )
+    exact_count_mask = no_missing_assays
+    strain_summary.loc[exact_count_mask, "susceptibility_bucket"] = [
+        classify_susceptibility_bucket(int(count), low_threshold)
+        for count in strain_summary.loc[exact_count_mask, "known_lytic_phages"]
     ]
     return strain_summary.sort_values(["n_lytic_phages", "bacteria"]).reset_index(drop=True)
 
@@ -237,7 +267,7 @@ def summarize_trait_field(
         key=lambda row: (
             row["summary_level"] != "trait_value",
             row["fisher_q_value"] if row["fisher_q_value"] is not None else 1.0,
-            -float(row["low_susceptibility_rate"]),
+            -(float(row["low_susceptibility_rate"]) if row["low_susceptibility_rate"] is not None else -1.0),
             row["trait_value"],
         )
     )

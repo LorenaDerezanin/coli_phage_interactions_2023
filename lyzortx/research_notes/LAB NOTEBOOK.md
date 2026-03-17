@@ -18,7 +18,8 @@
 
 - Interaction-matrix strains analyzed: `402`.
 - Zero-lysis strains: `12 / 402` (`2.99%`).
-- Low-susceptibility strains (`<=3` lytic phages): `36 / 402` (`8.96%`).
+- Low-susceptibility strains (`<=3` lytic phages): `36 / 401` resolved strains (`8.98%`), with `S1-84` remaining
+  ambiguous because missing assays do not rule in or rule out the threshold.
 - Zero-lysis strains:
   `B156`, `B253`, `DEC2a`, `E_albertiiCIP107988T`, `FN-B4`, `FN-B7`, `H1-002-0060-C-T`, `H1-007-0015-D-G`,
   `NILS22`, `NILS24`, `ROAR205`, `ROAR220`.
@@ -28,17 +29,17 @@
   - ST: Kruskal-Wallis `p = 1.71e-05`
 - No individual trait value met the current multiple-testing cutoff (`q <= 0.1`).
 - Strongest nominal enrichments among testable groups (`n >= 4`) were:
-  - Phylogroup `Clade V`: `3 / 7` low-susceptibility (`42.9%`), odds ratio `7.89`, `q = 0.240`
-  - Phylogroup `E. fergusonii`: `2 / 5` low-susceptibility (`40.0%`), odds ratio `6.82`, `q = 0.282`
-  - ST `58`: `5 / 17` low-susceptibility (`29.4%`), odds ratio `4.56`, `q = 0.314`
+  - Phylogroup `Clade V`: `3 / 7` low-susceptibility (`42.9%`), odds ratio `8.20`, `q = 0.218`
+  - Phylogroup `E. fergusonii`: `2 / 5` low-susceptibility (`40.0%`), odds ratio `7.10`, `q = 0.264`
+  - ST `58`: `5 / 17` low-susceptibility (`29.4%`), odds ratio `4.74`, `q = 0.296`
 - Broad-susceptibility counterexample:
-  - Phylogroup `B2`: only `6 / 126` low-susceptibility (`4.9%`), median `27` lytic phages, odds ratio `0.41`
+  - Phylogroup `B2`: only `6 / 126` low-susceptibility (`4.8%`), median `27` lytic phages, odds ratio `0.41`
 
 #### TB03 interpretation
 
 1. Hard-to-lyse behavior is not random noise in the matrix; it tracks host background strongly at the field level for
    serotype, phylogroup, and ST.
-2. The clearest nominal concentration is in `Clade V` (`42.9%` low susceptibility versus a `9.0%` panel-wide
+2. The clearest nominal concentration is in `Clade V` (`42.9%` low susceptibility versus an `8.98%` resolved-panel
    baseline), but none of the tested trait values yet survive multiple-testing correction.
 3. `ST58` is still the strongest recurring ST signal in the currently testable set, but the ST landscape is fragmented
    across many small sequence types, so the category-level evidence remains weak after correction.
