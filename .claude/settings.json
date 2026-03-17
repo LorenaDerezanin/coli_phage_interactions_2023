@@ -3,6 +3,8 @@
     "allow": [
       "Bash(gh issue list *)",
       "Bash(gh issue view *)",
+      "Bash(gh workflow run *)",
+      "Bash(git fetch *)",
       "Bash(git log *)",
       "Bash(grep *)",
       "WebFetch(domain:github.com)",
