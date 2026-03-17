@@ -206,21 +206,24 @@ Each node takes `ReviewCycleState`, returns a partial state update dict.
             mark_clean          +-- round >= max? --+
                                 | no                | yes
                                 v                   v
-                       address_feedback          escalate
+                        address_feedback          escalate
                                 |
                                 v
                          verify_replies
                                 |
-                                v
-                           rereview
-                                |
-                    +-----------+-----------+
-                    | approved              | has_issues
-                    v                       v
-                   END              round >= max? --+
-                 (approved)         | no            | yes
-                                    v               v
-                             address_feedback    escalate
+                +---------------+---------------+
+                | unanswered comments           | all replied
+                v                               v
+        round >= max? --+                    rereview
+        | no            | yes                    |
+        v               v                        v
+  address_feedback   escalate        +-----------+-----------+
+                                     | approved              | has_issues
+                                     v                       v
+                                mark_clean          round >= max? --+
+                                                      | no          | yes
+                                                      v             v
+                                               address_feedback  escalate
 ```
 
 <!-- markdownlint-enable MD010 MD033 -->
@@ -235,9 +238,16 @@ def route_after_collect(state) -> str:
         return "escalate"
     return "address_feedback"
 
+def route_after_verify_replies(state) -> str:
+    if state["unanswered_comments"]:
+        if state["round"] >= state["max_rounds"]:
+            return "escalate"
+        return "address_feedback"
+    return "rereview"
+
 def route_after_rereview(state) -> str:
     if state["approved"]:
-        return END
+        return "mark_clean"
     if state["round"] >= state["max_rounds"]:
         return "escalate"
     return "address_feedback"
@@ -315,7 +325,10 @@ counting, no more shell-scripted API calls, no more Codex action.
   - `test_route_after_collect_no_feedback` -> "mark_clean"
   - `test_route_after_collect_has_feedback` -> "address_feedback"
   - `test_route_after_collect_round_exceeded` -> "escalate"
-  - `test_route_after_rereview_approved` -> END
+  - `test_route_after_verify_replies_with_unanswered_comments` -> "address_feedback"
+  - `test_route_after_verify_replies_round_exceeded` -> "escalate"
+  - `test_route_after_verify_replies_all_replied` -> "rereview"
+  - `test_route_after_rereview_approved` -> "mark_clean"
   - `test_route_after_rereview_has_issues` -> "address_feedback"
   - `test_route_after_rereview_round_exceeded` -> "escalate"
 - **Node tests** (mock GitHubClient):
@@ -324,6 +337,7 @@ counting, no more shell-scripted API calls, no more Codex action.
   - `test_verify_replies_reuses_find_unanswered_comments`
 - **Graph integration** (mock LLM, verify full state flow):
   - `test_graph_no_feedback_path` -> collect -> mark_clean
+  - `test_graph_unanswered_comments_loop_back_to_address_feedback`
   - `test_graph_escalation_after_max_rounds`
 
 ### `test_review_graph_tools.py`
