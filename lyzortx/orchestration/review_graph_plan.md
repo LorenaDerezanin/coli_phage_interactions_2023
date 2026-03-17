@@ -260,18 +260,18 @@ Compile with `MemorySaver` checkpointer (sufficient for single GH Actions run).
 ```bash
 python -m lyzortx.orchestration.review_graph \
     --pr-number 42 \
-    --review-id 123456 \
     --repo owner/repo \
     --max-rounds 3
 ```
 
 - Reads `GITHUB_TOKEN` and `OPENAI_API_KEY` from environment
+- Accepts optional `--review-id` for `pull_request_review` triggers; omit it for `workflow_dispatch` reruns
 - Constructs initial state, invokes graph, prints JSON outcome
 - Exit code 0 on success, 1 on error
 
 ## Step 8: Replace `codex-pr-lifecycle.yml`
 
-Replace the 190-line workflow with ~40 lines:
+Replace the 190-line workflow with ~50 lines:
 
 ```yaml
 name: PR Review Cycle (LangGraph)
@@ -299,19 +299,42 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
+      - name: Resolve PR context
+        env:
+          GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUM="${{ github.event.inputs.pr_number }}"
+            REVIEW_ID=""
+          else
+            PR_NUM="${{ github.event.pull_request.number }}"
+            REVIEW_ID="${{ github.event.review.id }}"
+          fi
+
+          PR_REF="$(gh api repos/${{ github.repository }}/pulls/$PR_NUM --jq '.head.ref')"
+
+          {
+            echo "PR_NUM=$PR_NUM"
+            echo "REVIEW_ID=$REVIEW_ID"
+            echo "PR_REF=$PR_REF"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@v6
         with:
-          ref: <pr-branch> # resolved from pr number
+          ref: ${{ env.PR_REF }}
           fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12.12"
       - run: pip install -r requirements.txt
       - run: |
-          python -m lyzortx.orchestration.review_graph \
-            --pr-number $PR_NUM \
-            --review-id $REVIEW_ID \
-            --repo ${{ github.repository }}
+          args=(
+            --pr-number "$PR_NUM"
+            --repo "${{ github.repository }}"
+          )
+          if [ -n "$REVIEW_ID" ]; then
+            args+=(--review-id "$REVIEW_ID")
+          fi
+          python -m lyzortx.orchestration.review_graph "${args[@]}"
 ```
 
 The workflow just sets up the environment and delegates everything to the Python graph. No more label-based round
