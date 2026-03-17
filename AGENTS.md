@@ -1,9 +1,9 @@
 # Documentation Style Rules
 
-- Markdown style relies on tool settings in `.pre-commit-config.yaml` and `.markdownlint.yaml`.
+- Markdown style relies on tool settings in `.pre-commit-config.yaml` and `.pymarkdown.yaml`.
 - The line-length policy is 120 characters for prose, with configured exceptions for code blocks, tables, and headings.
-- Use `pre-commit run prettier --all-files` for bulk auto-fixes.
-- Use `pre-commit run markdownlint --all-files` for optional manual lint checks.
+- Use `pymarkdown --config .pymarkdown.yaml fix -r .` for optional Markdown auto-fixes.
+- Use `pre-commit run pymarkdown --all-files` for optional manual lint checks.
 - After auto-fixes, stage updated files explicitly before committing.
 
 # Environment Policy

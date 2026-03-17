@@ -113,11 +113,11 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
 def mark_task_done_in_plan(plan_path: Path, plan_md_path: Path, task_id: str) -> None:
     """Mark a task done in plan.yml and regenerate PLAN.md."""
     from lyzortx.orchestration.plan_parser import mark_task_done
-    from lyzortx.orchestration.render_plan import load_plan_yaml, render_plan
+    from lyzortx.orchestration.render_plan import load_plan_yaml, render_plan, write_rendered_plan
 
     mark_task_done(plan_path, task_id)
     plan = load_plan_yaml(plan_path)
-    plan_md_path.write_text(render_plan(plan), encoding="utf-8")
+    write_rendered_plan(plan_md_path, render_plan(plan))
 
 
 def initialize_state(tasks: list[Task], state_path: Path) -> dict[str, Any]:

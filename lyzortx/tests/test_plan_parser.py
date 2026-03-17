@@ -16,7 +16,7 @@ from lyzortx.orchestration.plan_parser import (
     mark_task_done,
     select_ready_tasks,
 )
-from lyzortx.orchestration.render_plan import load_plan_yaml, render_plan
+from lyzortx.orchestration.render_plan import load_plan_yaml, render_plan, write_rendered_plan
 
 MINIMAL_PLAN = textwrap.dedent("""\
     tracks:
@@ -108,3 +108,68 @@ def test_render_plan_contains_tracks(tmp_path: Path) -> None:
     assert "- [ ] Second task" in md
     assert "```mermaid" in md
     assert "ta --> tb" in md
+
+
+def test_render_plan_wraps_long_task_metadata(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: Define a task title that is long enough to force wrapping once implementation metadata is appended
+                status: done
+                implemented_in: lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py
+                baseline: lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json
+    """)
+    plan = load_plan_yaml(_write_plan(tmp_path, content))
+    md = render_plan(plan)
+    assert (
+        "- [x] Define a task title that is long enough to force wrapping once implementation metadata is appended."
+    ) in md
+    assert "      `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`." in md
+    assert "      `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`." in md
+    assert all(len(line) <= 120 for line in md.splitlines())
+
+
+def test_render_plan_wraps_guiding_principle(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            description: A guiding principle description that is intentionally long enough to exceed the markdown prose width limit and must wrap cleanly onto a continuation line.
+            tasks:
+              - id: TA01
+                title: First task
+                status: pending
+    """)
+    plan = load_plan_yaml(_write_plan(tmp_path, content))
+    md = render_plan(plan)
+    assert "- **Guiding Principle:** A guiding principle description that is intentionally long enough" in md
+    assert "  width limit and must wrap cleanly onto a continuation line." in md
+    assert all(len(line) <= 120 for line in md.splitlines())
+
+
+def test_write_rendered_plan_uses_pymarkdown_fix(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    output_path = tmp_path / "PLAN.md"
+    captured: dict[str, str] = {}
+
+    class _FakeApi:
+        def configuration_file_path(self, config_path: str) -> "_FakeApi":
+            captured["config_path"] = config_path
+            return self
+
+        def fix_path(self, file_path: str) -> None:
+            captured["fixed_path"] = file_path
+            path = Path(file_path)
+            path.write_text(path.read_text(encoding="utf-8") + "\n<!-- fixed -->\n", encoding="utf-8")
+
+    monkeypatch.setattr("lyzortx.orchestration.render_plan.PyMarkdownApi", lambda: _FakeApi())
+    write_rendered_plan(output_path, "# Title\n")
+
+    assert captured["config_path"].endswith(".pymarkdown.yaml")
+    assert output_path.read_text(encoding="utf-8") == "# Title\n\n<!-- fixed -->\n"

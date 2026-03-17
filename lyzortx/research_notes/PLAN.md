@@ -178,7 +178,7 @@ graph LR
 - [ ] External-data training order: internal-only -> +Tier A -> +Tier B
 - [ ] Stretch: Stage A model P(adsorption) from host-surface + phage-RBP + compatibility features
 - [ ] Stretch: Stage B model P(productive_lysis | adsorption) from post-entry features
-- [ ] Stretch: compose P(lysis) = P(adsorption) \* P(productive_lysis | adsorption)
+- [ ] Stretch: compose P(lysis) = P(adsorption) * P(productive_lysis | adsorption)
 - [ ] Add multi-task formulation for binary + strength + potency targets
 - [ ] Add calibrated outputs (isotonic/Platt) and uncertainty intervals
 - [ ] Add label-noise-aware training variants
