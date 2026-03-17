@@ -320,6 +320,7 @@ jobs:
           } >> "$GITHUB_ENV"
       - uses: actions/checkout@v6
         with:
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
           ref: ${{ env.PR_REF }}
           fetch-depth: 0
       - uses: actions/setup-python@v6
