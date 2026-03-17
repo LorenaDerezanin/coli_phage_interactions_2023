@@ -20,6 +20,7 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 
 LOW_SUSCEPTIBILITY_THRESHOLD = 3
 MIN_GROUP_SIZE_FOR_ENRICHMENT_TEST = 4
+UNKNOWN_SUSCEPTIBILITY_BUCKET = "unknown_missing_assays"
 
 TRAIT_FIELDS: Sequence[tuple[str, str]] = (
     ("host_serotype", "serotype"),
@@ -82,12 +83,36 @@ def derive_serotype(o_type: object, h_type: object) -> str:
     return f"{o_value}:{h_value}"
 
 
-def classify_susceptibility_bucket(n_lytic_phages: int, low_threshold: int) -> str:
+def classify_susceptibility_bucket(n_lytic_phages: int | None, low_threshold: int) -> str:
+    if n_lytic_phages is None:
+        return UNKNOWN_SUSCEPTIBILITY_BUCKET
     if n_lytic_phages == 0:
         return "zero"
     if n_lytic_phages <= low_threshold:
         return f"low_{1}_{low_threshold}"
     return "broad"
+
+
+def count_lytic_phages(interaction_matrix: pd.DataFrame) -> pd.Series:
+    binary_matrix = interaction_matrix.gt(0).astype("Int64").where(interaction_matrix.notna(), pd.NA)
+    return binary_matrix.sum(axis=1, min_count=binary_matrix.shape[1]).astype("Int64").rename("n_lytic_phages")
+
+
+def true_count(values: pd.Series) -> int:
+    return int(values.eq(True).sum())
+
+
+def false_count(values: pd.Series) -> int:
+    return int(values.eq(False).sum())
+
+
+def observed_rate(values: pd.Series) -> float:
+    observed_total = int(values.notna().sum())
+    return true_count(values) / observed_total if observed_total else 0.0
+
+
+def optional_float(value: object) -> float | None:
+    return None if pd.isna(value) else float(value)
 
 
 def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
@@ -113,8 +138,7 @@ def build_per_strain_summary(
     host_metadata: pd.DataFrame,
     low_threshold: int,
 ) -> pd.DataFrame:
-    binary_matrix = (interaction_matrix > 0).astype(int)
-    n_lytic_phages = binary_matrix.sum(axis=1).rename("n_lytic_phages")
+    n_lytic_phages = count_lytic_phages(interaction_matrix)
 
     strain_summary = n_lytic_phages.reset_index().rename(columns={"index": "bacteria"})
     host_columns = [
@@ -133,10 +157,10 @@ def build_per_strain_summary(
     strain_summary["host_abc_serotype"] = strain_summary["ABC_serotype"].map(clean_trait_value)
     strain_summary["host_phylogroup"] = strain_summary["Clermont_Phylo"].map(clean_trait_value)
     strain_summary["host_st"] = strain_summary["ST_Warwick"].map(clean_trait_value)
-    strain_summary["is_zero_lysis"] = strain_summary["n_lytic_phages"] == 0
-    strain_summary["is_low_susceptibility"] = strain_summary["n_lytic_phages"] <= low_threshold
+    strain_summary["is_zero_lysis"] = strain_summary["n_lytic_phages"].eq(0)
+    strain_summary["is_low_susceptibility"] = strain_summary["n_lytic_phages"].le(low_threshold)
     strain_summary["susceptibility_bucket"] = [
-        classify_susceptibility_bucket(int(count), low_threshold)
+        classify_susceptibility_bucket(None if pd.isna(count) else int(count), low_threshold)
         for count in strain_summary["n_lytic_phages"]
     ]
     return strain_summary.sort_values(["n_lytic_phages", "bacteria"]).reset_index(drop=True)
@@ -154,8 +178,9 @@ def summarize_trait_field(
 
     grouped = work.groupby(field_name, dropna=False)
     groups_for_kruskal = [
-        group["n_lytic_phages"].to_numpy()
+        group["n_lytic_phages"].dropna().to_numpy(dtype=float)
         for _, group in grouped
+        if group["n_lytic_phages"].notna().any()
     ]
     kruskal_p_value = float(kruskal(*groups_for_kruskal).pvalue) if len(groups_for_kruskal) >= 2 else None
 
@@ -165,10 +190,11 @@ def summarize_trait_field(
 
     for trait_value, group in grouped:
         total_strains = int(len(group))
-        low_count = int(group["is_low_susceptibility"].sum())
-        zero_count = int(group["is_zero_lysis"].sum())
-        non_low_count = total_strains - low_count
-        low_rate = low_count / total_strains if total_strains else 0.0
+        low_count = true_count(group["is_low_susceptibility"])
+        zero_count = true_count(group["is_zero_lysis"])
+        non_low_count = false_count(group["is_low_susceptibility"])
+        low_rate = observed_rate(group["is_low_susceptibility"])
+        observed_low_status_count = int(group["is_low_susceptibility"].notna().sum())
         row: dict[str, object] = {
             "summary_level": "trait_value",
             "field_name": field_label,
@@ -177,9 +203,9 @@ def summarize_trait_field(
             "zero_lysis_count": zero_count,
             "low_susceptibility_count": low_count,
             "low_susceptibility_rate": low_rate,
-            "mean_lytic_phages": float(group["n_lytic_phages"].mean()),
-            "median_lytic_phages": float(group["n_lytic_phages"].median()),
-            "tested_for_enrichment": total_strains >= min_group_size,
+            "mean_lytic_phages": optional_float(group["n_lytic_phages"].mean()),
+            "median_lytic_phages": optional_float(group["n_lytic_phages"].median()),
+            "tested_for_enrichment": observed_low_status_count >= min_group_size,
             "odds_ratio_vs_rest": None,
             "fisher_p_value": None,
             "fisher_q_value": None,
@@ -188,11 +214,13 @@ def summarize_trait_field(
             "min_group_size_for_enrichment_test": min_group_size,
         }
 
-        if total_strains >= min_group_size:
+        if observed_low_status_count >= min_group_size:
             rest = work.loc[work[field_name] != trait_value]
+            rest_low_count = true_count(rest["is_low_susceptibility"])
+            rest_non_low_count = false_count(rest["is_low_susceptibility"])
             contingency = [
                 [low_count, non_low_count],
-                [int(rest["is_low_susceptibility"].sum()), int((~rest["is_low_susceptibility"]).sum())],
+                [rest_low_count, rest_non_low_count],
             ]
             odds_ratio, fisher_p_value = fisher_exact(contingency, alternative="two-sided")
             row["odds_ratio_vs_rest"] = float(odds_ratio)
@@ -219,11 +247,11 @@ def summarize_trait_field(
         "field_name": field_label,
         "trait_value": "__all__",
         "total_strains": int(len(work)),
-        "zero_lysis_count": int(work["is_zero_lysis"].sum()),
-        "low_susceptibility_count": int(work["is_low_susceptibility"].sum()),
-        "low_susceptibility_rate": float(work["is_low_susceptibility"].mean()),
-        "mean_lytic_phages": float(work["n_lytic_phages"].mean()),
-        "median_lytic_phages": float(work["n_lytic_phages"].median()),
+        "zero_lysis_count": true_count(work["is_zero_lysis"]),
+        "low_susceptibility_count": true_count(work["is_low_susceptibility"]),
+        "low_susceptibility_rate": observed_rate(work["is_low_susceptibility"]),
+        "mean_lytic_phages": optional_float(work["n_lytic_phages"].mean()),
+        "median_lytic_phages": optional_float(work["n_lytic_phages"].median()),
         "tested_for_enrichment": True,
         "odds_ratio_vs_rest": None,
         "fisher_p_value": None,
@@ -330,8 +358,8 @@ def main() -> None:
         rows=summary_rows,
     )
 
-    low_strains = strain_summary.loc[strain_summary["is_low_susceptibility"], "bacteria"].tolist()
-    zero_strains = strain_summary.loc[strain_summary["is_zero_lysis"], "bacteria"].tolist()
+    low_strains = strain_summary.loc[strain_summary["is_low_susceptibility"].eq(True), "bacteria"].tolist()
+    zero_strains = strain_summary.loc[strain_summary["is_zero_lysis"].eq(True), "bacteria"].tolist()
     manifest = {
         "analysis_id": "TB03",
         "interaction_matrix_path": str(args.interaction_matrix_path),
@@ -341,8 +369,8 @@ def main() -> None:
         "low_susceptibility_threshold": args.low_susceptibility_threshold,
         "min_group_size_for_enrichment_test": args.min_group_size_for_enrichment_test,
         "n_total_strains": int(len(strain_summary)),
-        "n_zero_lysis_strains": int(strain_summary["is_zero_lysis"].sum()),
-        "n_low_susceptibility_strains": int(strain_summary["is_low_susceptibility"].sum()),
+        "n_zero_lysis_strains": true_count(strain_summary["is_zero_lysis"]),
+        "n_low_susceptibility_strains": true_count(strain_summary["is_low_susceptibility"]),
         "zero_lysis_strains": zero_strains,
         "low_susceptibility_strains": low_strains,
         "top_enriched_trait_values_q_le_0_1": top_enriched_rows(summary_rows),

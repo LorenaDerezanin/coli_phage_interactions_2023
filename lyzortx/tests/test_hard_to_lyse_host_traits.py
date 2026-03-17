@@ -58,6 +58,39 @@ def test_build_per_strain_summary_derives_expected_host_fields() -> None:
     assert out.loc[out["bacteria"] == "B2", "susceptibility_bucket"].item() == "low_1_1"
 
 
+def test_build_per_strain_summary_preserves_missing_assays_in_lysis_counts() -> None:
+    interaction_matrix = pd.DataFrame(
+        {
+            "P1": [1, 0],
+            "P2": [pd.NA, 0],
+            "P3": [0, 1],
+        },
+        index=["B1", "B2"],
+    )
+    interaction_matrix.index.name = "bacteria"
+    host_metadata = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2"],
+            "ABC_serotype": ["K1", "K2"],
+            "Clermont_Phylo": ["B2", "A"],
+            "ST_Warwick": ["95", "10"],
+            "O-type": ["O8", "O89"],
+            "H-type": ["H9", "H9"],
+        }
+    )
+
+    out = build_per_strain_summary(interaction_matrix, host_metadata, low_threshold=1)
+
+    b1 = out.loc[out["bacteria"] == "B1"].iloc[0]
+    b2 = out.loc[out["bacteria"] == "B2"].iloc[0]
+
+    assert pd.isna(b1["n_lytic_phages"])
+    assert pd.isna(b1["is_zero_lysis"])
+    assert pd.isna(b1["is_low_susceptibility"])
+    assert b1["susceptibility_bucket"] == "unknown_missing_assays"
+    assert b2["n_lytic_phages"] == 1
+
+
 def test_summarize_trait_field_reports_field_and_value_rows() -> None:
     strain_summary = pd.DataFrame(
         {
@@ -87,6 +120,32 @@ def test_summarize_trait_field_reports_field_and_value_rows() -> None:
     assert a_row["tested_for_enrichment"] is True
     assert a_row["fisher_q_value"] is not None
     assert b_row["low_susceptibility_rate"] == 1 / 3
+
+
+def test_summarize_trait_field_excludes_unknown_low_status_from_rates() -> None:
+    strain_summary = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2", "B3", "B4"],
+            "n_lytic_phages": [1, pd.NA, 5, 6],
+            "is_zero_lysis": [False, pd.NA, False, False],
+            "is_low_susceptibility": [True, pd.NA, False, False],
+            "host_phylogroup": ["A", "A", "A", "B"],
+        }
+    )
+
+    rows = summarize_trait_field(
+        strain_summary=strain_summary,
+        field_name="host_phylogroup",
+        field_label="phylogroup",
+        low_threshold=3,
+        min_group_size=2,
+    )
+
+    a_row = next(row for row in rows if row["summary_level"] == "trait_value" and row["trait_value"] == "A")
+
+    assert a_row["low_susceptibility_count"] == 1
+    assert a_row["low_susceptibility_rate"] == 0.5
+    assert a_row["tested_for_enrichment"] is True
 
 
 def test_summarize_trait_field_includes_singletons_in_kruskal_test() -> None:
