@@ -3,8 +3,7 @@ repos:
     hooks:
       - id: pymarkdown
         name: pymarkdown
-        entry: pymarkdown --config .pymarkdown.yaml scan
+        entry: pymarkdown --config .pymarkdown.yaml fix
         language: python
         additional_dependencies: ["pymarkdownlnt==0.9.36"]
         types_or: [markdown]
-        stages: [manual]

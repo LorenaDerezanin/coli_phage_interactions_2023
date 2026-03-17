@@ -26,6 +26,6 @@ my WSL `phd` conda environment). See log file for more information.
 
 MLST was performed in silico using the mlst package (https://github.com/tseemann/mlst) with the `ecoli_achtman_4` scheme
 (not the `ecoli` scheme) using the following bash command :
-`./bin/mlst --scheme ecoli_achtman_4 --legacy /mnt/d/These/20_data/201_genomic_data/370_and_host/host/FNA/* > host_strains_ST.tsv `
+`./bin/mlst --scheme ecoli_achtman_4 --legacy /mnt/d/These/20_data/201_genomic_data/370_and_host/host/FNA/* > host_strains_ST.tsv`
 
 The output was then formatted (to add original strain name).
