@@ -20,7 +20,6 @@ IAI14,1,False,True,low_1_3,O111:H12,Missing,A,10
 NILS03,1,False,True,low_1_3,O11:H4,Missing,A,216
 NILS04,1,False,True,low_1_3,O9:H4,Missing,A,46
 NILS17,1,False,True,low_1_3,O21:H52,Missing,A,2739
-S1-84,1,False,True,low_1_3,O146:Hneg,Missing,E. albertii,new
 034-026-c1,2,False,True,low_1_3,O81:H27,HP,B2,452
 DEC1a,2,False,True,low_1_3,O55:H6,Missing,B2,19
 ECOR-01,2,False,True,low_1_3,O144:H4,Missing,A,10
@@ -43,7 +42,6 @@ ECOR-08,4,False,False,broad,O86:H2,Missing,A,10
 ECOR-19,4,False,False,broad,O89:H5,Missing,A,48
 E_fergusonii-IVAN,4,False,False,broad,Oneg:Hneg,Missing,E. fergusonii,5636
 IAI07,4,False,False,broad,O16:H48,Missing,A,1137
-IAI12,4,False,False,broad,O148:H32,Missing,A,10
 NILS08,4,False,False,broad,O107:H27,Missing,A,10
 NILS14,4,False,False,broad,O71:H25,Missing,A,10
 NILS15,4,False,False,broad,Oneg:H12,Missing,C,88
@@ -88,7 +86,6 @@ NILS33,6,False,False,broad,Oneg:H38,Missing,B1,154
 NILS76,6,False,False,broad,O16:H5,3,B2,131
 ROAR178,6,False,False,broad,O8:H25,Missing,B1,58
 ROAR438,6,False,False,broad,O7:H56,3,Clade III,5547
-370D,7,False,False,broad,Onovel27:H45,Missing,Clade I,7056
 ECOR-09,7,False,False,broad,O167:H4,Missing,A,10
 ECOR-43_A,7,False,False,broad,O6:H10,Missing,A,43
 ECOR-69,7,False,False,broad,O86:H10,Missing,B1,86
@@ -105,27 +102,23 @@ ROAR043,7,False,False,broad,O130:H56,Missing,Clade V,4104
 ECOR-02,8,False,False,broad,O48:H32,Missing,A,49
 ECOR-15,8,False,False,broad,O25:H30,Missing,A,45
 FN126,8,False,False,broad,O145:H34,Missing,B2,35
-H009,8,False,False,broad,O15:H45,Missing,Clade I,2711
 IAI40,8,False,False,broad,O4:H4,Unknown,A,10
 IAI53,8,False,False,broad,O46:H31,K1,B2,363
 NILS16,8,False,False,broad,O89:H9,Missing,A,167
 NILS19,8,False,False,broad,O25:H4,K5,B2,131
 NILS48,8,False,False,broad,O78:H4,Missing,C,23
 S1-76,8,False,False,broad,O128:H6,Missing,B2,28
-VDG427,8,False,False,broad,O81:H27,HP,B2,452
 55989,9,False,False,broad,O104:H4,Missing,B1,678
 Asp51g,9,False,False,broad,O113:H6,Missing,B2,3616
 B1147,9,False,False,broad,O19:Hneg,K4,Clade II,5615
 B12I13,9,False,False,broad,O25:H17,Unknown,Clade I,770
 C2-119,9,False,False,broad,O15:H16,Missing,Clade I,770
 E4962,9,False,False,broad,Oneg:H33,Missing,Clade I,6492
-EC6230,9,False,False,broad,O153:H31,Missing,E,2569
 H1-003-0019-B-M,9,False,False,broad,O85:H43,Missing,Clade I,3042
 IAI10,9,False,False,broad,O74:H39,Missing,A,548
 IAI24,9,False,False,broad,O17:H34,Missing,D,130
 IAI29,9,False,False,broad,O73:H31,Missing,A,10
 NILS38,9,False,False,broad,O17:H1,Missing,D,501
-PDP110,9,False,False,broad,O9:H17,Missing,C,88
 ROAR019,9,False,False,broad,Oneg:H56,K15,Clade II,5362
 ROAR292,9,False,False,broad,O150:H56,K4,Clade V,2196
 ECOR-21,10,False,False,broad,O121:H11,Missing,A,48
@@ -138,9 +131,7 @@ NAN33,10,False,False,broad,O89:H9,Missing,A,10
 NILS35,10,False,False,broad,Oneg:H4,Missing,A,4238
 NILS41,10,False,False,broad,O5:H4,CatB,A,93
 ROAR116,10,False,False,broad,O36:Hneg,Missing,Clade III,new
-ROAR185,10,False,False,broad,O45:H25,Missing,Clade I,3042
 DIJ06,11,False,False,broad,O25:H1,CatB,B2,73
-E2052,11,False,False,broad,O73:H45,Missing,Clade I,747
 ECOR-10,11,False,False,broad,O6:H10,Missing,A,43
 ECOR-28,11,False,False,broad,O104:H2,Missing,B1,54
 H1-002-0069-V-G,11,False,False,broad,O146:H28,Missing,G,738
@@ -150,7 +141,6 @@ NILS07,11,False,False,broad,O105:H6,Missing,A,10
 NILS53,11,False,False,broad,O16:H5,3,B2,131
 T205,11,False,False,broad,O2:H14,K7,B2,2015
 BDX09,12,False,False,broad,O24:H4,Missing,G,117
-E7519,12,False,False,broad,Oneg:H45,HP,Clade I,2562
 ECOR-12,12,False,False,broad,Oneg:H32,Missing,A,10
 ECOR-44,12,False,False,broad,O17:H34,Missing,D,130
 ECOR-46,12,False,False,broad,O1:H6,K2,D,68
@@ -170,7 +160,6 @@ NILS60,13,False,False,broad,O33:H4,Missing,G,117
 Ben4d,14,False,False,broad,O81:H27,HP,B2,452
 ECOR-37,14,False,False,broad,O55:H7,Missing,E,61
 ECOR-52,14,False,False,broad,O25:H1,Missing,B2,73
-H384,14,False,False,broad,O73:H45,Missing,Clade I,662
 IAI42,14,False,False,broad,O114:H9,Missing,C,23
 IAI76,14,False,False,broad,O6:H31,CatB,B2,127
 LM33,14,False,False,broad,O25:H4,CatB,B2,131
@@ -178,7 +167,6 @@ LM33,14,False,False,broad,O25:H4,CatB,B2,131
 BDX03,15,False,False,broad,O77/O17/O44/O106:H18,K96,D,69
 DIJ07,15,False,False,broad,O77/O17/O44/O106:H18,K96,D,69
 ECOR-27,15,False,False,broad,O104:H21,Missing,B1,53
-FN-B9,15,False,False,broad,O119:H49,Missing,B2,589
 H1-005-0058-M-A,15,False,False,broad,O9:H25,Missing,B1,58
 H95,15,False,False,broad,Oneg:H34,Missing,G,7961
 IAI02,15,False,False,broad,Oneg:H38,Missing,B1,154
@@ -190,7 +178,6 @@ ROAR047,15,False,False,broad,O88:H21,Missing,B1,155
 ROAR061,15,False,False,broad,O88:H21,Missing,B1,155
 S1-11,15,False,False,broad,O145:H34,Missing,B2,713
 E2348_69,16,False,False,broad,O127:H6,Missing,B2,15
-ECOR-53,16,False,False,broad,O4:H5,Missing,B2,12
 H1-001-0125-B-M,16,False,False,broad,O49:H9,Missing,B1,58
 H1-001-0154-T-K,16,False,False,broad,O8:H9,Missing,C,410
 IAI58,16,False,False,broad,O1:H7,Missing,F,59
@@ -317,7 +304,6 @@ NILS18,31,False,False,broad,O17:H18,K5,D,69
 NILS67,31,False,False,broad,O2:H4,K1,B2,95
 NILS72,31,False,False,broad,O6:H31,CatB,B2,127
 ROAR419,31,False,False,broad,O9:H12,Missing,B1,58
-001-023,32,False,False,broad,O149:H23,Missing,G,1163
 IAI01,32,False,False,broad,O8:H-,Missing,B1,1128
 IAI33,32,False,False,broad,O1:H1,K7,F,624
 LF73,32,False,False,broad,O83:H1,5,B2,135
@@ -381,7 +367,6 @@ LF7074,49,False,False,broad,O45:H7,K1,B2,95
 ROAR434,49,False,False,broad,O183:H18,Missing,G,657
 NILS27,50,False,False,broad,O25:H4,K5,B2,131
 ECOR-50,51,False,False,broad,O2:H4,K5,D,72
-IAI64,51,False,False,broad,O83:H31,CatB,B2,372
 ECOR-11,52,False,False,broad,O10:H4,K5,A,10
 ECOR-56,52,False,False,broad,O6:H1,5,B2,73
 NILS66,53,False,False,broad,O2:H5,K1,B2,140
@@ -401,3 +386,18 @@ IAI82,62,False,False,broad,O6:H31,K15,B2,127
 IAI46,63,False,False,broad,O45:H7,K1,B2,95
 IAI81,64,False,False,broad,O18:H5,K5,B2,14
 IAI79,68,False,False,broad,O18:H5,K5,B2,14
+001-023,,,,unknown_missing_assays,O149:H23,Missing,G,1163
+370D,,,,unknown_missing_assays,Onovel27:H45,Missing,Clade I,7056
+E2052,,,,unknown_missing_assays,O73:H45,Missing,Clade I,747
+E7519,,,,unknown_missing_assays,Oneg:H45,HP,Clade I,2562
+EC6230,,,,unknown_missing_assays,O153:H31,Missing,E,2569
+ECOR-53,,,,unknown_missing_assays,O4:H5,Missing,B2,12
+FN-B9,,,,unknown_missing_assays,O119:H49,Missing,B2,589
+H009,,,,unknown_missing_assays,O15:H45,Missing,Clade I,2711
+H384,,,,unknown_missing_assays,O73:H45,Missing,Clade I,662
+IAI12,,,,unknown_missing_assays,O148:H32,Missing,A,10
+IAI64,,,,unknown_missing_assays,O83:H31,CatB,B2,372
+PDP110,,,,unknown_missing_assays,O9:H17,Missing,C,88
+ROAR185,,,,unknown_missing_assays,O45:H25,Missing,Clade I,3042
+S1-84,,,,unknown_missing_assays,O146:Hneg,Missing,E. albertii,new
+VDG427,,,,unknown_missing_assays,O81:H27,HP,B2,452

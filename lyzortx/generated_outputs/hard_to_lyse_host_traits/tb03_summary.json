@@ -24,7 +24,6 @@
     "NILS03",
     "NILS04",
     "NILS17",
-    "S1-84",
     "034-026-c1",
     "DEC1a",
     "ECOR-01",
@@ -43,7 +42,7 @@
   ],
   "low_susceptibility_threshold": 3,
   "min_group_size_for_enrichment_test": 4,
-  "n_low_susceptibility_strains": 37,
+  "n_low_susceptibility_strains": 36,
   "n_total_strains": 402,
   "n_zero_lysis_strains": 12,
   "notes": [
