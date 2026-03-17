@@ -1,13 +1,20 @@
 plugins:
+  # MD013: line length
   md013:
     line_length: 120
     code_blocks: false
     headings: false
     strict: false
     stern: false
+  # MD025: multiple top-level headings in the same document
   md025:
     enabled: false
+  # MD031: blank lines around fenced code blocks
+  md031:
+    enabled: false
+  # MD033: inline HTML
   md033:
     enabled: false
+  # MD041: first line in file should be a top-level heading
   md041:
     enabled: false
