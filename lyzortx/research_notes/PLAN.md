@@ -56,31 +56,58 @@ graph LR
 ## Track ST: Steel Thread v0
 
 - **Guiding Principle:** Prove end-to-end viability with a minimal but honest pipeline using internal data only.
-- [x] Define v0 label policy and uncertainty flags from raw interactions. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
-- [x] Add strict confidence tiering as a parallel output from ST0.1 to support dual-slice evaluation. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`.
-- [x] Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
-- [x] Lock one leakage-safe split protocol and one fixed holdout benchmark for v0. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`.
-- [x] Train one strong tabular baseline and one simple comparator baseline. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`.
-- [x] Calibrate probabilities and export ranked per-strain phage predictions. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
-- [x] Generate top-3 recommendations with policy-tuned defaults. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
-- [x] Compare ranking policy variants to avoid recommendation-policy regressions. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
-- [x] Emit one reproducible report to generated_outputs/steel_thread_v0/. Implemented in `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline: `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
+- [x] Define v0 label policy and uncertainty flags from raw interactions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`.
+- [x] Add strict confidence tiering as a parallel output from ST0.1 to support dual-slice evaluation. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st01b_confidence_tiers.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st01b_expected_metrics.json`.
+- [x] Build one canonical pair table with IDs, labels, uncertainty, and v0 feature blocks. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st02_expected_metrics.json`.
+- [x] Lock one leakage-safe split protocol and one fixed holdout benchmark for v0. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st03_expected_metrics.json`.
+- [x] Train one strong tabular baseline and one simple comparator baseline. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st04_expected_metrics.json`.
+- [x] Calibrate probabilities and export ranked per-strain phage predictions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st05_expected_metrics.json`.
+- [x] Generate top-3 recommendations with policy-tuned defaults. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st06_recommend_top3.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st06_expected_metrics.json`.
+- [x] Compare ranking policy variants to avoid recommendation-policy regressions. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st06b_compare_ranking_policies.py`.
+- [x] Emit one reproducible report to generated_outputs/steel_thread_v0/. Implemented in
+      `lyzortx/pipeline/steel_thread_v0/steps/st07_build_report.py`. Regression baseline:
+      `lyzortx/pipeline/steel_thread_v0/baselines/st07_expected_metrics.json`.
 - [x] Add dual-slice reporting (full-label and strict-confidence) to ST0.7
 - [x] Document failure case hypotheses for each major holdout miss error bucket
 
 ## Track A: Data Integrity and Labeling
 
 - **Guiding Principle:** Canonical IDs, label policies, cohort contracts, and replicate-aware label sets from raw data.
-- [x] Build a canonical ID map for bacteria and phages across all tables. Implemented in `lyzortx/generated_outputs/track_a/id_map/{bacteria_id_map.csv,phage_id_map.csv}`.
-- [x] Resolve naming/alias mismatches (for example legacy phage names). Implemented in `lyzortx/generated_outputs/track_a/id_map/{bacteria_alias_resolution.csv,phage_alias_resolution.csv}`.
-- [x] Add automated data integrity checks for row/column consistency. Implemented in `lyzortx/pipeline/track_a/checks/check_track_a_integrity.py`.
-- [x] Define and document handling policy for uninterpretable labels (score='n'). Implemented in `lyzortx/generated_outputs/track_a/labels/{label_set_v1_policy.json,label_set_v2_policy.json}`.
-- [x] Add plaque-image-assisted QC pass for ambiguous/conflicting pairs. Implemented in `lyzortx/generated_outputs/track_a/qc/{plaque_image_qc_queue.csv,plaque_image_qc_summary.json}`.
-- [x] Define cohort contracts and denominator rules for all reports. Implemented in `lyzortx/generated_outputs/track_a/cohort/{cohort_contracts.csv,cohort_contracts.json}`.
-- [x] Preserve replicate and dilution structure in intermediate tables. Implemented in `lyzortx/generated_outputs/track_a/labels/track_a_observations_with_ids.csv`.
-- [x] Create label set v1: any_lysis, lysis_strength, dilution_potency, uncertainty_flags. Implemented in `lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv`.
-- [x] Create label set v2 with alternative aggregation assumptions and compare impact. Implemented in `lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}`.
-- [x] Add scripts that regenerate all derived labels from raw data in one command. Implemented in `lyzortx/pipeline/track_a/run_track_a.py`.
+- [x] Build a canonical ID map for bacteria and phages across all tables. Implemented in
+      `lyzortx/generated_outputs/track_a/id_map/{bacteria_id_map.csv,phage_id_map.csv}`.
+- [x] Resolve naming/alias mismatches (for example legacy phage names). Implemented in
+      `lyzortx/generated_outputs/track_a/id_map/{bacteria_alias_resolution.csv,phage_alias_resolution.csv}`.
+- [x] Add automated data integrity checks for row/column consistency. Implemented in
+      `lyzortx/pipeline/track_a/checks/check_track_a_integrity.py`.
+- [x] Define and document handling policy for uninterpretable labels (score='n'). Implemented in
+      `lyzortx/generated_outputs/track_a/labels/{label_set_v1_policy.json,label_set_v2_policy.json}`.
+- [x] Add plaque-image-assisted QC pass for ambiguous/conflicting pairs. Implemented in
+      `lyzortx/generated_outputs/track_a/qc/{plaque_image_qc_queue.csv,plaque_image_qc_summary.json}`.
+- [x] Define cohort contracts and denominator rules for all reports. Implemented in
+      `lyzortx/generated_outputs/track_a/cohort/{cohort_contracts.csv,cohort_contracts.json}`.
+- [x] Preserve replicate and dilution structure in intermediate tables. Implemented in
+      `lyzortx/generated_outputs/track_a/labels/track_a_observations_with_ids.csv`.
+- [x] Create label set v1: any_lysis, lysis_strength, dilution_potency, uncertainty_flags. Implemented in
+      `lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv`.
+- [x] Create label set v2 with alternative aggregation assumptions and compare impact. Implemented in
+      `lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}`.
+- [x] Add scripts that regenerate all derived labels from raw data in one command. Implemented in
+      `lyzortx/pipeline/track_a/run_track_a.py`.
 
 ## Track B: Exploratory Analysis and Signal Discovery
 
@@ -116,7 +143,8 @@ graph LR
 
 ## Track E: Pairwise Compatibility Features
 
-- **Guiding Principle:** RBP-vs-receptor compatibility scores, domain-level interactions, and uncertainty-aware pair features.
+- **Guiding Principle:** RBP-vs-receptor compatibility scores, domain-level interactions, and uncertainty-aware pair
+  features.
 - [ ] Design phage-host compatibility features (RBP family vs host receptor proxies)
 - [ ] Add domain-level compatibility scores
 - [ ] Add feature interactions for adsorption-relevant host/phage pairs
@@ -124,7 +152,8 @@ graph LR
 
 ## Track F: Splits, Evaluation Protocol, and Leakage Control
 
-- **Guiding Principle:** Leakage-safe splits, grouped CV, bootstrap CIs, source-aware evaluation, and Tier 1/2 benchmarks.
+- **Guiding Principle:** Leakage-safe splits, grouped CV, bootstrap CIs, source-aware evaluation, and Tier 1/2
+  benchmarks.
 - [ ] Define fixed split protocol: leave-cluster-out host splits and phage-clade holdouts
 - [ ] Keep a strict untouched external test benchmark for final validation
 - [ ] Add leakage checks for all split strategies
@@ -140,7 +169,8 @@ graph LR
 
 ## Track G: Modeling Pipeline
 
-- **Guiding Principle:** A "meaningful model" for this project is one that produces a calibrated probability of lysis for any given phage-bacterium pair, enabling nuanced downstream cocktail recommendations.
+- **Guiding Principle:** A "meaningful model" for this project is one that produces a calibrated probability of lysis
+  for any given phage-bacterium pair, enabling nuanced downstream cocktail recommendations.
 - [ ] Baseline 1: strong tabular binary model on existing host-only features
 - [ ] Baseline 2: joint host+phage feature model without pairwise interactions
 - [ ] Milestone G0: ship calibrated Baseline 2 with leakage-safe protocol
@@ -158,7 +188,8 @@ graph LR
 
 ## Track H: In-Silico Cocktail Recommendation
 
-- **Guiding Principle:** Optimization-based cocktail recommender with diversity, potency, and uncertainty-aware objectives.
+- **Guiding Principle:** Optimization-based cocktail recommender with diversity, potency, and uncertainty-aware
+  objectives.
 - [x] Benchmark policy variants for top-k recommendation and lock a non-regressing default
 - [ ] Add policy guardrail against monotonic-recalibration-only top-k gains
 - [ ] Replace heuristic-only recommender with optimization-based recommender
@@ -170,9 +201,12 @@ graph LR
 
 ## Track I: External Data and Literature Integration
 
-- **Guiding Principle:** Tier A supervised and Tier B weak-label ingestion with source-fidelity, ablations, and lift tracking.
-- [x] Create a curated reading list of closely related phage-host prediction papers. Implemented in `lyzortx/research_notes/LITERATURE.md`.
-- [x] Build source_registry.csv for all external sources. Implemented in `lyzortx/research_notes/external_data/source_registry.csv`.
+- **Guiding Principle:** Tier A supervised and Tier B weak-label ingestion with source-fidelity, ablations, and lift
+  tracking.
+- [x] Create a curated reading list of closely related phage-host prediction papers. Implemented in
+      `lyzortx/research_notes/LITERATURE.md`.
+- [x] Build source_registry.csv for all external sources. Implemented in
+      `lyzortx/research_notes/external_data/source_registry.csv`.
 - [ ] For VHRdb ingest, keep source-fidelity fields
 - [ ] Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
 - [ ] Define harmonization protocol for Tier A datasets

@@ -1,0 +1,13 @@
+plugins:
+  md013:
+    line_length: 120
+    code_blocks: false
+    headings: false
+    strict: false
+    stern: false
+  md025:
+    enabled: false
+  md033:
+    enabled: false
+  md041:
+    enabled: false

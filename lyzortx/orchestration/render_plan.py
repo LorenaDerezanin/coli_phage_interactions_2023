@@ -12,7 +12,11 @@ import argparse
 import sys
 from collections import defaultdict
 from pathlib import Path
+import tempfile
+import textwrap
 from typing import Any
+
+from pymarkdown.api import PyMarkdownApi, PyMarkdownApiException
 
 try:
     import yaml
@@ -24,6 +28,8 @@ except ImportError:
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PLAN_PATH = REPO_ROOT / "lyzortx/orchestration/plan.yml"
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "lyzortx/research_notes/PLAN.md"
+DEFAULT_PYMARKDOWN_CONFIG = REPO_ROOT / ".pymarkdown.yaml"
+MAX_PROSE_WIDTH = 120
 
 # Map track keys to Mermaid node IDs (lowercase prefix "t" + lowercase track key).
 TRACK_KEY_TO_MERMAID = {
@@ -87,14 +93,21 @@ def _render_mermaid(tracks: dict[str, Any]) -> str:
 def _render_task_line(task: dict[str, Any]) -> str:
     check = "x" if task.get("status") == "done" else " "
     title = task["title"]
-    line = f"- [{check}] {title}"
+    parts = [f"{title}." if task.get("status") == "done" and (task.get("implemented_in") or task.get("baseline")) else title]
     impl = task.get("implemented_in")
     if impl and task.get("status") == "done":
-        line += f". Implemented in `{impl}`."
+        parts.append(f"Implemented in `{impl}`.")
     baseline = task.get("baseline")
     if baseline and task.get("status") == "done":
-        line += f" Regression baseline: `{baseline}`."
-    return line
+        parts.append(f"Regression baseline: `{baseline}`.")
+    return textwrap.fill(
+        " ".join(parts),
+        width=MAX_PROSE_WIDTH,
+        initial_indent=f"- [{check}] ",
+        subsequent_indent="      ",
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
 
 
 def render_plan(plan: dict[str, Any]) -> str:
@@ -119,13 +132,48 @@ def render_plan(plan: dict[str, Any]) -> str:
 
         description = track.get("description")
         if description:
-            sections.append(f"- **Guiding Principle:** {description}")
+            sections.append(
+                textwrap.fill(
+                    f"**Guiding Principle:** {description}",
+                    width=MAX_PROSE_WIDTH,
+                    initial_indent="- ",
+                    subsequent_indent="  ",
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+            )
 
         for task in track.get("tasks", []):
             sections.append(_render_task_line(task))
         sections.append("")
 
     return "\n".join(sections)
+
+
+def write_rendered_plan(output_path: Path, rendered: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=output_path.parent,
+        prefix=f"{output_path.stem}.",
+        suffix=output_path.suffix,
+        delete=False,
+    ) as temp_file:
+        temp_path = Path(temp_file.name)
+        temp_file.write(rendered)
+
+    try:
+        api = PyMarkdownApi().configuration_file_path(str(DEFAULT_PYMARKDOWN_CONFIG))
+        api.fix_path(str(temp_path))
+        temp_path.replace(output_path)
+    except PyMarkdownApiException as exc:
+        temp_path.unlink(missing_ok=True)
+        raise RuntimeError(f"PyMarkdown fix failed for {output_path}: {exc}") from exc
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -158,7 +206,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.stdout:
         sys.stdout.write(rendered)
     else:
-        args.output.write_text(rendered, encoding="utf-8")
+        write_rendered_plan(args.output, rendered)
         print(f"Wrote {args.output}")
 
 

@@ -1,9 +1,9 @@
 # Documentation Style Rules
 
-- Markdown style relies on tool settings in `.pre-commit-config.yaml` and `.markdownlint.yaml`.
+- Markdown style relies on tool settings in `.pre-commit-config.yaml` and `.pymarkdown.yaml`.
 - The line-length policy is 120 characters for prose, with configured exceptions for code blocks, tables, and headings.
-- Use `pre-commit run prettier --all-files` for bulk auto-fixes.
-- Use `pre-commit run markdownlint --all-files` for optional manual lint checks.
+- Use `pymarkdown --config .pymarkdown.yaml fix -r .` for optional Markdown auto-fixes.
+- Use `pre-commit run pymarkdown --all-files` for optional manual lint checks.
 - After auto-fixes, stage updated files explicitly before committing.
 
 # Environment Policy
@@ -71,8 +71,10 @@
 
 # Review guidelines
 
-- Do not approve a PR unless all CI checks pass. A branch with failing tests is not mergeable regardless of code quality.
-- Review must verify: code quality, test coverage, alignment with acceptance criteria, and adherence to AGENTS.md policies.
+- Do not approve a PR unless all CI checks pass. A branch with failing tests is not mergeable regardless of code
+  quality.
+- Review must verify: code quality, test coverage, alignment with acceptance criteria, and adherence to AGENTS.md
+  policies.
 - When addressing review feedback, apply the Requirement Challenge Policy: push back on comments that are wrong,
   overcomplicated, or low-value rather than blindly implementing every suggestion.
 - Before raising an issue, check existing review threads and replies on the PR. Do not re-raise concerns that have
