@@ -25,8 +25,8 @@ Host cohorts are defined by canonicalized bacteria IDs produced by the Track A f
    - Locked host denominator: **402 strains**
 3. `features404`
    - Definition: bacteria present in `data/metadata/370+host_cross_validation_groups_1e-4.csv`
-   - Clarification: the filename's `370+` prefix is legacy naming; the canonicalized union represented
-     by this file is 404 strains.
+   - Clarification: the filename's `370+` prefix is legacy naming; the canonicalized union represented by this file is
+     404 strains.
    - Locked host denominator: **404 strains**
 
 These three denominators are asserted in the Track A integrity checker (`raw369=369`, `matrix402=402`,
@@ -126,9 +126,7 @@ Every benchmark table/report must include:
 The denominator contracts are considered valid only when both checks pass:
 
 1. Track A foundation artifacts regenerate without cohort-count drift.
-2. Track A integrity check confirms expected host cohort sizes
-   (`raw369=369`, `matrix402=402`, `features404=404`) and fixed phage panel size
-   (`phage96=96`).
+2. Track A integrity check confirms expected host cohort sizes (`raw369=369`, `matrix402=402`, `features404=404`) and
+   fixed phage panel size (`phage96=96`).
 
-If any denominator drifts, Tier 1/Tier 2 benchmark comparisons are invalid until the drift is explained and
-documented.
+If any denominator drifts, Tier 1/Tier 2 benchmark comparisons are invalid until the drift is explained and documented.
