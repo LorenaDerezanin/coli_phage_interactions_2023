@@ -1,3 +1,7 @@
+extensions:
+  front-matter:
+    enabled: true
+
 plugins:
   # MD013: line length
   md013:
