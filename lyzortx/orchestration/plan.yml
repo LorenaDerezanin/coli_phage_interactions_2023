@@ -131,7 +131,7 @@ tracks:
       status: done
     - id: TB03
       title: Characterize hard-to-lyse strains by known host traits
-      status: pending
+      status: done
       acceptance_criteria:
       - Identify strains with zero or very few lytic phages in the interaction matrix
       - Report which host metadata fields (serotype, phylogroup, ST) correlate with

@@ -114,7 +114,7 @@ graph LR
 - **Guiding Principle:** Profile interactions, identify hard-to-lyse strains, rescuer phages, and uncertainty hotspots.
 - [x] Profile raw interaction matrix composition and replicate consistency
 - [x] Quantify morphotype breadth and narrow-susceptibility patterns
-- [ ] Characterize hard-to-lyse strains by known host traits
+- [x] Characterize hard-to-lyse strains by known host traits
 - [ ] Characterize rescuer phages for narrow-susceptibility strains
 - [ ] Analyze dilution-response patterns per phage and per bacterial subgroup
 - [ ] Build uncertainty map: where annotation conflicts are concentrated
