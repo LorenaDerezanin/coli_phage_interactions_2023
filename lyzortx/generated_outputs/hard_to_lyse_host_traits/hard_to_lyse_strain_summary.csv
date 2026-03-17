@@ -1,0 +1,403 @@
+bacteria,n_lytic_phages,is_zero_lysis,is_low_susceptibility,susceptibility_bucket,host_serotype,host_abc_serotype,host_phylogroup,host_st
+B156,0,True,True,zero,Oneg:Hneg,Missing,E. albertii,new
+B253,0,True,True,zero,O79:H2,Missing,E. fergusonii,4419
+DEC2a,0,True,True,zero,O55:H6,Missing,B2,19
+E_albertiiCIP107988T,0,True,True,zero,O131:Hneg,Missing,E. albertii,383
+FN-B4,0,True,True,zero,O86:H34,Missing,B2,1907
+FN-B7,0,True,True,zero,O142:H6,Missing,B2,15
+H1-002-0060-C-T,0,True,True,zero,Oneg:H12,Missing,C,88
+H1-007-0015-D-G,0,True,True,zero,O78:H4,Missing,C,23
+NILS22,0,True,True,zero,O89:H9,Missing,A,10
+NILS24,0,True,True,zero,O65:H16,Missing,B1,58
+ROAR205,0,True,True,zero,O8:H9,Missing,B1,58
+ROAR220,0,True,True,zero,O4:H56,K4,Clade V,133
+ECOR-06,1,False,True,low_1_3,Oneg:H5,Missing,A,77
+H1-001-0053-K-C,1,False,True,low_1_3,O33:H4,Missing,G,117
+H1-003-0010-G-J,1,False,True,low_1_3,O8:H25,Missing,B1,58
+H1-004-0021-W-I,1,False,True,low_1_3,O78:H4,Missing,C,23
+H14,1,False,True,low_1_3,O8:H10,Missing,B1,58
+IAI14,1,False,True,low_1_3,O111:H12,Missing,A,10
+NILS03,1,False,True,low_1_3,O11:H4,Missing,A,216
+NILS04,1,False,True,low_1_3,O9:H4,Missing,A,46
+NILS17,1,False,True,low_1_3,O21:H52,Missing,A,2739
+S1-84,1,False,True,low_1_3,O146:Hneg,Missing,E. albertii,new
+034-026-c1,2,False,True,low_1_3,O81:H27,HP,B2,452
+DEC1a,2,False,True,low_1_3,O55:H6,Missing,B2,19
+ECOR-01,2,False,True,low_1_3,O144:H4,Missing,A,10
+ECOR-20,2,False,True,low_1_3,O121:H11,Missing,A,48
+H1-001-0034-S-M,2,False,True,low_1_3,O24:H4,Missing,G,117
+H1-001-0131-C-A,2,False,True,low_1_3,O86:H25,Missing,C,88
+H1-006-0003-S-L,2,False,True,low_1_3,O21:H9,Missing,C,783
+ROAR344,2,False,True,low_1_3,O134:Hneg,Missing,E. fergusonii,10187
+ROAR400,2,False,True,low_1_3,O8:H25,Missing,B1,58
+ECOR-17,3,False,True,low_1_3,O29:H12,Missing,A,47
+EDL933,3,False,True,low_1_3,O157:H7,Missing,E,11
+NIC06,3,False,True,low_1_3,O89:H10,Missing,A,10
+NILS20,3,False,True,low_1_3,O81:H27,HP,B2,452
+ROAR129,3,False,True,low_1_3,Oneg:H56,Missing,Clade V,7495
+ROAR176,3,False,True,low_1_3,O4:H56,K4,Clade V,133
+035-004,4,False,False,broad,O81:H27,HP,B2,452
+B6A1,4,False,False,broad,O172:H45,Missing,E,1508
+ECOR-03,4,False,False,broad,O10:H32,Missing,A,10
+ECOR-08,4,False,False,broad,O86:H2,Missing,A,10
+ECOR-19,4,False,False,broad,O89:H5,Missing,A,48
+E_fergusonii-IVAN,4,False,False,broad,Oneg:Hneg,Missing,E. fergusonii,5636
+IAI07,4,False,False,broad,O16:H48,Missing,A,1137
+IAI12,4,False,False,broad,O148:H32,Missing,A,10
+NILS08,4,False,False,broad,O107:H27,Missing,A,10
+NILS14,4,False,False,broad,O71:H25,Missing,A,10
+NILS15,4,False,False,broad,Oneg:H12,Missing,C,88
+NILS36,4,False,False,broad,O1:H7,Missing,F,7339
+NILS70,4,False,False,broad,O4:H5,Missing,B2,12
+NILS77,4,False,False,broad,O158:H34,Missing,B2,7344
+S1-91,4,False,False,broad,O115:Hneg,Missing,E. albertii,new
+001-031-c1,5,False,False,broad,O81:H27,Unknown,B2,452
+013-008,5,False,False,broad,O81:H27,Unknown,B2,452
+034-008,5,False,False,broad,O81:H27,HP,B2,452
+ECOR-25,5,False,False,broad,O127:H40,Missing,A,10
+ECOR-26,5,False,False,broad,O104:H21,Missing,B1,53
+ECOR-72,5,False,False,broad,O112:H8,Missing,B1,89
+ED1a,5,False,False,broad,O81:H27,HP,B2,452
+FN89,5,False,False,broad,O132:H34,Missing,B2,582
+H1-001-0155-M-I,5,False,False,broad,O114:H4,Missing,G,117
+H1-003-0116-V-R,5,False,False,broad,O38:H27,Missing,C,8105
+IAI03,5,False,False,broad,O18:H14,Missing,A,1434
+IAI28,5,False,False,broad,O10:H4,Missing,A,10
+NILS13,5,False,False,broad,O16:H48,Missing,A,1137
+NILS40,5,False,False,broad,Oneg:H12,Missing,C,23
+NILS44,5,False,False,broad,O16:H5,3,B2,131
+ROAR036,5,False,False,broad,O39:H18,Missing,E,new
+ROAR130,5,False,False,broad,O98:H56,Missing,Clade V,3747
+ROAR291,5,False,False,broad,O10:H52,K7,Clade III,2371
+S1-109,5,False,False,broad,Oneg:Hneg,Missing,E. albertii,5397
+B090,6,False,False,broad,O155:Hneg,Missing,E. albertii,7532
+B1747,6,False,False,broad,O15:H16,Missing,Clade I,770
+B992,6,False,False,broad,O79:Hneg,Missing,E. albertii,10001
+E1426,6,False,False,broad,Oneg:H28,Missing,G,2712
+E1492,6,False,False,broad,O155:H25,Missing,Clade I,3720
+ECOR-07,6,False,False,broad,O8:H45,Missing,A,345
+ECOR-14,6,False,False,broad,O71:H4,K4,A,10
+ECOR-31,6,False,False,broad,Oneg:H25,Missing,E,57
+ECOR-70,6,False,False,broad,O78:H19,Missing,C,88
+H1-003-0088-B-J,6,False,False,broad,O9:H19,Missing,C,88
+IAI19,6,False,False,broad,O103:H12,Missing,A,10
+IAI22,6,False,False,broad,O10:H4,Missing,A,10
+NILS06,6,False,False,broad,O9:H9,Missing,A,10
+NILS32,6,False,False,broad,O11:H4,HP,A,10
+NILS33,6,False,False,broad,Oneg:H38,Missing,B1,154
+NILS76,6,False,False,broad,O16:H5,3,B2,131
+ROAR178,6,False,False,broad,O8:H25,Missing,B1,58
+ROAR438,6,False,False,broad,O7:H56,3,Clade III,5547
+370D,7,False,False,broad,Onovel27:H45,Missing,Clade I,7056
+ECOR-09,7,False,False,broad,O167:H4,Missing,A,10
+ECOR-43_A,7,False,False,broad,O6:H10,Missing,A,43
+ECOR-69,7,False,False,broad,O86:H10,Missing,B1,86
+H1-002-0007-M-M,7,False,False,broad,O78:H10,Missing,C,23
+H1-003-0035-D-E,7,False,False,broad,O179:H31,Missing,B2,1092
+IAI23,7,False,False,broad,O18:H14,K98,A,1434
+NILS02,7,False,False,broad,O173:H23,Missing,B1,224
+NILS23,7,False,False,broad,O21:H5,K15,D,973
+NILS31,7,False,False,broad,O17:H45,K4,Clade I,2562
+NILS78,7,False,False,broad,O1:H7,K1,B2,95
+ROAR043,7,False,False,broad,O130:H56,Missing,Clade V,4104
+381A,8,False,False,broad,O81:H27,HP,B2,452
+921A,8,False,False,broad,Oneg:H34,Missing,G,174
+ECOR-02,8,False,False,broad,O48:H32,Missing,A,49
+ECOR-15,8,False,False,broad,O25:H30,Missing,A,45
+FN126,8,False,False,broad,O145:H34,Missing,B2,35
+H009,8,False,False,broad,O15:H45,Missing,Clade I,2711
+IAI40,8,False,False,broad,O4:H4,Unknown,A,10
+IAI53,8,False,False,broad,O46:H31,K1,B2,363
+NILS16,8,False,False,broad,O89:H9,Missing,A,167
+NILS19,8,False,False,broad,O25:H4,K5,B2,131
+NILS48,8,False,False,broad,O78:H4,Missing,C,23
+S1-76,8,False,False,broad,O128:H6,Missing,B2,28
+VDG427,8,False,False,broad,O81:H27,HP,B2,452
+55989,9,False,False,broad,O104:H4,Missing,B1,678
+Asp51g,9,False,False,broad,O113:H6,Missing,B2,3616
+B1147,9,False,False,broad,O19:Hneg,K4,Clade II,5615
+B12I13,9,False,False,broad,O25:H17,Unknown,Clade I,770
+C2-119,9,False,False,broad,O15:H16,Missing,Clade I,770
+E4962,9,False,False,broad,Oneg:H33,Missing,Clade I,6492
+EC6230,9,False,False,broad,O153:H31,Missing,E,2569
+H1-003-0019-B-M,9,False,False,broad,O85:H43,Missing,Clade I,3042
+IAI10,9,False,False,broad,O74:H39,Missing,A,548
+IAI24,9,False,False,broad,O17:H34,Missing,D,130
+IAI29,9,False,False,broad,O73:H31,Missing,A,10
+NILS38,9,False,False,broad,O17:H1,Missing,D,501
+PDP110,9,False,False,broad,O9:H17,Missing,C,88
+ROAR019,9,False,False,broad,Oneg:H56,K15,Clade II,5362
+ROAR292,9,False,False,broad,O150:H56,K4,Clade V,2196
+ECOR-21,10,False,False,broad,O121:H11,Missing,A,48
+H1-004-0007-O-M,10,False,False,broad,O102:H51,Missing,Clade I,770
+IAI32,10,False,False,broad,O45:H25,Missing,Clade I,3042
+IAI44,10,False,False,broad,O78:H10,Missing,A,10
+IAI63,10,False,False,broad,O6:H31,CatB,B2,127
+LMR-3158,10,False,False,broad,O24:H25,Missing,E,3777
+NAN33,10,False,False,broad,O89:H9,Missing,A,10
+NILS35,10,False,False,broad,Oneg:H4,Missing,A,4238
+NILS41,10,False,False,broad,O5:H4,CatB,A,93
+ROAR116,10,False,False,broad,O36:Hneg,Missing,Clade III,new
+ROAR185,10,False,False,broad,O45:H25,Missing,Clade I,3042
+DIJ06,11,False,False,broad,O25:H1,CatB,B2,73
+E2052,11,False,False,broad,O73:H45,Missing,Clade I,747
+ECOR-10,11,False,False,broad,O6:H10,Missing,A,43
+ECOR-28,11,False,False,broad,O104:H2,Missing,B1,54
+H1-002-0069-V-G,11,False,False,broad,O146:H28,Missing,G,738
+IAI50,11,False,False,broad,O87:H19,Missing,E,1265
+IAI67,11,False,False,broad,O75:H5,K2,B2,14
+NILS07,11,False,False,broad,O105:H6,Missing,A,10
+NILS53,11,False,False,broad,O16:H5,3,B2,131
+T205,11,False,False,broad,O2:H14,K7,B2,2015
+BDX09,12,False,False,broad,O24:H4,Missing,G,117
+E7519,12,False,False,broad,Oneg:H45,HP,Clade I,2562
+ECOR-12,12,False,False,broad,Oneg:H32,Missing,A,10
+ECOR-44,12,False,False,broad,O17:H34,Missing,D,130
+ECOR-46,12,False,False,broad,O1:H6,K2,D,68
+H1-002-0011-M-G,12,False,False,broad,O8:H9,Missing,C,23
+H47,12,False,False,broad,O38:H21,Missing,B1,155
+IAI25,12,False,False,broad,O107:H27,Missing,A,10
+IAI26,12,False,False,broad,Oneg:H21,Missing,A,10
+IAI31,12,False,False,broad,O29:H4,Missing,A,10
+IAI36,12,False,False,broad,O7:H45,K1,F,62
+NILS39,12,False,False,broad,O17:H18,Unknown,D,69
+ECOR-23,13,False,False,broad,O86:H42,Missing,A,1112
+H1-006-0022-L-R,13,False,False,broad,O8:H27,Missing,C,410
+H442,13,False,False,broad,O17:H45,HP,Clade I,747
+IAI11,13,False,False,broad,Oneg:H6,Missing,A,10
+IAI62,13,False,False,broad,O6:H31,CatB,B2,127
+NILS60,13,False,False,broad,O33:H4,Missing,G,117
+Ben4d,14,False,False,broad,O81:H27,HP,B2,452
+ECOR-37,14,False,False,broad,O55:H7,Missing,E,61
+ECOR-52,14,False,False,broad,O25:H1,Missing,B2,73
+H384,14,False,False,broad,O73:H45,Missing,Clade I,662
+IAI42,14,False,False,broad,O114:H9,Missing,C,23
+IAI76,14,False,False,broad,O6:H31,CatB,B2,127
+LM33,14,False,False,broad,O25:H4,CatB,B2,131
+916A,15,False,False,broad,Oneg:H34,Missing,G,174
+BDX03,15,False,False,broad,O77/O17/O44/O106:H18,K96,D,69
+DIJ07,15,False,False,broad,O77/O17/O44/O106:H18,K96,D,69
+ECOR-27,15,False,False,broad,O104:H21,Missing,B1,53
+FN-B9,15,False,False,broad,O119:H49,Missing,B2,589
+H1-005-0058-M-A,15,False,False,broad,O9:H25,Missing,B1,58
+H95,15,False,False,broad,Oneg:H34,Missing,G,7961
+IAI02,15,False,False,broad,Oneg:H38,Missing,B1,154
+NILS12,15,False,False,broad,O25:H16,K5,A,450
+NILS37,15,False,False,broad,O18:H14,Missing,A,1434
+NILS55,15,False,False,broad,O25:H4,5,B2,131
+ROAR029,15,False,False,broad,O44/O38:H39,Missing,E,9312
+ROAR047,15,False,False,broad,O88:H21,Missing,B1,155
+ROAR061,15,False,False,broad,O88:H21,Missing,B1,155
+S1-11,15,False,False,broad,O145:H34,Missing,B2,713
+E2348_69,16,False,False,broad,O127:H6,Missing,B2,15
+ECOR-53,16,False,False,broad,O4:H5,Missing,B2,12
+H1-001-0125-B-M,16,False,False,broad,O49:H9,Missing,B1,58
+H1-001-0154-T-K,16,False,False,broad,O8:H9,Missing,C,410
+IAI58,16,False,False,broad,O1:H7,Missing,F,59
+M863,16,False,False,broad,O2:H25,Missing,Clade I,2715
+NILS56,16,False,False,broad,O102:H6,K10,D,405
+ROAR072,16,False,False,broad,O88:H21,Missing,B1,155
+ROAR334,16,False,False,broad,O40:H5,Missing,B1,58
+AN24,17,False,False,broad,O9:H9,Missing,A,10
+H1-001-0027-S-G,17,False,False,broad,O9:H25,Missing,B1,58
+H1-002-0064-E-M,17,False,False,broad,O9:H25,Missing,B1,58
+H1-003-0054-P-P,17,False,False,broad,O143:H4,Missing,G,117
+H1-003-0105-C-R,17,False,False,broad,O8:H4,Missing,C,88
+H1-003-0120-P-R,17,False,False,broad,O8:H11,Missing,C,8106
+IAI16,17,False,False,broad,O18:H14,Missing,A,1434
+IAI34,17,False,False,broad,O9:H9,Missing,A,10
+LM02,17,False,False,broad,O77/O17/O44/O106:H33,K96,D,69
+NILS01,17,False,False,broad,O25:H18,K4,D,69
+NILS49,17,False,False,broad,O9:H11,Missing,B1,58
+ECOR-40,18,False,False,broad,O7:H45,K1,F,62
+H1-004-0017-B-M,18,False,False,broad,O9:H9,Missing,B1,58
+H70,18,False,False,broad,O86:H51,Missing,B1,155
+IAI13,18,False,False,broad,O1:H32,Missing,A,10
+IAI18,18,False,False,broad,Oneg:H4,Missing,C,88
+LM40,18,False,False,broad,O77/O17/O44/O106:H18,K96,D,69
+NILS10,18,False,False,broad,O16:H48,Missing,A,1137
+NILS21,18,False,False,broad,O2:H5,K1,B2,95
+NILS26,18,False,False,broad,O46:H31,K1,B2,569
+NILS50,18,False,False,broad,O15:H18,Unknown,D,69
+NILS63,18,False,False,broad,O39:H4,K4,B2,91
+NILS71,18,False,False,broad,O2:H1,Missing,B2,1154
+BCH953,19,False,False,broad,O9:H25,Missing,B1,58
+ECOR-29,19,False,False,broad,O150:H21,Missing,B1,55
+ECOR-38,19,False,False,broad,O7:H45,K1,F,62
+ECOR-41,19,False,False,broad,O7:Hneg,K1,F,62
+ECOR-58,19,False,False,broad,O112:H8,Missing,B1,75
+H1-003-0115-L-R,19,False,False,broad,O8:H4,Missing,C,88
+H1-007-0037-H-D,19,False,False,broad,O8:H10,Missing,C,88
+IAI09,19,False,False,broad,O71:H4,Missing,A,10
+IAI48,19,False,False,broad,O81:H27,HP,B2,452
+NILS34,19,False,False,broad,Oneg:H12,Missing,C,23
+NILS51,19,False,False,broad,O3:H1,Missing,D,132
+PDP21,19,False,False,broad,O77/O17/O44/O106:H18,K5,D,69
+PDP351,19,False,False,broad,ONT:H9,Missing,C,410
+ROAR059,19,False,False,broad,O17:H31,Missing,E,3774
+ROAR082,19,False,False,broad,O102:H21,Missing,B1,155
+B49,20,False,False,broad,O7:Hneg,K4,Clade IV,5358
+H1-001-0013-L-J,20,False,False,broad,O9:H4,Missing,C,88
+IAI04,20,False,False,broad,O89:H9,Missing,A,10
+IAI37,20,False,False,broad,O19:H4,Unknown,A,10
+NILS46,20,False,False,broad,O17:H18,1,D,69
+S2-1,20,False,False,broad,O156:H1,Missing,B2,941
+colF12g,20,False,False,broad,O81:H27,HP,B2,452
+B691,21,False,False,broad,O8:Hneg,Missing,E. fergusonii,7966
+ECOR-32,21,False,False,broad,O7:H21,Missing,B1,56
+ECOR-45,21,False,False,broad,Oneg:H2,Missing,B1,67
+H1-001-0121-Q-J,21,False,False,broad,O8:H30,Missing,C,23
+LI10,21,False,False,broad,O25:H4,K2,B2,131
+LM08,21,False,False,broad,O25:H18,1,D,69
+T145,21,False,False,broad,O2:H6,K1,B2,141
+ECOR-18,22,False,False,broad,O5:H11,Missing,A,48
+ECOR-59,22,False,False,broad,O4:H40,Missing,B2,12
+ECOR-71,22,False,False,broad,Oneg:H19,Missing,C,360
+IAI20,22,False,False,broad,O153:H4,Missing,A,10
+NILS09,22,False,False,broad,O12:H4,K1,A,10
+ROAR387,22,False,False,broad,Oneg:H39,Missing,E,6646
+ECOR-05,23,False,False,broad,Oneg:H6,Missing,A,10
+ECOR-48,23,False,False,broad,O23:H15,3,D,70
+ECOR-57,23,False,False,broad,O2:H1,K7,B2,73
+ECOR-67,23,False,False,broad,O8:H49,Missing,B1,84
+FN116,23,False,False,broad,O51:H49,Missing,B2,589
+IAI21,23,False,False,broad,O96:H19,Missing,B1,210
+NILS28,23,False,False,broad,O75:H5,K1,B2,1193
+IAI47,24,False,False,broad,O16:H5,K98,B2,1861
+IAI70,24,False,False,broad,O6:H-,K15,B2,372
+NILS58,24,False,False,broad,O107:H5,K2,B2,6530
+B1932,25,False,False,broad,O119:H4,Missing,G,117
+ECOR-30,25,False,False,broad,O113:H21,Missing,B1,56
+H1-001-0003-S-J,25,False,False,broad,O8:H9,Missing,C,23
+H1-001-0020-M-O,25,False,False,broad,O9:H4,Missing,C,88
+IAI45,25,False,False,broad,O45:H25,Missing,Clade I,3042
+IAI73,25,False,False,broad,O6:H31,K15,B2,127
+LF50,25,False,False,broad,O8:H21,Missing,B1,1511
+NILS29,25,False,False,broad,O6:H31,5,B2,127
+NILS47,25,False,False,broad,O8:H19,Missing,C,88
+NILS61,25,False,False,broad,O2:H7,Missing,B2,141
+NILS64,25,False,False,broad,O25:H4,5,B2,131
+NILS73,25,False,False,broad,O25:H4,K2,B2,131
+AN03,26,False,False,broad,O24:H4,Missing,G,117
+ECOR-04,26,False,False,broad,Oneg:H20,Missing,A,63
+IAI30,26,False,False,broad,O73:H18,K4,D,106
+IAI78,26,False,False,broad,Oneg:H5,K5,B2,14
+ECOR-54,27,False,False,broad,O25:H1,Missing,B2,73
+ECOR-65,27,False,False,broad,O8:H10,Missing,B2,681
+H1-001-0093-R-A,27,False,False,broad,O25:H34,Missing,B1,155
+IAI05,27,False,False,broad,O38:H45,Missing,E,3051
+IAI27,27,False,False,broad,O73:H18,K4,D,106
+IAI66,27,False,False,broad,O2:H4,K1,B2,95
+NILS52,27,False,False,broad,O2:H18,1,D,963
+NILS75,27,False,False,broad,O4:H5,K2,B2,12
+ROAR145,27,False,False,broad,Onovel21:H56,5,Clade V,7494
+TW10509,27,False,False,broad,O73:H45,Missing,Clade I,747
+003-026,28,False,False,broad,O33:H23,Missing,G,1163
+ECOR-33,28,False,False,broad,O7:H21,Missing,B1,56
+ECOR-35,28,False,False,broad,O1:H7,K1,F,59
+IAI17,28,False,False,broad,O17:H33,Missing,A,34
+IAI43,28,False,False,broad,O104:H12,Missing,C,88
+IAI60,28,False,False,broad,O2:H4,K1,B2,95
+IAI61,28,False,False,broad,O1:H7,K1,B2,95
+IAI77,28,False,False,broad,O4:H5,Missing,B2,12
+NILS05,28,False,False,broad,O169:H9,Missing,E,543
+ECOR-22,29,False,False,broad,O150:H28,Missing,A,50
+ECOR-24,29,False,False,broad,O15:H14,K1,A,52
+H1-003-0079-G-R,29,False,False,broad,O8:H10,Missing,C,88
+H4,29,False,False,broad,O5:H11,Missing,B1,155
+NILS25,29,False,False,broad,O25:H4,K5,B2,131
+NILS65,29,False,False,broad,O6:H31,K2,B2,127
+025-010,30,False,False,broad,O169:H9,Missing,E,543
+H1-003-0071-C-J,30,False,False,broad,O8:H19,Missing,C,88
+LF31,30,False,False,broad,O6:H1,Missing,B2,73
+H1-005-0012-L-M,31,False,False,broad,O8:H19,Missing,C,8117
+IAI54,31,False,False,broad,O2:H1,K7,B2,73
+LM07,31,False,False,broad,O9:H25,Missing,B1,58
+NILS18,31,False,False,broad,O17:H18,K5,D,69
+NILS67,31,False,False,broad,O2:H4,K1,B2,95
+NILS72,31,False,False,broad,O6:H31,CatB,B2,127
+ROAR419,31,False,False,broad,O9:H12,Missing,B1,58
+001-023,32,False,False,broad,O149:H23,Missing,G,1163
+IAI01,32,False,False,broad,O8:H-,Missing,B1,1128
+IAI33,32,False,False,broad,O1:H1,K7,F,624
+LF73,32,False,False,broad,O83:H1,5,B2,135
+MT1B1,32,False,False,broad,O2:H6,K1,B2,998
+NILS30,32,False,False,broad,Oneg:H4,K1,A,3877
+NILS69,32,False,False,broad,Oneg:H4,Missing,B2,1170
+NILS81,32,False,False,broad,O83:H31,CatB,B2,372
+H1-003-0090-V-J,33,False,False,broad,O9:H4,Missing,C,88
+NILS42,33,False,False,broad,Oneg:H30,K2,D,38
+ROAR274,33,False,False,broad,O114:H18,Missing,E,new
+T147,33,False,False,broad,O6:H1,K5,B2,73
+ECOR-47,34,False,False,broad,O17:H18,Missing,D,69
+ECOR-66,34,False,False,broad,O4:H40,K2,B2,83
+H48,34,False,False,broad,O159:H25,Missing,B1,155
+IAI41,34,False,False,broad,Oneg:H4,Missing,C,2230
+IAI57,34,False,False,broad,O6:H31,5,B2,127
+ECOR-42,35,False,False,broad,Oneg:H26,Missing,E,64
+ECOR-49,35,False,False,broad,O2:H4,K5,D,405
+IAI06,35,False,False,broad,O2:H48,K1,A,10
+IAI71,35,False,False,broad,O4:H1,Missing,B2,12
+LF82,35,False,False,broad,O83:H1,5,B2,135
+IAI15,36,False,False,broad,ONT:H33,Missing,A,34
+NILS43,36,False,False,broad,Oneg:H30,Missing,A,540
+NILS62,36,False,False,broad,O2:H6,Missing,B2,141
+ECOR-13,37,False,False,broad,Oneg:H25,Missing,A,44
+IAI49,37,False,False,broad,O85:H1,Missing,B2,706
+IAI56,37,False,False,broad,O1:H7,K1,B2,95
+ECOR-64,38,False,False,broad,O75:H5,K5,B2,14
+NILS59,38,False,False,broad,O6:H1,Missing,B2,73
+IAI08,39,False,False,broad,O8:H9,Missing,C,3593
+NILS57,39,False,False,broad,O1:H7,K1,B2,95
+IAI68,40,False,False,broad,Oneg:H1,K5,B2,73
+NILS11,40,False,False,broad,O2:H4/H48,K1,A,10
+NILS54,40,False,False,broad,O2:H6,K1,B2,6458
+NILS79,40,False,False,broad,O6:H31,CatB,B2,127
+NILS82,41,False,False,broad,O1:H7,K1,B2,95
+AL505,42,False,False,broad,O1:H7,K1,B2,95
+ECOR-62,42,False,False,broad,O2:H4,K1,B2,79
+NILS45,42,False,False,broad,O137:H41,Missing,E,3018
+ROAR131,42,False,False,broad,O115:H18,Missing,E,350
+ECOR-16,43,False,False,broad,O9:H10,Missing,A,46
+IAI35,43,False,False,broad,O1:H7,1,F,59
+IAI59,43,False,False,broad,O2:H4,K1,B2,79
+ECOR-36,44,False,False,broad,O1:H7,K1,F,59
+IAI55,44,False,False,broad,O83:H31,5,B2,372
+BE,45,False,False,broad,O16:H48,Missing,A,10
+ECOR-60,45,False,False,broad,O4:H5,Missing,B2,12
+IAI51,45,False,False,broad,O2:H6,K1,B2,141
+IAI75,45,False,False,broad,O6:H31,CatB,B2,127
+NILS68,45,False,False,broad,O1:H7,K1,B2,95
+NILS80,45,False,False,broad,O46:H31,K1,B2,569
+ECOR-34,46,False,False,broad,O88:H21,Missing,B1,58
+IAI69,46,False,False,broad,O2:H4,K1,B2,95
+ROAR012,46,False,False,broad,O112:H32,Missing,E,10233
+AN17,47,False,False,broad,O6:H1,K5,B2,73
+IAI38,47,False,False,broad,O2:H4,Missing,B2,79
+BL21,48,False,False,broad,O7:-,Missing,A,93
+NRG807C,48,False,False,broad,O83:H1,5,B2,135
+IAI65,49,False,False,broad,O2:H4,K1,B2,95
+LF7074,49,False,False,broad,O45:H7,K1,B2,95
+ROAR434,49,False,False,broad,O183:H18,Missing,G,657
+NILS27,50,False,False,broad,O25:H4,K5,B2,131
+ECOR-50,51,False,False,broad,O2:H4,K5,D,72
+IAI64,51,False,False,broad,O83:H31,CatB,B2,372
+ECOR-11,52,False,False,broad,O10:H4,K5,A,10
+ECOR-56,52,False,False,broad,O6:H1,5,B2,73
+NILS66,53,False,False,broad,O2:H5,K1,B2,140
+536,54,False,False,broad,O6:H31,K15,B2,127
+IAI74,54,False,False,broad,O2:H6,K1,B2,141
+IAI80,54,False,False,broad,O18:H-,K5,B2,14
+ECOR-63,55,False,False,broad,Oneg:H7,K1,B2,80
+ECOR-39,56,False,False,broad,O7:H45,K1,F,62
+ECOR-51,56,False,False,broad,O25:H1,K5,B2,73
+IAI39,56,False,False,broad,O7:H45,K1,F,62
+NILS74,56,False,False,broad,O6:H1,K2,B2,73
+IAI72,59,False,False,broad,O2:H1,K7,B2,73
+ECOR-61,61,False,False,broad,O2:H4,K1,B2,79
+ATCC35469T,62,False,False,broad,Oneg:Hneg,Missing,E. fergusonii,5298
+ECOR-55,62,False,False,broad,O25:H1,K5,B2,74
+IAI82,62,False,False,broad,O6:H31,K15,B2,127
+IAI46,63,False,False,broad,O45:H7,K1,B2,95
+IAI81,64,False,False,broad,O18:H5,K5,B2,14
+IAI79,68,False,False,broad,O18:H5,K5,B2,14
