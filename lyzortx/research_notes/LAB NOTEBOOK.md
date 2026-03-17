@@ -1,3 +1,55 @@
+### 2026-03-17: TB03 hard-to-lyse strains by host traits
+
+#### What we implemented in TB03
+
+1. Added one reproducible TB03 analysis script:
+   `lyzortx/research_notes/ad_hoc_analysis_code/hard_to_lyse_host_traits.py`.
+2. Configured the script to write generated outputs under
+   `lyzortx/generated_outputs/hard_to_lyse_host_traits/`:
+   - `hard_to_lyse_strain_summary.csv`
+   - `host_trait_low_susceptibility_summary.csv`
+   - `tb03_summary.json`
+3. Used `<=3` lytic phages as the low-susceptibility threshold to stay aligned with the prior narrow-susceptibility
+   slice from TB02.
+4. Used derived `O-type:H-type` serotype labels for the main serotype analysis because `ABC_serotype` is missing for
+   `251 / 402` strains (`62.4%`) and would mostly measure metadata completeness instead of biology.
+
+#### TB03 output summary
+
+- Interaction-matrix strains analyzed: `402`.
+- Zero-lysis strains: `12 / 402` (`2.99%`).
+- Low-susceptibility strains (`<=3` lytic phages): `36 / 401` resolved strains (`8.98%`), with `S1-84` remaining
+  ambiguous because missing assays do not rule in or rule out the threshold.
+- Zero-lysis strains:
+  `B156`, `B253`, `DEC2a`, `E_albertiiCIP107988T`, `FN-B4`, `FN-B7`, `H1-002-0060-C-T`, `H1-007-0015-D-G`,
+  `NILS22`, `NILS24`, `ROAR205`, `ROAR220`.
+- Field-level stratification of lytic-phage counts was significant for all three requested host metadata fields:
+  - Serotype (`O:H`): Kruskal-Wallis `p = 1.44e-03`
+  - Phylogroup: Kruskal-Wallis `p = 1.24e-09`
+  - ST: Kruskal-Wallis `p = 1.71e-05`
+- No individual trait value met the current multiple-testing cutoff (`q <= 0.1`).
+- Strongest nominal enrichments among testable groups (`n >= 4`) were:
+  - Phylogroup `Clade V`: `3 / 7` low-susceptibility (`42.9%`), odds ratio `8.20`, `q = 0.218`
+  - Phylogroup `E. fergusonii`: `2 / 5` low-susceptibility (`40.0%`), odds ratio `7.10`, `q = 0.264`
+  - ST `58`: `5 / 17` low-susceptibility (`29.4%`), odds ratio `4.74`, `q = 0.296`
+- Broad-susceptibility counterexample:
+  - Phylogroup `B2`: only `6 / 126` low-susceptibility (`4.8%`), median `27` lytic phages, odds ratio `0.41`
+
+#### TB03 interpretation
+
+1. Hard-to-lyse behavior is not random noise in the matrix; it tracks host background strongly at the field level for
+   serotype, phylogroup, and ST.
+2. The clearest nominal concentration is in `Clade V` (`42.9%` low susceptibility versus an `8.98%` resolved-panel
+   baseline), but none of the tested trait values yet survive multiple-testing correction.
+3. `ST58` is still the strongest recurring ST signal in the currently testable set, but the ST landscape is fragmented
+   across many small sequence types, so the category-level evidence remains weak after correction.
+4. Serotype still matters at the field level, but the effect is diffuse across many rare `O:H` categories rather than a
+   single dominant high-risk serotype. That means serotype is better treated as part of a multifeature host context than
+   as a standalone rule.
+5. Immediate next-step implication for modeling: host background features should keep explicit phylogroup and ST
+   encodings, and mechanistic follow-up should prioritize the `Clade V` and `ST58` subsets first, with
+   `E. fergusonii` as a secondary nominal candidate that still needs more support.
+
 ### 2026-02-15: ST0.6 policy switch to `logreg_platt__none`
 
 #### What we changed
