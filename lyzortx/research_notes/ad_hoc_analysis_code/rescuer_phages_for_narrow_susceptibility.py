@@ -75,7 +75,17 @@ def resolved_narrow_susceptibility_strains(
 
 
 def classify_rescue_mode(n_lytic_phages: int) -> str:
+    if n_lytic_phages == 0:
+        return "non_rescued"
     return "exclusive" if n_lytic_phages == 1 else "shared"
+
+
+def count_rescue_modes(narrow_strain_summary: pd.DataFrame) -> dict[str, int]:
+    return {
+        "exclusive": int((narrow_strain_summary["rescue_mode"] == "exclusive").sum()),
+        "shared": int((narrow_strain_summary["rescue_mode"] == "shared").sum()),
+        "non_rescued": int((narrow_strain_summary["rescue_mode"] == "non_rescued").sum()),
+    }
 
 
 def join_sorted(values: Sequence[str]) -> str:
@@ -326,7 +336,7 @@ def main() -> None:
         rows=group_summary_rows,
     )
 
-    exclusive_strain_count = int((narrow_strain_summary["rescue_mode"] == "exclusive").sum())
+    rescue_mode_counts = count_rescue_modes(narrow_strain_summary)
     manifest = {
         "analysis_id": "TB04",
         "interaction_matrix_path": str(args.interaction_matrix_path),
@@ -334,8 +344,9 @@ def main() -> None:
         "phage_metadata_path": str(args.phage_metadata_path),
         "low_susceptibility_threshold": args.low_susceptibility_threshold,
         "n_resolved_narrow_susceptibility_strains": int(len(narrow_strain_summary)),
-        "n_exclusive_rescue_strains": exclusive_strain_count,
-        "n_shared_rescue_strains": int(len(narrow_strain_summary) - exclusive_strain_count),
+        "n_exclusive_rescue_strains": rescue_mode_counts["exclusive"],
+        "n_shared_rescue_strains": rescue_mode_counts["shared"],
+        "n_non_rescued_narrow_strains": rescue_mode_counts["non_rescued"],
         "n_rescuer_phages": int(rescuer_phage_summary["is_rescuer_phage"].sum()),
         "n_exclusive_rescuer_phages": int(rescuer_phage_summary["exclusive_rescue_count"].gt(0).sum()),
         "top_rescuer_phages_by_narrow_strains": top_rows(
@@ -355,7 +366,7 @@ def main() -> None:
         ),
         "notes": [
             "Resolved narrow-susceptibility strains reuse the TB03 operational definition: <= threshold lytic phages and no missing assays.",
-            "Rescue mode is exclusive for single-lyser strains and shared for strains with two or three lytic phages.",
+            "Rescue mode is non_rescued for zero-lysis strains, exclusive for single-lyser strains, and shared for strains with two or three lytic phages.",
             "A rescuer phage is any phage with at least one lytic hit in the resolved narrow-susceptibility slice.",
         ],
     }

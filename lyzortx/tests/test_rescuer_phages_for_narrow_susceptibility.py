@@ -6,14 +6,29 @@ from lyzortx.research_notes.ad_hoc_analysis_code.rescuer_phages_for_narrow_susce
     build_rescuer_group_summary,
     build_rescuer_phage_summary,
     classify_rescue_mode,
+    count_rescue_modes,
     resolved_narrow_susceptibility_strains,
 )
 
 
 def test_classify_rescue_mode_distinguishes_exclusive_and_shared() -> None:
+    assert classify_rescue_mode(0) == "non_rescued"
     assert classify_rescue_mode(1) == "exclusive"
     assert classify_rescue_mode(2) == "shared"
     assert classify_rescue_mode(3) == "shared"
+
+
+def test_count_rescue_modes_excludes_non_rescued_rows_from_shared_totals() -> None:
+    narrow_strain_summary = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2", "B4"],
+            "rescue_mode": ["exclusive", "shared", "non_rescued"],
+        }
+    )
+
+    out = count_rescue_modes(narrow_strain_summary)
+
+    assert out == {"exclusive": 1, "shared": 1, "non_rescued": 1}
 
 
 def test_resolved_narrow_susceptibility_strains_keeps_only_true_rows() -> None:
@@ -33,18 +48,18 @@ def test_resolved_narrow_susceptibility_strains_keeps_only_true_rows() -> None:
 def test_build_narrow_strain_rescuer_summary_emits_expected_rescuer_lists() -> None:
     interaction_matrix = pd.DataFrame(
         {
-            "P1": [1, 1, 0],
-            "P2": [0, 1, 0],
-            "P3": [0, 0, 1],
+            "P1": [1, 1, 0, 0],
+            "P2": [0, 1, 0, 0],
+            "P3": [0, 0, 1, 0],
         },
-        index=["B1", "B2", "B3"],
+        index=["B1", "B2", "B3", "B4"],
     )
     interaction_matrix.index.name = "bacteria"
     strain_summary = pd.DataFrame(
         {
-            "bacteria": ["B1", "B2", "B3"],
-            "known_lytic_phages": [1, 2, 1],
-            "is_low_susceptibility": [True, True, False],
+            "bacteria": ["B1", "B2", "B3", "B4"],
+            "known_lytic_phages": [1, 2, 1, 0],
+            "is_low_susceptibility": [True, True, False, True],
         }
     )
     phage_metadata = pd.DataFrame(
@@ -63,6 +78,7 @@ def test_build_narrow_strain_rescuer_summary_emits_expected_rescuer_lists() -> N
 
     b1 = out.loc[out["bacteria"] == "B1"].iloc[0]
     b2 = out.loc[out["bacteria"] == "B2"].iloc[0]
+    b4 = out.loc[out["bacteria"] == "B4"].iloc[0]
 
     assert b1["rescue_mode"] == "exclusive"
     assert b1["rescuer_phages"] == "P1"
@@ -71,27 +87,31 @@ def test_build_narrow_strain_rescuer_summary_emits_expected_rescuer_lists() -> N
     assert b2["rescuer_phages"] == "P1,P2"
     assert b2["rescuer_morphotypes"] == "Myoviridae,Podoviridae"
     assert b2["unique_rescuer_phage"] == ""
+    assert b4["rescue_mode"] == "non_rescued"
+    assert b4["rescuer_phages"] == ""
+    assert b4["rescuer_morphotypes"] == ""
+    assert b4["unique_rescuer_phage"] == ""
 
 
 def test_build_rescuer_phage_summary_counts_exclusive_and_shared_rescues() -> None:
     interaction_matrix = pd.DataFrame(
         {
-            "P1": [1, 1, 0],
-            "P2": [0, 1, 1],
-            "P3": [0, 0, 1],
+            "P1": [1, 1, 0, 0],
+            "P2": [0, 1, 1, 0],
+            "P3": [0, 0, 1, 0],
         },
-        index=["B1", "B2", "B3"],
+        index=["B1", "B2", "B3", "B4"],
     )
     interaction_matrix.index.name = "bacteria"
     narrow_strain_summary = pd.DataFrame(
         {
-            "bacteria": ["B1", "B2"],
-            "known_lytic_phages": [1, 2],
-            "rescue_mode": ["exclusive", "shared"],
-            "rescuer_phages": ["P1", "P1,P2"],
-            "rescuer_morphotypes": ["Myoviridae", "Myoviridae,Podoviridae"],
-            "rescuer_families": ["Straboviridae", "Straboviridae,Autographiviridae"],
-            "unique_rescuer_phage": ["P1", ""],
+            "bacteria": ["B1", "B2", "B4"],
+            "known_lytic_phages": [1, 2, 0],
+            "rescue_mode": ["exclusive", "shared", "non_rescued"],
+            "rescuer_phages": ["P1", "P1,P2", ""],
+            "rescuer_morphotypes": ["Myoviridae", "Myoviridae,Podoviridae", ""],
+            "rescuer_families": ["Straboviridae", "Straboviridae,Autographiviridae", ""],
+            "unique_rescuer_phage": ["P1", "", ""],
         }
     )
     phage_metadata = pd.DataFrame(
