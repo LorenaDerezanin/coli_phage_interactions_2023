@@ -87,7 +87,6 @@ jobs:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4
           sandbox: danger-full-access
-          codex-args: --ask-for-approval never
           prompt-file: /tmp/codex_prompt.txt
 
       - name: Verify Codex created a PR
