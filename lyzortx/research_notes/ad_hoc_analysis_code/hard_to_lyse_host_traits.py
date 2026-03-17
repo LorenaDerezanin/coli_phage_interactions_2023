@@ -156,7 +156,6 @@ def summarize_trait_field(
     groups_for_kruskal = [
         group["n_lytic_phages"].to_numpy()
         for _, group in grouped
-        if len(group) >= 2
     ]
     kruskal_p_value = float(kruskal(*groups_for_kruskal).pvalue) if len(groups_for_kruskal) >= 2 else None
 

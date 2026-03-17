@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from scipy.stats import kruskal
 
 from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (
     benjamini_hochberg,
@@ -86,3 +87,29 @@ def test_summarize_trait_field_reports_field_and_value_rows() -> None:
     assert a_row["tested_for_enrichment"] is True
     assert a_row["fisher_q_value"] is not None
     assert b_row["low_susceptibility_rate"] == 1 / 3
+
+
+def test_summarize_trait_field_includes_singletons_in_kruskal_test() -> None:
+    strain_summary = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2", "B3", "B4"],
+            "n_lytic_phages": [1, 4, 9, 10],
+            "is_zero_lysis": [False, False, False, False],
+            "is_low_susceptibility": [True, False, False, False],
+            "host_st": ["11", "11", "12", "13"],
+        }
+    )
+
+    rows = summarize_trait_field(
+        strain_summary=strain_summary,
+        field_name="host_st",
+        field_label="ST",
+        low_threshold=3,
+        min_group_size=2,
+    )
+
+    field_row = rows[0]
+    expected_p_value = float(kruskal([1, 4], [9], [10]).pvalue)
+
+    assert field_row["summary_level"] == "field"
+    assert field_row["kruskal_p_value"] == pytest.approx(expected_p_value)
