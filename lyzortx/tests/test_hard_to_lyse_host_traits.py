@@ -1,0 +1,88 @@
+import pandas as pd
+import pytest
+
+from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (
+    benjamini_hochberg,
+    build_per_strain_summary,
+    classify_susceptibility_bucket,
+    derive_serotype,
+    summarize_trait_field,
+)
+
+
+def test_derive_serotype_prefers_o_h_pair_and_handles_missing() -> None:
+    assert derive_serotype("O8", "H9") == "O8:H9"
+    assert derive_serotype("O8", "") == "O8"
+    assert derive_serotype("", "") == "Missing"
+
+
+def test_classify_susceptibility_bucket_distinguishes_zero_low_and_broad() -> None:
+    assert classify_susceptibility_bucket(0, low_threshold=3) == "zero"
+    assert classify_susceptibility_bucket(2, low_threshold=3) == "low_1_3"
+    assert classify_susceptibility_bucket(5, low_threshold=3) == "broad"
+
+
+def test_benjamini_hochberg_is_monotone_after_ordering() -> None:
+    q_values = benjamini_hochberg([0.01, 0.02, 0.2])
+
+    assert q_values == pytest.approx([0.03, 0.03, 0.2])
+
+
+def test_build_per_strain_summary_derives_expected_host_fields() -> None:
+    interaction_matrix = pd.DataFrame(
+        {
+            "P1": [1, 0],
+            "P2": [0, 0],
+            "P3": [0, 1],
+        },
+        index=["B1", "B2"],
+    )
+    interaction_matrix.index.name = "bacteria"
+    host_metadata = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2"],
+            "ABC_serotype": ["K1", ""],
+            "Clermont_Phylo": ["B2", "A"],
+            "ST_Warwick": ["95", "10"],
+            "O-type": ["O8", "O89"],
+            "H-type": ["H9", "H9"],
+        }
+    )
+
+    out = build_per_strain_summary(interaction_matrix, host_metadata, low_threshold=1)
+
+    assert out.loc[out["bacteria"] == "B1", "host_serotype"].item() == "O8:H9"
+    assert out.loc[out["bacteria"] == "B1", "host_abc_serotype"].item() == "K1"
+    assert out.loc[out["bacteria"] == "B2", "host_phylogroup"].item() == "A"
+    assert out.loc[out["bacteria"] == "B2", "susceptibility_bucket"].item() == "low_1_1"
+
+
+def test_summarize_trait_field_reports_field_and_value_rows() -> None:
+    strain_summary = pd.DataFrame(
+        {
+            "bacteria": ["B1", "B2", "B3", "B4", "B5", "B6"],
+            "n_lytic_phages": [0, 1, 7, 8, 0, 6],
+            "is_zero_lysis": [True, False, False, False, True, False],
+            "is_low_susceptibility": [True, True, False, False, True, False],
+            "host_phylogroup": ["A", "A", "A", "B", "B", "B"],
+        }
+    )
+
+    rows = summarize_trait_field(
+        strain_summary=strain_summary,
+        field_name="host_phylogroup",
+        field_label="phylogroup",
+        low_threshold=3,
+        min_group_size=3,
+    )
+
+    field_row = rows[0]
+    a_row = next(row for row in rows if row["summary_level"] == "trait_value" and row["trait_value"] == "A")
+    b_row = next(row for row in rows if row["summary_level"] == "trait_value" and row["trait_value"] == "B")
+
+    assert field_row["summary_level"] == "field"
+    assert field_row["field_name"] == "phylogroup"
+    assert a_row["low_susceptibility_count"] == 2
+    assert a_row["tested_for_enrichment"] is True
+    assert a_row["fisher_q_value"] is not None
+    assert b_row["low_susceptibility_rate"] == 1 / 3
