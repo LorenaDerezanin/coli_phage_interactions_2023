@@ -19,7 +19,7 @@
 #### TB04 output summary
 
 - Resolved narrow-susceptibility strains analyzed: `36`.
-- Rescue-mode split: `9` exclusive-rescue strains and `27` shared-rescue strains.
+- Rescue-mode split: `9` exclusive-rescue strains, `15` shared-rescue strains, and `12` non-rescued narrow strains.
 - Rescuer phages: `19 / 96` panel phages (`19.8%`) have at least one lytic hit in the resolved narrow-susceptibility
   slice.
 - Top rescuer phages by resolved narrow-strain coverage:
@@ -45,8 +45,8 @@
 
 #### TB04 interpretation
 
-1. Narrow-strain rescue is concentrated in a minority of the panel (`19 / 96` phages), so these hard cases are not
-   being solved uniformly by broad host-range phages.
+1. Narrow-strain rescue is concentrated in a minority of the panel (`19 / 96` phages), and `12 / 36` resolved narrow
+   strains are not rescued at all, so these hard cases are not being solved uniformly by broad host-range phages.
 2. Myoviridae, especially `Straboviridae`, still dominate the rescue landscape and provide nearly all exclusive saves,
    which is consistent with the earlier single-lyser signal from the paper gist and TB02.
 3. The podophage `AN24_P4` matters despite modest absolute coverage because it has the highest narrow-hit concentration
