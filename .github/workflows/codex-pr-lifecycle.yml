@@ -165,7 +165,7 @@ jobs:
           model: gpt-5.4
           allow-bots: true
           sandbox: danger-full-access
-          codex-args: --full-auto
+          codex-args: -a never
           prompt-file: /tmp/codex_feedback.txt
 
       - name: Verify all comments were answered
