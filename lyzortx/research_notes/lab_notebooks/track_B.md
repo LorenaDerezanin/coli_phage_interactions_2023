@@ -110,3 +110,81 @@
 5. Immediate modeling implication: phage feature work should keep morphotype/family signals, but it also needs enough
    phage-specific capacity to preserve exceptions like `AN24_P4` and the `NIC06_P2` exclusive-rescue pattern instead of
    collapsing everything into a broad Myoviridae prior.
+
+### 2026-03-19: TB05 dilution-response patterns per phage and per bacterial subgroup
+
+#### What we implemented in TB05
+
+1. Added one reproducible TB05 analysis script:
+   `lyzortx/research_notes/ad_hoc_analysis_code/dilution_response_patterns.py`.
+2. Reused the Track A dilution-preserving outputs so the analysis runs on canonical pair labels plus the underlying
+   pair-by-dilution observation summary instead of recomputing this structure ad hoc.
+3. Configured the script to write generated outputs under
+   `lyzortx/generated_outputs/dilution_response_patterns/`:
+   - `pair_dilution_response_features.csv`
+   - `per_phage_dilution_response_summary.csv`
+   - `bacterial_subgroup_dilution_response_summary.csv`
+   - `tb05_summary.json`
+4. Used two operational dilution-response summaries for lytic pairs:
+   - `high_potency`: best lysis dilution at `-2` or `-4`
+   - `multi_dilution_support`: at least two dilution levels with any interpretable positive observation
+5. Reported bacterial subgroup summaries across three host metadata views:
+   - phylogroup
+   - ST
+   - derived `O:H` serotype
+
+#### TB05 output summary
+
+- Resolved pair labels analyzed: `35,266`.
+- Lytic pairs analyzed: `9,720`.
+- Best-lysis dilution distribution among lytic pairs:
+  - `0`: `4,428` (`45.6%`)
+  - `-1`: `2,097` (`21.6%`)
+  - `-2`: `2,323` (`23.9%`)
+  - `-4`: `872` (`9.0%`)
+- High-potency lysis (`-2` or `-4`) accounts for `3,195 / 9,720` lytic pairs (`32.9%`).
+- Multi-dilution support accounts for `5,249 / 9,720` lytic pairs (`54.0%`).
+- Top high-potency phages with at least `40` lytic pairs:
+  - `412_P2`: `57.4%` high-potency, `77.8%` multi-dilution support, `q = 5.76e-04`
+  - `NRG_11B1`: `56.9%` high-potency, `71.5%` multi-dilution support, `q = 4.84e-08`
+  - `536_P1`: `53.3%` high-potency, `64.1%` multi-dilution support, `q = 2.37e-08`
+  - `55989_P2`: `53.2%` high-potency, `70.5%` multi-dilution support, `q = 2.36e-09`
+  - `536_P6`: `50.6%` high-potency, `70.7%` multi-dilution support, `q = 1.32e-05`
+- Lowest-potency phages with at least `40` lytic pairs:
+  - `LM08_P1`: `2.8%` high-potency
+  - `LM02_P1`: `2.9%`
+  - `536_P11`: `3.6%`
+  - `LM08_P2`: `3.8%`
+  - `BDX03_P2`: `4.8%`
+- The high-potency end is mostly Myoviridae with one strong podophage outlier (`412_P2`), while the lowest-potency end
+  is dominated by Siphoviridae.
+- Phylogroup-level dilution-response extremes:
+  - `F`: `44.7%` high-potency, `66.4%` multi-dilution support, `q = 6.84e-07`
+  - `B2`: `34.6%` high-potency, `56.2%` multi-dilution support, `q = 6.77e-03`
+  - `Clade I`: only `15.9%` high-potency and `38.2%` multi-dilution support, `q = 1.29e-10`
+  - `E. albertii`: only `11.6%` high-potency and `30.2%` multi-dilution support, `q = 6.77e-03`
+- Highest-potency ST groups with at least `40` lytic pairs:
+  - `624`: `57.5%` high-potency, `77.5%` multi-dilution support, `q = 1.08e-02`
+  - `56`: `53.2%` high-potency, `66.0%` multi-dilution support, `q = 1.14e-03`
+  - `80`: `52.3%` high-potency, `66.2%` multi-dilution support, `q = 9.08e-03`
+  - `706`: `51.7%` high-potency, `69.0%` multi-dilution support, `q = 1.48e-02`
+  - `79`: `45.9%` high-potency, `66.7%` multi-dilution support, `q = 8.46e-04`
+
+#### TB05 interpretation
+
+1. Dilution response is not a trivial restatement of binary host range. A substantial minority of lytic pairs stay
+   positive at `-2` or `-4`, and these high-potency hits are concentrated in a specific subset of phages rather than
+   spread uniformly across the panel.
+2. The phage-level extremes are biologically structured. Most of the strongest dilution performers are Myoviridae, but
+   podophage `412_P2` is a real exception with the highest high-potency rate in the tested slice, so potency should not
+   be collapsed into a pure morphotype rule.
+3. Host background modulates dilution robustness as well as simple susceptibility. Phylogroup `F` is enriched for
+   stronger dilution-surviving lysis, while `Clade I` and `E. albertii` are depleted both for high-potency hits and for
+   multi-dilution support, marking them as especially fragile-response host contexts.
+4. This sharpens the TB03 picture. `B2` remains a comparatively favorable host background not just because it has more
+   lytic hits overall, but because those hits are modestly more potent than the panel baseline; `Clade I` and
+   `E. albertii` look difficult in both breadth and potency.
+5. Immediate modeling implication: future label and modeling work should preserve dilution potency and multi-dilution
+   support as first-class targets or auxiliary tasks. A binary `any_lysis` label would discard signal that clearly
+   separates both phages and host subgroups.
+
