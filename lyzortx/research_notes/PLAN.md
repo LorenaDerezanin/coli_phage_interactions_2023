@@ -115,7 +115,7 @@ graph LR
 - [x] Profile raw interaction matrix composition and replicate consistency
 - [x] Quantify morphotype breadth and narrow-susceptibility patterns
 - [x] Characterize hard-to-lyse strains by known host traits
-- [ ] Characterize rescuer phages for narrow-susceptibility strains
+- [x] Characterize rescuer phages for narrow-susceptibility strains
 - [ ] Analyze dilution-response patterns per phage and per bacterial subgroup
 - [ ] Build uncertainty map: where annotation conflicts are concentrated
 - [ ] Prioritize candidate mechanistic feature hypotheses from EDA findings

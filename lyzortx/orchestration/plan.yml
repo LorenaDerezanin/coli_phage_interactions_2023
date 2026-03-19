@@ -139,7 +139,7 @@ tracks:
       - Output a summary CSV and findings in the lab notebook
     - id: TB04
       title: Characterize rescuer phages for narrow-susceptibility strains
-      status: pending
+      status: done
     - id: TB05
       title: Analyze dilution-response patterns per phage and per bacterial subgroup
       status: pending

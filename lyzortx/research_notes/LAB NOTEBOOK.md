@@ -1,3 +1,64 @@
+### 2026-03-17: TB04 rescuer phages for narrow-susceptibility strains
+
+#### What we implemented in TB04
+
+1. Added one reproducible TB04 analysis script:
+   `lyzortx/research_notes/ad_hoc_analysis_code/rescuer_phages_for_narrow_susceptibility.py`.
+2. Reused the TB03 low-susceptibility definition so the rescuer slice stays consistent with prior Track B work:
+   resolved strains with `<=3` lytic phages and no missing assays.
+3. Configured the script to write generated outputs under
+   `lyzortx/generated_outputs/rescuer_phages_for_narrow_susceptibility/`:
+   - `narrow_strain_rescuer_summary.csv`
+   - `rescuer_phage_summary.csv`
+   - `rescuer_phage_group_summary.csv`
+   - `tb04_summary.json`
+4. Used two operational rescuer modes:
+   - `exclusive`: the phage is the only lytic hit for that narrow strain
+   - `shared`: the phage is one of `2-3` lytic hits for that narrow strain
+
+#### TB04 output summary
+
+- Resolved narrow-susceptibility strains analyzed: `36`.
+- Rescue-mode split: `9` exclusive-rescue strains, `15` shared-rescue strains, and `12` non-rescued narrow strains.
+- Rescuer phages: `19 / 96` panel phages (`19.8%`) have at least one lytic hit in the resolved narrow-susceptibility
+  slice.
+- Top rescuer phages by resolved narrow-strain coverage:
+  - `AL505_Ev3`: `5` narrow strains rescued (`13.9%` of the narrow slice), `1` exclusive and `4` shared
+  - `NIC06_P2`: `4` narrow strains rescued, with the highest exclusive count (`3`)
+  - `536_P9`: `4` narrow strains rescued, all shared
+  - `DIJ07_P2`: `4` narrow strains rescued, all shared
+  - `LF82_P8`: `4` narrow strains rescued, all shared
+- The top five rescuer phages together cover `16 / 36` resolved narrow-susceptibility strains (`44.4%`).
+- Exclusive rescue remains strongly Myoviridae-skewed:
+  - `8 / 9` exclusive-rescue strains are rescued by Myoviridae phages
+  - the only non-Myoviridae exclusive rescuer is podophage `AN24_P4`
+- Morphotype/family concentration among rescuer phages:
+  - Myoviridae: `17` rescuer phages, `41` narrow-strain rescue events, `8` exclusive rescues
+  - Podoviridae: `2` rescuer phages, `4` narrow-strain rescue events, `1` exclusive rescue
+  - Siphoviridae: `0` rescuer phages
+  - Straboviridae: `11 / 11` panel phages are rescuer phages, contributing `25` narrow-strain rescue events and `7`
+    exclusive rescues
+- Highest narrow-hit concentration among materially active rescuer phages:
+  - `AN24_P4`: `3 / 43` total lysed strains are narrow (`6.98%`)
+  - `AL505_Ev3`: `5 / 160` (`3.13%`)
+  - `NIC06_P2`: `4 / 170` (`2.35%`)
+
+#### TB04 interpretation
+
+1. Narrow-strain rescue is concentrated in a minority of the panel (`19 / 96` phages), and `12 / 36` resolved narrow
+   strains are not rescued at all, so these hard cases are not being solved uniformly by broad host-range phages.
+2. Myoviridae, especially `Straboviridae`, still dominate the rescue landscape and provide nearly all exclusive saves,
+   which is consistent with the earlier single-lyser signal from the paper gist and TB02.
+3. The podophage `AN24_P4` matters despite modest absolute coverage because it has the highest narrow-hit concentration
+   and supplies the only non-Myoviridae exclusive rescue in the resolved slice. That makes it a targeted exception,
+   not noise.
+4. The top rescuers combine broad-rescue specialists (`AL505_Ev3`, `NIC06_P2`) with shared-support phages
+   (`536_P9`, `DIJ07_P2`, `LF82_P8`), suggesting that narrow-susceptibility coverage is partly driven by a small
+   backbone set plus a few strain-specific add-ons rather than one universally dominant rescuer.
+5. Immediate modeling implication: phage feature work should keep morphotype/family signals, but it also needs enough
+   phage-specific capacity to preserve exceptions like `AN24_P4` and the `NIC06_P2` exclusive-rescue pattern instead of
+   collapsing everything into a broad Myoviridae prior.
+
 ### 2026-03-17: TB03 hard-to-lyse strains by host traits
 
 #### What we implemented in TB03
