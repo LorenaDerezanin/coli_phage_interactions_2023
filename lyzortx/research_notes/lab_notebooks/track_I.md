@@ -23,3 +23,34 @@
 - `ST0.8` now preserves both downstream usability and source auditability: the normalized label remains available for
   modeling, while the raw VHRdb response fields survive unchanged in the ingested table for provenance checks and later
   harmonization work.
+
+### 2026-03-19: TI04 Tier A supervised ingestion priority
+
+#### What was implemented
+
+- Generalized `ST0.8` from a VHRdb-only ingest step to an ordered Tier A ingest step:
+  `lyzortx/pipeline/steel_thread_v0/steps/st08_tier_a_ingest_ablation.py`.
+- Added source-registry validation so the runnable step now enforces the planned Tier A source order
+  `VHRdb -> BASEL -> KlebPhaCol -> GPB` and only ingests sources that are both present in the registry and available on
+  disk.
+- Extended the exported ingest schema with `source_strength_label` so GPB-style potency or strength annotations survive
+  the Tier A ingest pass when present, while preserving the existing VHRdb source-fidelity fields.
+- Changed the ablation summary from a two-arm VHRdb-only table to a sequential cumulative summary with
+  `new_pairs_vs_internal` and `new_pairs_vs_previous_arm`.
+- Added regression tests covering registry-driven source ordering, generic Tier A normalization, sequential ablation
+  counts, and end-to-end output emission.
+
+#### Findings
+
+- Before this change, the repository had a concrete ingest path only for VHRdb even though the plan already committed to
+  a broader Tier A supervised sequence.
+- That mismatch would have encouraged ad hoc one-source additions later, which is exactly the wrong place to be loose:
+  source ordering needs to be executable before TI05 harmonization and TI09 ablations build on it.
+- The minimal generalization was to keep VHRdb-specific fidelity logic intact and define one shared contract for the
+  remaining Tier A sources instead of cloning four nearly identical ingest scripts.
+
+#### Interpretation
+
+- Track I now has a runnable Tier A ingest spine rather than a documentation-only priority list.
+- This is the right level of implementation for TI04: it encodes source order, cumulative ablation accounting, and
+  provenance hooks without pretending harmonization policy is already solved before TI05.
