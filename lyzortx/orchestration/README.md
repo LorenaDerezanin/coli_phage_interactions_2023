@@ -15,7 +15,7 @@ stateDiagram-v2
 
     issue_open --> codex_implement : codex-implement.yml <br> triggers on issue opened
 
-    codex_implement --> pr_created : Codex (gpt-5.4) implements <br> task and opens PR <br> with Closes #issue
+    codex_implement --> pr_created : Codex (gpt-5.4) implements task, <br> appends findings to LAB NOTEBOOK.md, <br> and opens PR with Closes #issue
 
     pr_created --> codex_review : codex-connector bot <br> auto-reviews PR <br> (GitHub App hook)
 
