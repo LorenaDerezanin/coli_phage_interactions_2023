@@ -24,7 +24,7 @@
 # AGENTS.md and CLAUDE.md Pairing
 
 - Whenever you create an `AGENTS.md` in a directory, also create an accompanying `CLAUDE.md` in the same directory that
-  imports it with `@AGENTS.md`.
+  imports it with `@AGENTS.md`. This ensures cross-compatibility between Claude, Cursor, and Codex.
 
 # Agent Scratch Space
 
