@@ -123,6 +123,14 @@ def _disagreement_flag(global_response: str, datasource_response: str) -> str:
     )
 
 
+def _first_non_blank_value(row: Dict[str, str], columns: Sequence[str], default: str = "") -> str:
+    for column in columns:
+        value = row.get(column, "")
+        if value:
+            return value
+    return default
+
+
 def normalize_vhrdb_row(row: Dict[str, str]) -> Dict[str, str]:
     global_response_raw = row.get("global_response", "")
     datasource_response_raw = row.get("datasource_response", "")
@@ -166,9 +174,9 @@ def normalize_generic_tier_a_row(row: Dict[str, str], source_id: str) -> Dict[st
             _disagreement_flag(global_response_raw, datasource_response_raw),
         ),
         "source_uncertainty": row.get("source_uncertainty", row.get("label_strict_confidence_tier", "")),
-        "source_strength_label": row.get(
-            "source_strength_label",
-            row.get("potency_label", row.get("lysis_strength", "")),
+        "source_strength_label": _first_non_blank_value(
+            row,
+            ("source_strength_label", "potency_label", "lysis_strength"),
         ),
     }
 
@@ -206,14 +214,15 @@ def build_tier_a_source_specs(args: argparse.Namespace, registry_rows: Dict[str,
         "klebphacol": args.klebphacol_path,
         "gpb": args.gpb_path,
     }
-    missing_in_registry = [source_id for source_id in TIER_A_SOURCE_PRIORITY if source_id not in registry_rows]
-    if missing_in_registry:
-        missing_text = ", ".join(sorted(missing_in_registry))
-        raise ValueError(f"Missing Tier A sources in source registry: {missing_text}")
+    candidate_source_ids = [
+        source_id
+        for source_id in TIER_A_SOURCE_PRIORITY
+        if source_id in registry_rows and path_by_source[source_id].exists()
+    ]
 
     wrong_tier = [
         source_id
-        for source_id in TIER_A_SOURCE_PRIORITY
+        for source_id in candidate_source_ids
         if registry_rows[source_id].get("confidence_tier", "") != "A"
     ]
     if wrong_tier:
@@ -221,10 +230,8 @@ def build_tier_a_source_specs(args: argparse.Namespace, registry_rows: Dict[str,
         raise ValueError(f"Expected Tier A confidence tier for sources: {wrong_text}")
 
     source_specs: List[TierASourceSpec] = []
-    for source_id in TIER_A_SOURCE_PRIORITY:
+    for source_id in candidate_source_ids:
         path = path_by_source[source_id]
-        if not path.exists():
-            continue
         if source_id == "vhrdb":
             source_specs.append(
                 TierASourceSpec(

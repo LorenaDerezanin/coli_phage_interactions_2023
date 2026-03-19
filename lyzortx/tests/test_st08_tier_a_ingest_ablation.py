@@ -61,6 +61,21 @@ def test_normalize_generic_tier_a_row_uses_source_defaults_and_strength_label() 
     assert normalized["source_strength_label"] == "high"
 
 
+def test_normalize_generic_tier_a_row_falls_back_when_standardized_strength_label_is_blank() -> None:
+    row = {
+        "source_native_record_id": "GPB123",
+        "bacteria": "b3",
+        "phage": "p3",
+        "label_hard_any_lysis": "Sensitive",
+        "label_strict_confidence_tier": "A",
+        "source_strength_label": "",
+        "potency_label": "medium",
+        "lysis_strength": "weak",
+    }
+    normalized = normalize_generic_tier_a_row(row, source_id="gpb")
+    assert normalized["source_strength_label"] == "medium"
+
+
 def test_ablation_arm_sizing_and_sequential_novel_pair_counts() -> None:
     merged_rows = [
         {
@@ -224,6 +239,69 @@ def test_source_registry_drives_tier_a_priority(tmp_path) -> None:
             "vhrdb_path": vhrdb_path,
             "basel_path": basel_path,
             "klebphacol_path": tmp_path / "missing_klebphacol.csv",
+            "gpb_path": tmp_path / "missing_gpb.csv",
+        },
+    )()
+
+    registry_rows = read_source_registry(registry_path)
+    specs = build_tier_a_source_specs(args, registry_rows)
+
+    assert [spec.source_id for spec in specs] == ["vhrdb", "basel"]
+
+
+def test_source_registry_allows_partial_tier_a_subset_runs(tmp_path) -> None:
+    registry_path = tmp_path / "source_registry.csv"
+    registry_path.write_text(
+        "\n".join(
+            [
+                "source_id,confidence_tier",
+                "vhrdb,A",
+                "basel,A",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    vhrdb_path = tmp_path / "vhrdb.csv"
+    vhrdb_path.write_text(
+        "\n".join(
+            [
+                "source_native_record_id,bacteria,phage,global_response,datasource_response,uncertainty",
+                "VH123,b1,p1,Resistant,Sensitive,B",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    basel_path = tmp_path / "basel.csv"
+    basel_path.write_text(
+        "\n".join(
+            [
+                "source_native_record_id,bacteria,phage,label_hard_any_lysis,label_strict_confidence_tier",
+                "BAS123,b2,p2,Sensitive,A",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    klebphacol_path = tmp_path / "klebphacol.csv"
+    klebphacol_path.write_text(
+        "\n".join(
+            [
+                "source_native_record_id,bacteria,phage,label_hard_any_lysis,label_strict_confidence_tier",
+                "KLEB123,b4,p4,Sensitive,A",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    args = type(
+        "Args",
+        (),
+        {
+            "vhrdb_path": vhrdb_path,
+            "basel_path": basel_path,
+            "klebphacol_path": klebphacol_path,
             "gpb_path": tmp_path / "missing_gpb.csv",
         },
     )()
