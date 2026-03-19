@@ -1,9 +1,12 @@
 """Unit tests for ST0.8 VHRdb ingest and ablation summaries."""
 
+import csv
+
 from lyzortx.pipeline.steel_thread_v0.steps.st08_vhrdb_ingest_ablation import (
     build_internal_rows,
     compute_ablation_summary,
     compute_lift_failure_rows,
+    main,
     normalize_vhrdb_row,
 )
 
@@ -13,14 +16,14 @@ def test_normalize_vhrdb_row_preserves_source_fidelity_fields() -> None:
         "source_native_record_id": "VH123",
         "bacteria": "b1",
         "phage": "p1",
-        "global_response": "1",
-        "datasource_response": "0",
+        "global_response": "Resistant",
+        "datasource_response": "Sensitive",
         "uncertainty": "A",
     }
     normalized = normalize_vhrdb_row(row)
     assert normalized["source_native_record_id"] == "VH123"
-    assert normalized["source_global_response"] == "1"
-    assert normalized["source_datasource_response"] == "0"
+    assert normalized["global_response"] == "Resistant"
+    assert normalized["datasource_response"] == "Sensitive"
     assert normalized["source_disagreement_flag"] == "1"
     assert normalized["source_uncertainty"] == "A"
 
@@ -112,3 +115,55 @@ def test_build_internal_rows_sets_source_fields() -> None:
     out = build_internal_rows(internal)
     assert out[0]["source_system"] == "internal"
     assert out[0]["source_native_record_id"] == ""
+    assert out[0]["global_response"] == ""
+    assert out[0]["datasource_response"] == ""
+
+
+def test_main_preserves_raw_vhrdb_response_columns(tmp_path) -> None:
+    internal_path = tmp_path / "internal.csv"
+    internal_path.write_text(
+        "\n".join(
+            [
+                "pair_id,bacteria,phage,label_hard_any_lysis,label_strict_confidence_tier",
+                "b0__p0,b0,p0,1,A",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    vhrdb_path = tmp_path / "vhrdb.csv"
+    vhrdb_path.write_text(
+        "\n".join(
+            [
+                "source_native_record_id,bacteria,phage,global_response,datasource_response,uncertainty,datasource_id",
+                "VH123,b1,p1,Resistant,Sensitive,B,upstream_a",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "out"
+
+    main(
+        [
+            "--internal-pair-table-path",
+            str(internal_path),
+            "--vhrdb-path",
+            str(vhrdb_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    with (output_dir / "st08_vhrdb_ingested_pairs.csv").open("r", newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    vhrdb_row = next(row for row in rows if row["source_system"] == "vhrdb")
+    assert "global_response" in vhrdb_row
+    assert "datasource_response" in vhrdb_row
+    assert vhrdb_row["global_response"] == "Resistant"
+    assert vhrdb_row["datasource_response"] == "Sensitive"
+    assert vhrdb_row["label_hard_any_lysis"] == "resistant"
+    assert vhrdb_row["source_datasource_id"] == "upstream_a"
+    assert vhrdb_row["source_native_record_id"] == "VH123"
+    assert vhrdb_row["source_disagreement_flag"] == "1"
