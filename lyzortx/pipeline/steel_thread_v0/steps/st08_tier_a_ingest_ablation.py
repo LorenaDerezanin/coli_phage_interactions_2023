@@ -28,7 +28,6 @@ REQUIRED_GENERIC_TIER_A_COLUMNS = (
     "bacteria",
     "phage",
     "label_hard_any_lysis",
-    "label_strict_confidence_tier",
 )
 REQUIRED_SOURCE_REGISTRY_COLUMNS = ("source_id", "confidence_tier")
 
@@ -157,6 +156,15 @@ def normalize_vhrdb_row(row: Dict[str, str]) -> Dict[str, str]:
 def normalize_generic_tier_a_row(row: Dict[str, str], source_id: str) -> Dict[str, str]:
     global_response_raw = row.get("global_response", "")
     datasource_response_raw = row.get("datasource_response", "")
+    disagreement_flag = _first_non_blank_value(
+        row,
+        ("source_disagreement_flag",),
+        default=_disagreement_flag(global_response_raw, datasource_response_raw),
+    )
+    source_uncertainty = _first_non_blank_value(
+        row,
+        ("source_uncertainty", "label_strict_confidence_tier"),
+    )
     pair_id = f"{row['bacteria']}__{row['phage']}"
     return {
         "pair_id": pair_id,
@@ -169,11 +177,8 @@ def normalize_generic_tier_a_row(row: Dict[str, str], source_id: str) -> Dict[st
         "datasource_response": datasource_response_raw,
         "source_datasource_id": _resolve_datasource_identifier(row, source_id),
         "source_native_record_id": row.get("source_native_record_id", ""),
-        "source_disagreement_flag": row.get(
-            "source_disagreement_flag",
-            _disagreement_flag(global_response_raw, datasource_response_raw),
-        ),
-        "source_uncertainty": row.get("source_uncertainty", row.get("label_strict_confidence_tier", "")),
+        "source_disagreement_flag": disagreement_flag,
+        "source_uncertainty": source_uncertainty,
         "source_strength_label": _first_non_blank_value(
             row,
             ("source_strength_label", "potency_label", "lysis_strength"),

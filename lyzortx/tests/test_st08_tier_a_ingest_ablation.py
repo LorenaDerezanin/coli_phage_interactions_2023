@@ -8,6 +8,7 @@ from lyzortx.pipeline.steel_thread_v0.steps.st08_tier_a_ingest_ablation import (
     build_tier_a_source_specs,
     compute_ablation_summary,
     compute_lift_failure_rows,
+    load_tier_a_rows,
     main,
     normalize_generic_tier_a_row,
     normalize_vhrdb_row,
@@ -74,6 +75,23 @@ def test_normalize_generic_tier_a_row_falls_back_when_standardized_strength_labe
     }
     normalized = normalize_generic_tier_a_row(row, source_id="gpb")
     assert normalized["source_strength_label"] == "medium"
+
+
+def test_normalize_generic_tier_a_row_recomputes_blank_optional_source_fields() -> None:
+    row = {
+        "source_native_record_id": "BAS124",
+        "bacteria": "b4",
+        "phage": "p4",
+        "label_hard_any_lysis": "Sensitive",
+        "label_strict_confidence_tier": "B",
+        "global_response": "Sensitive",
+        "datasource_response": "Resistant",
+        "source_disagreement_flag": "",
+        "source_uncertainty": "",
+    }
+    normalized = normalize_generic_tier_a_row(row, source_id="basel")
+    assert normalized["source_disagreement_flag"] == "1"
+    assert normalized["source_uncertainty"] == "B"
 
 
 def test_ablation_arm_sizing_and_sequential_novel_pair_counts() -> None:
@@ -310,6 +328,40 @@ def test_source_registry_allows_partial_tier_a_subset_runs(tmp_path) -> None:
     specs = build_tier_a_source_specs(args, registry_rows)
 
     assert [spec.source_id for spec in specs] == ["vhrdb", "basel"]
+
+
+def test_load_tier_a_rows_allows_generic_inputs_without_confidence_tier_column(tmp_path) -> None:
+    generic_path = tmp_path / "basel.csv"
+    generic_path.write_text(
+        "\n".join(
+            [
+                "source_native_record_id,bacteria,phage,label_hard_any_lysis",
+                "BAS123,b2,p2,Sensitive",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    specs = build_tier_a_source_specs(
+        type(
+            "Args",
+            (),
+            {
+                "vhrdb_path": tmp_path / "missing_vhrdb.csv",
+                "basel_path": generic_path,
+                "klebphacol_path": tmp_path / "missing_klebphacol.csv",
+                "gpb_path": tmp_path / "missing_gpb.csv",
+            },
+        )(),
+        {"basel": {"source_id": "basel", "confidence_tier": "A"}},
+    )
+
+    rows = load_tier_a_rows(specs)
+
+    assert len(rows) == 1
+    assert rows[0]["source_system"] == "basel"
+    assert rows[0]["label_hard_any_lysis"] == "sensitive"
+    assert rows[0]["label_strict_confidence_tier"] == ""
 
 
 def test_main_preserves_vhrdb_source_fidelity_and_orders_tier_a_ablation(tmp_path) -> None:
