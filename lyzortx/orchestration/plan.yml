@@ -403,7 +403,7 @@ tracks:
       implemented_in: lyzortx/research_notes/external_data/source_registry.csv
     - id: TI03
       title: For VHRdb ingest, keep source-fidelity fields
-      status: pending
+      status: done
       acceptance_criteria:
       - Ingested VHRdb rows preserve raw global_response and datasource_response without
         case folding

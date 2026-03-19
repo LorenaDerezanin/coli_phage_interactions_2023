@@ -207,7 +207,7 @@ graph LR
       `lyzortx/research_notes/LITERATURE.md`.
 - [x] Build source_registry.csv for all external sources. Implemented in
       `lyzortx/research_notes/external_data/source_registry.csv`.
-- [ ] For VHRdb ingest, keep source-fidelity fields
+- [x] For VHRdb ingest, keep source-fidelity fields
 - [ ] Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
 - [ ] Define harmonization protocol for Tier A datasets
 - [ ] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata
