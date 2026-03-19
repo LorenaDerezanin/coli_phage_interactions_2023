@@ -119,6 +119,9 @@
    `lyzortx/research_notes/ad_hoc_analysis_code/dilution_response_patterns.py`.
 2. Reused the Track A dilution-preserving outputs so the analysis runs on canonical pair labels plus the underlying
    pair-by-dilution observation summary instead of recomputing this structure ad hoc.
+   Prerequisite: generate the required Track A label artifacts first with
+   `python3 -m lyzortx.pipeline.track_a.run_track_a --step build`, or pass equivalent custom CSVs via
+   `--pair-labels-path` and `--pair-dilution-summary-path`.
 3. Configured the script to write generated outputs under
    `lyzortx/generated_outputs/dilution_response_patterns/`:
    - `pair_dilution_response_features.csv`
@@ -187,4 +190,3 @@
 5. Immediate modeling implication: future label and modeling work should preserve dilution potency and multi-dilution
    support as first-class targets or auxiliary tasks. A binary `any_lysis` label would discard signal that clearly
    separates both phages and host subgroups.
-

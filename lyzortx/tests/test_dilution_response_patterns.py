@@ -1,12 +1,18 @@
+import argparse
+
 import pandas as pd
 import pytest
 
 from lyzortx.research_notes.ad_hoc_analysis_code.dilution_response_patterns import (
+    DEFAULT_PAIR_DILUTION_SUMMARY_PATH,
+    DEFAULT_PAIR_LABELS_PATH,
+    TRACK_A_BUILD_COMMAND,
     add_bh_q_values,
     build_bacterial_subgroup_dilution_response_summary,
     build_pair_response_features,
     build_phage_dilution_response_summary,
     prepare_host_metadata,
+    validate_required_inputs,
 )
 
 
@@ -145,3 +151,31 @@ def test_build_bacterial_subgroup_dilution_response_summary_reports_field_names(
     assert phylogroup_a["high_potency_rate"] == pytest.approx(1 / 3)
     assert st_10["multi_dilution_support_rate"] == pytest.approx(2 / 3)
     assert serotype_o1h1["tested_for_high_potency_enrichment"] == True
+
+
+def test_validate_required_inputs_explains_track_a_prerequisite(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    host_metadata_path = tmp_path / "host.csv"
+    phage_metadata_path = tmp_path / "phage.csv"
+    host_metadata_path.write_text("bacteria;Clermont_Phylo;ST_Warwick;O-type;H-type\n", encoding="utf-8")
+    phage_metadata_path.write_text("phage;Morphotype;Family\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(
+        pair_labels_path=DEFAULT_PAIR_LABELS_PATH,
+        pair_dilution_summary_path=DEFAULT_PAIR_DILUTION_SUMMARY_PATH,
+        host_metadata_path=host_metadata_path,
+        phage_metadata_path=phage_metadata_path,
+    )
+
+    with pytest.raises(FileNotFoundError, match="TB05 reuses canonical Track A outputs"):
+        validate_required_inputs(args)
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        validate_required_inputs(args)
+
+    message = str(exc_info.value)
+    assert str(DEFAULT_PAIR_LABELS_PATH) in message
+    assert str(DEFAULT_PAIR_DILUTION_SUMMARY_PATH) in message
+    assert TRACK_A_BUILD_COMMAND in message

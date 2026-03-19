@@ -25,6 +25,11 @@ from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import
 
 HIGH_POTENCY_DILUTIONS = {-4, -2}
 MIN_LYTIC_PAIRS_FOR_ENRICHMENT_TEST = 40
+DEFAULT_PAIR_LABELS_PATH = Path("lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv")
+DEFAULT_PAIR_DILUTION_SUMMARY_PATH = Path("lyzortx/generated_outputs/track_a/labels/track_a_pair_dilution_summary.csv")
+DEFAULT_HOST_METADATA_PATH = Path("data/genomics/bacteria/picard_collection.csv")
+DEFAULT_PHAGE_METADATA_PATH = Path("data/genomics/phages/guelin_collection.csv")
+TRACK_A_BUILD_COMMAND = "python3 -m lyzortx.pipeline.track_a.run_track_a --step build"
 SUBGROUP_FIELDS: Sequence[tuple[str, str]] = (
     ("host_phylogroup", "phylogroup"),
     ("host_st", "ST"),
@@ -33,29 +38,35 @@ SUBGROUP_FIELDS: Sequence[tuple[str, str]] = (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog=(
+            "TB05 reuses canonical Track A label artifacts. On a fresh checkout, generate them first with:\n"
+            f"  {TRACK_A_BUILD_COMMAND}"
+        ),
+    )
     parser.add_argument(
         "--pair-labels-path",
         type=Path,
-        default=Path("lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv"),
+        default=DEFAULT_PAIR_LABELS_PATH,
         help="Track A pair label set with dilution potency outputs.",
     )
     parser.add_argument(
         "--pair-dilution-summary-path",
         type=Path,
-        default=Path("lyzortx/generated_outputs/track_a/labels/track_a_pair_dilution_summary.csv"),
+        default=DEFAULT_PAIR_DILUTION_SUMMARY_PATH,
         help="Track A pair+dilution summary table.",
     )
     parser.add_argument(
         "--host-metadata-path",
         type=Path,
-        default=Path("data/genomics/bacteria/picard_collection.csv"),
+        default=DEFAULT_HOST_METADATA_PATH,
         help="Host metadata CSV (semicolon-delimited).",
     )
     parser.add_argument(
         "--phage-metadata-path",
         type=Path,
-        default=Path("data/genomics/phages/guelin_collection.csv"),
+        default=DEFAULT_PHAGE_METADATA_PATH,
         help="Phage metadata CSV (semicolon-delimited).",
     )
     parser.add_argument(
@@ -71,6 +82,35 @@ def parse_args() -> argparse.Namespace:
         help="Minimum lytic-pair count required before comparing a phage/subgroup against the rest.",
     )
     return parser.parse_args()
+
+
+def validate_required_inputs(args: argparse.Namespace) -> None:
+    required_inputs = (
+        ("pair labels", args.pair_labels_path),
+        ("pair+dilution summary", args.pair_dilution_summary_path),
+        ("host metadata", args.host_metadata_path),
+        ("phage metadata", args.phage_metadata_path),
+    )
+    missing_inputs = [(label, path) for label, path in required_inputs if not path.exists()]
+    if not missing_inputs:
+        return
+
+    missing_lines = "\n".join(f"- {label}: {path}" for label, path in missing_inputs)
+    track_a_inputs_missing = any(
+        path in {DEFAULT_PAIR_LABELS_PATH, DEFAULT_PAIR_DILUTION_SUMMARY_PATH} for _, path in missing_inputs
+    )
+    if track_a_inputs_missing:
+        raise FileNotFoundError(
+            "Missing required TB05 inputs:\n"
+            f"{missing_lines}\n\n"
+            "TB05 reuses canonical Track A outputs, which are not committed under "
+            "`lyzortx/generated_outputs/track_a/`. Generate them first with:\n"
+            f"  {TRACK_A_BUILD_COMMAND}\n\n"
+            "If you already have equivalent inputs elsewhere, pass them explicitly with "
+            "`--pair-labels-path` and `--pair-dilution-summary-path`."
+        )
+
+    raise FileNotFoundError(f"Missing required TB05 inputs:\n{missing_lines}")
 
 
 def serialize_dilution(value: object) -> str:
@@ -428,6 +468,7 @@ def build_manifest(
 
 def main() -> None:
     args = parse_args()
+    validate_required_inputs(args)
     ensure_directory(args.output_dir)
 
     pair_labels = pd.read_csv(args.pair_labels_path)
