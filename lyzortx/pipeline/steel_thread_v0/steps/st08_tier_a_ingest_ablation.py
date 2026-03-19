@@ -273,15 +273,13 @@ def compute_ablation_summary(
 
     for source_id in tier_a_priority:
         source_pairs = {key_for_pair(row) for row in merged_rows if row["source_system"] == source_id}
-        if not source_pairs:
-            continue
         next_pairs = cumulative_pairs | source_pairs
         output.append(
             {
                 "arm": f"plus_{source_id}",
                 "source_system": source_id,
                 "pair_count": len(next_pairs),
-                "new_pairs_vs_internal": len(source_pairs - internal_pairs),
+                "new_pairs_vs_internal": len(next_pairs - internal_pairs),
                 "new_pairs_vs_previous_arm": len(next_pairs - cumulative_pairs),
             }
         )

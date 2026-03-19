@@ -1,6 +1,7 @@
 """Unit tests for ST0.8 Tier A ingest and ablation summaries."""
 
 import csv
+import json
 
 from lyzortx.pipeline.steel_thread_v0.steps.st08_tier_a_ingest_ablation import (
     build_internal_rows,
@@ -93,8 +94,30 @@ def test_ablation_arm_sizing_and_sequential_novel_pair_counts() -> None:
     assert rows[1]["new_pairs_vs_internal"] == 1
     assert rows[1]["new_pairs_vs_previous_arm"] == 1
     assert rows[2]["pair_count"] == 3
-    assert rows[2]["new_pairs_vs_internal"] == 1
+    assert rows[2]["new_pairs_vs_internal"] == 2
     assert rows[2]["new_pairs_vs_previous_arm"] == 1
+
+
+def test_ablation_summary_preserves_available_zero_row_sources() -> None:
+    merged_rows = [
+        {
+            "pair_id": "b1__p1",
+            "bacteria": "b1",
+            "phage": "p1",
+            "source_system": "internal",
+        },
+        {
+            "pair_id": "b2__p2",
+            "bacteria": "b2",
+            "phage": "p2",
+            "source_system": "vhrdb",
+        },
+    ]
+    rows = compute_ablation_summary(merged_rows, tier_a_priority=["vhrdb", "basel"])
+    assert [row["arm"] for row in rows] == ["internal_only", "plus_vhrdb", "plus_basel"]
+    assert rows[2]["pair_count"] == 2
+    assert rows[2]["new_pairs_vs_internal"] == 1
+    assert rows[2]["new_pairs_vs_previous_arm"] == 0
 
 
 def test_lift_failure_counts_by_source_datasource_tier_and_quality() -> None:
@@ -296,3 +319,74 @@ def test_main_preserves_vhrdb_source_fidelity_and_orders_tier_a_ablation(tmp_pat
     assert [row["arm"] for row in ablation_rows] == ["internal_only", "plus_vhrdb", "plus_basel"]
     assert ablation_rows[1]["new_pairs_vs_previous_arm"] == "1"
     assert ablation_rows[2]["new_pairs_vs_previous_arm"] == "1"
+    assert ablation_rows[2]["new_pairs_vs_internal"] == "2"
+
+
+def test_main_keeps_zero_row_tier_a_sources_in_ablation_summary_and_manifest(tmp_path) -> None:
+    internal_path = tmp_path / "internal.csv"
+    internal_path.write_text(
+        "\n".join(
+            [
+                "pair_id,bacteria,phage,label_hard_any_lysis,label_strict_confidence_tier",
+                "b0__p0,b0,p0,1,A",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    registry_path = tmp_path / "source_registry.csv"
+    registry_path.write_text(
+        "\n".join(
+            [
+                "source_id,confidence_tier",
+                "vhrdb,A",
+                "basel,A",
+                "klebphacol,A",
+                "gpb,A",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    vhrdb_path = tmp_path / "vhrdb.csv"
+    vhrdb_path.write_text(
+        "\n".join(
+            [
+                "source_native_record_id,bacteria,phage,global_response,datasource_response,uncertainty",
+                "VH123,b1,p1,Resistant,Sensitive,B",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    basel_path = tmp_path / "basel.csv"
+    basel_path.write_text(
+        "source_native_record_id,bacteria,phage,label_hard_any_lysis,label_strict_confidence_tier\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "out"
+
+    main(
+        [
+            "--internal-pair-table-path",
+            str(internal_path),
+            "--source-registry-path",
+            str(registry_path),
+            "--vhrdb-path",
+            str(vhrdb_path),
+            "--basel-path",
+            str(basel_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    with (output_dir / "st08_ablation_summary.csv").open("r", newline="", encoding="utf-8") as handle:
+        ablation_rows = list(csv.DictReader(handle))
+    assert [row["arm"] for row in ablation_rows] == ["internal_only", "plus_vhrdb", "plus_basel"]
+    assert ablation_rows[2]["pair_count"] == "2"
+    assert ablation_rows[2]["new_pairs_vs_internal"] == "1"
+    assert ablation_rows[2]["new_pairs_vs_previous_arm"] == "0"
+
+    manifest = json.loads((output_dir / "st08_tier_a_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["active_tier_a_sources"] == ["vhrdb", "basel"]
