@@ -66,7 +66,7 @@ tracks:
       acceptance_criteria:
       - Each holdout miss strain in error_analysis.csv has at least one documented
         hypothesis
-      - Hypotheses are written to the lab notebook with actionable next steps
+      - Hypotheses are written to the track lab notebook with actionable next steps
   A:
     name: Data Integrity and Labeling
     description: Canonical IDs, label policies, cohort contracts, and replicate-aware
@@ -136,7 +136,7 @@ tracks:
       - Identify strains with zero or very few lytic phages in the interaction matrix
       - Report which host metadata fields (serotype, phylogroup, ST) correlate with
         low susceptibility
-      - Output a summary CSV and findings in the lab notebook
+      - Output a summary CSV and findings in the track lab notebook
     - id: TB04
       title: Characterize rescuer phages for narrow-susceptibility strains
       status: done
