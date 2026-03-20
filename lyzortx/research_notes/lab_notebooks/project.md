@@ -135,3 +135,83 @@ The most pragmatic approach is to start with the lowest-effort, highest-value ta
    to script a process to download all available phage-host pairs and integrate them as "known positive" in our dataset.
 2. **Mid-Term:** Investigate the curated databases at the CNCB.
 3. **Long-Term:** Scope the effort required to re-process a full screening project from the SRA or GWH.
+
+### 2026-03-21: Strategic plan revision — v1 push
+
+#### Context
+
+Steel thread v0 is complete and all go/no-go gates pass. The v0 logistic regression on metadata features achieves 84.6%
+top-3 hit rate (AUC 0.827) on the holdout set. However, the model has a "popular phage" bias: it recommends the same
+broad-range Myoviridae for almost every strain because it has zero compatibility signal between specific phage RBPs and
+specific host receptors. The strict-confidence slice drops to 62.5%.
+
+Meanwhile, the repo contains rich genomic data that is completely unused: 138 defense system subtypes
+(`370+host_defense_systems_subtypes.csv`), 12 outer-membrane receptor variant clusters
+(`blast_results_cured_clusters=99_wide.tsv`), per-phage RBP annotations (`RBP_list.csv`), 97 complete phage genomes
+(`FNA/`), UMAP phylogenomic embeddings (`coli_umap_8_dims.tsv`), and a pangenome matrix (`unique_host_genes.csv`).
+
+This revision refocuses the plan to maximize prediction accuracy by exploiting this untapped data, targeting mid-May 2026
+as an aspirational deadline for discussion-ready results.
+
+#### What changed in the plan
+
+**Tracks kept as-is (complete):** ST (11/11), A (10/10).
+
+**Tracks cut or radically downsized:**
+
+- **B** (EDA): marked done. TB06 (uncertainty map) and TB07 (mechanistic hypotheses) cut — TB07 is subsumed by actually
+  building features in C/D/E; TB06 is nice-to-have, not blocking.
+- **F** (Splits/Eval): 12 tasks → 2 tasks. ST03 already provides leakage-safe host-group and phage-family holdouts. Keep
+  only: lock existing split as v1 benchmark + bootstrap CIs.
+- **G** (Modeling): 14 tasks → 4 tasks. Two-stage mechanistic decomposition (P(adsorption) × P(lysis|adsorption))
+  requires labeled adsorption outcomes that don't exist. Multi-task learning for strength/potency is lower-ROI than
+  fixing the core binary prediction. Keep: LightGBM model + calibration + ablation suite + SHAP explanations.
+- **H** (Cocktail): 8 tasks → 2 tasks. The heuristic recommender works at 84.6%. Optimization-based cocktail design is a
+  later concern. Keep: existing top-3 + explained recommendations with SHAP features.
+- **J** (Reproducibility): 7 tasks → 2 tasks. Keep: one-command regeneration + environment freeze.
+- **K** (Wet-Lab): eliminated. No wet-lab access exists. Held-out strain evaluation serves the same credibility purpose.
+
+**Tracks refocused (critical path):**
+
+- **C** (Host Features): 6 tasks → 4 tasks. Defense subtypes (138 binary cols from defense_finder), OMP receptor variants
+  (12 proteins with cluster IDs), capsule/LPS detail, and UMAP embeddings.
+- **D** (Phage Features): 7 tasks → 3 tasks. RBP features from `RBP_list.csv`, k-mer embeddings from 97 FNA genomes
+  (tetranucleotide SVD), phage distance embedding from VIRIDIC tree.
+- **E** (Pairwise Features): 4 tasks → 3 tasks, moved to stage 1. RBP×receptor compatibility, defense evasion proxy
+  (collaborative filtering from training data), phylogenetic distance to isolation host.
+
+**Tracks kept at full scope:** I (External Data) — full Tier A pipeline: VHRdb + BASEL + KlebPhaCol + GPB ingestion with
+strict ablation sequence.
+
+**New track added:** P (Presentation) — 3 tasks: digital phagogram visualization, panel coverage heatmap, feature lift
+visualization.
+
+**Net effect:** 101 tasks → ~37 tasks. The cut tasks are done, deferred, or eliminated as low-ROI.
+
+#### Execution timeline (aspirational, ~8 weeks)
+
+- **Weeks 1–3 (Phase 1):** Feature engineering sprint. Expand pair table from ~28 metadata features to ~160–200 genomic
+  features across C, D, E.
+- **Weeks 2–6 (Parallel):** External data integration (Track I). Full Tier A ingestion with ablations.
+- **Weeks 3–5 (Phase 2):** Model upgrade. LightGBM replacing logistic regression, calibration, ablation suite, SHAP.
+- **Weeks 5–7 (Phase 3):** Evaluation and presentation artifacts. Bootstrap CIs, before/after comparison, explained
+  recommendations, visualizations.
+- **Week 8 (Phase 4):** Buffer. One-command reproducibility, environment freeze.
+
+#### Expected performance targets
+
+| Metric | v0 (current) | v1 (target) | Source of lift |
+|--------|-------------|-------------|----------------|
+| Top-3 hit rate (full-label) | 84.6% | 90–93% | OMP receptor + RBP compatibility resolves "popular phage" bias |
+| Top-3 hit rate (strict-conf) | 62.5% | 72–78% | Defense subtypes provide discriminative signal |
+| AUC | 0.827 | 0.87–0.90 | GBM captures nonlinear defense×phage interactions |
+| Brier score | 0.171 | 0.12–0.15 | Better feature set + GBM calibration |
+
+#### Risk factors
+
+1. RBP data is sparse — not all phages have annotations. Handle with indicator features.
+2. Defense subtype sparsity — many subtypes in <5 strains. Aggressive variance filtering needed.
+3. E2 (defense evasion proxy) leakage risk — must compute strictly on training fold per CV split.
+4. RBP-receptor lookup curation — requires ~2–3 days of manual literature work.
+5. GBM overfitting — with ~200 features and 29K training pairs, need careful regularization.
+6. Pangenome data deferred — `unique_host_genes.csv` (7,511 records) parked unless defense+receptor features plateau.
