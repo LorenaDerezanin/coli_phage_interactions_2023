@@ -62,6 +62,8 @@
 - Never push directly to main. All changes go through pull requests.
 - Create a feature branch, push it, and open a PR.
 - Always rebase on main before starting work — whether implementing a new task or addressing review feedback.
+- Always rebase on main before pushing. For plain git: `git fetch origin main && git rebase origin/main`. For Graphite
+  stacks: `gt stack restack` to rebase the entire stack on its trunk.
 
 # PR and Issue Linkage Policy
 
