@@ -8,6 +8,7 @@ from lyzortx.orchestration.ci_token_usage import (
     extract_token_count,
     format_table,
     strip_ansi,
+    strip_log_prefix,
 )
 
 
@@ -23,6 +24,19 @@ class TestStripAnsi:
 
     def test_multiple_codes(self) -> None:
         assert strip_ansi("\x1b[36mfoo\x1b[0m \x1b[33mbar\x1b[0m") == "foo bar"
+
+
+class TestStripLogPrefix:
+    def test_strips_gh_actions_prefix(self) -> None:
+        line = "Implement Task\tUNKNOWN STEP\t2026-03-19T22:22:13.3336984Z 126,700"
+        assert strip_log_prefix(line) == "126,700"
+
+    def test_passthrough_plain_text(self) -> None:
+        assert strip_log_prefix("no prefix here") == "no prefix here"
+
+    def test_strips_prefix_with_content(self) -> None:
+        line = "Job\tStep\t2026-01-01T00:00:00.0Z hello world"
+        assert strip_log_prefix(line) == "hello world"
 
 
 class TestExtractTokenCount:
@@ -54,10 +68,22 @@ class TestExtractTokenCount:
         log = "token used\n500\n"
         assert extract_token_count(log) == 500
 
-    def test_intervening_blank_line_still_finds_number(self) -> None:
-        # The function looks at ALL subsequent lines, not just the immediate next.
-        log = "tokens used\n\n7777\n"
-        assert extract_token_count(log) == 7777
+    def test_with_gh_actions_log_prefix(self) -> None:
+        """Real-world format: timestamp prefix must not be matched as the token count."""
+        log = (
+            "Implement Task\tUNKNOWN STEP\t2026-03-19T22:22:13.3336767Z \x1b[3m\x1b[35mtokens used\x1b[0m\x1b[0m\n"
+            "Implement Task\tUNKNOWN STEP\t2026-03-19T22:22:13.3336984Z 126,700\n"
+            "Implement Task\tUNKNOWN STEP\t2026-03-19T22:22:13.3342070Z Implemented TB05\n"
+        )
+        assert extract_token_count(log) == 126700
+
+    def test_does_not_match_year_in_timestamp(self) -> None:
+        """The year 2026 in a timestamp must not be mistaken for a token count."""
+        log = (
+            "Job\tStep\t2026-03-19T22:22:13Z tokens used\n"
+            "Job\tStep\t2026-03-19T22:22:14Z 83,123\n"
+        )
+        assert extract_token_count(log) == 83123
 
 
 class TestDetectWaste:

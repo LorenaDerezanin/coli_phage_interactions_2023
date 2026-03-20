@@ -24,10 +24,14 @@ LIFECYCLE_WORKFLOW = "codex-pr-lifecycle.yml"
 # Regex to strip ANSI escape codes from log output.
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
+# GitHub Actions log lines have a prefix: "Job\tStep\tTimestampZ "
+# Strip this to get just the content portion.
+GH_LOG_PREFIX_RE = re.compile(r"^[^\t]*\t[^\t]*\t\S+Z\s*")
+
 # Pattern to find the token-usage line and extract the count from the NEXT line.
 # Codex logs: a line containing "tokens used", then the next line has the number.
 TOKEN_HEADER_RE = re.compile(r"tokens?\s+used", re.IGNORECASE)
-TOKEN_VALUE_RE = re.compile(r"(\d[\d,]*)")
+TOKEN_VALUE_RE = re.compile(r"^(\d[\d,]*)$")
 
 # Waste-detection patterns.
 WASTE_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -52,24 +56,33 @@ def strip_ansi(text: str) -> str:
     return ANSI_RE.sub("", text)
 
 
+def strip_log_prefix(line: str) -> str:
+    """Remove the GitHub Actions log prefix (Job\\tStep\\tTimestamp) from a line."""
+    return GH_LOG_PREFIX_RE.sub("", line)
+
+
 def extract_token_count(log_text: str) -> int | None:
     """Return the token count from Codex log output, or None if not found.
 
     The Codex action logs a line containing "tokens used" and then the actual
-    count appears on the following line.
+    count appears on the following line.  Each log line is prefixed with
+    ``Job\\tStep\\tTimestampZ`` which must be stripped before matching numbers.
     """
-    lines = strip_ansi(log_text).splitlines()
+    raw_lines = strip_ansi(log_text).splitlines()
+    # Strip GitHub Actions log prefix from every line so timestamps don't
+    # produce false-positive number matches (e.g. "2026" from a date).
+    lines = [strip_log_prefix(line) for line in raw_lines]
     for i, line in enumerate(lines):
         if TOKEN_HEADER_RE.search(line):
-            # Look at the remaining lines after the header for the first number.
+            # Look at subsequent lines for a standalone number.
             for subsequent in lines[i + 1 :]:
-                match = TOKEN_VALUE_RE.search(subsequent)
+                content = subsequent.strip()
+                match = TOKEN_VALUE_RE.match(content)
                 if match:
                     return int(match.group(1).replace(",", ""))
-            # If the number is on the same line as the header, try that too.
-            match = TOKEN_VALUE_RE.search(line)
-            if match:
-                return int(match.group(1).replace(",", ""))
+                # Stop if we hit non-empty non-numeric content.
+                if content:
+                    break
     return None
 
 
@@ -106,6 +119,8 @@ class RunInfo:
     status: str
     conclusion: str
     head_branch: str
+    display_title: str = ""
+    event: str = ""
     tokens: int | None = None
     waste: WasteReport | None = None
 
@@ -150,7 +165,7 @@ def list_runs(workflow: str, limit: int = 50) -> list[dict]:
         "run", "list",
         "--workflow", workflow,
         "--limit", str(limit),
-        "--json", "databaseId,workflowName,createdAt,status,conclusion,headBranch",
+        "--json", "databaseId,workflowName,createdAt,status,conclusion,headBranch,displayTitle,event",
     ])
     if not raw.strip():
         return []
@@ -188,19 +203,51 @@ def find_issue_from_pr_body(body: str) -> int | None:
 # ---------------------------------------------------------------------------
 
 
+def _build_run_info(entry: dict) -> RunInfo:
+    """Create a RunInfo from a gh run list JSON entry."""
+    return RunInfo(
+        run_id=str(entry["databaseId"]),
+        workflow=entry["workflowName"],
+        date=entry["createdAt"][:10],
+        status=entry["status"],
+        conclusion=entry.get("conclusion") or "",
+        head_branch=entry.get("headBranch") or "",
+        display_title=entry.get("displayTitle") or "",
+        event=entry.get("event") or "",
+    )
+
+
+def _run_association(run: RunInfo) -> str:
+    """Derive a short PR/Issue label for a run.
+
+    Implement runs trigger on ``main`` so we can't look up the PR by branch.
+    Instead we extract a task ID from the display title (e.g. ``[ORCH][TB05] ...``).
+    Lifecycle runs have a real feature branch we can look up.
+    """
+    # For lifecycle runs, look up the PR by branch.
+    if run.head_branch and run.head_branch != "main":
+        pr = find_pr_for_branch(run.head_branch)
+        if pr:
+            issue = find_issue_from_pr_body(pr.get("body", ""))
+            label = f"PR#{pr['number']}"
+            if issue:
+                label += f" / Issue#{issue}"
+            return label
+
+    # For implement runs, extract task ID from display title.
+    m = re.search(r"\[ORCH\]\[(\w+)\]", run.display_title)
+    if m:
+        return m.group(1)
+
+    return ""
+
+
 def cmd_overview(limit: int) -> None:
     """Print a summary of recent Codex CI runs."""
     all_runs: list[RunInfo] = []
     for wf in [IMPLEMENT_WORKFLOW, LIFECYCLE_WORKFLOW]:
         for entry in list_runs(wf, limit=limit):
-            all_runs.append(RunInfo(
-                run_id=str(entry["databaseId"]),
-                workflow=entry["workflowName"],
-                date=entry["createdAt"][:10],
-                status=entry["status"],
-                conclusion=entry.get("conclusion") or "",
-                head_branch=entry.get("headBranch") or "",
-            ))
+            all_runs.append(_build_run_info(entry))
 
     # Sort by date descending, then take the requested limit.
     all_runs.sort(key=lambda r: r.date, reverse=True)
@@ -218,13 +265,7 @@ def cmd_overview(limit: int) -> None:
     # Build table.
     rows = []
     for r in all_runs:
-        pr = find_pr_for_branch(r.head_branch)
-        assoc = ""
-        if pr:
-            issue = find_issue_from_pr_body(pr.get("body", ""))
-            assoc = f"PR#{pr['number']}"
-            if issue:
-                assoc += f" / Issue#{issue}"
+        assoc = _run_association(r)
         tokens_str = f"{r.tokens:,}" if r.tokens is not None else "N/A"
         rows.append([r.run_id, r.workflow[:30], r.date, r.conclusion or r.status, tokens_str, assoc])
 
@@ -246,9 +287,12 @@ def cmd_overview(limit: int) -> None:
 
 def cmd_ticket(issue_number: int) -> None:
     """Print token spend breakdown for a given orchestrator ticket."""
-    # Find the implement run that created the PR.
     implement_runs = list_runs(IMPLEMENT_WORKFLOW, limit=100)
     lifecycle_runs = list_runs(LIFECYCLE_WORKFLOW, limit=100)
+
+    # Get issue title to match implement runs by display title.
+    issue_raw = _gh(["issue", "view", str(issue_number), "--json", "title"])
+    issue_title = json.loads(issue_raw).get("title", "") if issue_raw.strip() else ""
 
     # Find PR that closes this issue.
     raw = _gh([
@@ -265,45 +309,50 @@ def cmd_ticket(issue_number: int) -> None:
             target_pr = pr
             break
 
-    if not target_pr:
-        print(f"No PR found that closes issue #{issue_number}.")
-        return
-
-    pr_branch = target_pr["headRefName"]
-    pr_number = target_pr["number"]
-    print(f"Issue #{issue_number} -> PR #{pr_number} (branch: {pr_branch})")
+    pr_branch = target_pr["headRefName"] if target_pr else None
+    pr_number = target_pr["number"] if target_pr else None
+    if target_pr:
+        print(f"Issue #{issue_number} -> PR #{pr_number} (branch: {pr_branch})")
+    else:
+        print(f"Issue #{issue_number}: {issue_title}")
+        print("  (no PR found)")
     print()
 
-    # Match implement runs to this issue's PR branch.
-    impl_matched = [r for r in implement_runs if r.get("headBranch") == pr_branch]
-    life_matched = [r for r in lifecycle_runs if r.get("headBranch") == pr_branch]
+    # Match implement runs by display title (they all run on main).
+    impl_matched = [
+        r for r in implement_runs
+        if issue_title and issue_title in r.get("displayTitle", "")
+    ]
 
-    impl_tokens = 0
-    life_tokens = 0
+    # Match lifecycle runs by PR branch.
+    life_matched = [
+        r for r in lifecycle_runs
+        if pr_branch and r.get("headBranch") == pr_branch
+    ]
 
-    if impl_matched:
-        print("=== Implementation runs ===")
-        for entry in impl_matched:
+    def _print_runs(label: str, runs: list[dict]) -> int:
+        total = 0
+        if not runs:
+            return 0
+        print(f"=== {label} ===")
+        for entry in runs:
             rid = str(entry["databaseId"])
+            conclusion = entry.get("conclusion") or entry.get("status", "")
+            # Skip runs that never invoked Codex.
+            if conclusion in ("skipped",):
+                print(f"  Run {rid}: {conclusion} — skipped")
+                continue
             log = get_run_log(rid)
             tokens = extract_token_count(log)
             tokens_str = f"{tokens:,}" if tokens else "N/A"
-            print(f"  Run {rid}: {entry.get('conclusion', entry['status'])} — {tokens_str} tokens")
+            print(f"  Run {rid}: {conclusion} — {tokens_str} tokens")
             if tokens:
-                impl_tokens += tokens
+                total += tokens
         print()
+        return total
 
-    if life_matched:
-        print("=== Review lifecycle runs ===")
-        for entry in life_matched:
-            rid = str(entry["databaseId"])
-            log = get_run_log(rid)
-            tokens = extract_token_count(log)
-            tokens_str = f"{tokens:,}" if tokens else "N/A"
-            print(f"  Run {rid}: {entry.get('conclusion', entry['status'])} — {tokens_str} tokens")
-            if tokens:
-                life_tokens += tokens
-        print()
+    impl_tokens = _print_runs("Implementation runs", impl_matched)
+    life_tokens = _print_runs("Review lifecycle runs", life_matched)
 
     total = impl_tokens + life_tokens
     print(f"Implementation tokens: {impl_tokens:,}")
@@ -318,14 +367,7 @@ def cmd_waste(limit: int) -> None:
     all_runs: list[RunInfo] = []
     for wf in [IMPLEMENT_WORKFLOW, LIFECYCLE_WORKFLOW]:
         for entry in list_runs(wf, limit=limit):
-            all_runs.append(RunInfo(
-                run_id=str(entry["databaseId"]),
-                workflow=entry["workflowName"],
-                date=entry["createdAt"][:10],
-                status=entry["status"],
-                conclusion=entry.get("conclusion") or "",
-                head_branch=entry.get("headBranch") or "",
-            ))
+            all_runs.append(_build_run_info(entry))
 
     all_runs.sort(key=lambda r: r.date, reverse=True)
     all_runs = all_runs[:limit]
