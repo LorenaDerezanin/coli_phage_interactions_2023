@@ -15,7 +15,7 @@ stateDiagram-v2
 
     issue_open --> codex_implement : codex-implement.yml <br> triggers on issue opened
 
-    codex_implement --> pr_created : Codex (gpt-5.4) implements task, <br> appends findings to LAB NOTEBOOK.md, <br> and opens PR with Closes #issue
+    codex_implement --> pr_created : Codex (gpt-5.4) implements task, <br> writes findings to lab_notebooks/track_&lt;track&gt;.md, <br> and opens PR with Closes #issue
 
     pr_created --> codex_review : codex-connector bot <br> auto-reviews PR <br> (GitHub App hook)
 
@@ -140,5 +140,5 @@ If the review has feedback, Codex addresses it (up to 3 rounds). If no feedback,
 Each dispatched issue includes:
 
 - Task description and acceptance criteria (from `plan.yml`).
-- Instruction to append findings to `lyzortx/research_notes/LAB NOTEBOOK.md`.
+- Instruction to write findings to `lyzortx/research_notes/lab_notebooks/track_<track>.md`.
 - PR creation instructions using `gh pr create` with `Closes #<issue>`.

@@ -41,6 +41,7 @@ class Task:
     expected_paths: list[str]
     acceptance_criteria: list[str]
     plan_checkbox_text: str | None
+    track: str = ""
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             expected_paths=[],
             acceptance_criteria=_load_acceptance_criteria(plan_path, pt.task_id),
             plan_checkbox_text=pt.title,
+            track=pt.track,
         )
         for pt in graph.tasks
         if pt.status != "done"
@@ -306,8 +308,8 @@ class GitHubClient:
             "## Agent Instructions",
             "",
             "1. Implement the task described above, following `AGENTS.md` policies.",
-            "2. Append findings and interpretation to `lyzortx/research_notes/LAB NOTEBOOK.md`"
-            " following the existing entry format.",
+            f"2. Write findings and interpretation to `lyzortx/research_notes/lab_notebooks/track_{task.track}.md`"
+            " following the existing entry format (ordered by task code, earliest first).",
             "3. Create the PR using `gh pr create` (NOT any built-in PR tool).",
             "4. PR body MUST include `Closes #<this-issue-number>` for auto-close on merge.",
             "5. Add `--label orchestrator-task` to the `gh pr create` command.",
@@ -504,6 +506,7 @@ def run_once(
             expected_paths=[],
             acceptance_criteria=criteria,
             plan_checkbox_text=pt.title,
+            track=pt.track,
         )
         result = _dispatch_one_agent_task(task, state, issues_by_task, github_client)
         dispatched.append(result)

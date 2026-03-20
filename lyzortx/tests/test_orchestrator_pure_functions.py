@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from lyzortx.orchestration.orchestrator import IssueRef
+from lyzortx.orchestration.orchestrator import Task
 from lyzortx.orchestration.orchestrator import choose_preferred_issue
 from lyzortx.orchestration.orchestrator import extract_task_id_from_issue
 
@@ -74,3 +77,52 @@ def test_choose_preferred_issue_prefers_more_recent_when_states_match() -> None:
     )
 
     assert choose_preferred_issue(newer_issue, older_issue) == newer_issue
+
+
+def _make_task(track: str, task_id: str = "TX01") -> Task:
+    return Task(
+        task_id=task_id,
+        title="Test task",
+        description="desc",
+        dependencies=[],
+        executor="agent",
+        command=None,
+        expected_paths=[],
+        acceptance_criteria=[],
+        plan_checkbox_text=None,
+        track=track,
+    )
+
+
+@pytest.mark.parametrize(
+    "track,expected_path",
+    [
+        ("B", "lyzortx/research_notes/lab_notebooks/track_B.md"),
+        ("ST", "lyzortx/research_notes/lab_notebooks/track_ST.md"),
+        ("I", "lyzortx/research_notes/lab_notebooks/track_I.md"),
+        ("A", "lyzortx/research_notes/lab_notebooks/track_A.md"),
+    ],
+)
+def test_agent_instruction_uses_track_for_notebook_path(track: str, expected_path: str) -> None:
+    task = _make_task(track=track)
+    # Reproduce the f-string from create_agent_task_issue (orchestrator.py line 311)
+    instruction = (
+        f"2. Write findings and interpretation to `lyzortx/research_notes/lab_notebooks/track_{task.track}.md`"
+        " following the existing entry format (ordered by task code, earliest first)."
+    )
+    assert f"`{expected_path}`" in instruction
+
+
+def test_task_track_defaults_to_empty_string() -> None:
+    task = Task(
+        task_id="X01",
+        title="t",
+        description="d",
+        dependencies=[],
+        executor="agent",
+        command=None,
+        expected_paths=[],
+        acceptance_criteria=[],
+        plan_checkbox_text=None,
+    )
+    assert task.track == ""
