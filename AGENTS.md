@@ -8,9 +8,12 @@
 
 # Environment Policy
 
-- Use the `phage_env` micromamba environment for project commands by default.
-- Before running project tooling, activate it with `micromamba activate phage_env`.
-- Do not use system Python for repository tasks unless the user explicitly asks.
+- **Local development:** Use the `phage_env` micromamba environment. Activate it with `micromamba activate phage_env`.
+- **CI / Codex sandbox:** Use plain `python` and `pip` directly — micromamba is not installed in CI. Dependencies are
+  pre-installed via `pip install -r requirements.txt` before the agent runs.
+- **How to detect CI:** Check for the `CI` environment variable (`[ -n "$CI" ]`). If set, skip micromamba activation.
+- **Git identity in CI:** Git `user.name` and `user.email` are pre-configured before the agent runs. Do not attempt to
+  set them yourself.
 
 # Dependency Selection Policy
 

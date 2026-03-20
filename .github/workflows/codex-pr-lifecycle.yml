@@ -140,6 +140,12 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.ORCHESTRATOR_PAT }}
 
+      - name: Configure git identity for Codex agent
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Set up Python
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: actions/setup-python@v6
