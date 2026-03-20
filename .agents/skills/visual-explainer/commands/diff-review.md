@@ -52,10 +52,10 @@ Verify each claim against the code. If something cannot be verified, mark it as 
    - **Confidence**: whether this rationale was explicitly discussed (high — sourced from conversation/docs) or inferred from the code (medium — flagged as inference). Low confidence means the rationale couldn't be recovered at all.
    - Visual treatment by confidence level — use left-border accent colors consistent with the diff color language: **High** (sourced from conversation/docs): green left border. **Medium** (inferred from code): blue left border, labeled "inferred." **Low** (not recoverable): amber left border, "rationale not recoverable — document before committing" warning. Low-confidence cards are cognitive debt hotspots — tell the user to document the reasoning before committing.
 10. **Re-entry context** — a concise "note from present-you to future-you" covering the following. *Visual treatment: compact — consider `<details>` collapsed by default for pages with many sections.*
-   - **Key invariants**: assumptions the changed code relies on that aren't enforced by types or tests (e.g., "cleanup must be called before session switch or artifacts leak")
-   - **Non-obvious coupling**: files or behaviors that are connected in ways that aren't visible from imports alone (e.g., "the feed renderer reads events written by the overlay — changing the event schema requires updating both")
-   - **Gotchas**: things that would surprise someone modifying this code in two weeks. Edge cases, ordering dependencies, implicit contracts.
-   - **Don't forget**: if the changes require follow-up work (migration, config update, docs), list it here.
+- **Key invariants**: assumptions the changed code relies on that aren't enforced by types or tests (e.g., "cleanup must be called before session switch or artifacts leak")
+- **Non-obvious coupling**: files or behaviors that are connected in ways that aren't visible from imports alone (e.g., "the feed renderer reads events written by the overlay — changing the event schema requires updating both")
+- **Gotchas**: things that would surprise someone modifying this code in two weeks. Edge cases, ordering dependencies, implicit contracts.
+- **Don't forget**: if the changes require follow-up work (migration, config update, docs), list it here.
 
 **Visual hierarchy**: Sections 1-3 should dominate the viewport on load (hero depth, larger type, more padding). Sections 6+ are reference material and should feel lighter (flat or recessed depth, compact layout, collapsible where appropriate).
 
