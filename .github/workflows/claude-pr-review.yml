@@ -2,7 +2,7 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -37,7 +37,9 @@ jobs:
   # Opus for first review (opened) or manual dispatch, Sonnet for re-reviews (synchronize).
   auto-review:
     name: Claude Auto Review
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
