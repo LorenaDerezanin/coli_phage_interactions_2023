@@ -23,14 +23,14 @@ concurrency:
 
 jobs:
   # ── Auto-merge on Claude approval ───────────────────────────────────
-  # Scoped to github-actions[bot] (Claude) only. Human approvals should
-  # be merged manually — auto-merge on bot approval is safe because the
-  # bot follows deterministic review rules.
+  # Scoped to claude[bot] only. Human approvals should be merged
+  # manually — auto-merge on bot approval is safe because the bot
+  # follows deterministic review rules.
   auto-merge-on-approve:
     name: Auto-merge on Approval
     if: >-
       github.event.review.state == 'approved'
-      && github.event.review.user.login == 'github-actions[bot]'
+      && github.event.review.user.login == 'claude[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
@@ -53,7 +53,7 @@ jobs:
   # ── Address feedback from any commented review ───────────────────────
   # Only triggers on COMMENTED reviews from known reviewer bots:
   #   - chatgpt-codex-connector[bot]: Codex review bot
-  #   - github-actions[bot]: Claude (via claude-code-action with GITHUB_TOKEN)
+  #   - claude[bot]: Claude (via claude-code-action with OIDC app token)
   # This prevents a feedback loop: Codex replies via ORCHESTRATOR_PAT post as
   # the PAT holder, which would re-trigger this workflow endlessly if we
   # accepted all COMMENTED reviews. workflow_dispatch is always allowed.
@@ -65,7 +65,7 @@ jobs:
         github.event.review.state == 'commented'
         && (
           github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-          || github.event.review.user.login == 'github-actions[bot]'
+          || github.event.review.user.login == 'claude[bot]'
         )
       )
     runs-on: ubuntu-24.04
