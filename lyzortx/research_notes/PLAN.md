@@ -112,7 +112,7 @@ graph LR
 - [x] Quantify morphotype breadth and narrow-susceptibility patterns
 - [x] Characterize hard-to-lyse strains by known host traits
 - [x] Characterize rescuer phages for narrow-susceptibility strains
-- [ ] Analyze dilution-response patterns per phage and per bacterial subgroup
+- [x] Analyze dilution-response patterns per phage and per bacterial subgroup
 
 ## Track C: Feature Engineering (Host)
 
