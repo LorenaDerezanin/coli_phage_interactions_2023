@@ -241,57 +241,6 @@ def extract_genbank_translations(path: Path) -> List[SequenceRecord]:
                 sequence=sequence,
             )
         )
-
-    if proteins:
-        return proteins
-
-    # Handle multi-line `/translation="...."` qualifiers when the closing quote appears on later lines.
-    proteins = []
-    collecting = False
-    collected: List[str] = []
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if collecting:
-            if '"' in line:
-                before_quote = line.split('"', maxsplit=1)[0]
-                collected.append(before_quote)
-                sequence = _clean_protein_sequence("".join(collected))
-                if sequence:
-                    index = len(proteins) + 1
-                    proteins.append(
-                        SequenceRecord(
-                            identifier=f"cds_{index:04d}",
-                            description=f"cds_{index:04d}",
-                            sequence=sequence,
-                        )
-                    )
-                collecting = False
-                collected = []
-            else:
-                collected.append(line)
-            continue
-
-        if "/translation=" not in line:
-            continue
-        _, value = line.split("/translation=", maxsplit=1)
-        value = value.strip()
-        if not value.startswith('"'):
-            continue
-        payload = value[1:]
-        if payload.endswith('"'):
-            sequence = _clean_protein_sequence(payload[:-1])
-            if sequence:
-                index = len(proteins) + 1
-                proteins.append(
-                    SequenceRecord(
-                        identifier=f"cds_{index:04d}",
-                        description=f"cds_{index:04d}",
-                        sequence=sequence,
-                    )
-                )
-        else:
-            collecting = True
-            collected = [payload]
     return proteins
 
 
