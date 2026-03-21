@@ -70,3 +70,76 @@
    later pairwise compatibility work.
 5. `TonB` is still an explicit source gap. Leaving it silently absent would hide a real repository limitation, so the
    current builder surfaces that gap directly in both the matrix and the metadata manifest.
+
+### 2026-03-21: TC02 OMP receptor variant feature block
+
+#### What was implemented
+
+- Added a dedicated Track C OMP-cluster builder:
+  `lyzortx/pipeline/track_c/steps/build_omp_receptor_variant_feature_block.py`.
+- Configured the step to write generated outputs under
+  `lyzortx/generated_outputs/track_c/omp_receptor_variant_feature_block/`:
+  - `host_omp_receptor_variant_features_v1.csv`
+  - `host_omp_receptor_variant_feature_metadata_v1.csv`
+  - `host_omp_receptor_variant_feature_manifest_v1.json`
+- Ingested the full `blast_results_cured_clusters=99_wide.tsv` table directly, preserving the requested `404`-strain
+  host panel and the full set of `12` receptor proteins (`BTUB`, `FADL`, `FHUA`, `LAMB`, `LPTD`, `NFRA`, `OMPA`,
+  `OMPC`, `OMPF`, `TOLC`, `TSX`, `YNCD`).
+- Implemented a bounded categorical encoding policy:
+  - receptor clusters observed in fewer than `5` hosts are grouped into receptor-specific `rare` buckets
+  - one grouped category is always retained per receptor
+  - additional grouped categories are added by descending Bernoulli indicator variance until the feature budget is
+    exhausted
+- Added regression tests in `lyzortx/tests/test_omp_receptor_variant_feature_block.py` covering rare-cluster grouping,
+  feature-budgeted selection, row-level encoding, and end-to-end file emission.
+
+#### Output summary
+
+- Final matrix size: `404` host rows x `22` receptor features, plus the `bacteria` join key.
+- Receptor diversity in the source BLAST table:
+  - `BTUB`: `29` observed clusters, `1` missing host
+  - `FADL`: `12` observed clusters, `0` missing hosts
+  - `FHUA`: `20` observed clusters, `1` missing host
+  - `LAMB`: `11` observed clusters, `4` missing hosts
+  - `LPTD`: `11` observed clusters, `0` missing hosts
+  - `NFRA`: `62` observed clusters, `7` missing hosts
+  - `OMPA`: `11` observed clusters, `0` missing hosts
+  - `OMPC`: `52` observed clusters, `1` missing host
+  - `OMPF`: `14` observed clusters, `7` missing hosts
+  - `TOLC`: `10` observed clusters, `2` missing hosts
+  - `TSX`: `4` observed clusters, `2` missing hosts
+  - `YNCD`: `55` observed clusters, `11` missing hosts
+- Selected grouped categories by receptor:
+  - `BTUB`: `99_6`, `99_15`
+  - `FADL`: `99_1`, `99_17`
+  - `FHUA`: `99_5`
+  - `LAMB`: `99_10`, `99_9`, `99_19`
+  - `LPTD`: `99_3`, `99_8`
+  - `NFRA`: `99_14`, `99_18`, `rare`
+  - `OMPA`: `99_13`, `99_16`
+  - `OMPC`: `99_24`
+  - `OMPF`: `99_4`, `99_12`
+  - `TOLC`: `99_0`
+  - `TSX`: `99_2`, `99_11`
+  - `YNCD`: `99_7`
+- Highest-support emitted indicators:
+  - `host_omp_receptor_tolc_cluster_99_0`: `367` hosts
+  - `host_omp_receptor_fadl_cluster_99_1`: `290` hosts
+  - `host_omp_receptor_tsx_cluster_99_2`: `267` hosts
+  - `host_omp_receptor_lptd_cluster_99_3`: `235` hosts
+  - `host_omp_receptor_ompf_cluster_99_4`: `209` hosts
+- Grouped rare buckets were mostly compressed away by the global feature budget; only `NFRA`'s grouped `rare` bucket
+  survived as a final indicator (`67` hosts).
+
+#### Interpretation
+
+1. The acceptance target of `~20` receptor features is only feasible with aggressive categorical compression. The raw
+   source table contains `291` non-missing receptor-cluster states across the 12 proteins, so a naive full one-hot
+   expansion would be mostly noise and would violate the requested block size.
+2. Most of the usable signal is concentrated in a small number of common receptor variants. The selected `22` columns
+   capture the dominant structure in each receptor while still preserving one explicit grouped-rare signal for the most
+   diverse locus (`NFRA`).
+3. Receptor heterogeneity is highly uneven across loci. `TSX`, `TOLC`, and `LPTD` are dominated by one or two major
+   variants, while `NFRA`, `OMPC`, and `YNCD` remain much more fragmented even after support-based rare clustering.
+4. The emitted block is ready for downstream joins on `bacteria`, but the manifest should remain the source of truth
+   for interpretation because grouped categories are a lossy compression of the original BLAST cluster table.
