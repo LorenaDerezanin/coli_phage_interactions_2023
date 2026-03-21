@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that all Codex review comments on a PR have been replied to."""
+"""Verify that all reviewer bot comments on a PR have been replied to."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-CODEX_BOT = "chatgpt-codex-connector[bot]"
+DEFAULT_BOT_LOGIN = "chatgpt-codex-connector[bot]"
 
 
 def parse_paginated_json(raw: str) -> list[dict[str, Any]]:
@@ -35,22 +35,24 @@ def parse_paginated_json(raw: str) -> list[dict[str, Any]]:
 
 def find_unanswered_comments(
     review_comments: list[dict[str, Any]],
+    bot_login: str = DEFAULT_BOT_LOGIN,
     review_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Return Codex review comments that have no replies.
+    """Return reviewer bot comments that have no replies.
 
     Args:
         review_comments: All PR review comments (from GitHub API).
+        bot_login: The login of the reviewer bot to check.
         review_id: If set, only consider comments from this specific review.
 
     Returns:
-        List of top-level Codex comments with zero replies.
+        List of top-level bot comments with zero replies.
     """
-    # Find top-level Codex comments (not replies themselves)
+    # Find top-level bot comments (not replies themselves)
     top_level = [
         c
         for c in review_comments
-        if c.get("user", {}).get("login") == CODEX_BOT
+        if c.get("user", {}).get("login") == bot_login
         and c.get("in_reply_to_id") is None
         and (review_id is None or c.get("pull_request_review_id") == review_id)
     ]
@@ -67,13 +69,18 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--review-id", type=int, default=None, help="Scope to a specific review ID")
+    parser.add_argument(
+        "--bot-login",
+        default=DEFAULT_BOT_LOGIN,
+        help=f"Bot login to check for unanswered comments (default: {DEFAULT_BOT_LOGIN})",
+    )
     args = parser.parse_args()
 
     # gh api --paginate may output multiple JSON arrays (one per page).
     # Concatenate them into a single list.
     raw = sys.stdin.read()
     comments = parse_paginated_json(raw)
-    unanswered = find_unanswered_comments(comments, review_id=args.review_id)
+    unanswered = find_unanswered_comments(comments, bot_login=args.bot_login, review_id=args.review_id)
 
     if unanswered:
         for c in unanswered:
