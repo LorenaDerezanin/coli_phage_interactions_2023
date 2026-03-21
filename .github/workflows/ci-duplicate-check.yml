@@ -1,0 +1,29 @@
+name: Duplicate Code Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  symilar:
+    name: Detect duplicate code
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.12"
+
+      - name: Install pylint
+        run: pip install pylint
+
+      - name: Run symilar (duplicate code detection)
+        continue-on-error: true
+        run: |
+          symilar --min-lines 6 --ignore-signatures --ignore-docstrings \
+            $(find lyzortx -name '*.py' -not -path '*/tests/*')
