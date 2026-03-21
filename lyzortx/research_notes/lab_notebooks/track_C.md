@@ -208,3 +208,58 @@
 4. The 8D UMAP block gives the host feature stack one dense phylogenomic representation that is already aligned to the
    wider `404`-strain genomic panel. That should make TC04 integration simpler than forcing every upstream source onto
    the smaller interaction-only subset too early.
+
+### 2026-03-21: TC04 host feature integration into the v1 pair table
+
+#### What was implemented
+
+- Added a dedicated Track C integration step:
+  `lyzortx/pipeline/track_c/steps/build_v1_host_feature_pair_table.py`.
+- The step:
+  - rebuilds the missing defense-subtype block directly from
+    `data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv`
+  - reuses the TC02 OMP-cluster encoding policy and the TC03 extended surface builder
+  - merges those three host blocks onto the `369` ST0.2 hosts from the current canonical pair table
+  - appends the merged host matrix to ST0.2 to emit a v1 pair table under
+    `lyzortx/generated_outputs/track_c/v1_host_feature_pair_table/`
+- Generated outputs now include:
+  - `host_feature_matrix_v1.csv`
+  - `pair_table_v1.csv`
+  - `host_feature_join_audit_v1.json`
+  - `pair_table_manifest_v1.json`
+  - `lightgbm_sanity_check_v1.json`
+- Added regression tests in `lyzortx/tests/test_v1_host_feature_pair_table.py` covering:
+  - defense subtype filtering and derived features
+  - host-block merge completeness checks
+  - the LightGBM lift sanity check
+  - end-to-end artifact emission
+
+#### Output summary
+
+- Final host matrix contract: `369` ST0.2 hosts x `115` Track C host features, plus the `bacteria` join key.
+- Host block composition:
+  - defense subtypes: `79` variance-filtered subtype indicators + `3` derived defense aggregates
+  - OMP receptor variants: `22` bounded one-hot indicators
+  - extended surface and phylogeny: `11` features (`2` categorical, `1` missingness flag, `8` UMAP coordinates)
+- Join completeness:
+  - all `369 / 369` ST0.2 hosts are present in each merged source block after restricting the wider `404`-host
+    genomic panel
+  - `host_feature_join_audit_v1.json` records `unexpected_missing_increase = 0` for every merged column
+- Quick training-fold sanity check:
+  - LightGBM was run on the non-holdout ST0.3 folds only
+  - the v1 LightGBM model beat the ST0.4-style v0 logistic baseline on mean cross-validated average precision:
+    `0.801329` vs `0.664809` (`+0.136520`)
+
+#### Interpretation
+
+1. The correct TC04 join contract is the ST0.2 host panel. The wider `404`-host genomic sources stay upstream only,
+   and the older receptor/surface experimental builder is intentionally excluded. That keeps the merged matrix directly
+   consumable by the existing split and evaluation artifacts.
+2. The old receptor/surface experimental builder was intentionally not merged into v1 because it duplicates TC02/TC03
+   signal and would reintroduce avoidable host-panel sparsity. The cleaner stack is defense subtypes + bounded OMP
+   variants + extended surface/UMAP.
+3. The join audit matters as much as the merge itself. By separating source-missingness from merge-induced missingness,
+   TC04 makes it explicit that the new NaNs come from the underlying capsule sparsity rather than from integration
+   regressions.
+4. The LightGBM result is only a sanity gate, not a final model-selection claim, but it is enough to justify moving
+   forward to the full v1 modeling work on top of this expanded pair table.
