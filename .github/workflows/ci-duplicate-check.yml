@@ -20,10 +20,10 @@ jobs:
           python-version: "3.12.12"
 
       - name: Install pylint
-        run: pip install pylint
+        run: pip install pylint==4.0.5
 
       - name: Run symilar (duplicate code detection)
         continue-on-error: true
         run: |
-          symilar --min-lines 6 --ignore-signatures --ignore-docstrings \
+          symilar -d 6 --ignore-signatures --ignore-docstrings \
             $(find lyzortx -name '*.py' -not -path '*/tests/*')
