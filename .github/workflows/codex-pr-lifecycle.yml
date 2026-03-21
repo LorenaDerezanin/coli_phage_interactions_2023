@@ -88,7 +88,9 @@ jobs:
           echo "is_codex_pr=${IS_CODEX_PR}" >> "$GITHUB_OUTPUT"
 
       - name: No feedback — label as clean
-        if: steps.comments.outputs.has_feedback == 'false'
+        if: >-
+          github.event_name == 'pull_request_review'
+          && steps.comments.outputs.has_feedback == 'false'
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
