@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
-import csv
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lyzortx.pipeline.steel_thread_v0.checks._check_helpers import (
+    compare_dicts,
+    load_json,
+    read_csv_rows,
+)
 from lyzortx.pipeline.steel_thread_v0.steps import (
     st01_label_policy,
     st01b_confidence_tiers,
@@ -40,19 +43,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--run-st04", action="store_true", help="Run ST0.4 before checking ST0.5.")
     parser.add_argument("--run-st05", action="store_true", help="Run ST0.5 before checking ST0.5.")
     return parser.parse_args(argv)
-
-
-def load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def read_csv_rows(path: Path) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
@@ -97,27 +87,6 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "logreg_platt_coef": artifacts["models"]["logreg_host_phage"]["platt_coef"],
         },
     }
-
-
-def compare_dicts(expected: Dict[str, Any], actual: Dict[str, Any], prefix: str = "") -> List[str]:
-    errors: List[str] = []
-    all_keys = sorted(set(expected.keys()) | set(actual.keys()))
-    for key in all_keys:
-        path = f"{prefix}.{key}" if prefix else key
-        if key not in expected:
-            errors.append(f"Unexpected key in actual: {path}")
-            continue
-        if key not in actual:
-            errors.append(f"Missing key in actual: {path}")
-            continue
-        exp_val = expected[key]
-        act_val = actual[key]
-        if isinstance(exp_val, dict) and isinstance(act_val, dict):
-            errors.extend(compare_dicts(exp_val, act_val, prefix=path))
-            continue
-        if exp_val != act_val:
-            errors.append(f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}")
-    return errors
 
 
 def main(argv: Optional[List[str]] = None) -> None:

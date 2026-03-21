@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import parse_float, read_csv_rows, safe_round
 
 REQUIRED_ST02_COLUMNS = ("pair_id", "bacteria", "phage", "label_hard_any_lysis")
 REQUIRED_ST03B_COLUMNS = ("pair_id", "split_dual_axis")
@@ -48,32 +48,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--logreg-c", type=float, default=1.0)
     parser.add_argument("--logreg-max-iter", type=int, default=2000)
     return parser.parse_args(argv)
-
-
-def read_csv_rows(path: Path, required_columns: Sequence[str]) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        missing = [column for column in required_columns if column not in reader.fieldnames]
-        if missing:
-            raise ValueError(f"Missing required columns in {path}: {', '.join(sorted(missing))}")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
-
-
-def parse_float(value: str) -> Optional[float]:
-    if value == "":
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
-def safe_round(value: Optional[float]) -> Optional[float]:
-    if value is None:
-        return None
-    return round(float(value), 6)
 
 
 def infer_feature_columns(columns: Iterable[str]) -> Dict[str, List[str]]:

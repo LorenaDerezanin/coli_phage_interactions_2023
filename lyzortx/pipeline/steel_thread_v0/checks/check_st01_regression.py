@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lyzortx.pipeline.steel_thread_v0.checks._check_helpers import compare_dicts, load_json
 from lyzortx.pipeline.steel_thread_v0.steps import st01_label_policy
 
 
@@ -32,11 +32,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Run ST0.1 before checking regression metrics.",
     )
     return parser.parse_args(argv)
-
-
-def load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
 
 
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
@@ -78,27 +73,6 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "pair_label_audit_csv_sha256": pair_csv_sha256,
         },
     }
-
-
-def compare_dicts(expected: Dict[str, Any], actual: Dict[str, Any], prefix: str = "") -> List[str]:
-    errors: List[str] = []
-    all_keys = sorted(set(expected.keys()) | set(actual.keys()))
-    for key in all_keys:
-        path = f"{prefix}.{key}" if prefix else key
-        if key not in expected:
-            errors.append(f"Unexpected key in actual: {path}")
-            continue
-        if key not in actual:
-            errors.append(f"Missing key in actual: {path}")
-            continue
-        exp_val = expected[key]
-        act_val = actual[key]
-        if isinstance(exp_val, dict) and isinstance(act_val, dict):
-            errors.extend(compare_dicts(exp_val, act_val, prefix=path))
-            continue
-        if exp_val != act_val:
-            errors.append(f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}")
-    return errors
 
 
 def main(argv: Optional[List[str]] = None) -> None:

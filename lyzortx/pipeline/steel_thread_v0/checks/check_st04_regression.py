@@ -4,13 +4,15 @@
 from __future__ import annotations
 
 import argparse
-import csv
-import json
-from math import isclose
-from numbers import Real
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lyzortx.pipeline.steel_thread_v0.checks._check_helpers import (
+    compare_dicts,
+    load_json,
+    read_csv_rows,
+)
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import safe_round
 from lyzortx.pipeline.steel_thread_v0.steps import (
     st01_label_policy,
     st01b_confidence_tiers,
@@ -44,27 +46,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def safe_round(value: float, ndigits: int = 6) -> float:
-    return round(float(value), ndigits)
-
-
-def is_real_number(value: object) -> bool:
-    return isinstance(value, Real) and not isinstance(value, bool)
-
-
-def read_prediction_rows(path: Path) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
-
-
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     metrics_path = intermediate_dir / "st04_model_metrics_raw.json"
     artifacts_path = intermediate_dir / "st04_model_artifacts.json"
@@ -80,7 +61,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
 
     metrics = load_json(metrics_path)
     artifacts = load_json(artifacts_path)
-    prediction_rows = read_prediction_rows(predictions_path)
+    prediction_rows = read_csv_rows(predictions_path)
     if not prediction_rows:
         raise ValueError(f"Prediction CSV is empty: {predictions_path}")
 
@@ -119,33 +100,6 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     }
 
 
-def compare_dicts(expected: Dict[str, Any], actual: Dict[str, Any], prefix: str = "") -> List[str]:
-    errors: List[str] = []
-    all_keys = sorted(set(expected.keys()) | set(actual.keys()))
-    for key in all_keys:
-        path = f"{prefix}.{key}" if prefix else key
-        if key not in expected:
-            errors.append(f"Unexpected key in actual: {path}")
-            continue
-        if key not in actual:
-            errors.append(f"Missing key in actual: {path}")
-            continue
-        exp_val = expected[key]
-        act_val = actual[key]
-        if isinstance(exp_val, dict) and isinstance(act_val, dict):
-            errors.extend(compare_dicts(exp_val, act_val, prefix=path))
-            continue
-        if is_real_number(exp_val) and is_real_number(act_val):
-            if not isclose(float(exp_val), float(act_val), rel_tol=0.0, abs_tol=NUMERIC_TOLERANCE):
-                errors.append(
-                    f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}, tolerance={NUMERIC_TOLERANCE}"
-                )
-            continue
-        if exp_val != act_val:
-            errors.append(f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}")
-    return errors
-
-
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
 
@@ -162,7 +116,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     expected = load_json(args.expected_baseline_path)
     actual = build_actual_summary(args.intermediate_dir)
-    errors = compare_dicts(expected, actual)
+    errors = compare_dicts(expected, actual, numeric_tolerance=NUMERIC_TOLERANCE)
     if errors:
         print("ST0.4 regression check failed:")
         for err in errors:

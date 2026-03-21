@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, log_loss
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
 
 MODEL_COLUMNS = {
     "dummy_prior": "pred_dummy_raw",
@@ -67,21 +67,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Random state for Platt-scaling logistic regression.",
     )
     return parser.parse_args(argv)
-
-
-def read_csv_rows(path: Path) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        out: List[Dict[str, str]] = []
-        for row in reader:
-            out.append({k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()})
-        return out
-
-
-def safe_round(value: float) -> float:
-    return round(float(value), 6)
 
 
 def ece_score(y_true: Sequence[int], y_prob: Sequence[float], n_bins: int) -> float:

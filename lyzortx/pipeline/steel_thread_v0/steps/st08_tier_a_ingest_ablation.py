@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 from collections import Counter
 from dataclasses import dataclass
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
 
 REQUIRED_INTERNAL_COLUMNS = ("pair_id", "bacteria", "phage", "label_hard_any_lysis", "label_strict_confidence_tier")
 REQUIRED_VHRDB_COLUMNS = (
@@ -89,17 +89,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=Path("lyzortx/generated_outputs/steel_thread_v0/intermediate"),
     )
     return parser.parse_args(argv)
-
-
-def read_csv_rows(path: Path, required_columns: Sequence[str]) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        missing = [column for column in required_columns if column not in reader.fieldnames]
-        if missing:
-            raise ValueError(f"Missing required columns in {path}: {', '.join(sorted(missing))}")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def key_for_pair(row: Dict[str, str]) -> Tuple[str, str]:
