@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from lyzortx.pipeline.track_c.steps.build_receptor_surface_feature_block import (
+    _parse_integral_value,
     build_column_metadata,
     build_feature_rows,
     main,
@@ -55,6 +56,7 @@ def test_build_feature_rows_keeps_variant_columns_and_tonb_gap() -> None:
     assert rows[0]["host_k_antigen_type"] == "K1"
     assert rows[0]["host_k_antigen_type_source"] == "ABC_serotype"
     assert rows[0]["host_k_antigen_proxy_present"] == 1
+    assert rows[0]["host_capsule_groupiv_s"] == 2
     assert rows[0]["host_receptor_btub_variant"] == "99_1"
     assert rows[0]["host_receptor_tonB_present"] == ""
     assert rows[1]["host_o_antigen_present"] == 0
@@ -67,6 +69,15 @@ def test_resolve_k_antigen_type_prefers_klebsiella_call() -> None:
 
     assert value == "K54"
     assert source == "Klebs_capsule_type"
+
+
+def test_parse_integral_value_rejects_fractional_input() -> None:
+    try:
+        _parse_integral_value("1.7")
+    except ValueError as exc:
+        assert "integer-like value" in str(exc)
+    else:
+        raise AssertionError("Expected fractional capsule metadata to raise ValueError")
 
 
 def test_build_column_metadata_reports_missingness() -> None:
@@ -84,7 +95,7 @@ def test_build_column_metadata_reports_missingness() -> None:
             "host_capsule_abc_present": 0,
             "host_capsule_groupiv_e_present": 0,
             "host_capsule_groupiv_e_stricte_present": 0,
-            "host_capsule_groupiv_s_present": 0,
+            "host_capsule_groupiv_s": 0,
             "host_capsule_wzy_stricte_present": 0,
             "host_receptor_btub_present": 1,
             "host_receptor_btub_variant": "99_1",

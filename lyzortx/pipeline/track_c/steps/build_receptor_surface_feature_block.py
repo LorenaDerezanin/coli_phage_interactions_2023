@@ -25,7 +25,7 @@ CAPSULE_LOCUS_COLUMNS: Tuple[Tuple[str, str], ...] = (
     ("Capsule_ABC", "host_capsule_abc_present"),
     ("Capsule_GroupIV_e", "host_capsule_groupiv_e_present"),
     ("Capsule_GroupIV_e_stricte", "host_capsule_groupiv_e_stricte_present"),
-    ("Capsule_GroupIV_s", "host_capsule_groupiv_s_present"),
+    ("Capsule_GroupIV_s", "host_capsule_groupiv_s"),
     ("Capsule_Wzy_stricte", "host_capsule_wzy_stricte_present"),
 )
 
@@ -42,7 +42,7 @@ FEATURE_COLUMNS: Tuple[str, ...] = (
     "host_capsule_abc_present",
     "host_capsule_groupiv_e_present",
     "host_capsule_groupiv_e_stricte_present",
-    "host_capsule_groupiv_s_present",
+    "host_capsule_groupiv_s",
     "host_capsule_wzy_stricte_present",
     "host_receptor_btub_present",
     "host_receptor_btub_variant",
@@ -155,13 +155,16 @@ FEATURE_DEFINITIONS: Dict[str, Dict[str, object]] = {
         "transform": "Cast the source float-like flag to integer 0/1.",
         "note": "Capsule-related proxy copied from curated host metadata.",
     },
-    "host_capsule_groupiv_s_present": {
+    "host_capsule_groupiv_s": {
         "group": "surface_antigen",
         "type": "integer",
         "source_paths": ["data/genomics/bacteria/picard_collection.csv"],
         "source_columns": ["Capsule_GroupIV_s"],
-        "transform": "Cast the source float-like value to integer 0/1/2.",
-        "note": "Capsule-related proxy copied from curated host metadata.",
+        "transform": "Cast the source float-like value to an integer after validating it is integral.",
+        "note": (
+            "Capsule-related proxy copied from curated host metadata. The source currently includes "
+            "integer-valued levels rather than a pure binary presence flag."
+        ),
     },
     "host_capsule_wzy_stricte_present": {
         "group": "surface_antigen",
@@ -330,11 +333,14 @@ def _normalize_category(value: str) -> str:
     return "" if normalized in {"", "-", "Unknown"} else normalized
 
 
-def _as_int_flag(value: str) -> int:
+def _parse_integral_value(value: str) -> int:
     normalized = value.strip()
     if normalized == "":
         return 0
-    return int(float(normalized))
+    parsed = float(normalized)
+    if not parsed.is_integer():
+        raise ValueError(f"Expected an integer-like value, got {value!r}")
+    return int(parsed)
 
 
 def _sha256(path: Path) -> str:
@@ -417,7 +423,7 @@ def build_feature_rows(
 
         capsule_proxy_present = 1 if k_antigen_type else 0
         for source_column, output_column in CAPSULE_LOCUS_COLUMNS:
-            flag = _as_int_flag(host_row.get(source_column, ""))
+            flag = _parse_integral_value(host_row.get(source_column, ""))
             row[output_column] = flag
             if flag > 0:
                 capsule_proxy_present = 1
