@@ -47,8 +47,34 @@ def test_build_feature_rows_keeps_variant_columns_and_tonb_gap() -> None:
         },
         lps_by_bacteria={"B1": {"LPS_type": "R1"}, "B2": {"LPS_type": "R3"}},
         receptor_by_bacteria={
-            "B1": {"BTUB": "99_1", "FHUA": "99_2", "LAMB": "99_3", "OMPA": "99_4", "OMPC": "99_5"},
-            "B2": {"BTUB": "", "FHUA": "99_8", "LAMB": "", "OMPA": "99_9", "OMPC": "99_10"},
+            "B1": {
+                "BTUB": "99_1",
+                "FADL": "99_11",
+                "FHUA": "99_2",
+                "LAMB": "99_3",
+                "LPTD": "",
+                "NFRA": "99_12",
+                "OMPA": "99_4",
+                "OMPC": "99_5",
+                "OMPF": "99_13",
+                "TOLC": "99_14",
+                "TSX": "",
+                "YNCD": "99_15",
+            },
+            "B2": {
+                "BTUB": "",
+                "FADL": "",
+                "FHUA": "99_8",
+                "LAMB": "",
+                "LPTD": "99_16",
+                "NFRA": "",
+                "OMPA": "99_9",
+                "OMPC": "99_10",
+                "OMPF": "",
+                "TOLC": "",
+                "TSX": "99_17",
+                "YNCD": "",
+            },
         },
     )
 
@@ -58,10 +84,14 @@ def test_build_feature_rows_keeps_variant_columns_and_tonb_gap() -> None:
     assert rows[0]["host_k_antigen_proxy_present"] == 1
     assert rows[0]["host_capsule_groupiv_s"] == 2
     assert rows[0]["host_receptor_btub_variant"] == "99_1"
+    assert rows[0]["host_receptor_ompF_present"] == 1
+    assert rows[0]["host_receptor_ompF_variant"] == "99_13"
+    assert rows[0]["host_receptor_lptD_present"] == 0
     assert rows[0]["host_receptor_tonB_present"] == ""
     assert rows[1]["host_o_antigen_present"] == 0
     assert rows[1]["host_k_antigen_type"] == "K63"
     assert rows[1]["host_receptor_btub_present"] == 0
+    assert rows[1]["host_receptor_tsx_variant"] == "99_17"
 
 
 def test_resolve_k_antigen_type_prefers_klebsiella_call() -> None:
@@ -99,16 +129,30 @@ def test_build_column_metadata_reports_missingness() -> None:
             "host_capsule_wzy_stricte_present": 0,
             "host_receptor_btub_present": 1,
             "host_receptor_btub_variant": "99_1",
+            "host_receptor_fadL_present": 1,
+            "host_receptor_fadL_variant": "99_11",
             "host_receptor_fhua_present": 1,
             "host_receptor_fhua_variant": "99_2",
             "host_receptor_lamB_present": 1,
             "host_receptor_lamB_variant": "99_3",
+            "host_receptor_lptD_present": 0,
+            "host_receptor_lptD_variant": "",
+            "host_receptor_nfrA_present": 1,
+            "host_receptor_nfrA_variant": "99_12",
             "host_receptor_ompA_present": 1,
             "host_receptor_ompA_variant": "99_4",
             "host_receptor_ompC_present": 1,
             "host_receptor_ompC_variant": "99_5",
+            "host_receptor_ompF_present": 1,
+            "host_receptor_ompF_variant": "99_13",
+            "host_receptor_tolC_present": 1,
+            "host_receptor_tolC_variant": "99_14",
             "host_receptor_tonB_present": "",
             "host_receptor_tonB_variant": "",
+            "host_receptor_tsx_present": 0,
+            "host_receptor_tsx_variant": "",
+            "host_receptor_yncD_present": 1,
+            "host_receptor_yncD_variant": "99_15",
         }
     ]
 
@@ -141,7 +185,9 @@ def test_main_writes_matrix_metadata_and_manifest(tmp_path: Path) -> None:
     )
     lps_path.write_text("bacteria\tLPS_type\nB1\tR1\nB2\tR3\n", encoding="utf-8")
     receptors_path.write_text(
-        "bacteria\tBTUB\tFHUA\tLAMB\tOMPA\tOMPC\nB1\t99_1\t99_2\t99_3\t99_4\t99_5\nB2\t\t99_8\t\t99_9\t99_10\n",
+        "bacteria\tBTUB\tFADL\tFHUA\tLAMB\tLPTD\tNFRA\tOMPA\tOMPC\tOMPF\tTOLC\tTSX\tYNCD\n"
+        "B1\t99_1\t99_11\t99_2\t99_3\t\t99_12\t99_4\t99_5\t99_13\t99_14\t\t99_15\n"
+        "B2\t\t\t99_8\t\t99_16\t\t99_9\t99_10\t\t\t99_17\t\n",
         encoding="utf-8",
     )
 
