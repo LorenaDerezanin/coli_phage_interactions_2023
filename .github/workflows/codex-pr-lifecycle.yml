@@ -18,6 +18,9 @@ permissions:
 jobs:
   address-feedback:
     name: Address Review Feedback
+    # The Codex connector always posts COMMENTED reviews (never APPROVED), so we
+    # match on state == 'commented' and detect clean vs has-issues by checking
+    # for inline comments and substantive body text in subsequent steps.
     if: >-
       github.event_name == 'workflow_dispatch'
       || (
@@ -76,13 +79,39 @@ jobs:
           echo "has_feedback=$([[ $TOTAL -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "Inline: ${INLINE_COUNT}, Review body feedback: ${REVIEW_BODY_HAS_FEEDBACK}"
 
+      - name: Check if PR is Codex-created
+        id: origin
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          IS_CODEX_PR=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
+            --json labels --jq '[.labels[].name] | if index("orchestrator-task") then "true" else "false" end')
+          echo "is_codex_pr=${IS_CODEX_PR}" >> "$GITHUB_OUTPUT"
+
       - name: No feedback — label as clean
-        if: steps.comments.outputs.has_feedback == 'false'
+        if: >-
+          github.event_name == 'pull_request_review'
+          && steps.comments.outputs.has_feedback == 'false'
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
-          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
-            --body "Codex review passed with no issues. Ready for human review and merge."
+          if [ "${{ steps.origin.outputs.is_codex_pr }}" = "true" ]; then
+            gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
+              --body "Codex review passed with no issues. Auto-merging Codex-created PR after CI passes."
+          else
+            gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
+              --body "Codex review passed with no issues. Ready for human review and merge."
+          fi
+
+      - name: Auto-merge Codex-created PR
+        if: >-
+          github.event_name == 'pull_request_review'
+          && steps.comments.outputs.has_feedback == 'false'
+          && steps.origin.outputs.is_codex_pr == 'true'
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto \
+            --body "Auto-merged by codex-pr-lifecycle workflow after clean Codex review and passing CI."
+          echo "Auto-merge enabled for PR #${PR_NUM}. Will merge when required checks pass."
 
       - name: Check review round cap
         if: steps.comments.outputs.has_feedback == 'true'
