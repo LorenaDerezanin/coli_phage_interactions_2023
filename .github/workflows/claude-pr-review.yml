@@ -2,11 +2,25 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review"
+        required: true
+        type: number
+      model:
+        description: "Claude model to use"
+        required: false
+        type: choice
+        options:
+          - claude-opus-4-6
+          - claude-sonnet-4-6
+        default: claude-opus-4-6
 
 permissions:
   contents: read
@@ -15,25 +29,28 @@ permissions:
   id-token: write
 
 concurrency:
-  group: claude-review-pr-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: claude-review-pr-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
   cancel-in-progress: false
 
 jobs:
-  # ── Auto-review on every PR open / push ──────────────────────────────
-  # Opus for the first review (opened), Sonnet for re-reviews (synchronize).
+  # ── Auto-review on PR open / push / manual dispatch ────────────────
+  # Opus for first review (opened) or manual dispatch, Sonnet for re-reviews (synchronize).
   auto-review:
     name: Claude Auto Review
     if: >-
-      github.event_name == 'pull_request'
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
     steps:
       - name: Check for existing Claude approval
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APPROVED=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+          APPROVED=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews \
             --jq '[.[] | select(.user.login == "claude[bot]" and .state == "APPROVED")] | length')
           echo "skip=$([[ $APPROVED -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
@@ -41,7 +58,9 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         id: model
         run: |
-          if [ "${{ github.event.action }}" = "opened" ]; then
+          if [ -n "${{ inputs.model }}" ]; then
+            echo "name=${{ inputs.model }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.action }}" = "opened" ]; then
             echo "name=claude-opus-4-6" >> "$GITHUB_OUTPUT"
           else
             echo "name=claude-sonnet-4-6" >> "$GITHUB_OUTPUT"
@@ -51,6 +70,12 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         with:
           fetch-depth: 1
+
+      - name: Checkout PR branch (manual dispatch)
+        if: steps.check.outputs.skip != 'true' && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr checkout ${{ env.PR_NUMBER }}
 
       - uses: anthropics/claude-code-action@v1
         if: steps.check.outputs.skip != 'true'
@@ -63,14 +88,14 @@ jobs:
             --allowedTools
             "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(gh pr view:*),Bash(gh api:*),Bash(python:*),Read,Glob,Grep"
           prompt: |
-            Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Review PR #${{ env.PR_NUMBER }} in ${{ github.repository }}.
 
             1. Read AGENTS.md and lyzortx/AGENTS.md for review guidelines and project policies.
             2. Get the diff with mcp__github__get_pull_request_diff.
             3. Read relevant source files for context.
             4. Manage review threads (you are the sole judge of thread resolution):
                - List all threads with resolution state:
-                 python -m lyzortx.orchestration.review_threads ${{ github.repository_owner }} ${{ github.event.repository.name }} ${{ github.event.pull_request.number }} /dev/null --json
+                 python -m lyzortx.orchestration.review_threads ${{ github.repository_owner }} ${{ github.event.repository.name }} ${{ env.PR_NUMBER }} /dev/null --json
                - Resolve adequately addressed threads:
                  gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
                - Unresolve inadequately resolved threads:
