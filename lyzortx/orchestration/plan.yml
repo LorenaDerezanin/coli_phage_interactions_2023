@@ -177,7 +177,7 @@ tracks:
       - Missingness indicators added for features with incomplete coverage
     - id: TC04
       title: Integrate host feature blocks into v1 pair table
-      status: pending
+      status: done
       acceptance_criteria:
       - All host feature blocks merged into a single host feature matrix
       - Join completeness verified (no unexpected NaN increase vs source data)
