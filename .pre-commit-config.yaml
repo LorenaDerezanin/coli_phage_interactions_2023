@@ -1,6 +1,12 @@
 repos:
   - repo: local
     hooks:
+      - id: no-ignored-files
+        name: no-ignored-files
+        entry: "bash -c 'ignored=$(git check-ignore --no-index -- \"$@\" 2>/dev/null) && { echo \"ERROR: committed files that should be gitignored:\"; echo \"$ignored\"; exit 1; } || exit 0' --"
+        language: system
+        stages: [pre-commit]
+        always_run: true
       - id: pymarkdown
         name: pymarkdown
         entry: pymarkdown --config .pymarkdown.yaml fix
