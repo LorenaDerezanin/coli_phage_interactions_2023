@@ -1,4 +1,12 @@
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+        args: [--check]
+
   - repo: local
     hooks:
       - id: no-ignored-files
