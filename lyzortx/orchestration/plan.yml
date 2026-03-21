@@ -153,7 +153,7 @@ tracks:
     tasks:
     - id: TC01
       title: Build defense-system subtype feature block from defense_finder annotations
-      status: pending
+      status: done
       acceptance_criteria:
       - Ingest 370+host_defense_systems_subtypes.csv (138 subtype columns, 404 strains)
       - Variance filter drops subtypes present in <5 or >395 strains
