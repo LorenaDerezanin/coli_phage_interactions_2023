@@ -28,7 +28,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Check for existing Claude approval
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APPROVED=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+            --jq '[.[] | select(.user.login == "claude[bot]" and .state == "APPROVED")] | length')
+          echo "skip=$([[ $APPROVED -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - name: Select model
+        if: steps.check.outputs.skip != 'true'
         id: model
         run: |
           if [ "${{ github.event.action }}" = "opened" ]; then
@@ -38,10 +48,12 @@ jobs:
           fi
 
       - uses: actions/checkout@v6
+        if: steps.check.outputs.skip != 'true'
         with:
           fetch-depth: 1
 
       - uses: anthropics/claude-code-action@v1
+        if: steps.check.outputs.skip != 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: true
