@@ -143,3 +143,68 @@
    variants, while `NFRA`, `OMPC`, and `YNCD` remain much more fragmented even after support-based rare clustering.
 4. The emitted block is ready for downstream joins on `bacteria`, but the manifest should remain the source of truth
    for interpretation because grouped categories are a lossy compression of the original BLAST cluster table.
+
+### 2026-03-21: TC03 extended host surface features
+
+#### What was implemented
+
+- Added a dedicated Track C builder:
+  `lyzortx/pipeline/track_c/steps/build_extended_host_surface_feature_block.py`.
+- Configured the step to write generated outputs under
+  `lyzortx/generated_outputs/track_c/extended_host_surface_feature_block/`:
+  - `host_extended_surface_features_v1.csv`
+  - `host_extended_surface_feature_metadata_v1.csv`
+  - `host_extended_surface_feature_manifest_v1.json`
+- Set the output host contract to the full `404`-strain UMAP panel instead of shrinking to the sparse capsule subset.
+  This keeps the block directly joinable on `bacteria` with the current phylogeny and OMP-cluster host feature tables.
+- Added three feature families:
+  - `host_surface_klebsiella_capsule_type` plus explicit
+    `host_surface_klebsiella_capsule_type_missing`
+  - `host_surface_lps_core_type`, merged from the primary `370`-host `waaL` table and the supplemental host table after
+    conflict checks
+  - `host_phylogeny_umap_00` through `host_phylogeny_umap_07` from the in-repo 8D phylogenomic embedding table
+- Added regression tests in `lyzortx/tests/test_extended_host_surface_feature_block.py` covering LPS-source merging,
+  conflict detection, capsule missingness handling, and end-to-end file emission.
+
+#### Output summary
+
+- Final matrix size: `404` host rows x `11` engineered features, plus the `bacteria` join key.
+- Klebsiella capsule coverage:
+  - `23 / 404` hosts typed (`5.7%` observed, `94.3%` missing)
+  - Missingness indicator coverage matches the sparse call set exactly: `381 / 404` hosts flagged missing
+  - Observed capsule type counts:
+    - `K57`: `5`
+    - `K2`: `4`
+    - `K55`: `3`
+    - `K9`: `2`
+    - `K25`: `2`
+    - `K54`: `2`
+    - `K10`, `K16`, `K39`, `K63`, `K127`: `1` each
+- LPS core coverage:
+  - `404 / 404` hosts typed (`0.0%` missing)
+  - Source split: `370` hosts from `LPS_type_waaL_370.txt`, `34` backfilled from `LPS_type_waaL_host.txt`
+  - No conflicts were observed between the two curated `waaL` sources
+  - Final LPS distribution:
+    - `R1`: `188`
+    - `R3`: `54`
+    - `K12`: `40`
+    - `R4`: `34`
+    - `No_waaL`: `32`
+    - `R2`: `22`
+- UMAP coverage:
+  - All `8` phylogenomic dimensions are present for all `404 / 404` hosts
+  - The extra `35` hosts relative to the current `369`-host interaction panel are retained intentionally so Track C host
+    feature blocks can share one wider genomic join contract ahead of downstream pair-table integration
+
+#### Interpretation
+
+1. The correct simplification here is not to intersect away sparse annotations. Using the full `404`-host UMAP panel
+   preserves joinability across Track C host blocks and pushes missingness into one explicit capsule indicator where it
+   belongs.
+2. Klebsiella capsule typing is far too sparse to treat as a standalone dense categorical feature. The missingness flag
+   is likely to carry as much modeling signal as the observed `K` labels themselves until capsule coverage improves.
+3. LPS core typing is effectively complete once the two curated `waaL` sources are merged. That makes `host_surface_lps_core_type`
+   a cleaner downstream feature than the capsule call, despite both living in the same surface-feature family.
+4. The 8D UMAP block gives the host feature stack one dense phylogenomic representation that is already aligned to the
+   wider `404`-strain genomic panel. That should make TC04 integration simpler than forcing every upstream source onto
+   the smaller interaction-only subset too early.
