@@ -118,6 +118,9 @@
 - Store generated analysis outputs (CSVs, figures, reports) under `lyzortx/generated_outputs/`.
 - Organize outputs by analysis name, for example `lyzortx/generated_outputs/raw_interactions_summary/`.
 - Do not write new generated artifacts to top-level directories like `figures/` for `lyzortx` analyses.
+- `lyzortx/generated_outputs/` is listed in `.gitignore`. **Never commit generated outputs to git.** They are
+  reproducible from the analysis scripts and should not bloat the repository. If `git add` refuses to stage a file
+  because it is gitignored, that refusal is correct — do not override it with `git add -f` or `git add --force`.
 
 # Dead Code Policy
 
@@ -135,6 +138,12 @@
   (TDD-style).
 - Place tests under `lyzortx/tests/` unless the user explicitly requests a different location.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
+
+# Git Staging Policy
+
+- Never use `git add -f` or `git add --force`. If git refuses to stage a file, it is gitignored for a reason.
+- Stage files by explicit path (`git add <file> ...`). Do not use `git add .` or `git add -A` in CI, as these can
+  accidentally stage untracked artifacts, build outputs, or temporary files present in the working tree.
 
 # Commit Granularity
 
