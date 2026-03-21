@@ -7,11 +7,13 @@ from lyzortx.research_notes.ad_hoc_analysis_code.dilution_response_patterns impo
     DEFAULT_PAIR_DILUTION_SUMMARY_PATH,
     DEFAULT_PAIR_LABELS_PATH,
     TRACK_A_BUILD_COMMAND,
+    _aggregate_lytic_pair_metrics,
     add_bh_q_values,
     build_bacterial_subgroup_dilution_response_summary,
     build_pair_response_features,
     build_phage_dilution_response_summary,
     prepare_host_metadata,
+    top_rows,
     validate_required_inputs,
 )
 
@@ -35,6 +37,49 @@ def test_build_pair_response_features_counts_positive_dilutions_per_pair() -> No
     assert b1["has_multidilution_support"] == True
     assert b2["n_positive_dilutions"] == 1
     assert b2["positive_dilution_list"] == "-2"
+
+
+def test_aggregate_lytic_pair_metrics_matches_both_callers() -> None:
+    lytic_pairs = pd.DataFrame(
+        {
+            "pair_id": ["B1__P1", "B2__P1", "B1__P2"],
+            "group": ["G1", "G1", "G2"],
+            "is_high_potency": [True, False, True],
+            "has_multidilution_support": [True, True, False],
+            "dilution_potency_rank": [3.0, 1.0, 2.0],
+            "best_lysis_dilution": [-2, 0, -4],
+        }
+    )
+
+    out = _aggregate_lytic_pair_metrics(lytic_pairs, "group")
+
+    g1 = out.loc[out["group"] == "G1"].iloc[0]
+    g2 = out.loc[out["group"] == "G2"].iloc[0]
+
+    assert g1["n_lytic_pairs"] == 2
+    assert g1["n_high_potency_pairs"] == 1
+    assert g1["n_low_potency_pairs"] == 1
+    assert g1["multi_dilution_support_rate"] == 1.0
+    assert g1["best_dilution_minus2_count"] == 1
+    assert g2["n_lytic_pairs"] == 1
+    assert g2["high_potency_rate"] == 1.0
+    assert g2["n_single_dilution_pairs"] == 1
+
+
+def test_top_rows_replaces_nan_with_none() -> None:
+    summary = pd.DataFrame(
+        {
+            "name": ["A", "B", "C"],
+            "score": [1.0, float("nan"), 3.0],
+        }
+    )
+
+    result = top_rows(summary, limit=2, sort_columns=["score"])
+    assert result[0]["name"] == "C"
+    assert result[0]["score"] == 3.0
+    assert result[1]["name"] == "A"
+    assert result[1]["score"] == 1.0
+    assert len(result) == 2
 
 
 def test_add_bh_q_values_only_updates_tested_rows() -> None:

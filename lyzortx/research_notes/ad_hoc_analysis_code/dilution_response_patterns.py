@@ -176,6 +176,43 @@ def add_bh_q_values(
     return summary
 
 
+_LYTIC_PAIR_FILLNA = {
+    "n_lytic_pairs": 0,
+    "n_high_potency_pairs": 0,
+    "n_low_potency_pairs": 0,
+    "high_potency_rate": 0.0,
+    "n_multidilution_pairs": 0,
+    "n_single_dilution_pairs": 0,
+    "multi_dilution_support_rate": 0.0,
+    "best_dilution_0_count": 0,
+    "best_dilution_minus1_count": 0,
+    "best_dilution_minus2_count": 0,
+    "best_dilution_minus4_count": 0,
+}
+
+
+def _aggregate_lytic_pair_metrics(lytic_pairs: pd.DataFrame, group_column: str) -> pd.DataFrame:
+    return (
+        lytic_pairs.groupby(group_column, dropna=False)
+        .agg(
+            n_lytic_pairs=("pair_id", "size"),
+            n_high_potency_pairs=("is_high_potency", "sum"),
+            n_low_potency_pairs=("is_high_potency", lambda s: int((~s).sum())),
+            high_potency_rate=("is_high_potency", "mean"),
+            n_multidilution_pairs=("has_multidilution_support", "sum"),
+            n_single_dilution_pairs=("has_multidilution_support", lambda s: int((~s).sum())),
+            multi_dilution_support_rate=("has_multidilution_support", "mean"),
+            mean_potency_rank=("dilution_potency_rank", "mean"),
+            median_potency_rank=("dilution_potency_rank", "median"),
+            best_dilution_0_count=("best_lysis_dilution", lambda s: int((s == 0).sum())),
+            best_dilution_minus1_count=("best_lysis_dilution", lambda s: int((s == -1).sum())),
+            best_dilution_minus2_count=("best_lysis_dilution", lambda s: int((s == -2).sum())),
+            best_dilution_minus4_count=("best_lysis_dilution", lambda s: int((s == -4).sum())),
+        )
+        .reset_index()
+    )
+
+
 def summarize_binary_enrichment(
     summary: pd.DataFrame,
     group_column: str,
@@ -231,40 +268,8 @@ def build_phage_dilution_response_summary(
         .agg(n_resolved_pairs=("pair_id", "size"))
         .reset_index()
     )
-    phage_summary = (
-        lytic_pairs.groupby("phage", dropna=False)
-        .agg(
-            n_lytic_pairs=("pair_id", "size"),
-            n_high_potency_pairs=("is_high_potency", "sum"),
-            n_low_potency_pairs=("is_high_potency", lambda s: int((~s).sum())),
-            high_potency_rate=("is_high_potency", "mean"),
-            n_multidilution_pairs=("has_multidilution_support", "sum"),
-            n_single_dilution_pairs=("has_multidilution_support", lambda s: int((~s).sum())),
-            multi_dilution_support_rate=("has_multidilution_support", "mean"),
-            mean_potency_rank=("dilution_potency_rank", "mean"),
-            median_potency_rank=("dilution_potency_rank", "median"),
-            best_dilution_0_count=("best_lysis_dilution", lambda s: int((s == 0).sum())),
-            best_dilution_minus1_count=("best_lysis_dilution", lambda s: int((s == -1).sum())),
-            best_dilution_minus2_count=("best_lysis_dilution", lambda s: int((s == -2).sum())),
-            best_dilution_minus4_count=("best_lysis_dilution", lambda s: int((s == -4).sum())),
-        )
-        .reset_index()
-    )
-    phage_summary = resolved_counts.merge(phage_summary, on="phage", how="left").fillna(
-        {
-            "n_lytic_pairs": 0,
-            "n_high_potency_pairs": 0,
-            "n_low_potency_pairs": 0,
-            "high_potency_rate": 0.0,
-            "n_multidilution_pairs": 0,
-            "n_single_dilution_pairs": 0,
-            "multi_dilution_support_rate": 0.0,
-            "best_dilution_0_count": 0,
-            "best_dilution_minus1_count": 0,
-            "best_dilution_minus2_count": 0,
-            "best_dilution_minus4_count": 0,
-        }
-    )
+    phage_summary = _aggregate_lytic_pair_metrics(lytic_pairs, "phage")
+    phage_summary = resolved_counts.merge(phage_summary, on="phage", how="left").fillna(_LYTIC_PAIR_FILLNA)
     phage_summary["lytic_pair_rate"] = phage_summary["n_lytic_pairs"] / phage_summary["n_resolved_pairs"]
     phage_summary["tested_for_high_potency_enrichment"] = phage_summary["n_lytic_pairs"].ge(min_lytic_pairs_for_test)
     phage_summary["tested_for_multidilution_enrichment"] = phage_summary["n_lytic_pairs"].ge(min_lytic_pairs_for_test)
@@ -325,41 +330,10 @@ def build_bacterial_subgroup_dilution_response_summary(
             .reset_index()
             .rename(columns={subgroup_column: "subgroup_value"})
         )
-        summary = (
-            lytic_pairs.groupby(subgroup_column, dropna=False)
-            .agg(
-                n_lytic_pairs=("pair_id", "size"),
-                n_high_potency_pairs=("is_high_potency", "sum"),
-                n_low_potency_pairs=("is_high_potency", lambda s: int((~s).sum())),
-                high_potency_rate=("is_high_potency", "mean"),
-                n_multidilution_pairs=("has_multidilution_support", "sum"),
-                n_single_dilution_pairs=("has_multidilution_support", lambda s: int((~s).sum())),
-                multi_dilution_support_rate=("has_multidilution_support", "mean"),
-                mean_potency_rank=("dilution_potency_rank", "mean"),
-                median_potency_rank=("dilution_potency_rank", "median"),
-                best_dilution_0_count=("best_lysis_dilution", lambda s: int((s == 0).sum())),
-                best_dilution_minus1_count=("best_lysis_dilution", lambda s: int((s == -1).sum())),
-                best_dilution_minus2_count=("best_lysis_dilution", lambda s: int((s == -2).sum())),
-                best_dilution_minus4_count=("best_lysis_dilution", lambda s: int((s == -4).sum())),
-            )
-            .reset_index()
-            .rename(columns={subgroup_column: "subgroup_value"})
+        summary = _aggregate_lytic_pair_metrics(lytic_pairs, subgroup_column).rename(
+            columns={subgroup_column: "subgroup_value"}
         )
-        summary = resolved_counts.merge(summary, on="subgroup_value", how="left").fillna(
-            {
-                "n_lytic_pairs": 0,
-                "n_high_potency_pairs": 0,
-                "n_low_potency_pairs": 0,
-                "high_potency_rate": 0.0,
-                "n_multidilution_pairs": 0,
-                "n_single_dilution_pairs": 0,
-                "multi_dilution_support_rate": 0.0,
-                "best_dilution_0_count": 0,
-                "best_dilution_minus1_count": 0,
-                "best_dilution_minus2_count": 0,
-                "best_dilution_minus4_count": 0,
-            }
-        )
+        summary = resolved_counts.merge(summary, on="subgroup_value", how="left").fillna(_LYTIC_PAIR_FILLNA)
         summary["field_name"] = subgroup_label
         summary["subgroup_value"] = summary["subgroup_value"].map(clean_trait_value)
         summary["lytic_pair_rate"] = summary["n_lytic_pairs"] / summary["n_resolved_pairs"]
@@ -389,7 +363,10 @@ def build_bacterial_subgroup_dilution_response_summary(
 
     return (
         pd.concat(subgroup_rows, ignore_index=True)
-        .sort_values(["field_name", "high_potency_rate", "n_lytic_pairs", "subgroup_value"], ascending=[True, False, False, True])
+        .sort_values(
+            ["field_name", "high_potency_rate", "n_lytic_pairs", "subgroup_value"],
+            ascending=[True, False, False, True],
+        )
         .reset_index(drop=True)
     )
 
@@ -401,8 +378,8 @@ def top_rows(
 ) -> list[dict[str, object]]:
     if sort_columns:
         summary = summary.sort_values(list(sort_columns), ascending=[False] * len(sort_columns))
-    summary = summary.head(limit).where(pd.notna(summary.head(limit)), None)
-    return json.loads(summary.to_json(orient="records"))
+    top = summary.head(limit)
+    return json.loads(top.where(pd.notna(top), None).to_json(orient="records"))
 
 
 def build_manifest(
