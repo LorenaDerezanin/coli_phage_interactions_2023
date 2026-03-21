@@ -161,7 +161,7 @@ tracks:
       - Output CSV joinable on bacteria column with ~60-80 informative features
     - id: TC02
       title: Build OMP receptor variant feature block from BLAST cluster assignments
-      status: pending
+      status: done
       acceptance_criteria:
       - Ingest blast_results_cured_clusters=99_wide.tsv (12 receptor proteins, 404
         strains)
