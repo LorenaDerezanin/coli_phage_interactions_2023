@@ -74,6 +74,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install pre-commit hooks
+        run: |
+          pip install pre-commit
+          pre-commit install
+
       - name: Configure git identity for Codex agent
         run: |
           git config user.name "github-actions[bot]"

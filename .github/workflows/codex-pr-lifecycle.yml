@@ -185,6 +185,12 @@ jobs:
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: pip install -r requirements.txt
 
+      - name: Install pre-commit hooks
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        run: |
+          pip install pre-commit
+          pre-commit install
+
       # Workaround for https://github.com/openai/codex/issues/12572
       # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
       - name: Fix sandbox compatibility with Ubuntu 24.04 AppArmor
