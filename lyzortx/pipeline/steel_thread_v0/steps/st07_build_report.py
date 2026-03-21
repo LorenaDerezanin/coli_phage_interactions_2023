@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
-import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import load_json, read_csv_rows
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -52,19 +51,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Output directory for final ST0.7 report artifacts.",
     )
     return parser.parse_args(argv)
-
-
-def read_csv_rows(path: Path) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
-
-
-def load_json(path: Path) -> Dict[str, object]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
 
 
 def sha256(path: Path) -> str:

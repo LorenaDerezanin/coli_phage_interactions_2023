@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 from collections import Counter
 from datetime import datetime, timezone
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
 
 ST02_REQUIRED_COLUMNS: Sequence[str] = ("pair_id", "bacteria", "phage", "cv_group", "phage_family")
 ST03_REQUIRED_COLUMNS: Sequence[str] = ("pair_id", "split_holdout")
@@ -50,17 +50,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Deterministic salt for hash-based phage-family assignment.",
     )
     return parser.parse_args(argv)
-
-
-def read_csv_rows(path: Path, required_columns: Sequence[str]) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        missing = [column for column in required_columns if column not in reader.fieldnames]
-        if missing:
-            raise ValueError(f"Missing required columns in {path}: {', '.join(sorted(missing))}")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def select_holdout_items(items: Sequence[str], holdout_fraction: float, split_salt: str) -> Set[str]:

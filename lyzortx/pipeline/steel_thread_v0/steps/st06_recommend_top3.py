@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +12,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -60,18 +60,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Random seed for bootstrap CI sampling.",
     )
     return parser.parse_args(argv)
-
-
-def read_csv_rows(path: Path) -> List[Dict[str, str]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"No header found in {path}.")
-        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
-
-
-def safe_round(value: float) -> float:
-    return round(float(value), 6)
 
 
 def _slice_available_rows(rows: List[Dict[str, str]], slice_name: str) -> List[Dict[str, str]]:
