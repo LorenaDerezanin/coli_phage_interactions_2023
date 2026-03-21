@@ -14,6 +14,10 @@ permissions:
   issues: write
   id-token: write
 
+concurrency:
+  group: claude-review-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   # ── Auto-review on every PR open / push ──────────────────────────────
   # Opus for the first review (opened), Sonnet for re-reviews (synchronize).
