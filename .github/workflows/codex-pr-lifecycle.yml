@@ -18,6 +18,9 @@ permissions:
 jobs:
   address-feedback:
     name: Address Review Feedback
+    # The Codex connector always posts COMMENTED reviews (never APPROVED), so we
+    # match on state == 'commented' and detect clean vs has-issues by checking
+    # for inline comments and substantive body text in subsequent steps.
     if: >-
       github.event_name == 'workflow_dispatch'
       || (
@@ -99,7 +102,8 @@ jobs:
 
       - name: Auto-merge Codex-created PR
         if: >-
-          steps.comments.outputs.has_feedback == 'false'
+          github.event_name == 'pull_request_review'
+          && steps.comments.outputs.has_feedback == 'false'
           && steps.origin.outputs.is_codex_pr == 'true'
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"

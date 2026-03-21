@@ -74,6 +74,14 @@
 - Use one `Closes #...` line per issue when a PR intentionally resolves multiple issues.
 - Keep closure references explicit so orchestration and audit flows can advance automatically on merge.
 
+# Codex Review Connector
+
+- The repo owner has a `chatgpt-codex-connector` GitHub App installed that automatically reviews every pull request.
+- Codex reviews always use `state: "COMMENTED"` — never `APPROVED` or `CHANGES_REQUESTED"`.
+- When Codex has suggestions, it posts inline comments on specific lines. When it finds no issues, the review body
+  contains only boilerplate (e.g., "Didn't find any major issues") with no inline comments.
+- Re-reviews can be requested by commenting `@codex review` on the PR.
+
 # Review guidelines
 
 - Do not approve a PR unless all CI checks pass. A branch with failing tests is not mergeable regardless of code

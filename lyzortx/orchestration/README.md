@@ -64,7 +64,7 @@ stateDiagram-v2
 |---|---|---|
 | `orchestrator.yml` | GitHub Actions workflow | Selects ready tasks, creates issues, marks tasks done, commits plan updates |
 | `codex-implement.yml` | GitHub Actions workflow | Reacts to new `orchestrator-task` issues; runs Codex to implement and open a PR |
-| `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews PRs when created or when re-review is requested |
+| `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews every PR (installed on repo owner's account). Always posts `COMMENTED` reviews, never `APPROVED`. |
 | `codex-pr-lifecycle.yml` | GitHub Actions workflow | Reacts to Codex reviews; orchestrates fix rounds, labels PR, or auto-merges Codex-created PRs |
 | Human reviewer | Person | Final approval and merge for non-Codex PRs or when auto-merge fails |
 
@@ -139,8 +139,11 @@ a PR.
 
 ### codex-pr-lifecycle.yml
 
-- `pull_request_review.submitted`: triggers when `chatgpt-codex-connector[bot]` submits a review.
-- `workflow_dispatch`: manual trigger with a PR number.
+- `pull_request_review.submitted`: triggers when `chatgpt-codex-connector[bot]` submits a review. Note: the connector
+  always posts `COMMENTED` reviews (never `APPROVED`), so the workflow detects "clean" vs "has issues" by checking for
+  inline comments and substantive body text rather than review state.
+- `workflow_dispatch`: manual trigger with a PR number. Auto-merge is gated to `pull_request_review` events only to
+  prevent manual dispatches from bypassing Codex review.
 
 If the review has feedback, Codex addresses it (up to 3 rounds). If no feedback, the PR is labeled
 `ready-for-human-review`. For Codex-created PRs (those with the `orchestrator-task` label), the workflow then waits for
