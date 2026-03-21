@@ -23,6 +23,10 @@
 - If adding dependencies is needed for the technically better implementation, update CI/environment setup accordingly
   rather than degrading the implementation.
 - Keep `requirements.txt` alphabetically sorted by package name.
+- Every new dependency must be pinned to an exact version in `requirements.txt` (e.g., `ruff==0.11.6`, not
+  `ruff>=0.11.6`). Use the newest stable version available at the time of adding.
+- Never install packages with bare `pip install <package>`. Always add the pinned version to `requirements.txt` first,
+  then install via `pip install -r requirements.txt`.
 
 # AGENTS.md and CLAUDE.md Pairing
 

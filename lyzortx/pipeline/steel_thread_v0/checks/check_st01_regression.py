@@ -47,8 +47,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     if not audit_path.exists() or not definition_path.exists() or not pair_audit_path.exists():
         missing = [str(p) for p in (audit_path, definition_path, pair_audit_path) if not p.exists()]
         raise FileNotFoundError(
-            "ST0.1 artifacts missing. Run ST0.1 first or pass --run-st01. Missing: "
-            + ", ".join(missing)
+            "ST0.1 artifacts missing. Run ST0.1 first or pass --run-st01. Missing: " + ", ".join(missing)
         )
 
     audit = load_json(audit_path)

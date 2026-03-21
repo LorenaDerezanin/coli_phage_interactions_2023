@@ -56,8 +56,7 @@ def _read_st01_pair_rows(path: Path) -> List[Dict[str, str]]:
                     ) from exc
             if normalized["hard_label_any_lysis"] not in {"", "0", "1"}:
                 raise ValueError(
-                    f"Unexpected hard_label_any_lysis at {path}:{line_no}: "
-                    f"{normalized['hard_label_any_lysis']!r}"
+                    f"Unexpected hard_label_any_lysis at {path}:{line_no}: {normalized['hard_label_any_lysis']!r}"
                 )
             rows.append(normalized)
         return rows
@@ -69,9 +68,7 @@ def _positive_fraction(interpretable_count: int, score_1_count: int) -> float:
     return score_1_count / interpretable_count
 
 
-def assign_strict_tier(
-    row: Dict[str, str], config: StrictTierConfig
-) -> Tuple[str, str, str, int]:
+def assign_strict_tier(row: Dict[str, str], config: StrictTierConfig) -> Tuple[str, str, str, int]:
     """Assign strict confidence tier and machine-readable reason."""
     score_1_count = int(row["score_1_count"])
     score_0_count = int(row["score_0_count"])
@@ -218,9 +215,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     strict_total = tier_counter["high_conf_pos"] + tier_counter["high_conf_neg"]
     strict_coverage_fraction = strict_total / total_pairs
-    strict_pos_fraction = (
-        strict_label_counter["1"] / strict_total if strict_total else 0.0
-    )
+    strict_pos_fraction = strict_label_counter["1"] / strict_total if strict_total else 0.0
 
     policy_definition = build_policy_definition(config)
     policy_definition["generated_at_utc"] = datetime.now(tz=timezone.utc).isoformat()

@@ -5,8 +5,9 @@ import json
 from lyzortx.orchestration.verify_review_replies import find_unanswered_comments, parse_paginated_json
 
 
-def _comment(id: int, user: str = "chatgpt-codex-connector[bot]", reply_to: int | None = None,
-             review_id: int = 100) -> dict:
+def _comment(
+    id: int, user: str = "chatgpt-codex-connector[bot]", reply_to: int | None = None, review_id: int = 100
+) -> dict:
     return {
         "id": id,
         "user": {"login": user},

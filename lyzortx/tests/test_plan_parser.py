@@ -5,11 +5,9 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import yaml
+import pytest
 
 from lyzortx.orchestration.plan_parser import (
-    PlanGraph,
-    PlanTask,
     is_task_ready,
     is_track_complete,
     load_plan,

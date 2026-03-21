@@ -89,6 +89,8 @@ stateDiagram-v2
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.
 - `.github/workflows/codex-implement.yml` — CI trigger: Codex implements new `orchestrator-task` issues.
 - `.github/workflows/codex-pr-lifecycle.yml` — CI trigger: Codex addresses review feedback on PRs.
+- `.github/workflows/ci-duplicate-check.yml` — informational CI check: runs pylint `symilar` to detect duplicate code
+  in `lyzortx/`. Does not block PRs (`continue-on-error: true`).
 
 ## Task Readiness
 

@@ -62,10 +62,7 @@ def read_prediction_rows(path: Path) -> List[Dict[str, str]]:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError(f"No header found in {path}.")
-        return [
-            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
-            for row in reader
-        ]
+        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
@@ -91,9 +88,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
         dummy_probs = [float(row["pred_dummy_raw"]) for row in prediction_rows]
         logreg_probs = [float(row["pred_logreg_raw"]) for row in prediction_rows]
     except (KeyError, ValueError) as exc:
-        raise ValueError(
-            "Prediction CSV is missing numeric pred_dummy_raw/pred_logreg_raw columns."
-        ) from exc
+        raise ValueError("Prediction CSV is missing numeric pred_dummy_raw/pred_logreg_raw columns.") from exc
 
     return {
         "train_summary": metrics["train_summary"],
@@ -143,8 +138,7 @@ def compare_dicts(expected: Dict[str, Any], actual: Dict[str, Any], prefix: str 
         if is_real_number(exp_val) and is_real_number(act_val):
             if not isclose(float(exp_val), float(act_val), rel_tol=0.0, abs_tol=NUMERIC_TOLERANCE):
                 errors.append(
-                    f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}, "
-                    f"tolerance={NUMERIC_TOLERANCE}"
+                    f"Mismatch at {path}: expected={exp_val!r}, actual={act_val!r}, tolerance={NUMERIC_TOLERANCE}"
                 )
             continue
         if exp_val != act_val:

@@ -198,9 +198,7 @@ def test_build_bacterial_subgroup_dilution_response_summary_reports_field_names(
     assert serotype_o1h1["tested_for_high_potency_enrichment"] == True
 
 
-def test_validate_required_inputs_explains_track_a_prerequisite(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
+def test_validate_required_inputs_explains_track_a_prerequisite(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     host_metadata_path = tmp_path / "host.csv"
     phage_metadata_path = tmp_path / "phage.csv"
     host_metadata_path.write_text("bacteria;Clermont_Phylo;ST_Warwick;O-type;H-type\n", encoding="utf-8")

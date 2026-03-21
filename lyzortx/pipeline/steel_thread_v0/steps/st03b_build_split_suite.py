@@ -212,7 +212,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         "leakage_checks": {
             "host_group_holdout_cv_group_overlap_count": len(train_host_groups & holdout_host_groups),
             "phage_family_holdout_family_overlap_count": len(train_phage_families & holdout_phage_families),
-            "dual_axis_train_vs_dual_holdout_cv_group_overlap_count": len(train_host_groups_dual & dual_holdout_host_groups),
+            "dual_axis_train_vs_dual_holdout_cv_group_overlap_count": len(
+                train_host_groups_dual & dual_holdout_host_groups
+            ),
             "dual_axis_train_vs_dual_holdout_family_overlap_count": len(train_families_dual & dual_holdout_families),
         },
         "holdout_membership": {
@@ -220,7 +222,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         },
     }
 
-    write_csv(args.output_dir / "st03b_split_suite_assignments.csv", fieldnames=list(assignments[0].keys()), rows=assignments)
+    write_csv(
+        args.output_dir / "st03b_split_suite_assignments.csv", fieldnames=list(assignments[0].keys()), rows=assignments
+    )
     write_json(args.output_dir / "st03b_split_suite_protocol.json", protocol)
     write_json(args.output_dir / "st03b_split_suite_audit.json", audit)
 
@@ -231,4 +235,3 @@ def main(argv: Optional[List[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-

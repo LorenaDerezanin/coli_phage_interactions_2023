@@ -1,4 +1,14 @@
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^lyzortx/
+      - id: ruff-format
+        args: [--check]
+        files: ^lyzortx/
+
   - repo: local
     hooks:
       - id: no-ignored-files

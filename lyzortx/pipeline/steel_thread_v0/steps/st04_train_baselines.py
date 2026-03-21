@@ -352,8 +352,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "n_iter": int(logreg_model.n_iter_[0]),
             "intercept": safe_round(float(logreg_model.intercept_[0])),
             "top_positive_features": [
-                {"feature": feature, "coefficient": safe_round(float(coef))}
-                for feature, coef in ranked_coef[:25]
+                {"feature": feature, "coefficient": safe_round(float(coef))} for feature, coef in ranked_coef[:25]
             ],
             "top_negative_features": [
                 {"feature": feature, "coefficient": safe_round(float(coef))}

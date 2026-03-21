@@ -54,10 +54,7 @@ def read_csv_rows(path: Path) -> List[Dict[str, str]]:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError(f"No header found in {path}.")
-        return [
-            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
-            for row in reader
-        ]
+        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:

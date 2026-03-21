@@ -32,15 +32,11 @@ def iter_raw_interactions(raw_interactions_path: Path) -> Iterator[Dict[str, str
 
         missing = [c for c in REQUIRED_RAW_INTERACTION_COLUMNS if c not in reader.fieldnames]
         if missing:
-            raise ValueError(
-                f"Missing required columns in {raw_interactions_path}: {', '.join(sorted(missing))}"
-            )
+            raise ValueError(f"Missing required columns in {raw_interactions_path}: {', '.join(sorted(missing))}")
 
         for line_no, row in enumerate(reader, start=2):
             normalized = {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
             score_value = normalized["score"]
             if score_value not in ALLOWED_RAW_SCORE_VALUES:
-                raise ValueError(
-                    f"Unexpected score value '{score_value}' at {raw_interactions_path}:{line_no}"
-                )
+                raise ValueError(f"Unexpected score value '{score_value}' at {raw_interactions_path}:{line_no}")
             yield normalized

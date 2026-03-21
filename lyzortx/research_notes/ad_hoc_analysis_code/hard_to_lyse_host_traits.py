@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json  # noqa: E402
 
 LOW_SUSCEPTIBILITY_THRESHOLD = 3
 MIN_GROUP_SIZE_FOR_ENRICHMENT_TEST = 4
@@ -98,8 +98,12 @@ def count_lytic_phages(interaction_matrix: pd.DataFrame) -> pd.Series:
 
 
 def count_known_lytic_phages(interaction_matrix: pd.DataFrame) -> pd.Series:
-    return interaction_matrix.gt(0).where(interaction_matrix.notna(), False).sum(axis=1).astype(int).rename(
-        "known_lytic_phages"
+    return (
+        interaction_matrix.gt(0)
+        .where(interaction_matrix.notna(), False)
+        .sum(axis=1)
+        .astype(int)
+        .rename("known_lytic_phages")
     )
 
 
@@ -172,7 +176,9 @@ def build_per_strain_summary(
     has_missing_assays = strain_summary["missing_assay_count"].gt(0)
     strain_summary["is_zero_lysis"] = pd.Series(pd.NA, index=strain_summary.index, dtype="boolean")
     strain_summary["is_low_susceptibility"] = pd.Series(pd.NA, index=strain_summary.index, dtype="boolean")
-    strain_summary["is_zero_lysis"] = strain_summary["is_zero_lysis"].mask(strain_summary["known_lytic_phages"].gt(0), False)
+    strain_summary["is_zero_lysis"] = strain_summary["is_zero_lysis"].mask(
+        strain_summary["known_lytic_phages"].gt(0), False
+    )
     strain_summary["is_low_susceptibility"] = strain_summary["is_low_susceptibility"].mask(
         strain_summary["known_lytic_phages"].gt(low_threshold), False
     )

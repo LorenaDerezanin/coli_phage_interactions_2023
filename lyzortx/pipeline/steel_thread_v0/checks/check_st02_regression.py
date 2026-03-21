@@ -86,9 +86,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
         },
         "schema_summary": {
             "output_column_count": len(audit["output_columns"]),
-            "column_group_sizes": {
-                key: len(cols) for key, cols in manifest["column_groups"].items()
-            },
+            "column_group_sizes": {key: len(cols) for key, cols in manifest["column_groups"].items()},
             "step_name": manifest["step_name"],
         },
         "artifacts": {

@@ -79,10 +79,7 @@ class TestExtractTokenCount:
 
     def test_does_not_match_year_in_timestamp(self) -> None:
         """The year 2026 in a timestamp must not be mistaken for a token count."""
-        log = (
-            "Job\tStep\t2026-03-19T22:22:13Z tokens used\n"
-            "Job\tStep\t2026-03-19T22:22:14Z 83,123\n"
-        )
+        log = "Job\tStep\t2026-03-19T22:22:13Z tokens used\nJob\tStep\t2026-03-19T22:22:14Z 83,123\n"
         assert extract_token_count(log) == 83123
 
 

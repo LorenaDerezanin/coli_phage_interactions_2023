@@ -21,8 +21,6 @@ from pymarkdown.api import PyMarkdownApi, PyMarkdownApiException
 try:
     import yaml
 except ImportError:
-    import json
-
     yaml = None  # type: ignore[assignment]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -93,7 +91,9 @@ def _render_mermaid(tracks: dict[str, Any]) -> str:
 def _render_task_line(task: dict[str, Any]) -> str:
     check = "x" if task.get("status") == "done" else " "
     title = task["title"]
-    parts = [f"{title}." if task.get("status") == "done" and (task.get("implemented_in") or task.get("baseline")) else title]
+    parts = [
+        f"{title}." if task.get("status") == "done" and (task.get("implemented_in") or task.get("baseline")) else title
+    ]
     impl = task.get("implemented_in")
     if impl and task.get("status") == "done":
         parts.append(f"Implemented in `{impl}`.")

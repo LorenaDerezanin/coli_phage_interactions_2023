@@ -52,8 +52,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     if not audit_path.exists() or not definition_path.exists() or not pair_audit_path.exists():
         missing = [str(p) for p in (audit_path, definition_path, pair_audit_path) if not p.exists()]
         raise FileNotFoundError(
-            "ST0.1b artifacts missing. Run ST0.1b first or pass --run-st01 --run-st01b. Missing: "
-            + ", ".join(missing)
+            "ST0.1b artifacts missing. Run ST0.1b first or pass --run-st01 --run-st01b. Missing: " + ", ".join(missing)
         )
 
     audit = load_json(audit_path)
@@ -71,9 +70,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
             "strict_tier_counts": audit["strict_tier_counts"],
             "strict_label_counts": audit["strict_label_counts"],
             "strict_coverage_fraction": audit["strict_coverage_fraction"],
-            "strict_positive_fraction_within_strict_slice": audit[
-                "strict_positive_fraction_within_strict_slice"
-            ],
+            "strict_positive_fraction_within_strict_slice": audit["strict_positive_fraction_within_strict_slice"],
         },
         "quality_summary": {
             "strict_conflicting_counts": audit["strict_conflicting_counts"],

@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import json
 import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
@@ -227,9 +226,7 @@ def read_alias_overrides(path: Path) -> Dict[str, Dict[str, Dict[str, str]]]:
         required = {"entity_type", "alias_name", "canonical_name", "reason", "apply"}
         missing = sorted(required - set(reader.fieldnames))
         if missing:
-            raise ValueError(
-                f"Missing alias override columns in {path}: {', '.join(missing)}"
-            )
+            raise ValueError(f"Missing alias override columns in {path}: {', '.join(missing)}")
         for row in reader:
             entity_type = row["entity_type"].strip().lower()
             if entity_type not in out:
@@ -327,9 +324,7 @@ def build_alias_candidates(
             else:
                 ratio = SequenceMatcher(None, left_norm, right_norm).ratio()
                 min_len = min(len(left_norm), len(right_norm))
-                if min_len >= 5 and (
-                    left_norm in right_norm or right_norm in left_norm
-                ):
+                if min_len >= 5 and (left_norm in right_norm or right_norm in left_norm):
                     confidence = 0.93
                     reason = "normalized_substring"
                 elif min_len >= 6 and ratio >= 0.88:
@@ -437,9 +432,7 @@ def compute_label_v1(
     policy: LabelPolicyV1,
 ) -> Dict[str, object]:
     interpretable = score_1_count + score_0_count
-    positive_fraction_interpretable = (
-        score_1_count / interpretable if interpretable > 0 else 0.0
-    )
+    positive_fraction_interpretable = score_1_count / interpretable if interpretable > 0 else 0.0
 
     if score_1_count > 0:
         any_lysis = "1"
@@ -512,9 +505,7 @@ def compute_label_v2(
     policy: LabelPolicyV2,
 ) -> Dict[str, object]:
     interpretable = score_1_count + score_0_count
-    positive_fraction_interpretable = (
-        score_1_count / interpretable if interpretable > 0 else 0.0
-    )
+    positive_fraction_interpretable = score_1_count / interpretable if interpretable > 0 else 0.0
 
     if (
         score_1_count >= policy.min_positive_obs
@@ -523,10 +514,7 @@ def compute_label_v2(
     ):
         any_lysis = "1"
         label_reason = "strict_positive_rule"
-    elif (
-        score_0_count >= policy.min_negative_obs
-        and score_n_count <= policy.max_uninterpretable_obs
-    ):
+    elif score_0_count >= policy.min_negative_obs and score_n_count <= policy.max_uninterpretable_obs:
         any_lysis = "0"
         label_reason = "strict_negative_rule"
     else:
@@ -549,9 +537,7 @@ def compute_label_v2(
         weighted_pos += counts["1"] * weight
         weighted_interpretable += interpretable_at_d * weight
 
-    weighted_strength = (
-        weighted_pos / weighted_interpretable if weighted_interpretable > 0 else 0.0
-    )
+    weighted_strength = weighted_pos / weighted_interpretable if weighted_interpretable > 0 else 0.0
 
     if any_lysis == "1":
         if weighted_strength >= 0.65:
@@ -774,26 +760,14 @@ def main(argv: Optional[List[str]] = None) -> None:
             )
 
     canonical_bacteria_names = sorted(
-        {
-            canonical
-            for per_source in canonical_bacteria_by_source_name.values()
-            for canonical in per_source.values()
-        }
+        {canonical for per_source in canonical_bacteria_by_source_name.values() for canonical in per_source.values()}
     )
     canonical_phage_names = sorted(
-        {
-            canonical
-            for per_source in canonical_phage_by_source_name.values()
-            for canonical in per_source.values()
-        }
+        {canonical for per_source in canonical_phage_by_source_name.values() for canonical in per_source.values()}
     )
 
-    bacteria_id_map = {
-        name: f"BAC{idx:04d}" for idx, name in enumerate(canonical_bacteria_names, start=1)
-    }
-    phage_id_map = {
-        name: f"PHG{idx:04d}" for idx, name in enumerate(canonical_phage_names, start=1)
-    }
+    bacteria_id_map = {name: f"BAC{idx:04d}" for idx, name in enumerate(canonical_bacteria_names, start=1)}
+    phage_id_map = {name: f"PHG{idx:04d}" for idx, name in enumerate(canonical_phage_names, start=1)}
 
     raw_obs_count_by_bacteria: Counter[str] = Counter()
     raw_pair_count_by_bacteria: Dict[str, Set[str]] = defaultdict(set)
@@ -1005,9 +979,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             f"raw rows={len(raw_rows)} matches full grid {len(raw_bacteria)}*{len(raw_phages)}*"
             f"{args.expected_observations_per_pair}"
         ),
-        fail_detail=(
-            f"raw rows={len(raw_rows)} does not match expected full grid rows={expected_raw_rows}"
-        ),
+        fail_detail=(f"raw rows={len(raw_rows)} does not match expected full grid rows={expected_raw_rows}"),
     )
 
     add_check(
@@ -1138,49 +1110,26 @@ def main(argv: Optional[List[str]] = None) -> None:
     cohorts = {
         "raw369": {
             "description": "Bacteria present in raw_interactions.csv",
-            "bacteria": sorted(
-                {
-                    canonical_bacteria_by_source_name["raw_interactions"][name]
-                    for name in raw_bacteria
-                }
-            ),
+            "bacteria": sorted({canonical_bacteria_by_source_name["raw_interactions"][name] for name in raw_bacteria}),
         },
         "matrix402": {
             "description": "Bacteria present in interaction_matrix.csv",
             "bacteria": sorted(
-                {
-                    canonical_bacteria_by_source_name["interaction_matrix"][name]
-                    for name in matrix_bacteria
-                }
+                {canonical_bacteria_by_source_name["interaction_matrix"][name] for name in matrix_bacteria}
             ),
         },
         "features404": {
             "description": "Bacteria present in CV group table (feature-ready denominator)",
-            "bacteria": sorted(
-                {
-                    canonical_bacteria_by_source_name["cv_groups"][name]
-                    for name in cv_bacteria
-                }
-            ),
+            "bacteria": sorted({canonical_bacteria_by_source_name["cv_groups"][name] for name in cv_bacteria}),
         },
     }
 
-    host_bacteria_canonical = {
-        canonical_bacteria_by_source_name["host_metadata"][name]
-        for name in host_bacteria
-    }
+    host_bacteria_canonical = {canonical_bacteria_by_source_name["host_metadata"][name] for name in host_bacteria}
     matrix_bacteria_canonical = {
-        canonical_bacteria_by_source_name["interaction_matrix"][name]
-        for name in matrix_bacteria
+        canonical_bacteria_by_source_name["interaction_matrix"][name] for name in matrix_bacteria
     }
-    raw_bacteria_canonical = {
-        canonical_bacteria_by_source_name["raw_interactions"][name]
-        for name in raw_bacteria
-    }
-    cv_bacteria_canonical = {
-        canonical_bacteria_by_source_name["cv_groups"][name]
-        for name in cv_bacteria
-    }
+    raw_bacteria_canonical = {canonical_bacteria_by_source_name["raw_interactions"][name] for name in raw_bacteria}
+    cv_bacteria_canonical = {canonical_bacteria_by_source_name["cv_groups"][name] for name in cv_bacteria}
 
     cohort_rows: List[Dict[str, object]] = []
     for cohort_name, cohort in cohorts.items():
@@ -1219,9 +1168,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Preserve observation-level replicate/dilution structure with canonical IDs.
     observation_rows: List[Dict[str, object]] = []
-    pair_dilution_counts: Dict[Tuple[str, str], Dict[int, Counter[str]]] = defaultdict(
-        lambda: defaultdict(Counter)
-    )
+    pair_dilution_counts: Dict[Tuple[str, str], Dict[int, Counter[str]]] = defaultdict(lambda: defaultdict(Counter))
     pair_grid_scores: Dict[Tuple[str, str], Dict[Tuple[str, int], Counter[str]]] = defaultdict(
         lambda: defaultdict(Counter)
     )
@@ -1427,9 +1374,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
         "any_lysis_rule": {
             "positive": "any score=1 across 9 observations",
-            "negative": (
-                "no score=1 and score_0_count >= min_interpretable_obs_for_hard_negative"
-            ),
+            "negative": ("no score=1 and score_0_count >= min_interpretable_obs_for_hard_negative"),
             "unresolved": "otherwise",
         },
         "lysis_strength_rule": {
@@ -1439,9 +1384,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "none": "hard negative",
             "unresolved": "unresolved any_lysis",
         },
-        "dilution_potency_rule": (
-            "best dilution where any lysis observed (most diluted/highest potency retained)"
-        ),
+        "dilution_potency_rule": ("best dilution where any lysis observed (most diluted/highest potency retained)"),
         "uncertainty_flags": [
             "has_uninterpretable",
             "high_uninterpretable_fraction",
@@ -1463,14 +1406,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "score_1_count >= min_positive_obs and positive_fraction_interpretable >= "
                 "min_positive_fraction_interpretable and score_n_count <= max_uninterpretable_obs"
             ),
-            "negative": (
-                "score_0_count >= min_negative_obs and score_n_count <= max_uninterpretable_obs"
-            ),
+            "negative": ("score_0_count >= min_negative_obs and score_n_count <= max_uninterpretable_obs"),
             "unresolved": "otherwise",
         },
-        "lysis_strength_rule": (
-            "weighted positive fraction across dilutions using potency weights"
-        ),
+        "lysis_strength_rule": ("weighted positive fraction across dilutions using potency weights"),
         "dilution_potency_rule": (
             "best dilution with strong support (>=2 positives), else weak support if positive label"
         ),
@@ -1503,10 +1442,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         },
         "include_in_training_count": sum(row["include_in_training"] for row in pair_rows_v1),
         "strict_uncertainty_counts": Counter(
-            flag
-            for row in pair_rows_v1
-            for flag in row["uncertainty_flags"].split("|")
-            if flag
+            flag for row in pair_rows_v1 for flag in row["uncertainty_flags"].split("|") if flag
         ),
     }
 
@@ -1520,10 +1456,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         },
         "include_in_training_count": sum(row["include_in_training"] for row in pair_rows_v2),
         "strict_uncertainty_counts": Counter(
-            flag
-            for row in pair_rows_v2
-            for flag in row["uncertainty_flags"].split("|")
-            if flag
+            flag for row in pair_rows_v2 for flag in row["uncertainty_flags"].split("|") if flag
         ),
     }
 
@@ -1547,9 +1480,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "v2_dilution_potency": row_v2["dilution_potency"],
                 "changed_any_lysis": int(row_v1["any_lysis"] != row_v2["any_lysis"]),
                 "changed_lysis_strength": int(row_v1["lysis_strength"] != row_v2["lysis_strength"]),
-                "changed_dilution_potency": int(
-                    row_v1["dilution_potency"] != row_v2["dilution_potency"]
-                ),
+                "changed_dilution_potency": int(row_v1["dilution_potency"] != row_v2["dilution_potency"]),
                 "v1_uncertainty_flags": row_v1["uncertainty_flags"],
                 "v2_uncertainty_flags": row_v2["uncertainty_flags"],
             }
@@ -1586,11 +1517,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     for row in observation_rows:
         raw_obs_by_pair[str(row["pair_id"])].append(row)
 
-    image_search_roots = [
-        Path(part.strip())
-        for part in args.image_search_roots.split(",")
-        if part.strip() != ""
-    ]
+    image_search_roots = [Path(part.strip()) for part in args.image_search_roots.split(",") if part.strip() != ""]
     image_name_to_path = discover_images(image_search_roots)
 
     qc_rows: List[Dict[str, object]] = []
@@ -1598,9 +1525,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         reasons = sorted(qc_reason_by_pair[pair_id])
         for row in sorted(
             raw_obs_by_pair.get(pair_id, []),
-            key=lambda item: (
-                int(item["observation_id"]),
-            ),
+            key=lambda item: (int(item["observation_id"]),),
         ):
             image_name = str(row["image"])
             image_path = image_name_to_path.get(image_name, "")
@@ -1623,7 +1548,9 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     write_csv(
         qc_dir / "plaque_image_qc_queue.csv",
-        fieldnames=list(qc_rows[0].keys()) if qc_rows else [
+        fieldnames=list(qc_rows[0].keys())
+        if qc_rows
+        else [
             "pair_id",
             "bacteria",
             "phage",
@@ -1684,9 +1611,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "host_metadata": sha256_of_file(args.host_metadata_path),
             "phage_metadata": sha256_of_file(args.phage_metadata_path),
             "cv_groups": sha256_of_file(args.cv_groups_path),
-            "alias_overrides": sha256_of_file(args.alias_overrides_path)
-            if args.alias_overrides_path.exists()
-            else "",
+            "alias_overrides": sha256_of_file(args.alias_overrides_path) if args.alias_overrides_path.exists() else "",
         },
         "outputs": {
             "id_map_summary_json": str(id_map_dir / "id_map_summary.json"),

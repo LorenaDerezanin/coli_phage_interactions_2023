@@ -210,7 +210,9 @@ def read_source_registry(path: Path) -> Dict[str, Dict[str, str]]:
     return {row["source_id"]: row for row in rows}
 
 
-def build_tier_a_source_specs(args: argparse.Namespace, registry_rows: Dict[str, Dict[str, str]]) -> List[TierASourceSpec]:
+def build_tier_a_source_specs(
+    args: argparse.Namespace, registry_rows: Dict[str, Dict[str, str]]
+) -> List[TierASourceSpec]:
     path_by_source = {
         "vhrdb": args.vhrdb_path,
         "basel": args.basel_path,
@@ -224,9 +226,7 @@ def build_tier_a_source_specs(args: argparse.Namespace, registry_rows: Dict[str,
     ]
 
     wrong_tier = [
-        source_id
-        for source_id in candidate_source_ids
-        if registry_rows[source_id].get("confidence_tier", "") != "A"
+        source_id for source_id in candidate_source_ids if registry_rows[source_id].get("confidence_tier", "") != "A"
     ]
     if wrong_tier:
         wrong_text = ", ".join(sorted(wrong_tier))

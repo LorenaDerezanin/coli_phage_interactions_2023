@@ -161,12 +161,18 @@ def _gh_json(args: list[str], *, repo: str = REPO) -> list[dict] | dict:
 
 def list_runs(workflow: str, limit: int = 50) -> list[dict]:
     """List recent workflow runs for *workflow*."""
-    raw = _gh([
-        "run", "list",
-        "--workflow", workflow,
-        "--limit", str(limit),
-        "--json", "databaseId,workflowName,createdAt,status,conclusion,headBranch,displayTitle,event",
-    ])
+    raw = _gh(
+        [
+            "run",
+            "list",
+            "--workflow",
+            workflow,
+            "--limit",
+            str(limit),
+            "--json",
+            "databaseId,workflowName,createdAt,status,conclusion,headBranch,displayTitle,event",
+        ]
+    )
     if not raw.strip():
         return []
     return json.loads(raw)
@@ -179,13 +185,20 @@ def get_run_log(run_id: str) -> str:
 
 def find_pr_for_branch(branch: str) -> dict | None:
     """Find the PR associated with a branch, if any."""
-    raw = _gh([
-        "pr", "list",
-        "--head", branch,
-        "--state", "all",
-        "--json", "number,title,body,headRefName",
-        "--limit", "1",
-    ])
+    raw = _gh(
+        [
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,headRefName",
+            "--limit",
+            "1",
+        ]
+    )
     if not raw.strip():
         return None
     items = json.loads(raw)
@@ -295,13 +308,20 @@ def cmd_ticket(issue_number: int) -> None:
     issue_title = json.loads(issue_raw).get("title", "") if issue_raw.strip() else ""
 
     # Find PR that closes this issue.
-    raw = _gh([
-        "pr", "list",
-        "--search", f"Closes #{issue_number}",
-        "--state", "all",
-        "--json", "number,title,headRefName,body",
-        "--limit", "5",
-    ])
+    raw = _gh(
+        [
+            "pr",
+            "list",
+            "--search",
+            f"Closes #{issue_number}",
+            "--state",
+            "all",
+            "--json",
+            "number,title,headRefName,body",
+            "--limit",
+            "5",
+        ]
+    )
     prs = json.loads(raw) if raw.strip() else []
     target_pr = None
     for pr in prs:
@@ -319,16 +339,10 @@ def cmd_ticket(issue_number: int) -> None:
     print()
 
     # Match implement runs by display title (they all run on main).
-    impl_matched = [
-        r for r in implement_runs
-        if issue_title and issue_title in r.get("displayTitle", "")
-    ]
+    impl_matched = [r for r in implement_runs if issue_title and issue_title in r.get("displayTitle", "")]
 
     # Match lifecycle runs by PR branch.
-    life_matched = [
-        r for r in lifecycle_runs
-        if pr_branch and r.get("headBranch") == pr_branch
-    ]
+    life_matched = [r for r in lifecycle_runs if pr_branch and r.get("headBranch") == pr_branch]
 
     def _print_runs(label: str, runs: list[dict]) -> int:
         total = 0
@@ -385,21 +399,30 @@ def cmd_waste(limit: int) -> None:
     for r in all_runs:
         w = r.waste or WasteReport()
         tokens_str = f"{r.tokens:,}" if r.tokens is not None else "N/A"
-        rows.append([
-            r.run_id,
-            r.date,
-            r.conclusion or r.status,
-            tokens_str,
-            str(w.env_discovery),
-            str(w.failed_commands),
-            str(w.git_config_failures),
-            str(w.file_reads),
-            str(w.shell_commands),
-        ])
+        rows.append(
+            [
+                r.run_id,
+                r.date,
+                r.conclusion or r.status,
+                tokens_str,
+                str(w.env_discovery),
+                str(w.failed_commands),
+                str(w.git_config_failures),
+                str(w.file_reads),
+                str(w.shell_commands),
+            ]
+        )
 
     headers = [
-        "Run ID", "Date", "Status", "Tokens",
-        "Env Fumble", "Failed Cmd", "Git Cfg", "File Reads", "Shell Cmds",
+        "Run ID",
+        "Date",
+        "Status",
+        "Tokens",
+        "Env Fumble",
+        "Failed Cmd",
+        "Git Cfg",
+        "File Reads",
+        "Shell Cmds",
     ]
     print(format_table(rows, headers))
 
@@ -428,19 +451,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Analyze token usage across Codex CI workflow runs.",
     )
     parser.add_argument(
-        "--runs", "-n",
+        "--runs",
+        "-n",
         type=int,
         default=10,
         help="Number of recent runs to analyze (default: 10).",
     )
     parser.add_argument(
-        "--ticket", "-t",
+        "--ticket",
+        "-t",
         type=int,
         default=None,
         help="Analyze all token spend for a given orchestrator issue number.",
     )
     parser.add_argument(
-        "--waste", "-w",
+        "--waste",
+        "-w",
         action="store_true",
         help="Show token waste analysis (env fumbling, failed commands, etc.).",
     )
