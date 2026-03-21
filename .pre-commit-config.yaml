@@ -6,7 +6,6 @@ repos:
         args: [--fix]
         files: ^lyzortx/
       - id: ruff-format
-        args: [--check]
         files: ^lyzortx/
 
   - repo: local
