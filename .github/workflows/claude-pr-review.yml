@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   # ── Auto-review on every PR open / push ──────────────────────────────
+  # Opus for the first review (opened), Sonnet for re-reviews (synchronize).
   auto-review:
     name: Claude Auto Review
     if: >-
@@ -23,6 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Select model
+        id: model
+        run: |
+          if [ "${{ github.event.action }}" = "opened" ]; then
+            echo "name=claude-opus-4-6" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=claude-sonnet-4-6" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -33,7 +43,7 @@ jobs:
           use_sticky_comment: true
           track_progress: true
           claude_args: >-
-            --model claude-opus-4-6
+            --model ${{ steps.model.outputs.name }}
             --allowedTools
             "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(gh pr view:*),Bash(gh api:*),Bash(python:*),Read,Glob,Grep"
           prompt: |
