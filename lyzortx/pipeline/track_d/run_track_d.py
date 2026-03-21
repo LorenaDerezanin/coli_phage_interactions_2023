@@ -10,16 +10,16 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from lyzortx.pipeline.track_d.steps import build_phage_protein_sets
+from lyzortx.pipeline.track_d.steps import build_phage_genome_kmer_features, build_phage_protein_sets
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["protein-sets", "all"],
+        choices=["protein-sets", "genome-kmers", "all"],
         default="all",
-        help="Track D step to run. 'all' currently runs the phage protein-set builder.",
+        help="Track D step to run. 'all' runs the protein-set and genome k-mer feature builders.",
     )
     return parser.parse_args(argv)
 
@@ -28,6 +28,8 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     if args.step in {"protein-sets", "all"}:
         build_phage_protein_sets.main([])
+    if args.step in {"genome-kmers", "all"}:
+        build_phage_genome_kmer_features.main([])
         return
     raise ValueError(f"Unsupported step: {args.step}")
 

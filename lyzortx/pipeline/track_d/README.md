@@ -3,8 +3,12 @@
 `python lyzortx/pipeline/track_d/run_track_d.py`
 
 This command scans `data/genomics/phages/`, resolves the canonical 96-phage panel from
-`data/genomics/phages/guelin_collection.csv`, and writes reproducible per-phage protein FASTA files to
-`lyzortx/generated_outputs/track_d/phage_protein_sets/protein_fastas/`.
+`data/genomics/phages/guelin_collection.csv`, and runs the implemented Track D sequence-derived feature builders:
+
+1. `protein-sets`: write reproducible per-phage protein FASTA files to
+   `lyzortx/generated_outputs/track_d/phage_protein_sets/protein_fastas/`
+2. `genome-kmers`: write tetranucleotide SVD features to
+   `lyzortx/generated_outputs/track_d/phage_genome_kmer_features/phage_genome_kmer_features.csv`
 
 Input precedence is deterministic:
 
@@ -12,6 +16,10 @@ Input precedence is deterministic:
 2. GenBank (`.gb`, `.gbk`, `.genbank`) CDS `/translation=` qualifiers
 3. Genome FASTA (`.fna`, `.fa`, `.fasta`) or GenBank `ORIGIN` sequence with `pyrodigal`
 
-Tracked documentation for the output format lives in `manifest.json` and `phage_protein_summary.csv` under the output
-directory. The manifest records the exact one-command regeneration path, ignored non-panel inputs, and the gene-calling
-policy used when proteins are derived from genomes.
+The genome k-mer builder fits a deterministic TruncatedSVD embedding on normalized tetranucleotide frequencies from all
+discovered genome FASTA files in `FNA/`, then emits panel-joinable rows with `phage_gc_content`,
+`phage_genome_length_nt`, and `phage_genome_tetra_svd_00..23`. Any non-panel genomes remain documented in the source
+summary and manifest but are excluded from the joinable feature CSV.
+
+Tracked documentation for the output formats lives in each step's `manifest.json` plus the corresponding summary/metadata
+CSV files under the output directories.
