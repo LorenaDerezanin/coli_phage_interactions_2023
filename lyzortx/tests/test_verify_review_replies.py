@@ -66,6 +66,24 @@ def test_reply_from_any_user_counts() -> None:
     assert find_unanswered_comments(comments) == []
 
 
+def test_custom_bot_login() -> None:
+    comments = [
+        _comment(1, user="github-actions[bot]"),
+        _comment(2, user="chatgpt-codex-connector[bot]"),
+    ]
+    unanswered = find_unanswered_comments(comments, bot_login="github-actions[bot]")
+    assert len(unanswered) == 1
+    assert unanswered[0]["id"] == 1
+
+
+def test_custom_bot_login_with_reply() -> None:
+    comments = [
+        _comment(1, user="github-actions[bot]"),
+        _comment(2, user="codex-action-bot", reply_to=1),
+    ]
+    assert find_unanswered_comments(comments, bot_login="github-actions[bot]") == []
+
+
 def test_parse_single_page() -> None:
     raw = json.dumps([_comment(1), _comment(2)])
     assert len(parse_paginated_json(raw)) == 2

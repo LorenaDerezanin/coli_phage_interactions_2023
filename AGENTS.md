@@ -97,6 +97,17 @@
 - Before raising an issue, check existing review threads and replies on the PR. Do not re-raise concerns that have
   already been addressed with a code fix or explicitly pushed back on with a reasoned explanation.
 
+## Review focus areas
+
+1. **Correctness** — bugs, logic errors, off-by-one, wrong variable usage.
+2. **Test coverage** — are new/changed functions tested? Are critical edge cases covered?
+3. **Security** — no secrets committed, no injection risks.
+4. **AGENTS.md compliance** — verify the PR follows all policies in this file (code placement, dependency pinning,
+   generated outputs, git staging, etc.).
+5. **Clarity** — naming, structure, readability.
+
+Do NOT nitpick style — ruff handles formatting. Focus on substantive issues only. Do not invent problems.
+
 # PR Creation for Orchestrator Tasks
 
 - When implementing an orchestrator task, create the PR using `gh pr create` from the CLI.
