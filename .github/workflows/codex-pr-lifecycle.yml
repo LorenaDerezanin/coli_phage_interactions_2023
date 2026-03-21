@@ -15,6 +15,12 @@ permissions:
   pull-requests: write
   issues: write
 
+# Only one lifecycle run per PR at a time. New runs cancel in-progress ones
+# to prevent race conditions on the review round cap label.
+concurrency:
+  group: codex-lifecycle-pr-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
 jobs:
   # ── Auto-merge on Claude approval ───────────────────────────────────
   # Scoped to github-actions[bot] (Claude) only. Human approvals should
@@ -45,15 +51,23 @@ jobs:
           echo "Auto-merge enabled for PR #${PR_NUM}. Will merge when required checks pass."
 
   # ── Address feedback from any commented review ───────────────────────
-  # Deliberately unfiltered by reviewer identity: any COMMENTED review
-  # (human, Claude, Codex, etc.) triggers the fix loop. The review round
-  # cap (3) prevents runaway cycles, and Claude is the sole judge of
-  # thread resolution during re-review.
+  # Only triggers on COMMENTED reviews from known reviewer bots:
+  #   - chatgpt-codex-connector[bot]: Codex review bot
+  #   - github-actions[bot]: Claude (via claude-code-action with GITHUB_TOKEN)
+  # This prevents a feedback loop: Codex replies via ORCHESTRATOR_PAT post as
+  # the PAT holder, which would re-trigger this workflow endlessly if we
+  # accepted all COMMENTED reviews. workflow_dispatch is always allowed.
   address-feedback:
     name: Address Review Feedback
     if: >-
       github.event_name == 'workflow_dispatch'
-      || github.event.review.state == 'commented'
+      || (
+        github.event.review.state == 'commented'
+        && (
+          github.event.review.user.login == 'chatgpt-codex-connector[bot]'
+          || github.event.review.user.login == 'github-actions[bot]'
+        )
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).

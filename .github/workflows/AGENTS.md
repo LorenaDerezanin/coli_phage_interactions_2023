@@ -7,5 +7,6 @@
 - `claude-pr-review.yml` uses `anthropics/claude-code-action@v1` to auto-review every PR on open/push, and supports
   interactive `@claude` mentions. Requires the `ANTHROPIC_API_KEY` repository secret. Claude posts comments as
   `github-actions[bot]`.
-- `codex-pr-lifecycle.yml` triggers on PR reviews from either `chatgpt-codex-connector[bot]` or `github-actions[bot]`
-  (Claude). The reviewer bot login is resolved dynamically from the review event.
+- `codex-pr-lifecycle.yml` triggers on COMMENTED reviews from `chatgpt-codex-connector[bot]` or `github-actions[bot]`
+  (Claude) only. Reviews from other users (including the ORCHESTRATOR_PAT holder) are excluded to prevent feedback
+  loops. A concurrency group ensures only one lifecycle run per PR at a time.
