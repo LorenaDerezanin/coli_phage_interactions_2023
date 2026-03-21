@@ -37,7 +37,17 @@ stateDiagram-v2
 
     no_issues --> ready_for_human : label ready-for-human-review
 
-    ready_for_human --> human_merge : human approves <br> and merges PR
+    ready_for_human --> auto_merge_check : PR has <br> orchestrator-task label?
+
+    auto_merge_check --> wait_ci : yes — wait for <br> CI checks to pass
+    auto_merge_check --> human_merge : no — human approves <br> and merges PR
+
+    wait_ci --> auto_merged : CI passes — <br> squash merge
+    wait_ci --> needs_human : CI fails or <br> times out
+
+    needs_human --> human_merge : human reviews <br> and merges PR
+
+    auto_merged --> issue_closed : PR merge <br> auto-closes issue
 
     human_merge --> issue_closed : PR merge <br> auto-closes issue
 
@@ -55,8 +65,8 @@ stateDiagram-v2
 | `orchestrator.yml` | GitHub Actions workflow | Selects ready tasks, creates issues, marks tasks done, commits plan updates |
 | `codex-implement.yml` | GitHub Actions workflow | Reacts to new `orchestrator-task` issues; runs Codex to implement and open a PR |
 | `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews PRs when created or when re-review is requested |
-| `codex-pr-lifecycle.yml` | GitHub Actions workflow | Reacts to Codex reviews; orchestrates fix rounds or labels PR for human review |
-| Human reviewer | Person | Final approval and merge |
+| `codex-pr-lifecycle.yml` | GitHub Actions workflow | Reacts to Codex reviews; orchestrates fix rounds, labels PR, or auto-merges Codex-created PRs |
+| Human reviewer | Person | Final approval and merge for non-Codex PRs or when auto-merge fails |
 
 ## Architecture
 
@@ -133,7 +143,10 @@ a PR.
 - `workflow_dispatch`: manual trigger with a PR number.
 
 If the review has feedback, Codex addresses it (up to 3 rounds). If no feedback, the PR is labeled
-`ready-for-human-review`. After 3 rounds it is labeled `needs-human-review`.
+`ready-for-human-review`. For Codex-created PRs (those with the `orchestrator-task` label), the workflow then waits for
+CI checks to pass and auto-merges via squash merge. If CI fails or times out, the PR is labeled `needs-human-review`.
+Non-Codex PRs with no feedback are left for human review. After 3 feedback rounds the PR is labeled
+`needs-human-review`.
 
 ## Agent Instructions in Dispatched Issues
 
