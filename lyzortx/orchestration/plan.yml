@@ -192,7 +192,7 @@ tracks:
     tasks:
     - id: TD01
       title: Build RBP feature block from RBP_list.csv annotations
-      status: pending
+      status: done
       acceptance_criteria:
       - Parse per-phage RBP count, has_fiber, has_spike, RBP type composition
       - Handle NAs with indicator features for missing RBP annotations
