@@ -360,7 +360,7 @@ tracks:
       - Unit tests verify source-fidelity preservation
     - id: TI04
       title: 'Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB'
-      status: pending
+      status: done
     - id: TI05
       title: Define harmonization protocol for Tier A datasets
       status: pending
