@@ -1,0 +1,4 @@
+line-length = 120
+
+[lint.per-file-ignores]
+"lyzortx/tests/**" = ["E712"]  # numpy bools require == comparison, not `is`
