@@ -15,7 +15,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: claude-review-pr-${{ github.event.pull_request.number }}
+  group: claude-review-pr-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
