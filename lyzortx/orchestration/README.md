@@ -65,7 +65,7 @@ stateDiagram-v2
 | `orchestrator.yml` | GitHub Actions workflow | Selects ready tasks, creates issues, marks tasks done, commits plan updates |
 | `codex-implement.yml` | GitHub Actions workflow | Reacts to new `orchestrator-task` issues; runs Codex to implement and open a PR |
 | `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews every PR (installed on repo owner's account). Always posts `COMMENTED` reviews, never `APPROVED`. |
-| `claude-pr-review.yml` | GitHub Actions workflow | Auto-reviews every PR on open/push via `claude-code-action`. Claude submits formal `APPROVE`/`COMMENT` reviews and manages thread resolution. Posts as `github-actions[bot]`. |
+| `claude-pr-review.yml` | GitHub Actions workflow | Auto-reviews every PR on open/push via `claude-code-action`. Claude (Opus 4.6) submits formal `APPROVE`/`COMMENT` reviews and manages thread resolution. Posts as `claude[bot]`. |
 | `codex-pr-lifecycle.yml` | GitHub Actions workflow | Reacts to bot reviews; orchestrates fix rounds, labels PR, or auto-merges on Claude approval. Uses concurrency groups to prevent parallel runs per PR. |
 | Human reviewer | Person | Final approval and merge for non-Codex PRs or when auto-merge fails |
 
@@ -151,9 +151,9 @@ the sole judge of thread resolution (can resolve/unresolve threads via GraphQL m
 
 ### codex-pr-lifecycle.yml
 
-- `pull_request_review.submitted`: triggers on `COMMENTED` reviews from `chatgpt-codex-connector[bot]` or
-  `github-actions[bot]` (Claude) only. Reviews from other users are excluded to prevent feedback loops (Codex replies
-  via `ORCHESTRATOR_PAT` post as the PAT holder).
+- `pull_request_review.submitted`: triggers on `COMMENTED` reviews from `chatgpt-codex-connector[bot]` or `claude[bot]`
+  only. Reviews from other users are excluded to prevent feedback loops (Codex replies via `ORCHESTRATOR_PAT` post as
+  the PAT holder).
 - `workflow_dispatch`: manual trigger with a PR number.
 
 Two jobs: `auto-merge-on-approve` (merges on Claude's `APPROVED` review) and `address-feedback` (Codex fix loop). A
