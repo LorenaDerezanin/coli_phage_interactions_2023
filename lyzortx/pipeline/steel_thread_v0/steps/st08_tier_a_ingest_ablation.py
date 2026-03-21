@@ -156,10 +156,8 @@ def normalize_vhrdb_row(row: Dict[str, str]) -> Dict[str, str]:
 def normalize_generic_tier_a_row(row: Dict[str, str], source_id: str) -> Dict[str, str]:
     global_response_raw = row.get("global_response", "")
     datasource_response_raw = row.get("datasource_response", "")
-    disagreement_flag = _first_non_blank_value(
-        row,
-        ("source_disagreement_flag",),
-        default=_disagreement_flag(global_response_raw, datasource_response_raw),
+    disagreement_flag = row.get("source_disagreement_flag", "") or _disagreement_flag(
+        global_response_raw, datasource_response_raw
     )
     source_uncertainty = _first_non_blank_value(
         row,
@@ -259,6 +257,8 @@ def build_tier_a_source_specs(args: argparse.Namespace, registry_rows: Dict[str,
 
 
 def load_tier_a_rows(source_specs: Sequence[TierASourceSpec]) -> List[Dict[str, str]]:
+    # Duplicate (bacteria, phage) pairs across sources are kept intentionally;
+    # downstream consumers may need per-source records for ablation and provenance.
     external_rows: List[Dict[str, str]] = []
     for source_spec in source_specs:
         source_rows = read_csv_rows(source_spec.path, source_spec.required_columns)
