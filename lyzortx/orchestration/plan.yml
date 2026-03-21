@@ -170,7 +170,7 @@ tracks:
     - id: TC03
       title: Build extended host surface features (capsule detail, LPS core, UMAP
         embeddings)
-      status: pending
+      status: done
       acceptance_criteria:
       - Add Klebsiella-type capsule, LPS core type, and 8D UMAP phylogenomic embeddings
       - All features joinable on bacteria column

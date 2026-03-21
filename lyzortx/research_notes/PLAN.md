@@ -120,7 +120,7 @@ graph LR
   for host strains.
 - [x] Build defense-system subtype feature block from defense_finder annotations
 - [x] Build OMP receptor variant feature block from BLAST cluster assignments
-- [ ] Build extended host surface features (capsule detail, LPS core, UMAP embeddings)
+- [x] Build extended host surface features (capsule detail, LPS core, UMAP embeddings)
 - [ ] Integrate host feature blocks into v1 pair table
 
 ## Track D: Feature Engineering (Phage)
