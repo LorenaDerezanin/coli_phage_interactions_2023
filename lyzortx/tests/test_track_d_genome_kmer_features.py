@@ -79,6 +79,10 @@ def test_run_track_d_dispatches_genome_kmer_step(monkeypatch) -> None:
         lambda argv: calls.append("genome-kmers"),
     )
 
+    run_track_d.main(["--step", "protein-sets"])
+    assert calls == ["protein-sets"]
+
+    calls.clear()
     run_track_d.main(["--step", "genome-kmers"])
     assert calls == ["genome-kmers"]
 

@@ -284,7 +284,6 @@ def build_feature_rows(
 def build_metadata_rows(
     *,
     feature_columns: Sequence[str],
-    summary_rows: Sequence[Mapping[str, object]],
     fna_dir: Path,
     kmer_size: int,
 ) -> List[Dict[str, object]]:
@@ -362,7 +361,6 @@ def build_genome_kmer_feature_block(
     feature_fieldnames = ("phage", *feature_columns, "phage_gc_content", "phage_genome_length_nt")
     metadata_rows = build_metadata_rows(
         feature_columns=feature_columns,
-        summary_rows=summary_rows,
         fna_dir=fna_dir,
         kmer_size=kmer_size,
     )

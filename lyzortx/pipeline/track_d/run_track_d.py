@@ -30,8 +30,6 @@ def main(argv: list[str] | None = None) -> None:
         build_phage_protein_sets.main([])
     if args.step in {"genome-kmers", "all"}:
         build_phage_genome_kmer_features.main([])
-        return
-    raise ValueError(f"Unsupported step: {args.step}")
 
 
 if __name__ == "__main__":
