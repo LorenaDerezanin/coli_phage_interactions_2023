@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 
@@ -265,14 +265,8 @@ def main(argv: Optional[List[str]] = None) -> None:
 
         uncertainty_flags = parse_flags(row["uncertainty_flags"])
 
-        host_features = {
-            target_col: host_row.get(source_col, "")
-            for source_col, target_col in HOST_FEATURE_MAP
-        }
-        phage_features = {
-            target_col: phage_row.get(source_col, "")
-            for source_col, target_col in PHAGE_FEATURE_MAP
-        }
+        host_features = {target_col: host_row.get(source_col, "") for source_col, target_col in HOST_FEATURE_MAP}
+        phage_features = {target_col: phage_row.get(source_col, "") for source_col, target_col in PHAGE_FEATURE_MAP}
         host_missing = count_missing(host_features.values())
         phage_missing = count_missing(phage_features.values())
 
@@ -342,9 +336,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         host_phylo = host_features.get("host_clermont_phylo", "")
         phage_host_phylo = phage_features.get("phage_host_phylo", "")
         if host_phylo and phage_host_phylo:
-            pair_row["pair_host_phylo_equals_phage_host_phylo"] = (
-                "1" if host_phylo == phage_host_phylo else "0"
-            )
+            pair_row["pair_host_phylo_equals_phage_host_phylo"] = "1" if host_phylo == phage_host_phylo else "0"
         else:
             pair_row["pair_host_phylo_equals_phage_host_phylo"] = ""
 
@@ -359,8 +351,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     if critical_missing and not args.allow_missing_joins:
         missing_summary = ", ".join(f"{k}={v}" for k, v in sorted(critical_missing.items()))
         raise ValueError(
-            "Missing joins detected during ST0.2. Use --allow-missing-joins to continue. "
-            f"Missing: {missing_summary}"
+            f"Missing joins detected during ST0.2. Use --allow-missing-joins to continue. Missing: {missing_summary}"
         )
 
     output_rows.sort(key=lambda r: (str(r["bacteria"]), str(r["phage"])))
@@ -418,10 +409,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "aux_matrix_ge2",
                 "aux_matrix_ge3",
             ],
-            "host_features": [target_col for _, target_col in HOST_FEATURE_MAP]
-            + ["host_feature_missing_count"],
-            "phage_features": [target_col for _, target_col in PHAGE_FEATURE_MAP]
-            + ["phage_feature_missing_count"],
+            "host_features": [target_col for _, target_col in HOST_FEATURE_MAP] + ["host_feature_missing_count"],
+            "phage_features": [target_col for _, target_col in PHAGE_FEATURE_MAP] + ["phage_feature_missing_count"],
             "pair_features": [
                 "pair_host_phylo_equals_phage_host_phylo",
             ],

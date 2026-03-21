@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.load_inputs import iter_raw_interactions
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
@@ -57,9 +57,7 @@ class PairAccumulator:
         return self.score_n_count / self.total_obs
 
 
-def evaluate_pair_policy(
-    counts: PairAccumulator, policy: LabelPolicyConfig
-) -> Tuple[Optional[int], str, List[str]]:
+def evaluate_pair_policy(counts: PairAccumulator, policy: LabelPolicyConfig) -> Tuple[Optional[int], str, List[str]]:
     """Apply hard-label and uncertainty policy for one bacteria-phage pair."""
     hard_label: Optional[int]
     label_reason: str
@@ -98,22 +96,15 @@ def build_policy_definition(policy: LabelPolicyConfig) -> Dict[str, object]:
         "policy_version": "v1",
         "hard_label_rules": {
             "positive": "hard_label=1 if at least one interpretable score is 1",
-            "negative": (
-                "hard_label=0 if no score is 1 and score_0_count >= "
-                "min_interpretable_obs_for_hard_negative"
-            ),
+            "negative": ("hard_label=0 if no score is 1 and score_0_count >= min_interpretable_obs_for_hard_negative"),
             "unresolved": "hard_label is null otherwise",
         },
         "uncertainty_flags": {
             "has_uninterpretable": "pair contains one or more score='n' observations",
-            "high_uninterpretable_fraction": (
-                "score_n_count / total_obs >= high_uninterpretable_fraction_threshold"
-            ),
+            "high_uninterpretable_fraction": ("score_n_count / total_obs >= high_uninterpretable_fraction_threshold"),
             "conflicting_interpretable_observations": "pair contains both score='0' and score='1'",
             "incomplete_observation_grid": "total_obs differs from expected_observations_per_pair",
-            "low_interpretable_support": (
-                "interpretable_count < min_interpretable_obs_for_hard_negative"
-            ),
+            "low_interpretable_support": ("interpretable_count < min_interpretable_obs_for_hard_negative"),
             "unresolved_label": "pair does not satisfy hard positive or hard negative rule",
         },
         "thresholds": asdict(policy),
@@ -230,9 +221,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "distinct_phage_count": len(phage_ids),
         "observed_pair_count": total_pairs,
         "expected_full_grid_pair_count": expected_full_grid_pairs,
-        "observed_vs_full_grid_pair_fraction": round(
-            total_pairs / expected_full_grid_pairs, 6
-        )
+        "observed_vs_full_grid_pair_fraction": round(total_pairs / expected_full_grid_pairs, 6)
         if expected_full_grid_pairs
         else 0.0,
         "hard_label_counts": {

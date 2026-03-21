@@ -109,10 +109,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             f"failed_error_check_count={error_failures}, failed_warning_check_count={warning_failures}"
         )
     if args.fail_on_warnings and warning_failures > 0:
-        raise SystemExit(
-            "Track A integrity warning gate failed: "
-            f"failed_warning_check_count={warning_failures}"
-        )
+        raise SystemExit(f"Track A integrity warning gate failed: failed_warning_check_count={warning_failures}")
 
     cohort_rows = load_csv_rows(cohort_dir / "cohort_contracts.csv")
     expected_cohorts = {
@@ -160,15 +157,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     if len(v1_rows) == 0:
         raise SystemExit("Track A label_set_v1_pairs.csv is empty.")
     if len(v1_rows) != len(v2_rows):
-        raise SystemExit(
-            "Track A label set size mismatch: "
-            f"v1={len(v1_rows)}, v2={len(v2_rows)}"
-        )
+        raise SystemExit(f"Track A label set size mismatch: v1={len(v1_rows)}, v2={len(v2_rows)}")
     if len(v1_rows) != len(comparison_rows):
-        raise SystemExit(
-            "Track A comparison size mismatch: "
-            f"v1={len(v1_rows)}, comparison={len(comparison_rows)}"
-        )
+        raise SystemExit(f"Track A comparison size mismatch: v1={len(v1_rows)}, comparison={len(comparison_rows)}")
 
     v1_summary = load_json(labels_dir / "label_set_v1_summary.json")
     v2_summary = load_json(labels_dir / "label_set_v2_summary.json")

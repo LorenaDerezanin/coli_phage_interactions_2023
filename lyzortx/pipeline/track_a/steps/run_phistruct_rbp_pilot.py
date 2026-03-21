@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -152,7 +151,9 @@ def build_phistruct_style_embeddings(
 
     by_phage: Dict[str, Dict[str, float]] = {}
     for idx, phage in enumerate(phage_names):
-        by_phage[phage] = {f"phage_struct_rbp_emb_{col:02d}": round(float(reduced[idx, col]), 8) for col in range(embedding_dim)}
+        by_phage[phage] = {
+            f"phage_struct_rbp_emb_{col:02d}": round(float(reduced[idx, col]), 8) for col in range(embedding_dim)
+        }
     by_phage["__metadata__"] = {
         "missing_genome_count": float(len(missing)),
         "svd_dim_effective": float(svd_dim),
@@ -323,7 +324,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     train_rows = [row for row in enriched_rows if row["split_phage_family_holdout"] == "train_non_holdout"]
     eval_rows = [row for row in enriched_rows if row["split_phage_family_holdout"] == "holdout_test"]
     if not train_rows or not eval_rows:
-        raise ValueError("Pilot requires non-empty train_non_holdout and holdout_test rows from split_phage_family_holdout")
+        raise ValueError(
+            "Pilot requires non-empty train_non_holdout and holdout_test rows from split_phage_family_holdout"
+        )
 
     features_by_variant = build_variant_feature_columns(enriched_rows, embedding_dim=args.embedding_dim)
 
@@ -404,7 +407,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     write_csv(predictions_path, fieldnames=list(prediction_rows_sorted[0].keys()), rows=prediction_rows_sorted)
     write_json(summary_path, delta_summary)
 
-    print(json.dumps({"metrics": str(metrics_path), "predictions": str(predictions_path), "summary": str(summary_path)}))
+    print(
+        json.dumps({"metrics": str(metrics_path), "predictions": str(predictions_path), "summary": str(summary_path)})
+    )
 
 
 if __name__ == "__main__":

@@ -16,8 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
-from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (
+from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json  # noqa: E402
+from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (  # noqa: E402
     benjamini_hochberg,
     clean_trait_value,
     derive_serotype,
@@ -152,8 +152,7 @@ def prepare_host_metadata(host_metadata: pd.DataFrame) -> pd.DataFrame:
     prepared["host_phylogroup"] = prepared["Clermont_Phylo"].map(clean_trait_value)
     prepared["host_st"] = prepared["ST_Warwick"].map(clean_trait_value)
     prepared["host_serotype"] = [
-        derive_serotype(o_type, h_type)
-        for o_type, h_type in zip(prepared["O-type"], prepared["H-type"], strict=False)
+        derive_serotype(o_type, h_type) for o_type, h_type in zip(prepared["O-type"], prepared["H-type"], strict=False)
     ]
     return prepared[["bacteria", "host_phylogroup", "host_st", "host_serotype"]].drop_duplicates()
 
@@ -264,9 +263,7 @@ def build_phage_dilution_response_summary(
     lytic_pairs["is_high_potency"] = lytic_pairs["best_lysis_dilution"].isin(HIGH_POTENCY_DILUTIONS)
 
     resolved_counts = (
-        resolved_pairs.groupby("phage", dropna=False)
-        .agg(n_resolved_pairs=("pair_id", "size"))
-        .reset_index()
+        resolved_pairs.groupby("phage", dropna=False).agg(n_resolved_pairs=("pair_id", "size")).reset_index()
     )
     phage_summary = _aggregate_lytic_pair_metrics(lytic_pairs, "phage")
     phage_summary = resolved_counts.merge(phage_summary, on="phage", how="left").fillna(_LYTIC_PAIR_FILLNA)
@@ -312,7 +309,9 @@ def build_bacterial_subgroup_dilution_response_summary(
     host_metadata: pd.DataFrame,
     min_lytic_pairs_for_test: int,
 ) -> pd.DataFrame:
-    resolved_pairs = pair_labels[pair_labels["any_lysis"].notna()].copy().merge(host_metadata, on="bacteria", how="left")
+    resolved_pairs = (
+        pair_labels[pair_labels["any_lysis"].notna()].copy().merge(host_metadata, on="bacteria", how="left")
+    )
     lytic_pairs = pair_labels[pair_labels["any_lysis"].eq(1)].copy()
     lytic_pairs = lytic_pairs.merge(pair_response_features, on="pair_id", how="left").merge(
         host_metadata,

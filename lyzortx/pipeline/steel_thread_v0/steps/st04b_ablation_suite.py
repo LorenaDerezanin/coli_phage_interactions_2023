@@ -58,10 +58,7 @@ def read_csv_rows(path: Path, required_columns: Sequence[str]) -> List[Dict[str,
         missing = [column for column in required_columns if column not in reader.fieldnames]
         if missing:
             raise ValueError(f"Missing required columns in {path}: {', '.join(sorted(missing))}")
-        return [
-            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
-            for row in reader
-        ]
+        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def parse_float(value: str) -> Optional[float]:
@@ -139,9 +136,7 @@ def summarize_signal_sources(matrix_rows: List[Dict[str, object]]) -> List[str]:
     phage_ap = ap_by_model.get("phage_only_logreg")
     if host_ap is not None and phage_ap is not None:
         dominant = "host identity" if host_ap >= phage_ap else "phage identity"
-        lines.append(
-            f"Dominant single-axis signal is {dominant} (host AP={host_ap:.3f}, phage AP={phage_ap:.3f})."
-        )
+        lines.append(f"Dominant single-axis signal is {dominant} (host AP={host_ap:.3f}, phage AP={phage_ap:.3f}).")
     if no_identity_ap is not None:
         delta = best_ap - no_identity_ap
         lines.append(
@@ -190,9 +185,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         if r["split_dual_axis"] == "train_non_holdout" and r["label_hard_any_lysis"] in {"0", "1"}
     ]
     eval_rows = [
-        r
-        for r in joined_rows
-        if split_membership(r["split_dual_axis"]) and r["label_hard_any_lysis"] in {"0", "1"}
+        r for r in joined_rows if split_membership(r["split_dual_axis"]) and r["label_hard_any_lysis"] in {"0", "1"}
     ]
     if not train_rows or not eval_rows:
         raise ValueError("ST0.4b requires non-empty train_non_holdout and evaluation rows.")
@@ -235,7 +228,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     dummy.fit(X_dummy, y_train_dummy)
     y_eval_dummy = [int(row["label_hard_any_lysis"]) for row in eval_rows]
     dummy_probs = [float(dummy.predict_proba([[0]])[0][1]) for _ in eval_rows]
-    matrix_rows.append({"model": "dummy_prior", "split": "all_eval", **compute_binary_metrics(y_eval_dummy, dummy_probs)})
+    matrix_rows.append(
+        {"model": "dummy_prior", "split": "all_eval", **compute_binary_metrics(y_eval_dummy, dummy_probs)}
+    )
 
     signal_summary = summarize_signal_sources(matrix_rows)
     split_ap_snapshot = build_split_ap_snapshot(matrix_rows)

@@ -32,7 +32,7 @@ def main() -> None:
     phage_to_morph = dict(zip(phage_meta["phage"], phage_meta["Morphotype"]))
 
     # Morphotype lytic breadth stats at phage level.
-    phage_lysis_counts = (bin_mat.sum(axis=0).rename("n_bacteria_lysed").to_frame())
+    phage_lysis_counts = bin_mat.sum(axis=0).rename("n_bacteria_lysed").to_frame()
     phage_lysis_counts["morphotype"] = phage_lysis_counts.index.map(phage_to_morph)
 
     groups = {
@@ -89,10 +89,7 @@ def main() -> None:
     single_df.to_csv(out_dir / "bacteria_lysed_by_exactly_one_phage.csv", index=False)
 
     unique_lyser_counts = (
-        single_df["unique_lyser"]
-        .value_counts()
-        .rename_axis("phage")
-        .reset_index(name="n_bacteria_lysed_exclusively")
+        single_df["unique_lyser"].value_counts().rename_axis("phage").reset_index(name="n_bacteria_lysed_exclusively")
     )
     unique_lyser_counts["morphotype"] = unique_lyser_counts["phage"].map(phage_to_morph)
     unique_lyser_counts.to_csv(out_dir / "phage_counts_for_exactly_one_phage_bacteria.csv", index=False)

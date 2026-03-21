@@ -33,7 +33,6 @@ def test_evaluate_holdout_slice_handles_dual_slices() -> None:
     assert strict_metrics["holdout_hit_count"] == 1
 
 
-
 def test_evaluate_holdout_slice_counts_missing_strict_recs_as_miss() -> None:
     holdout_by_bacteria = {
         "b1": [{"label_hard_binary": "1", "is_strict_trainable": "1"}],
@@ -72,9 +71,4 @@ def test_bootstrap_topk_ci_bounds() -> None:
 
     assert ci["bootstrap_samples"] == 100
     assert 0.0 <= ci["ci_low_topk_hit_rate_all_strains"] <= ci["ci_high_topk_hit_rate_all_strains"] <= 1.0
-    assert (
-        0.0
-        <= ci["ci_low_topk_hit_rate_susceptible_only"]
-        <= ci["ci_high_topk_hit_rate_susceptible_only"]
-        <= 1.0
-    )
+    assert 0.0 <= ci["ci_low_topk_hit_rate_susceptible_only"] <= ci["ci_high_topk_hit_rate_susceptible_only"] <= 1.0

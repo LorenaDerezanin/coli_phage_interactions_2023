@@ -52,10 +52,7 @@ def read_csv_rows(path: Path) -> List[Dict[str, str]]:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError(f"No header found in {path}.")
-        return [
-            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
-            for row in reader
-        ]
+        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
@@ -64,11 +61,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     ranked_path = intermediate_dir / "st05_ranked_predictions.csv"
     artifacts_path = intermediate_dir / "st05_calibration_artifacts.json"
 
-    missing = [
-        str(p)
-        for p in (summary_path, predictions_path, ranked_path, artifacts_path)
-        if not p.exists()
-    ]
+    missing = [str(p) for p in (summary_path, predictions_path, ranked_path, artifacts_path) if not p.exists()]
     if missing:
         raise FileNotFoundError(
             "ST0.5 artifacts missing. Run ST0.5 first or pass --run-st01 --run-st01b --run-st02 --run-st03 --run-st04 --run-st05. "
@@ -80,7 +73,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
     artifacts = load_json(artifacts_path)
     summary_by_key = {}
     for row in summary_rows:
-        label_slice = row.get('label_slice', 'full_label')
+        label_slice = row.get("label_slice", "full_label")
         key = f"{row['model']}|{row['dataset']}|{label_slice}|{row['variant']}"
         summary_by_key[key] = {
             "n": int(row["n"]),

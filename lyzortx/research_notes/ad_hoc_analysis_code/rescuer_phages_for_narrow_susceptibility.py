@@ -14,8 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
-from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (
+from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json  # noqa: E402
+from lyzortx.research_notes.ad_hoc_analysis_code.hard_to_lyse_host_traits import (  # noqa: E402
     LOW_SUSCEPTIBILITY_THRESHOLD,
     build_per_strain_summary,
 )

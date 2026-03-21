@@ -67,15 +67,11 @@ def read_csv_rows(path: Path) -> List[Dict[str, str]]:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError(f"No header found in {path}.")
-        return [
-            {k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()}
-            for row in reader
-        ]
+        return [{k: (v.strip() if isinstance(v, str) else "") for k, v in row.items()} for row in reader]
 
 
 def safe_round(value: float) -> float:
     return round(float(value), 6)
-
 
 
 def _slice_available_rows(rows: List[Dict[str, str]], slice_name: str) -> List[Dict[str, str]]:
@@ -322,7 +318,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     print("ST0.6 completed.")
     print(f"- Recommended strains: {summary['recommendation_summary']['recommended_strain_count']}")
     print(f"- Recommendation rows: {summary['recommendation_summary']['recommended_row_count']}")
-    print(f"- Holdout top-{args.top_k} hit rate: {summary['holdout_topk_metrics']['full_label']['topk_hit_rate_all_strains']}")
+    print(
+        f"- Holdout top-{args.top_k} hit rate: {summary['holdout_topk_metrics']['full_label']['topk_hit_rate_all_strains']}"
+    )
     print(f"- Output recommendations: {output_recs}")
 
 

@@ -66,17 +66,11 @@ def build_actual_summary(output_dir: Path) -> Dict[str, Any]:
     error_path = output_dir / "error_analysis.csv"
     manifest_path = output_dir / "run_manifest.json"
 
-    missing = [
-        str(p)
-        for p in (metrics_path, top3_path, calib_path, error_path, manifest_path)
-        if not p.exists()
-    ]
+    missing = [str(p) for p in (metrics_path, top3_path, calib_path, error_path, manifest_path) if not p.exists()]
     if missing:
         raise FileNotFoundError(
             "ST0.7 artifacts missing. Run ST0.7 first or pass --run-st01 --run-st01b --run-st02 "
-            "--run-st03 --run-st04 --run-st05 --run-st06 --run-st07. "
-            + "Missing: "
-            + ", ".join(missing)
+            "--run-st03 --run-st04 --run-st05 --run-st06 --run-st07. " + "Missing: " + ", ".join(missing)
         )
 
     manifest = load_json(manifest_path)

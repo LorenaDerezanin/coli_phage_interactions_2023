@@ -289,15 +289,13 @@ class GitHubClient:
     def create_agent_task_issue(self, task: Task) -> IssueRef:
         title = f"[ORCH][{task.task_id}] {task.title}"
 
-        acceptance = (
-            "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
-        )
+        acceptance = "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
         body_parts = [
             f"<!-- {TASK_ID_MARKER}: {task.task_id} -->",
             "## Orchestrator Task",
             f"- Task ID: `{task.task_id}`",
             f"- Executor: `{task.executor}`",
-            f"- Plan Source: `lyzortx/orchestration/plan.yml`",
+            "- Plan Source: `lyzortx/orchestration/plan.yml`",
             "",
             "## Description",
             task.description or "No description provided.",
@@ -422,8 +420,11 @@ def _dispatch_one_agent_task(
     if existing_issue is not None and existing_issue.state == "open":
         task_status[task.task_id] = "in_progress"
         append_history(
-            state, "task_dispatched_existing_issue",
-            task_id=task.task_id, issue_number=existing_issue.number, issue_url=existing_issue.html_url,
+            state,
+            "task_dispatched_existing_issue",
+            task_id=task.task_id,
+            issue_number=existing_issue.number,
+            issue_url=existing_issue.html_url,
         )
         return {"task_id": task.task_id, "issue_number": existing_issue.number, "reused": True}
 
@@ -438,8 +439,11 @@ def _dispatch_one_agent_task(
     }
 
     append_history(
-        state, "task_dispatched_new_issue",
-        task_id=task.task_id, issue_number=created_issue.number, issue_url=created_issue.html_url,
+        state,
+        "task_dispatched_new_issue",
+        task_id=task.task_id,
+        issue_number=created_issue.number,
+        issue_url=created_issue.html_url,
     )
     return {"task_id": task.task_id, "issue_number": created_issue.number, "reused": False}
 
@@ -482,10 +486,18 @@ def run_once(
         dispatched = []
         for pt in candidates:
             task_status[pt.task_id] = "in_progress"
-            append_history(state, "task_waiting_for_agent", task_id=pt.task_id,
-                           note="No GitHub token/repo configured; issue dispatch skipped.")
+            append_history(
+                state,
+                "task_waiting_for_agent",
+                task_id=pt.task_id,
+                note="No GitHub token/repo configured; issue dispatch skipped.",
+            )
             dispatched.append(pt.task_id)
-        return {"action": "tasks_waiting_for_agent", "task_ids": dispatched, "warning": "No GitHub token/repo configured"}
+        return {
+            "action": "tasks_waiting_for_agent",
+            "task_ids": dispatched,
+            "warning": "No GitHub token/repo configured",
+        }
 
     try:
         github_client.ensure_task_label_exists()
