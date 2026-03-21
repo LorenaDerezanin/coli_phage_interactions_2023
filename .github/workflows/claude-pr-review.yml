@@ -33,6 +33,7 @@ jobs:
           use_sticky_comment: true
           track_progress: true
           claude_args: >-
+            --model claude-opus-4-6
             --allowedTools
             "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(gh pr view:*),Bash(gh api:*),Bash(python:*),Read,Glob,Grep"
           prompt: |
