@@ -318,7 +318,9 @@ def _usage_str(run: RunInfo) -> str:
         return f"{run.tokens:,} tok"
     if run.claude_result and run.claude_result.cost_usd > 0:
         return f"${run.claude_result.cost_usd:.2f}"
-    return "N/A"
+    if run.conclusion in ("skipped", "cancelled"):
+        return run.conclusion
+    return "no LLM"
 
 
 def cmd_overview(limit: int) -> None:
@@ -436,8 +438,10 @@ def cmd_ticket(issue_number: int) -> None:
                 continue
             log = get_run_log(rid)
             tokens = extract_token_count(log)
-            tokens_str = f"{tokens:,}" if tokens else "N/A"
-            print(f"  Run {rid}: {conclusion} — {tokens_str} tokens")
+            if tokens:
+                print(f"  Run {rid}: {conclusion} — {tokens:,} tokens")
+            else:
+                print(f"  Run {rid}: {conclusion} — no LLM invocation")
             if tokens:
                 total += tokens
         print()
