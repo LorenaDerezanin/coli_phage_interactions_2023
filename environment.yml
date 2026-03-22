@@ -4,6 +4,6 @@ channels:
   - bioconda
 dependencies:
   - python=3.12.12
-  - pip
+  - pip=26.0.1
   - pip:
       - -r requirements.txt
