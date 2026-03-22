@@ -41,6 +41,56 @@ COST_USD_RE = re.compile(r'"total_cost_usd"\s*:\s*([\d.]+)')
 NUM_TURNS_RE = re.compile(r'"num_turns"\s*:\s*(\d+)')
 DURATION_MS_RE = re.compile(r'"duration_ms"\s*:\s*(\d+)')
 
+# Codex model detection in logs (e.g. "model: gpt-5.4" or "CODEX_MODEL: gpt-5.4").
+CODEX_MODEL_RE = re.compile(r"(?:model:|CODEX_MODEL:)\s*(gpt-[\w.-]+)", re.IGNORECASE)
+
+# OpenAI per-1M-token pricing: (input_rate, output_rate, as_of_date).
+# Codex logs only a total token count without an input/output split, so we use
+# a blended rate assuming ~30% input / 70% output — a reasonable ratio for
+# coding agents that read context then generate code.
+# Source: https://developers.openai.com/api/docs/pricing
+# ⚠️  When prices change, add a NEW entry with updated as_of — keep old entries
+# so historical runs can use the rate that was current when they ran.
+_OPENAI_RATES: dict[str, list[tuple[float, float, str]]] = {
+    # model -> [(input_per_1M, output_per_1M, "YYYY-MM-DD"), ...] newest first
+    "gpt-5.4": [(2.50, 15.00, "2026-03-01")],
+    "gpt-5.4-mini": [(0.75, 4.50, "2026-03-01")],
+    "gpt-5.4-nano": [(0.20, 1.25, "2026-03-01")],
+    "gpt-5.2": [(2.50, 10.00, "2026-01-01")],
+    "gpt-5": [(2.00, 8.00, "2025-06-01")],
+}
+_INPUT_RATIO = 0.30
+
+
+def _rate_for_model(model: str, run_date: str) -> tuple[float, float, str] | None:
+    """Return (input_rate, output_rate, as_of) for *model* at *run_date*.
+
+    Picks the newest rate whose as_of <= run_date.  Returns None if unknown.
+    """
+    entries = _OPENAI_RATES.get(model)
+    if not entries:
+        return None
+    # Entries are newest-first; pick the first one whose as_of <= run_date.
+    for input_rate, output_rate, as_of in entries:
+        if as_of <= run_date:
+            return input_rate, output_rate, as_of
+    # All entries are after the run date — use the oldest as best guess.
+    return entries[-1]
+
+
+def estimate_codex_cost(tokens: int, model: str, run_date: str) -> float | None:
+    """Estimate USD cost for a Codex run from total tokens, model, and date.
+
+    Returns None if the model is not in the pricing table.
+    """
+    rate = _rate_for_model(model, run_date)
+    if rate is None:
+        return None
+    input_rate, output_rate, _ = rate
+    blended_per_token = (_INPUT_RATIO * input_rate + (1 - _INPUT_RATIO) * output_rate) / 1_000_000
+    return tokens * blended_per_token
+
+
 # Waste-detection patterns.
 WASTE_PATTERNS: dict[str, re.Pattern[str]] = {
     "env_discovery": re.compile(
@@ -92,6 +142,13 @@ def extract_token_count(log_text: str) -> int | None:
                 if content:
                     break
     return None
+
+
+def extract_codex_model(log_text: str) -> str | None:
+    """Return the model name from a Codex run log, or None if not found."""
+    clean = strip_ansi(log_text)
+    match = CODEX_MODEL_RE.search(clean)
+    return match.group(1) if match else None
 
 
 @dataclass
@@ -164,6 +221,8 @@ class RunInfo:
     display_title: str = ""
     event: str = ""
     tokens: int | None = None
+    model: str | None = None
+    cost_usd: float | None = None
     claude_result: ClaudeActionResult | None = None
     waste: WasteReport | None = None
 
@@ -304,23 +363,26 @@ def _is_review_workflow(run: RunInfo) -> bool:
 
 
 def _enrich_run(run: RunInfo, log: str) -> None:
-    """Extract token count and/or Claude action result from a run log."""
+    """Extract token count, model, cost, and/or Claude action result from a run log."""
     run.tokens = extract_token_count(log)
+    run.model = extract_codex_model(log)
     run.claude_result = extract_claude_action_result(log)
+    # Compute Codex cost estimate from tokens + model + date.
+    if run.tokens is not None and run.model:
+        run.cost_usd = estimate_codex_cost(run.tokens, run.model, run.date)
+    elif run.claude_result and run.claude_result.cost_usd > 0:
+        run.cost_usd = run.claude_result.cost_usd
 
 
-def _usage_str(run: RunInfo) -> str:
-    """Return a human-readable usage string for a run.
-
-    Codex runs report token counts; Claude review runs report USD cost.
-    """
-    if run.tokens is not None:
-        return f"{run.tokens:,} tok"
-    if run.claude_result and run.claude_result.cost_usd > 0:
-        return f"${run.claude_result.cost_usd:.2f}"
+def _cost_str(run: RunInfo) -> str:
+    """Return a human-readable cost string for a run."""
+    if run.cost_usd is not None:
+        return f"${run.cost_usd:.2f}"
     if run.conclusion in ("skipped", "cancelled"):
         return run.conclusion
-    return "no LLM"
+    if run.tokens is None and run.claude_result is None:
+        return "no LLM"
+    return "?"
 
 
 def cmd_overview(limit: int) -> None:
@@ -347,32 +409,30 @@ def cmd_overview(limit: int) -> None:
     rows = []
     for r in all_runs:
         assoc = _run_association(r)
-        rows.append([r.run_id, r.workflow[:30], r.date, r.conclusion or r.status, _usage_str(r), assoc])
+        model = r.model or ""
+        rows.append([r.run_id, r.workflow[:25], r.date, r.conclusion or r.status, model, _cost_str(r), assoc])
 
-    headers = ["Run ID", "Workflow", "Date", "Status", "Usage", "PR/Issue"]
+    headers = ["Run ID", "Workflow", "Date", "Status", "Model", "Cost", "PR/Issue"]
     print(format_table(rows, headers))
 
-    # Summary stats — split by workflow type.
-    codex_runs = [r for r in all_runs if not _is_review_workflow(r)]
-    review_runs = [r for r in all_runs if _is_review_workflow(r)]
-
-    token_values = [r.tokens for r in codex_runs if r.tokens is not None]
-    success_tokens = [r.tokens for r in codex_runs if r.tokens is not None and r.conclusion == "success"]
-    failure_tokens = [r.tokens for r in codex_runs if r.tokens is not None and r.conclusion == "failure"]
+    # Summary stats.
+    all_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None]
+    codex_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None and not _is_review_workflow(r)]
+    review_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None and _is_review_workflow(r)]
 
     print()
-    if token_values:
-        print(f"Codex total tokens: {sum(token_values):,}")
-    if success_tokens:
-        print(f"Codex avg tokens (success): {sum(success_tokens) // len(success_tokens):,}")
-    if failure_tokens:
-        print(f"Codex avg tokens (failure): {sum(failure_tokens) // len(failure_tokens):,}")
-
-    cost_values = [r.claude_result.cost_usd for r in review_runs if r.claude_result and r.claude_result.cost_usd > 0]
-    if cost_values:
-        print(f"Claude review total cost: ${sum(cost_values):.2f}")
-        print(f"Claude review avg cost:   ${sum(cost_values) / len(cost_values):.2f}")
-        print(f"Claude review runs:       {len(cost_values)}")
+    if all_costs:
+        print(f"Total estimated cost: ${sum(all_costs):.2f}")
+    if codex_costs:
+        print(
+            f"  Codex:   ${sum(codex_costs):.2f}  ({len(codex_costs)} runs, avg ${sum(codex_costs) / len(codex_costs):.2f})"
+        )
+    if review_costs:
+        print(
+            f"  Claude:  ${sum(review_costs):.2f}  ({len(review_costs)} runs, avg ${sum(review_costs) / len(review_costs):.2f})"
+        )
+    if codex_costs:
+        print(f"\n  ⚠ Codex costs are estimates (blended {_INPUT_RATIO:.0%} in / {1 - _INPUT_RATIO:.0%} out rate)")
 
 
 def cmd_ticket(issue_number: int) -> None:
@@ -425,61 +485,58 @@ def cmd_ticket(issue_number: int) -> None:
     # Match Claude review runs by PR branch.
     claude_matched = [r for r in review_runs if pr_branch and r.get("headBranch") == pr_branch]
 
-    def _print_codex_runs(label: str, runs: list[dict]) -> int:
-        total = 0
-        if not runs:
-            return 0
-        print(f"=== {label} ===")
-        for entry in runs:
-            rid = str(entry["databaseId"])
-            conclusion = entry.get("conclusion") or entry.get("status", "")
-            if conclusion in ("skipped",):
-                print(f"  Run {rid}: {conclusion} — skipped")
-                continue
-            log = get_run_log(rid)
-            tokens = extract_token_count(log)
-            if tokens:
-                print(f"  Run {rid}: {conclusion} — {tokens:,} tokens")
-            else:
-                print(f"  Run {rid}: {conclusion} — no LLM invocation")
-            if tokens:
-                total += tokens
-        print()
-        return total
-
-    def _print_claude_runs(label: str, runs: list[dict]) -> float:
+    def _print_runs(label: str, runs: list[dict]) -> float:
         total_cost = 0.0
         if not runs:
             return 0.0
         print(f"=== {label} ===")
         for entry in runs:
             rid = str(entry["databaseId"])
+            date = entry["createdAt"][:10]
             conclusion = entry.get("conclusion") or entry.get("status", "")
             if conclusion in ("skipped",):
                 print(f"  Run {rid}: {conclusion} — skipped")
                 continue
             log = get_run_log(rid)
-            result = extract_claude_action_result(log)
-            if result and result.cost_usd > 0:
-                print(f"  Run {rid}: {conclusion} — ${result.cost_usd:.2f} ({result.num_turns} turns)")
-                total_cost += result.cost_usd
-            else:
-                print(f"  Run {rid}: {conclusion} — N/A")
+            run = RunInfo(
+                run_id=rid,
+                workflow="",
+                date=date,
+                status="",
+                conclusion=conclusion,
+                head_branch="",
+            )
+            _enrich_run(run, log)
+            cost_label = _cost_str(run)
+            detail = ""
+            if run.tokens is not None:
+                detail = f"{run.tokens:,} tok"
+                if run.model:
+                    detail += f" ({run.model})"
+            elif run.claude_result and run.claude_result.num_turns > 0:
+                detail = f"{run.claude_result.num_turns} turns"
+            elif run.cost_usd is None:
+                detail = "no LLM invocation"
+            print(f"  Run {rid}: {conclusion} — {cost_label}  {detail}")
+            if run.cost_usd:
+                total_cost += run.cost_usd
         print()
         return total_cost
 
-    impl_tokens = _print_codex_runs("Implementation runs", impl_matched)
-    life_tokens = _print_codex_runs("Review lifecycle runs (Codex)", life_matched)
-    claude_cost = _print_claude_runs("Claude review runs", claude_matched)
+    impl_cost = _print_runs("Implementation runs", impl_matched)
+    life_cost = _print_runs("Lifecycle runs (Codex)", life_matched)
+    claude_cost = _print_runs("Claude review runs", claude_matched)
 
-    codex_total = impl_tokens + life_tokens
-    print(f"Implementation tokens:  {impl_tokens:,}")
-    print(f"Lifecycle tokens:       {life_tokens:,}")
-    print(f"Codex total tokens:     {codex_total:,}")
+    total = impl_cost + life_cost + claude_cost
+    print(f"Total estimated cost: ${total:.2f}")
+    if impl_cost > 0:
+        print(f"  Implementation: ${impl_cost:.2f}")
+    if life_cost > 0:
+        print(f"  Lifecycle:      ${life_cost:.2f}")
     if claude_cost > 0:
-        print(f"Claude review cost:     ${claude_cost:.2f}")
-    if codex_total > 0:
-        print(f"Lifecycle overhead:     {life_tokens / codex_total * 100:.1f}%")
+        print(f"  Claude review:  ${claude_cost:.2f}")
+    if impl_cost > 0:
+        print(f"\n  ⚠ Codex costs are estimates (blended {_INPUT_RATIO:.0%} in / {1 - _INPUT_RATIO:.0%} out rate)")
 
 
 def cmd_waste(limit: int) -> None:
@@ -510,7 +567,7 @@ def cmd_waste(limit: int) -> None:
                 r.workflow[:20],
                 r.date,
                 r.conclusion or r.status,
-                _usage_str(r),
+                _cost_str(r),
                 str(w.env_discovery),
                 str(w.failed_commands),
                 str(w.git_config_failures),
@@ -524,7 +581,7 @@ def cmd_waste(limit: int) -> None:
         "Workflow",
         "Date",
         "Status",
-        "Usage",
+        "Cost",
         "Env Fumble",
         "Failed Cmd",
         "Git Cfg",

@@ -4,17 +4,31 @@ description: >-
   Analyze token usage and cost across Codex CI and Claude PR review workflow
   runs — overview, per-ticket breakdown, and waste detection.
 user-invocable: true
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, WebFetch
 argument-hint: "[--runs N] [--ticket <issue_number>] [--waste]"
 ---
 
 # CI Token Usage Analysis
 
-Analyze token consumption and cost across Codex CI workflow runs and Claude PR
-review runs for the `LorenaDerezanin/coli_phage_interactions_2023` repository.
+Analyze token consumption and estimated USD cost across Codex CI workflow runs
+and Claude PR review runs for the `LorenaDerezanin/coli_phage_interactions_2023`
+repository.
 
-Codex runs (implement + lifecycle) report token counts. Claude review runs
-report USD cost, number of turns, and duration.
+- **Claude review runs** report exact `total_cost_usd` from the action logs.
+- **Codex runs** report only a total token count. Cost is estimated using
+  cached per-model pricing with a 30% input / 70% output blended rate. The
+  pricing table lives in `_OPENAI_RATES` in
+  `lyzortx/orchestration/ci_token_usage.py` and includes an `as_of` date per
+  entry so historical runs use the rate that was current when they ran.
+
+## Pricing verification
+
+Before presenting results to the user, **verify that the cached OpenAI rates
+are still current**. Check `_OPENAI_RATES` in
+`lyzortx/orchestration/ci_token_usage.py` — each entry has an `as_of` date. If
+the newest `as_of` is more than ~60 days old, fetch the current rates from
+<https://developers.openai.com/api/docs/pricing> and update the table (add a
+new entry with the new date; keep old entries for historical accuracy).
 
 ## How to run
 
@@ -33,8 +47,8 @@ Route on `$ARGUMENTS`:
 ### No arguments (or `--runs N`)
 
 Show a recent overview of the last N workflow runs (default 10):
-- Run ID, workflow name, date, status, usage (tokens or USD cost), associated PR/issue
-- Summary stats split by Codex (tokens) and Claude review (USD cost)
+- Run ID, workflow, date, status, model, estimated USD cost, associated PR/issue
+- Totals and averages split by Codex vs Claude
 
 ```bash
 python -m lyzortx.orchestration.ci_token_usage
@@ -44,10 +58,10 @@ python -m lyzortx.orchestration.ci_token_usage --runs 20
 ### `--ticket <issue_number>`
 
 Track ALL spend for a given orchestrator ticket:
-1. Implementation runs (Codex) — token counts
-2. Lifecycle review runs (Codex) — token counts
-3. Claude PR review runs — USD cost and turn counts
-4. Breakdown: implementation vs review rounds
+1. Implementation runs (Codex) — tokens, model, estimated cost
+2. Lifecycle runs — usually no LLM invocation
+3. Claude PR review runs — exact USD cost and turn counts
+4. Total estimated cost across all run types
 
 ```bash
 python -m lyzortx.orchestration.ci_token_usage --ticket 42

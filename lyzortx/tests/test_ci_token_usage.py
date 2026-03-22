@@ -6,7 +6,9 @@ from lyzortx.orchestration.ci_token_usage import (
     ClaudeActionResult,
     WasteReport,
     detect_waste,
+    estimate_codex_cost,
     extract_claude_action_result,
+    extract_codex_model,
     extract_token_count,
     format_table,
     strip_ansi,
@@ -83,6 +85,38 @@ class TestExtractTokenCount:
         """The year 2026 in a timestamp must not be mistaken for a token count."""
         log = "Job\tStep\t2026-03-19T22:22:13Z tokens used\nJob\tStep\t2026-03-19T22:22:14Z 83,123\n"
         assert extract_token_count(log) == 83123
+
+
+class TestExtractCodexModel:
+    def test_model_line(self) -> None:
+        log = "some output\nmodel: gpt-5.4\nmore output"
+        assert extract_codex_model(log) == "gpt-5.4"
+
+    def test_codex_model_env(self) -> None:
+        log = "CODEX_MODEL: gpt-5.4-mini\nRunning..."
+        assert extract_codex_model(log) == "gpt-5.4-mini"
+
+    def test_with_ansi(self) -> None:
+        log = "\x1b[1mmodel: gpt-5.2\x1b[0m\n"
+        assert extract_codex_model(log) == "gpt-5.2"
+
+    def test_no_model(self) -> None:
+        assert extract_codex_model("no model info here") is None
+
+
+class TestEstimateCodexCost:
+    def test_known_model(self) -> None:
+        # gpt-5.4: $2.50 in, $15.00 out, blended 30/70 = $11.25/1M
+        cost = estimate_codex_cost(100_000, "gpt-5.4", "2026-03-22")
+        assert cost is not None
+        assert abs(cost - 1.125) < 0.001
+
+    def test_unknown_model(self) -> None:
+        assert estimate_codex_cost(100_000, "gpt-99", "2026-03-22") is None
+
+    def test_zero_tokens(self) -> None:
+        cost = estimate_codex_cost(0, "gpt-5.4", "2026-03-22")
+        assert cost == 0.0
 
 
 class TestExtractClaudeActionResult:
