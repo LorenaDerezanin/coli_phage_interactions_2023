@@ -455,6 +455,10 @@ tracks:
       acceptance_criteria:
       - For any input strain shows ranked phage list with P(lysis), confidence band,
         and top SHAP features
+      - Show both panel-model predictions (with host_n_infections) and
+        deployment-realistic predictions (without) side by side
+      - Use the locked v1 feature config from
+        lyzortx/pipeline/track_g/v1_feature_configuration.json
       - Suitable for interactive live demos
     - id: TP02
       title: Build panel coverage heatmap across strain diversity
@@ -464,6 +468,9 @@ tracks:
       - 96-phage panel predicted coverage shown as heatmap
       - Axes are host phylogroup x phage family, colored by predicted lysis probability
       - Hard-to-lyse strain gaps clearly visible
+      - Include a second heatmap or annotation layer showing deployment-realistic
+        coverage (predictions without host_n_infections) so partners can see where
+        novel-strain confidence differs from panel confidence
     - id: TP03
       title: Build feature lift visualization from ablation suite results
       status: pending
@@ -471,3 +478,6 @@ tracks:
       acceptance_criteria:
       - Bar chart showing prediction improvement by feature block from TG03 ablation
       - Clear narrative from metadata-only through each feature addition
+      - Include the TG05 deployment-realistic result as a callout showing that
+        removing host_n_infections improves top-3 ranking (92.3%) while reducing
+        pairwise calibration (AUC 0.835)
