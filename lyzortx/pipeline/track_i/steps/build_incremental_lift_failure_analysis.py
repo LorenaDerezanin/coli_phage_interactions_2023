@@ -173,6 +173,7 @@ def compute_source_tier_lift_rows(
     for (source_system, confidence_tier), rows in sorted(grouped_rows.items()):
         included_rows = [row for row in rows if row.get("external_label_include_in_training", "") == "1"]
         first_arm = included_rows[0].get("first_training_arm", "excluded") if included_rows else "excluded"
+        first_arm_row = included_rows[0] if included_rows else rows[0]
         arm_summary = arm_rows.get(first_arm)
         row_count = len(rows)
         pair_ids = {str(row["pair_id"]) for row in rows}
@@ -185,11 +186,11 @@ def compute_source_tier_lift_rows(
                 "source_system": source_system,
                 "confidence_tier": confidence_tier or "unknown",
                 "first_training_arm": first_arm,
-                "first_training_arm_index": int(rows[0].get("first_training_arm_index", "-1") or -1),
+                "first_training_arm_index": int(first_arm_row.get("first_training_arm_index", "-1") or -1),
                 "row_count": row_count,
                 "pair_count": len(pair_ids),
                 "training_weight": safe_round(training_weight),
-                "mean_training_weight": safe_round(training_weight / row_count if row_count else 0.0),
+                "mean_training_weight": safe_round(training_weight / included_row_count if included_row_count else 0.0),
                 "included_row_count": included_row_count,
                 "excluded_row_count": excluded_row_count,
                 "row_exclusion_rate": safe_round(excluded_row_count / row_count if row_count else 0.0),

@@ -49,6 +49,19 @@ def test_compute_source_tier_lift_rows_tracks_included_and_excluded_external_row
             "source_qc_flag": "ok",
         },
         {
+            "pair_id": "b2__p2_excluded",
+            "source_system": "vhrdb",
+            "first_training_arm": "excluded",
+            "first_training_arm_index": "-1",
+            "effective_training_weight": "0.0",
+            "integration_status": "excluded_by_confidence",
+            "external_label_include_in_training": "0",
+            "external_label_confidence_tier": "high",
+            "source_resolution_status": "resolved",
+            "source_disagreement_flag": "0",
+            "source_qc_flag": "ok",
+        },
+        {
             "pair_id": "b3__p3",
             "source_system": "vhrdb",
             "first_training_arm": "plus_vhrdb",
@@ -124,11 +137,13 @@ def test_compute_source_tier_lift_rows_tracks_included_and_excluded_external_row
         if row["source_system"] == "virus_host_db" and row["confidence_tier"] == "medium"
     )
 
-    assert vhrdb_high["row_count"] == 1
+    assert vhrdb_high["row_count"] == 2
     assert vhrdb_high["included_row_count"] == 1
-    assert vhrdb_high["excluded_row_count"] == 0
+    assert vhrdb_high["excluded_row_count"] == 1
     assert vhrdb_high["first_training_arm"] == "plus_vhrdb"
-    assert vhrdb_high["row_share_of_arm"] == 0.333333
+    assert vhrdb_high["first_training_arm_index"] == 1
+    assert vhrdb_high["mean_training_weight"] == 1.0
+    assert vhrdb_high["row_share_of_arm"] == 0.666667
     assert virus_host_db_medium["included_row_count"] == 0
     assert virus_host_db_medium["excluded_row_count"] == 1
     assert virus_host_db_medium["first_training_arm"] == "excluded"

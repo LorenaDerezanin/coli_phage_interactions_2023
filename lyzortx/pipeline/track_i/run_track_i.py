@@ -11,9 +11,9 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from lyzortx.pipeline.track_i.steps import (
-    build_incremental_lift_failure_analysis,
     build_external_label_confidence_tiers,
     build_external_training_cohorts,
+    build_incremental_lift_failure_analysis,
     build_strict_ablation_sequence,
     build_tier_b_weak_label_ingest,
 )
