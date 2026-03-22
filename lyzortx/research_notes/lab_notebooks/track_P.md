@@ -79,3 +79,44 @@ panel confidence.
 1. If the partner deck needs a compact static figure, export the same bundle to a publication-style PNG/SVG without
    changing the aggregation logic.
 2. If the panel expands, keep the same row/column ordering logic so future coverage maps remain comparable.
+
+### 2026-03-22: TP03 implemented (feature lift visualization from ablation suite results)
+
+#### Executive summary
+
+Built a Track P feature lift visualization that turns the TG03 ablation results into a ranked bar chart with a clear
+metadata-only narrative and a TG05 deployment-realistic callout. The chart emphasizes top-3 ranking lift by feature
+block, while the callout shows why removing `host_n_infections` improves top-3 ranking even as pairwise calibration
+weakens.
+
+#### Implementation
+
+- Added `lyzortx/pipeline/track_p/steps/build_feature_lift_visualization.py` and wired it into
+  `lyzortx/pipeline/track_p/run_track_p.py`.
+- The new step reads the TG03 ablation summary and TG05 lock summary when available, with a deterministic fallback to
+  the recorded notebook values so the visualization remains runnable even if the generated summaries are absent.
+- The artifact renders:
+  - a bar chart of top-3 lift versus the metadata-only baseline
+  - a sequence narrative that walks through each TG03 feature addition in order
+  - a TG05 callout summarizing the deployment-realistic tradeoff
+
+#### Output summary
+
+- Feature lift bundle:
+  - `lyzortx/generated_outputs/track_p/feature_lift_visualization/tp03_feature_lift_visualization.html`
+  - `lyzortx/generated_outputs/track_p/feature_lift_visualization/tp03_feature_lift_visualization_bundle.json`
+  - `lyzortx/generated_outputs/track_p/feature_lift_visualization/tp03_feature_lift_visualization_summary.json`
+
+#### Interpretation
+
+1. `+defense subtypes` and `+phage genomic` are the clean ranking winners in TG03. Both recover the strongest
+   percentage-point lift relative to the metadata baseline, which is exactly the story the bar chart needs to show.
+2. `+OMP receptors` improves AUC more than it improves top-3 ranking, which is why the visualization separates
+   discrimination from ranking lift instead of collapsing them into one metric.
+3. The TG05 deployment-realistic lock is the useful partner-facing caution: the same winner gets better top-3 ranking
+   when `host_n_infections` is removed, but pairwise calibration falls to ROC-AUC `0.835178`.
+
+#### Next steps
+
+1. If we need a slide-ready still frame, export the SVG chart from the HTML bundle rather than rebuilding the metrics.
+2. If the ranking story changes in a later lock, keep the narrative order fixed so the comparison remains readable.
