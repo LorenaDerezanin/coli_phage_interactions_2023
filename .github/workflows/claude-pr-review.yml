@@ -93,7 +93,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
         run: |
           PR_NUM="${{ github.event.pull_request.number }}"
-          LATEST_REVIEW=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
+          LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
             --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state')
 
           if [ "$LATEST_REVIEW" = "APPROVED" ]; then
