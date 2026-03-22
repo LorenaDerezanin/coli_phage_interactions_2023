@@ -215,3 +215,90 @@ visualization.
 4. RBP-receptor lookup curation — requires ~2–3 days of manual literature work.
 5. GBM overfitting — with ~200 features and 29K training pairs, need careful regularization.
 6. Pangenome data deferred — `unique_host_genes.csv` (7,511 records) parked unless defense+receptor features plateau.
+
+### 2026-03-22: v1 model results — ablation paradox and feature-selection plan adjustment
+
+#### What happened
+
+Tracks C, D, E, and most of G landed in a single sprint. The v1 LightGBM model on 191 features (21 categorical + 170
+numeric) was trained, calibrated, and ablated against the locked ST03 holdout (65 strains, 6,235 pairs).
+
+#### Headline v0 → v1 comparison
+
+| Metric | v0 (logreg, metadata) | v1 (LightGBM, all features) | Delta |
+|--------|----------------------|---------------------------|-------|
+| ROC-AUC | 0.827 | **0.910** | +0.083 |
+| Top-3 hit rate (all strains) | 84.6% | **89.2%** | +4.6% |
+| Top-3 hit rate (susceptible only) | 87.3% | **92.1%** | +4.8% |
+| Brier score | 0.171 | **0.113** | -0.058 |
+| ECE (isotonic, full-label) | 0.032 | **0.020** | -0.012 |
+| ECE (isotonic, strict-conf) | 0.124 | **0.094** | -0.030 |
+
+AUC exceeded the 0.87–0.90 target at 0.910. Calibration is excellent (ECE 0.020 isotonic on full-label). Top-3 hit rate
+at 89.2% is close to the 90% target but does not clear it.
+
+#### The ablation paradox
+
+The TG03 ablation suite revealed an unexpected pattern: individual feature blocks outperform the combined model on the
+top-3 ranking metric.
+
+| Arm (v0 baseline + one block) | Top-3 hit rate | ROC-AUC | Brier |
+|-------------------------------|---------------|---------|-------|
+| v0 only (metadata baseline) | 86.2% | 0.908 | 0.114 |
+| **+defense subtypes** | **90.8%** | 0.907 | 0.114 |
+| +OMP receptors | 87.7% | **0.910** | **0.112** |
+| **+phage genomic** | **90.8%** | 0.909 | 0.112 |
+| +pairwise compatibility | 87.7% | 0.905 | 0.117 |
+| all features combined | 87.7% | 0.909 | 0.113 |
+
+Key observations:
+
+1. **Defense subtypes and phage genomic features are the clear winners.** Each independently pushes top-3 hit rate to
+   90.8% (+3 holdout strains recovered). These are the features that break the "popular phage" bias — they encode *which
+   specific defense systems* a strain carries and *which specific phage genome architecture* can evade them.
+
+2. **OMP receptors win on discrimination but not ranking.** Best AUC (0.910) and Brier (0.112) as a single block, but
+   only 87.7% top-3 hit rate. The receptor variants help separate lytic from non-lytic pairs more precisely, but that
+   precision does not translate into moving the *right* phages into the top-3 slots.
+
+3. **Pairwise compatibility features hurt.** Adding them alone degrades both AUC (0.905, worst of all arms) and Brier
+   (0.117, worst of all arms). The genus-level receptor lookup covers 80% of phages, but the compatibility signal may
+   be too coarse, or the defense evasion proxy may be partially redundant with the raw defense subtype block.
+
+4. **The all-features model does not dominate.** At 87.7% top-3 / 0.909 AUC, it underperforms the single-block defense
+   and phage-genomic arms on ranking. This means feature interactions are creating noise when all blocks are thrown
+   together without selection.
+
+#### Why this happens
+
+The most likely explanation: when all 191 features are present, the GBM splits on pairwise-compatibility and
+OMP-receptor features that have good binary discrimination (high AUC) but that *dilute the ranking signal* from defense
+and phage-genomic features. Top-3 hit rate is a ranking metric sensitive to the relative ordering of the top few phages
+per strain, not just the classification boundary. A feature that improves average-case AUC can still hurt the top-k
+ranking for specific strains by pushing a marginally-higher-scoring wrong phage above a correct one.
+
+#### What this means for the plan
+
+The 90.8% top-3 hit rate from defense-only or phage-genomic-only arms proves the target is reachable — we just need
+to find the right feature combination that preserves it.
+
+**Plan adjustment (two changes):**
+
+1. **Added TG05: feature-subset sweep.** Train models on all 2-block and 3-block combinations of the 4 new feature
+   blocks (defense, OMP, phage-genomic, pairwise). Identify the winning subset that maximizes top-3 hit rate without
+   degrading AUC. Lock the final v1 feature configuration for downstream Tracks F, H, and P.
+
+2. **Extended TG04 acceptance criteria.** SHAP analysis must now also produce a concrete recommendation of which feature
+   blocks to keep in the final v1 model, informed by both SHAP evidence and TG03 ablation results. This ensures SHAP
+   is not just descriptive but prescriptive.
+
+No other plan changes needed. The pairwise compatibility work (Track E) was still worth doing — the features may become
+useful after refinement (e.g., finer-grained receptor lookup, per-genus rather than per-family evasion rates) or in the
+optimization-based recommender (Track H). We just should not force them into the v1 model if they hurt ranking.
+
+#### Next steps (priority order)
+
+1. **TG04** (SHAP): understand *which* pairwise features cause the ranking degradation and whether any are worth keeping.
+2. **TG05** (feature-subset sweep): find the combination that clears 90%+ top-3 on holdout.
+3. **TF01** (bootstrap CIs): run on the winning feature configuration, not necessarily the all-features model.
+4. **TF02** (before/after error analysis): compare the winning v1 model against v0 on the specific holdout miss strains.

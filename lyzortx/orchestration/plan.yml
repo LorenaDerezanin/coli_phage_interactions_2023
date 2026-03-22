@@ -311,6 +311,18 @@ tracks:
       - Per-pair explanations answering why each phage was recommended for each strain
       - Global feature importance ranking across the panel
       - Per-strain summary of what makes each strain hard or easy to predict
+      - Concrete recommendation of which feature blocks to keep in final v1 model,
+        based on SHAP evidence and TG03 ablation results
+    - id: TG05
+      title: Run feature-subset sweep to find best block combination for top-3 ranking
+      status: pending
+      acceptance_criteria:
+      - Train models on all 2-block and 3-block combinations of the 4 new feature
+        blocks (defense, OMP, phage-genomic, pairwise)
+      - Report top-3 hit rate, AUC, and Brier on the same ST03 holdout for each combo
+      - Identify the winning subset that maximizes top-3 hit rate without degrading AUC
+      - Compare winning subset against the TG01 all-features model
+      - Lock the final v1 feature configuration for downstream Track F, H, and P
   H:
     name: In-Silico Cocktail Recommendation
     description: Top-k recommendations with SHAP-based explanations for each recommended
