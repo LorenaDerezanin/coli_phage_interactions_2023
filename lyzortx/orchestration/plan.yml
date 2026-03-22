@@ -400,7 +400,7 @@ tracks:
     - id: TI09
       title: 'Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL
         -> +KlebPhaCol -> +GPB -> +Tier B'
-      status: pending
+      status: done
       model: gpt-5.4-mini
     - id: TI10
       title: Track incremental lift and failure modes by datasource and confidence

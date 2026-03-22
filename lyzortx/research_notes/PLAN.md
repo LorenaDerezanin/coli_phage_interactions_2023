@@ -176,8 +176,7 @@ graph LR
 - [x] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata
 - [x] Define confidence tiers for external labels
 - [x] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable
-- [ ] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B Model:
-      `gpt-5.4-mini`.
+- [x] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B
 - [ ] Track incremental lift and failure modes by datasource and confidence tier Model: `gpt-5.4-mini`.
 
 ## Track J: Reproducibility and Release Quality
