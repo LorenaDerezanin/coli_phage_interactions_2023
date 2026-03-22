@@ -39,3 +39,43 @@ and SHAP drivers for each ranked phage, and it is wired to the locked v1 feature
    overview.
 2. If the demo needs slimmer initial load times, trim the initial rank limit in the HTML controls rather than changing
    the underlying data bundle.
+
+### 2026-03-22: TP02 implemented (panel coverage heatmap across strain diversity)
+
+#### Executive summary
+
+Built a Track P coverage heatmap that aggregates predicted lysis probability across host phylogroup and phage family for
+the locked 96-phage panel. The artifact renders panel-default and deployment-realistic heatmaps side by side, plus a
+delta layer that makes `host_n_infections`-driven confidence shifts visible where novel-strain confidence diverges from
+panel confidence.
+
+#### Implementation
+
+- Added `lyzortx/pipeline/track_p/steps/build_panel_coverage_heatmap.py` and wired it into
+  `lyzortx/pipeline/track_p/run_track_p.py`.
+- The step reuses the locked Track G v1 feature lock and TG05 scorer, then aggregates pair-level predictions into
+  phylogroup-by-family bins.
+- Rows are ordered by panel mean predicted lysis so the hardest-to-lyse host groups surface first, and missing bins are
+  left blank so panel gaps stay visually obvious.
+
+#### Output summary
+
+- Heatmap bundle:
+  - `lyzortx/generated_outputs/track_p/panel_coverage_heatmap/tp02_panel_coverage_heatmap.html`
+  - `lyzortx/generated_outputs/track_p/panel_coverage_heatmap/tp02_panel_coverage_heatmap_bundle.json`
+  - `lyzortx/generated_outputs/track_p/panel_coverage_heatmap/tp02_panel_coverage_heatmap_summary.json`
+
+#### Interpretation
+
+1. The panel heatmap highlights where susceptibility is concentrated by phylogroup/family rather than by individual
+   strain, which makes hard-to-lyse regions much easier to explain in a partner demo.
+2. The deployment-realistic layer shows the cost of removing label-derived host features, so the demo can distinguish
+   panel confidence from novel-strain confidence without switching tools.
+3. The delta layer is the useful part for planning: large positive panel-minus-deployment cells are the bins where the
+   current panel is leaning hardest on `host_n_infections`.
+
+#### Next steps
+
+1. If the partner deck needs a compact static figure, export the same bundle to a publication-style PNG/SVG without
+   changing the aggregation logic.
+2. If the panel expands, keep the same row/column ordering logic so future coverage maps remain comparable.
