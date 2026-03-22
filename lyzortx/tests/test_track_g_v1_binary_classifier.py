@@ -2,7 +2,12 @@ import csv
 
 from lyzortx.pipeline.track_g import run_track_g
 from lyzortx.pipeline.track_g.steps import calibrate_gbm_outputs
+from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import (
+    build_ablation_arms,
+    partition_track_c_columns,
+)
 from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
+    FeatureSpace,
     build_feature_space,
     compute_top3_hit_rate,
     merge_expanded_feature_rows,
@@ -128,6 +133,70 @@ def test_select_best_candidate_prefers_auc_then_top3_then_brier() -> None:
     assert best["params"]["name"] == "b"
 
 
+def test_partition_track_c_columns_splits_defense_from_remaining_host_genomic() -> None:
+    partitioned = partition_track_c_columns(
+        [
+            "host_defense_subtype_abi_a",
+            "host_defense_diversity",
+            "host_receptor_variant_btub_01",
+            "host_surface_lps_core_type",
+            "host_phylogeny_umap_00",
+        ]
+    )
+
+    assert partitioned["defense_subtypes"] == (
+        "host_defense_subtype_abi_a",
+        "host_defense_diversity",
+    )
+    assert partitioned["host_genomic_remainder"] == (
+        "host_receptor_variant_btub_01",
+        "host_surface_lps_core_type",
+        "host_phylogeny_umap_00",
+    )
+
+
+def test_build_ablation_arms_matches_acceptance_sequence() -> None:
+    arms = build_ablation_arms(
+        FeatureSpace(
+            categorical_columns=("host_pathotype", "host_surface_lps_core_type"),
+            numeric_columns=(
+                "host_mouse_killed_10",
+                "host_defense_subtype_abi_a",
+                "host_defense_diversity",
+                "host_receptor_variant_btub_01",
+                "host_phylogeny_umap_00",
+                "phage_gc_content",
+                "target_receptor_present",
+            ),
+            track_c_additional_columns=(
+                "host_defense_subtype_abi_a",
+                "host_defense_diversity",
+                "host_receptor_variant_btub_01",
+                "host_surface_lps_core_type",
+                "host_phylogeny_umap_00",
+            ),
+            track_d_columns=("phage_gc_content",),
+            track_e_columns=("target_receptor_present",),
+        )
+    )
+
+    assert [arm.arm_id for arm in arms] == [
+        "v0_features_only",
+        "plus_defense_subtypes",
+        "plus_omp_receptors",
+        "plus_phage_genomic",
+        "plus_pairwise_compatibility",
+        "all_features",
+    ]
+    assert "host_defense_subtype_abi_a" in arms[1].numeric_columns
+    assert "phage_gc_content" not in arms[1].numeric_columns
+    assert "host_surface_lps_core_type" in arms[2].categorical_columns
+    assert "host_receptor_variant_btub_01" in arms[2].numeric_columns
+    assert "phage_gc_content" in arms[3].numeric_columns
+    assert "target_receptor_present" in arms[4].numeric_columns
+    assert arms[-1].categorical_columns == ("host_pathotype", "host_surface_lps_core_type")
+
+
 def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
     calls: list[str] = []
 
@@ -141,13 +210,18 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("calibrate-gbm"),
     )
+    monkeypatch.setattr(
+        run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("feature-block-ablation"),
+    )
 
     run_track_g.main(["--step", "train-v1-binary"])
     assert calls == ["train-v1-binary"]
 
     calls.clear()
     run_track_g.main(["--step", "all"])
-    assert calls == ["train-v1-binary", "calibrate-gbm"]
+    assert calls == ["train-v1-binary", "calibrate-gbm", "feature-block-ablation"]
 
 
 def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
@@ -163,9 +237,37 @@ def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("calibrate-gbm"),
     )
+    monkeypatch.setattr(
+        run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("feature-block-ablation"),
+    )
 
     run_track_g.main(["--step", "calibrate-gbm"])
     assert calls == ["calibrate-gbm"]
+
+
+def test_run_track_g_dispatches_tg03_ablation_step(monkeypatch) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        run_track_g.train_v1_binary_classifier,
+        "main",
+        lambda argv: calls.append("train-v1-binary"),
+    )
+    monkeypatch.setattr(
+        run_track_g.calibrate_gbm_outputs,
+        "main",
+        lambda argv: calls.append("calibrate-gbm"),
+    )
+    monkeypatch.setattr(
+        run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("feature-block-ablation"),
+    )
+
+    run_track_g.main(["--step", "feature-block-ablation"])
+    assert calls == ["feature-block-ablation"]
 
 
 def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:
