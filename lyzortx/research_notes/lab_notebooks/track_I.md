@@ -54,3 +54,30 @@
 - Track I now has a runnable Tier A ingest spine rather than a documentation-only priority list.
 - This is the right level of implementation for TI04: it encodes source order, cumulative ablation accounting, and
   provenance hooks without pretending harmonization policy is already solved before TI05.
+
+### 2026-03-22: TI06 Tier B weak-label ingestion
+
+#### Executive summary
+
+TI06 now has a reproducible weak-label ingestion step under `lyzortx/pipeline/track_i/steps/` that normalizes
+Virus-Host DB TSV rows and NCBI Virus/BioSample metadata into a shared provenance-preserving table. The importer keeps
+raw source identifiers, expands multi-accession Virus-Host DB rows deterministically, and optionally resolves host and
+phage names through the Track A canonical maps when those files are present. The output is a combined weak-label table
+plus a manifest and source summary under `lyzortx/generated_outputs/track_i/tier_b_weak_label_ingest/`.
+
+#### Findings
+
+- Live Virus-Host DB access still exposes the expected TSV header with explicit virus and host tax IDs, names, lineage,
+  PMID, evidence, sample type, and source-organism fields, which makes the source straightforward to normalize into
+  one positive weak-label row per accession.
+- BioSample metadata is nested rather than flat; the host signal lives in XML attributes such as `host`,
+  `isolation_host`, and `isolation_source`, so the importer has to merge those attributes back onto the virus report
+  row instead of assuming a single tabular export.
+- Track A raw-name lists use pipe-delimited values, so the canonical-resolution helper needs to split `|` as well as
+  commas and semicolons to make alias cross-referencing work reliably.
+
+#### Interpretation
+
+TI06 should be treated as source-shape normalization, not final confidence-tier assignment. The code now preserves the
+weak-label provenance required for downstream TI07 tiering while keeping the pipeline honest about disagreement and
+missing BioSample context instead of silently collapsing those cases.
