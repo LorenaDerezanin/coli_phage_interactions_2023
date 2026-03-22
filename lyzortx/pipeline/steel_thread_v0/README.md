@@ -16,6 +16,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - `ST0.2` canonical pair table builder: `lyzortx/pipeline/steel_thread_v0/steps/st02_build_pair_table.py`.
   - `ST0.3` split builder: `lyzortx/pipeline/steel_thread_v0/steps/st03_build_splits.py`.
   - `ST0.3b` split-suite builder: `lyzortx/pipeline/steel_thread_v0/steps/st03b_build_split_suite.py`.
+  - `TF01/ST0.3c` fixed split protocol builder: `lyzortx/pipeline/steel_thread_v0/steps/st03c_build_fixed_split_protocol.py`.
   - `ST0.4` baseline model trainer: `lyzortx/pipeline/steel_thread_v0/steps/st04_train_baselines.py`.
   - `ST0.4b` ablation suite: `lyzortx/pipeline/steel_thread_v0/steps/st04b_ablation_suite.py`.
   - `ST0.5` calibrator and ranker: `lyzortx/pipeline/steel_thread_v0/steps/st05_calibrate_rank.py`.
@@ -28,6 +29,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
   - Regression gate for ST0.2: `lyzortx/pipeline/steel_thread_v0/checks/check_st02_regression.py`.
   - Regression gate for ST0.3: `lyzortx/pipeline/steel_thread_v0/checks/check_st03_regression.py`.
   - Regression gate for ST0.3b: `lyzortx/pipeline/steel_thread_v0/checks/check_st03b_regression.py`.
+  - Regression gate for TF01/ST0.3c: `lyzortx/pipeline/steel_thread_v0/checks/check_st03c_regression.py`.
   - Regression gate for ST0.4: `lyzortx/pipeline/steel_thread_v0/checks/check_st04_regression.py`.
   - Regression gate for ST0.5: `lyzortx/pipeline/steel_thread_v0/checks/check_st05_regression.py`.
   - Regression gate for ST0.6: `lyzortx/pipeline/steel_thread_v0/checks/check_st06_regression.py`.
@@ -40,6 +42,7 @@ This directory contains a minimal end-to-end pipeline to validate feasibility be
 - `ST0.2`: Build canonical pair table with IDs, labels, uncertainty, and v0 features.
 - `ST0.3`: Build fixed leakage-safe host-group splits.
 - `ST0.3b`: Build split-suite artifacts for phage-family holdout and host+phage dual-axis stress tests.
+- `TF01/ST0.3c`: Build a versioned fixed split protocol with leave-cluster-out host splits and phage-clade holdouts.
 - `ST0.4`: Train baseline models.
 - `ST0.4b`: Run host-only, phage-only, and no-identity ablations on locked ST0.3b splits.
 - `ST0.5`: Calibrate probabilities and generate rankings.
@@ -109,6 +112,18 @@ Run the ST0.3b regression gate (recomputes ST0.1, ST0.1b, ST0.2, ST0.3, and ST0.
 
 ```bash
 python -m lyzortx.pipeline.steel_thread_v0.checks.check_st03b_regression --run-st01 --run-st01b --run-st02 --run-st03 --run-st03b
+```
+
+Run TF01/ST0.3c fixed split protocol:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.run_steel_thread_v0 --step st03c
+```
+
+Run the TF01/ST0.3c regression gate:
+
+```bash
+python -m lyzortx.pipeline.steel_thread_v0.checks.check_st03c_regression --run-st03c
 ```
 
 Run ST0.4 baseline training:

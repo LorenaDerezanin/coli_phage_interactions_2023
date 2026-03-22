@@ -397,3 +397,42 @@ Why:
    three phages even when no labeled susceptible phage exists.
 4. The next technically highest-value iteration is not more calibration tuning; it is adding host-compatibility signal
    plus an abstention/no-match mechanism, then re-checking this exact 10-strain bucket.
+
+### 2026-03-22: TF01 fixed split protocol implemented (host clusters + phage clades)
+
+#### Executive summary
+
+Implemented a versioned fixed split protocol at `lyzortx/pipeline/steel_thread_v0/steps/st03c_build_fixed_split_protocol.py`
+that deterministically assigns host CV groups to leave-cluster-out holdouts and assigns phage clades to a separate holdout
+axis. The exported assignment table and protocol JSON are versioned (`v1`) and the leakage audit is clean: zero overlap
+for host clusters and phage clades across train/test, including the dual-axis holdout view.
+
+#### Protocol definition
+
+- Host axis: deterministic hash assignment on `cv_group` with salt `steel_thread_v0_tf01_host_cluster_v1`.
+- Phage axis: deterministic hash assignment on `phage_clade` with salt `steel_thread_v0_tf01_phage_clade_v1`.
+- Phage clade label: first non-empty taxon from `phage_family`, `phage_subfamily`, `phage_genus`, `phage_old_family`,
+  or `phage_old_genus`, skipping generic `Other` / missing tokens.
+- Outputs:
+  - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st03c_fixed_split_protocol_v1_assignments.csv`
+  - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st03c_fixed_split_protocol_v1_protocol.json`
+  - `lyzortx/generated_outputs/steel_thread_v0/intermediate/st03c_fixed_split_protocol_v1_audit.json`
+
+#### Findings
+
+- Total rows: `35,424`.
+- Host clusters: `283`, with `57` routed to holdout (`0.201413` actual fraction).
+- Phage clades: `12`, with `2` routed to holdout (`0.166667` actual fraction).
+- Leakage checks:
+  - host cluster overlap: `0`
+  - phage clade overlap: `0`
+  - dual-axis host overlap: `0`
+  - dual-axis clade overlap: `0`
+
+#### Interpretation
+
+1. The split contract is deterministic and reproducible from the published salts and group labels.
+2. The host holdout behavior matches the earlier ST0.3 contract closely, while the phage axis now holds out explicit
+   clades rather than family labels alone.
+3. Because the protocol is versioned and hashed, downstream evaluation can cite the exact CSV payload rather than
+   reconstructing the split ad hoc.
