@@ -266,7 +266,7 @@ tracks:
       - Dual-slice reporting (full-label and strict-confidence) for all metrics
     - id: TF02
       title: Before/after comparison of v0 vs v1 with error bucket analysis
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Side-by-side metrics table for v0 (metadata logreg) vs v1 (genomic GBM)
