@@ -13,6 +13,7 @@ if __package__ in {None, ""}:
 from lyzortx.pipeline.track_i.steps import (
     build_external_label_confidence_tiers,
     build_external_training_cohorts,
+    build_incremental_lift_failure_analysis,
     build_strict_ablation_sequence,
     build_tier_b_weak_label_ingest,
 )
@@ -27,12 +28,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "external-confidence-tiers",
             "training-cohorts",
             "strict-ablation-sequence",
+            "incremental-lift-failure-analysis",
             "all",
         ],
         default="all",
         help=(
-            "Track I step to run. 'all' runs the implemented weak-label ingest, confidence-tier, cohort, and "
-            "strict-ablation steps."
+            "Track I step to run. 'all' runs the implemented weak-label ingest, confidence-tier, cohort, strict-"
+            "ablation, and lift-analysis steps."
         ),
     )
     return parser.parse_args(argv)
@@ -48,6 +50,8 @@ def main(argv: list[str] | None = None) -> None:
         build_external_training_cohorts.main([])
     if args.step in {"strict-ablation-sequence", "all"}:
         build_strict_ablation_sequence.main([])
+    if args.step in {"incremental-lift-failure-analysis", "all"}:
+        build_incremental_lift_failure_analysis.main([])
 
 
 if __name__ == "__main__":

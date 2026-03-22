@@ -161,6 +161,11 @@ def test_run_track_i_dispatches_ti08_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("strict-ablation-sequence"),
     )
+    monkeypatch.setattr(
+        run_track_i.build_incremental_lift_failure_analysis,
+        "main",
+        lambda argv: calls.append("incremental-lift-failure-analysis"),
+    )
 
     run_track_i.main(["--step", "training-cohorts"])
     assert calls == ["training-cohorts"]
@@ -172,4 +177,5 @@ def test_run_track_i_dispatches_ti08_step(monkeypatch) -> None:
         "external-confidence-tiers",
         "training-cohorts",
         "strict-ablation-sequence",
+        "incremental-lift-failure-analysis",
     ]
