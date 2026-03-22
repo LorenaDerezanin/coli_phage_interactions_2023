@@ -302,3 +302,209 @@ optimization-based recommender (Track H). We just should not force them into the
 2. **TG05** (feature-subset sweep): find the combination that clears 90%+ top-3 on holdout.
 3. **TF01** (bootstrap CIs): run on the winning feature configuration, not necessarily the all-features model.
 4. **TF02** (before/after error analysis): compare the winning v1 model against v0 on the specific holdout miss strains.
+
+### 2026-03-22: Per-task model selection for Codex CI — cost analysis and assignments
+
+#### Problem
+
+The orchestrator dispatches all tasks to `gpt-5.4` via `codex-implement.yml`, regardless of task complexity. After the
+first full day of automated v1 sprint execution (8 implementation runs for TD03, TE01–TE03, TG01–TG03, and TG04
+attempt), total token consumption reached **856,463 tokens** with an average of **106,752 tokens per successful run**.
+
+At gpt-5.4 pricing ($2.50/1M input, $15.00/1M output), this represents significant cost. Meanwhile, gpt-5.4-mini
+($0.75/1M input, $4.50/1M output — approximately **70% cheaper**) scores 54.4% on SWE-Bench Pro and handles
+straightforward coding tasks well. The key trade-off: gpt-5.4-mini has a 400K context window (vs 1.05M for gpt-5.4)
+and shows a 5–10% accuracy gap on complex reasoning tasks.
+
+#### Token usage breakdown from today's runs
+
+| Task | Tokens | Status | Complexity |
+|------|--------|--------|------------|
+| TD03 (phage distance embedding) | 58,488 | success | Low — single MDS embedding from Newick tree |
+| TE01 (RBP-receptor compatibility) | 134,626 | success | Medium — curated lookup + pair feature generation |
+| TE02 (defense evasion proxy) | 103,687 | success | Medium — collaborative filtering with leakage guard |
+| TE03 (phylogenetic distance) | 114,781 | success | Low-Medium — UMAP distance computation |
+| TG01 (LightGBM training) | 129,532 | success | High — hyperparameter tuning, CV, comparator model |
+| TG02 (calibration) | 85,193 | success | Medium — isotonic/Platt scaling, metric reporting |
+| TG03 (ablation suite) | 120,957 | success | Medium — parameterized training loop, metric collection |
+| TG04 (SHAP explanations) | 109,199 | failure | High — TreeExplainer, interpretation, cross-referencing |
+
+Observations: TD03 (simplest task) used 58K tokens. TG01 and TE01 (most complex) used 130K+ tokens. The failed TG04
+attempt still consumed 109K tokens. There is no correlation between token usage and task complexity strong enough to
+predict model needs from token count alone — the decision must be based on task characteristics.
+
+#### Waste patterns observed
+
+Analysis of shell command patterns across today's 8 runs revealed systematic waste:
+
+- **12 environment discovery issues**: Codex attempts `micromamba activate` in CI where micromamba does not exist. This
+  is partially addressed in AGENTS.md but the agent still fumbles on first attempts.
+- **30 git config attempts**: Git identity is pre-configured by the workflow, but Codex tries to set it again.
+- **24 failed commands**: Various command failures across runs (exit codes 1, 127, 128).
+
+These waste patterns account for an estimated 5–10% of total tokens. Fixing them helps but does not change the
+fundamental cost picture — the bulk of tokens are legitimate implementation work.
+
+#### Model capability comparison
+
+**gpt-5.4** (full model):
+- 1,050,000 token context window
+- Highest accuracy on complex reasoning, architectural decisions, multi-file coordination
+- Best for tasks requiring deep domain knowledge, novel algorithmic design, or cascading design decisions
+- $2.50/1M input, $15.00/1M output
+
+**gpt-5.4-mini**:
+- 400,000 token context window
+- 54.4% on SWE-Bench Pro (vs gpt-5.4 full score)
+- 2x+ faster inference
+- Strong on targeted edits, standard library usage, parameterized loops, visualization code
+- $0.75/1M input, $4.50/1M output (~70% cheaper)
+
+The 400K context window is sufficient for all tasks in this repo — the largest single-step context needed is the pair
+table (~30K pairs × ~200 features), which is loaded from disk, not from the prompt. The deciding factor is reasoning
+quality, not context size.
+
+#### Assignment methodology
+
+Each of the 16 pending tasks was evaluated on four axes:
+
+1. **Novelty**: Does the task require implementing a pattern not yet in the codebase, or does it follow established
+   patterns (TG01 training loop, TG03 ablation structure, ST05 calibration)?
+2. **Domain criticality**: Do design errors cascade to downstream tasks? A wrong harmonization protocol (TI05) poisons
+   all external data work; a wrong bar chart color (TP03) is trivially fixable.
+3. **Reasoning depth**: Does the task require multi-step logical reasoning (combinatorial search, leakage analysis,
+   SHAP interpretation) or straightforward data assembly (bootstrap resampling, metric aggregation)?
+4. **Established patterns**: Can the task largely reuse existing code structure? Tasks that follow TG01/TG03 patterns
+   (train model, collect metrics, output CSV) are good candidates for gpt-5.4-mini.
+
+#### Assignments: gpt-5.4 (5 tasks)
+
+**TG04 — Compute SHAP explanations for per-pair and global feature importance**
+- TreeExplainer integration is new to the codebase (no existing SHAP usage to copy)
+- Must cross-reference TG03 ablation results with per-feature SHAP values to produce prescriptive recommendations
+- Per-strain narrative synthesis ("what makes strain X hard to predict") requires domain interpretation
+- Acceptance criteria explicitly require a concrete recommendation of which feature blocks to keep — this is a design
+  decision, not a computation
+
+**TG05 — Run feature-subset sweep to find best block combination for top-3 ranking**
+- 10 combinatorial model runs (C(4,2) + C(4,3) = 6 + 4) with careful feature-block bookkeeping
+- Must identify the winning subset, compare against the TG01 all-features model, and lock the final v1 configuration
+- The "lock" decision affects all downstream tracks (F, H, P) — getting it wrong means rework
+- Unlike TG03 (sequential ablation), this requires combinatorial logic and winner-selection heuristics
+
+**TI05 — Define harmonization protocol for Tier A datasets**
+- Multi-source schema alignment across VHRdb, BASEL, KlebPhaCol, and GPB — each has different column semantics, label
+  types, and confidence levels
+- Design decisions here cascade to TI06 (Tier B ingestion), TI07 (confidence tiers), TI08 (integration), and TI09
+  (ablation sequence)
+- Requires domain understanding of what "lysis" means in each source's assay context
+- Errors are silent and expensive to detect (wrong label mapping looks correct until model evaluation)
+
+**TI07 — Define confidence tiers for external labels**
+- Subjective tier design: what confidence level does a VHRdb curated record deserve vs an NCBI BioSample isolation_host
+  record?
+- Weighting strategy for training (how much to down-weight low-confidence labels) requires balancing coverage vs noise
+- Cascades to TI08 (integration uses tier weights) and TI09 (ablation sequence is ordered by tier)
+- The ST01b strict-confidence concept provides a pattern, but extending it to external sources with heterogeneous assay
+  types is a design challenge
+
+**TI08 — Integrate external data as non-blocking enhancer**
+- Architectural pattern: external data must be truly optional — the internal-only pipeline must remain runnable
+- Leakage prevention: external datasets may contain organisms that overlap with holdout strains — careful ID validation
+  needed
+- Fallback handling: graceful degradation when external data files are absent (CI runs without them)
+- The "non-blocking" constraint means conditional imports, feature-flag-like behavior, and defensive coding — harder to
+  get right than it looks
+
+#### Assignments: gpt-5.4-mini (11 tasks)
+
+**TF01 — Lock ST03 split as v1 benchmark and add bootstrap CIs**
+- Bootstrap resampling is a standard NumPy pattern (np.random.choice with replacement, 1000 iterations)
+- Dual-slice filtering (full-label vs strict-confidence) already implemented in TG02
+- Metric functions (AUC, top-3 hit rate, Brier, ECE) already exist in the codebase
+- No design decisions — just apply existing patterns with confidence intervals
+
+**TF02 — Before/after comparison of v0 vs v1 with error bucket analysis**
+- Side-by-side metric table is a DataFrame join between ST05 and TG02 outputs
+- Error bucket identification is algorithmic: for each holdout strain, did v0 miss and v1 hit (or vice versa)?
+- The "honest reporting" requirement is met by listing strains that remain unpredictable — no narrative synthesis needed
+
+**TH02 — Add explained recommendations with calibrated P(lysis), CI, and SHAP features**
+- Top-3 recommendation assembly reuses ST06 logic with TG02 predictions
+- SHAP feature extraction is a DataFrame merge with TG04 output (pair_id → top-3 SHAP features)
+- CI computation is percentile-based from bootstrap or calibration data
+- Output formatting for "clinician-ready" display is light presentation logic
+
+**TI06 — Tier B weak-label ingestion (Virus-Host DB, NCBI BioSample)**
+- ID cross-referencing against canonical maps from Track A (already built)
+- Follows TI03/TI04 ingestion patterns (source fidelity preservation, standardized output format)
+- Confidence tier assignment uses rules defined in TI07 (upstream dependency)
+
+**TI09 — Run strict ablations in sequence**
+- Parameterized loop over TG01 training with progressively more external data
+- 6 training runs: internal-only → +VHRdb → +BASEL → +KlebPhaCol → +GPB → +Tier B
+- Metric collection identical to TG03 ablation suite structure
+- Leakage verification is the only subtle part, but the holdout split is already locked
+
+**TI10 — Track incremental lift and failure modes by datasource and confidence tier**
+- GroupBy aggregation of TI09 ablation results by source and tier
+- Failure mode detection: which strains regressed when adding each source?
+- Follows ST09 error analysis pattern (documented hypotheses per miss strain)
+
+**TJ01 — One command to regenerate all v1 outputs from raw data**
+- Orchestration script that calls existing `run_track_*.py` entry points in dependency order
+- Dependency validation (check prerequisites before running each track)
+- Follows `run_track_a.py` structural pattern
+
+**TJ02 — Freeze environment specs and seeds for v1 benchmark run**
+- Documentation task: inventory all `random_state` parameters, export `pip freeze`
+- Verification: run pipeline twice with frozen seeds, compare outputs
+- No new algorithms or ML logic
+
+**TP01 — Build digital phagogram visualization for per-strain phage ranking**
+- Plotly or Matplotlib visualization of ranked phage list with P(lysis) and confidence bands
+- Data inputs are well-defined (TG02 calibrated predictions, TG04 SHAP values)
+- Standard charting library usage — no novel algorithmic work
+
+**TP02 — Build panel coverage heatmap across strain diversity**
+- Seaborn/Matplotlib heatmap with host phylogroup × phage family axes
+- Aggregation: mean P(lysis) per cell from TG02 predictions grouped by ST02 taxonomy
+- Hard-to-lyse gaps are visually evident from low-probability cells
+
+**TP03 — Build feature lift visualization from ablation suite results**
+- Bar chart from TG03 ablation CSV (already generated and available)
+- Standard Matplotlib bar chart with v0 baseline reference line
+- Simplest visualization task — no data processing beyond reading the CSV
+
+#### Projected cost impact
+
+Assuming average token usage of ~107K per run (today's observed average):
+
+- **All gpt-5.4 (status quo):** 16 tasks × 107K tokens × ~$17.50/1M blended ≈ **$30**
+- **With model selection:** (5 × 107K × $17.50/1M) + (11 × 107K × $5.25/1M) ≈ $9.36 + $6.18 ≈ **$15.50**
+- **Estimated savings:** ~48% on implementation runs
+
+This does not include lifecycle (review feedback) runs, which use the same model and add 1–3 rounds per task. With
+lifecycle runs, the savings scale proportionally.
+
+#### Implementation approach
+
+Two PRs to minimize risk:
+
+1. **PR 1 (data-only):** Add `model:` field to all 16 pending tasks in `plan.yml`. The existing `load_plan()` function
+   ignores unknown YAML fields, so this is a no-op until PR 2 lands. This allows model assignments to be reviewed and
+   adjusted independently of the code changes.
+
+2. **PR 2 (code):** Wire the model field through `plan_parser.py` → `orchestrator.py` → issue body → workflow YAML.
+   The orchestrator emits a `<!-- model: gpt-5.4-mini -->` HTML comment in the issue body. The workflow extracts it
+   with a small Python helper (`parse_model_directive.py`) and passes it to `openai/codex-action@v1`. No default — if
+   the model directive is missing, the workflow fails with a clear error message.
+
+#### Open questions for future refinement
+
+1. **Should lifecycle (review feedback) runs use the same model as the original implementation?** Currently planned: yes,
+   for consistency. But review feedback is often simpler than initial implementation — a cheaper model might suffice.
+2. **Should we track per-task model cost to validate these assignments?** The `ci_token_usage.py` tool already reports
+   per-run tokens. After a few tasks run with model selection, we can compare actual mini vs full token usage.
+3. **When should a task be upgraded from mini to full?** If a gpt-5.4-mini run fails, the model assignment can be
+   changed in plan.yml and the orchestrator re-dispatched. No code change needed.
