@@ -48,11 +48,7 @@ jobs:
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body')
-          MODEL=$(echo "$BODY" | python3 -c "
-          import re, sys
-          m = re.search(r'<!--\s*model:\s*(\S+)\s*-->', sys.stdin.read())
-          print(m.group(1) if m else '')
-          ")
+          MODEL=$(echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive)
           if [ -z "$MODEL" ]; then
             echo "::error::No model directive found in issue #${ISSUE_NUM} body. Add <!-- model: <id> --> to the issue."
             exit 1

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from lyzortx.orchestration.orchestrator import IssueRef
@@ -162,3 +164,51 @@ def test_extract_model_missing() -> None:
 def test_extract_model_whitespace_tolerance() -> None:
     body = "<!--  model:  gpt-5.4-mini  -->"
     assert extract_model(body) == "gpt-5.4-mini"
+
+
+def test_load_pending_tasks_raises_on_missing_model(tmp_path: Path) -> None:
+    """Pending tasks without a model field must cause a ValueError."""
+    import textwrap
+
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: Task without model
+                status: pending
+    """)
+    plan_path = tmp_path / "plan.yml"
+    plan_path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match="missing required 'model' field"):
+        load_pending_tasks(plan_path)
+
+
+def test_load_pending_tasks_accepts_tasks_with_model(tmp_path: Path) -> None:
+    """Pending tasks with a model field should load without error."""
+    import textwrap
+
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: Task with model
+                status: pending
+                model: gpt-5.4-mini
+    """)
+    plan_path = tmp_path / "plan.yml"
+    plan_path.write_text(content, encoding="utf-8")
+    tasks = load_pending_tasks(plan_path)
+    assert len(tasks) == 1
+    assert tasks[0].model == "gpt-5.4-mini"
