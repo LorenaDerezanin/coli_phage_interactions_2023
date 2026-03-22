@@ -318,14 +318,14 @@ tracks:
         based on SHAP evidence and TG03 ablation results
     - id: TG05
       title: Run feature-subset sweep to find best block combination for top-3 ranking
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Train models on all 2-block and 3-block combinations of the 4 new feature
         blocks (defense, OMP, phage-genomic, pairwise)
-      - Reuse the TG01 winning hyperparameters for all sweep arms — do NOT run
-        per-arm hyperparameter search. The goal is to isolate the feature-block
-        effect, not confound it with per-arm tuning differences.
+      - Reuse the TG01 winning hyperparameters for all sweep arms — do NOT run per-arm
+        hyperparameter search. The goal is to isolate the feature-block effect, not
+        confound it with per-arm tuning differences.
       - Report top-3 hit rate, AUC, and Brier on the same ST03 holdout for each combo
       - Identify the winning subset that maximizes top-3 hit rate without degrading
         AUC
