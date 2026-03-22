@@ -100,6 +100,9 @@ def _render_task_line(task: dict[str, Any]) -> str:
     baseline = task.get("baseline")
     if baseline and task.get("status") == "done":
         parts.append(f"Regression baseline: `{baseline}`.")
+    model = task.get("model")
+    if model and task.get("status") != "done":
+        parts.append(f"Model: `{model}`.")
     return textwrap.fill(
         " ".join(parts),
         width=MAX_PROSE_WIDTH,
