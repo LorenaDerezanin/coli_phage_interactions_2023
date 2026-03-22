@@ -175,7 +175,7 @@ graph LR
 - [x] Define harmonization protocol for Tier A datasets
 - [x] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata
 - [x] Define confidence tiers for external labels
-- [ ] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable Model: `gpt-5.4`.
+- [x] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable
 - [ ] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B Model:
       `gpt-5.4-mini`.
 - [ ] Track incremental lift and failure modes by datasource and confidence tier Model: `gpt-5.4-mini`.

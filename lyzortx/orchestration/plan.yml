@@ -395,7 +395,7 @@ tracks:
     - id: TI08
       title: 'Integrate external data as non-blocking enhancer: internal-only baseline
         must remain runnable'
-      status: pending
+      status: done
       model: gpt-5.4
     - id: TI09
       title: 'Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL
