@@ -224,7 +224,7 @@ tracks:
     - id: TE01
       title: Build RBP-receptor compatibility features from curated genus-receptor
         lookup
-      status: pending
+      status: done
       acceptance_criteria:
       - Curated lookup mapping phage genus/subfamily to known primary receptor targets
       - Per-pair features include target_receptor_present, receptor_cluster_matches,
