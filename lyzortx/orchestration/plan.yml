@@ -472,7 +472,7 @@ tracks:
         novel-strain confidence differs from panel confidence
     - id: TP03
       title: Build feature lift visualization from ablation suite results
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Bar chart showing prediction improvement by feature block from TG03 ablation
