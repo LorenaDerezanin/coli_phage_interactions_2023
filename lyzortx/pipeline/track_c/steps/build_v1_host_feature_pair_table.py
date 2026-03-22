@@ -157,7 +157,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _slugify_token(value: str) -> str:
+def slugify_token(value: str) -> str:
     normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value.strip())
     normalized = re.sub(r"[^0-9a-zA-Z]+", "_", normalized.lower())
     normalized = re.sub(r"_+", "_", normalized).strip("_")
@@ -202,7 +202,7 @@ def build_defense_feature_rows(
         if min_present_count <= present_count <= max_present_count:
             retained_subtypes.append(column)
 
-    kept_column_names = [f"host_defense_subtype_{_slugify_token(column)}" for column in retained_subtypes]
+    kept_column_names = [f"host_defense_subtype_{slugify_token(column)}" for column in retained_subtypes]
     output_rows: List[Dict[str, object]] = []
     for row in sorted(defense_rows, key=lambda item: item["bacteria"]):
         bacteria = row.get("bacteria", "").strip()
@@ -215,7 +215,7 @@ def build_defense_feature_rows(
         has_crispr = 0
         for subtype in retained_subtypes:
             value = _parse_binary_flag(str(row.get(subtype, "")))
-            encoded_row[f"host_defense_subtype_{_slugify_token(subtype)}"] = value
+            encoded_row[f"host_defense_subtype_{slugify_token(subtype)}"] = value
             defense_diversity += value
             if subtype.startswith("Abi"):
                 abi_burden += value

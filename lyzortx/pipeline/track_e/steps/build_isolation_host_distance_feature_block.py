@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
-from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import _slugify_token
+from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import slugify_token
 
 OUTPUT_FEATURE_COLUMNS: Tuple[str, ...] = (
     "isolation_host_umap_euclidean_distance",
@@ -163,7 +163,7 @@ def resolve_defense_source_columns(
 ) -> Dict[str, str]:
     _require_columns(defense_rows, path, ("bacteria",))
     available_source_columns = {column: column for column in defense_rows[0] if column != "bacteria"}
-    by_slug = {_slugify_token(column): column for column in available_source_columns}
+    by_slug = {slugify_token(column): column for column in available_source_columns}
 
     resolved: Dict[str, str] = {}
     for target_column in target_defense_columns:
@@ -181,7 +181,7 @@ def build_umap_index(
     umap_rows: Sequence[Mapping[str, str]],
     target_umap_columns: Sequence[str],
 ) -> Dict[str, Tuple[float, ...]]:
-    required_columns = ["bacteria", *[f"UMAP{index}" for index in range(len(target_umap_columns))]]
+    required_columns = ["bacteria", *[f"UMAP{dim}" for dim in range(len(target_umap_columns))]]
     _require_columns(umap_rows, Path("<umap_rows>"), required_columns)
 
     index: Dict[str, Tuple[float, ...]] = {}
@@ -192,7 +192,7 @@ def build_umap_index(
         if bacteria in index:
             raise ValueError(f"Duplicate bacteria value {bacteria!r} in UMAP rows")
         index[bacteria] = tuple(
-            _parse_float(row[f"UMAP{index}"], column_name=f"UMAP{index}") for index in range(len(target_umap_columns))
+            _parse_float(row[f"UMAP{dim}"], column_name=f"UMAP{dim}") for dim in range(len(target_umap_columns))
         )
     return index
 
