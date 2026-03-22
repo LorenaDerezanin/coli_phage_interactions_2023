@@ -357,17 +357,21 @@ def _run_association(run: RunInfo) -> str:
     return ""
 
 
-def _is_review_workflow(run: RunInfo) -> bool:
-    """Return True if *run* is from the Claude PR review workflow."""
-    return run.workflow == "Claude PR Review"
-
-
 def _enrich_run(run: RunInfo, log: str) -> None:
-    """Extract token count, model, cost, and/or Claude action result from a run log."""
+    """Detect LLM invocations purely from log content and populate run fields.
+
+    Classification is based on log markers, not workflow names:
+    - Codex invocation: log contains "tokens used" → extract token count + model
+    - Claude invocation: log contains "total_cost_usd" JSON → extract cost/turns
+    - Neither: no LLM was invoked in this run
+    """
     run.tokens = extract_token_count(log)
-    run.model = extract_codex_model(log)
     run.claude_result = extract_claude_action_result(log)
-    # Compute Codex cost estimate from tokens + model + date.
+    # Only extract model when we actually found tokens — avoids false positives
+    # from model names appearing in pip install output or environment context.
+    if run.tokens is not None:
+        run.model = extract_codex_model(log)
+    # Compute cost.
     if run.tokens is not None and run.model:
         run.cost_usd = estimate_codex_cost(run.tokens, run.model, run.date)
     elif run.claude_result and run.claude_result.cost_usd > 0:
@@ -415,10 +419,10 @@ def cmd_overview(limit: int) -> None:
     headers = ["Run ID", "Workflow", "Date", "Status", "Model", "Cost", "PR/Issue"]
     print(format_table(rows, headers))
 
-    # Summary stats.
+    # Summary stats — classify by detected LLM, not workflow name.
     all_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None]
-    codex_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None and not _is_review_workflow(r)]
-    review_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None and _is_review_workflow(r)]
+    codex_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None and r.tokens is not None]
+    claude_costs = [r.cost_usd for r in all_runs if r.cost_usd is not None and r.claude_result is not None]
 
     print()
     if all_costs:
@@ -427,9 +431,9 @@ def cmd_overview(limit: int) -> None:
         print(
             f"  Codex:   ${sum(codex_costs):.2f}  ({len(codex_costs)} runs, avg ${sum(codex_costs) / len(codex_costs):.2f})"
         )
-    if review_costs:
+    if claude_costs:
         print(
-            f"  Claude:  ${sum(review_costs):.2f}  ({len(review_costs)} runs, avg ${sum(review_costs) / len(review_costs):.2f})"
+            f"  Claude:  ${sum(claude_costs):.2f}  ({len(claude_costs)} runs, avg ${sum(claude_costs) / len(claude_costs):.2f})"
         )
     if codex_costs:
         print(f"\n  ⚠ Codex costs are estimates (blended {_INPUT_RATIO:.0%} in / {1 - _INPUT_RATIO:.0%} out rate)")

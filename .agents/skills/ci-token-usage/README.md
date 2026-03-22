@@ -24,6 +24,19 @@ standard pattern: pure functions for extraction/computation, side-effect boundar
 
 ## Design decisions
 
+### Log-based LLM detection (not workflow-name based)
+
+The script classifies runs by grepping log content, not by workflow filename or labels:
+
+- **Codex invocation detected** = log contains `tokens used` followed by a number
+- **Claude invocation detected** = log contains `"total_cost_usd"` in a JSON result block
+- **No LLM** = neither marker found
+
+This is robust against workflow renames, label changes, and the fact that a single workflow can have both LLM-invoking
+and non-LLM jobs (e.g. `codex-pr-lifecycle.yml` has an auto-merge job that does no LLM work and a feedback-address job
+that invokes Codex). Model extraction is also gated on finding tokens first — the model regex only runs when `tokens
+used` was detected, avoiding false positives from model names appearing in pip install logs or environment variables.
+
 ### Two different cost sources
 
 Codex and Claude log usage in fundamentally different formats:
