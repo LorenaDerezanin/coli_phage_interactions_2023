@@ -290,7 +290,7 @@ tracks:
       - Target AUC 0.87-0.90 and top-3 hit rate 90%+
     - id: TG02
       title: Calibrate GBM outputs with isotonic and Platt scaling
-      status: pending
+      status: done
       acceptance_criteria:
       - Same calibration approach as ST05 applied to GBM
       - Report ECE, Brier, log-loss for both calibration methods

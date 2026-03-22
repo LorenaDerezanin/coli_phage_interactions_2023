@@ -151,7 +151,7 @@ graph LR
 - **Guiding Principle:** LightGBM model on expanded genomic features with calibration, ablation, and SHAP
   interpretation.
 - [x] Train LightGBM binary classifier on v1 expanded feature set
-- [ ] Calibrate GBM outputs with isotonic and Platt scaling
+- [x] Calibrate GBM outputs with isotonic and Platt scaling
 - [ ] Run feature-block ablation suite proving which features deliver lift
 - [ ] Compute SHAP explanations for per-pair and global feature importance
 
