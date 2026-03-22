@@ -84,6 +84,8 @@ def format_prompt(pr_number: int, threads: list[dict[str, Any]]) -> str:
             "You MUST reply to every review comment using gh api to post a reply.",
             "For each comment: either fix the issue and explain what you changed,",
             "or push back explaining why the feedback is wrong or unnecessary.",
+            "End every reply with a signature line: 'Posted by Codex <model>'",
+            "where <model> is the model you are running as (e.g., gpt-5.4).",
             "Run tests: pytest -q lyzortx/tests/",
             "Commit and push fixes to the current branch.",
         ]

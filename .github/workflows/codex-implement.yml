@@ -77,6 +77,11 @@ jobs:
             echo "   The PR title must follow the pattern: [ORCH][TASK_ID] Brief description"
             echo "   The PR body must include a detailed description of changes AND 'Closes #${ISSUE_NUM}' at the end."
             echo "   Add --label orchestrator-task to the gh pr create command."
+            echo ""
+            echo "When posting any GitHub comment (issue comments, PR comments, review replies),"
+            echo "end every comment with a signature line: 'Posted by Codex <model>'"
+            echo "where <model> is the model you are running as (e.g., gpt-5.4)."
+            echo "This is required because you are posting via a shared PAT, not a bot account."
           } > /tmp/codex_prompt.txt
 
       - name: Set up Python
