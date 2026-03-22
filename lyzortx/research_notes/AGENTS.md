@@ -19,8 +19,11 @@ Entries are written by agents dispatched through the orchestrator pipeline:
 
 - Each entry starts with `### YYYY-MM-DD: Title` (date heading level 3).
 - Entries within a track file are ordered by task code, earliest first.
-- Sections typically include: what was implemented, output summary, interpretation, and next steps.
+- Every entry must begin with an `#### Executive summary` section: 2–4 sentences covering what changed, why, and the
+  key outcome or metric. A reader should be able to skip the rest of the entry and still understand the decision.
+- Subsequent sections typically include: problem statement, design decisions, interpretation, and next steps.
 - Entries should reference generated output paths and script paths so findings are traceable.
+- Do not list files changed — that is what git is for.
 
 ## Other contents
 
