@@ -318,7 +318,7 @@ tracks:
         based on SHAP evidence and TG03 ablation results
     - id: TG05
       title: Run feature-subset sweep to find best block combination for top-3 ranking
-      status: done
+      status: pending
       model: gpt-5.4
       acceptance_criteria:
       - Train models on all 2-block and 3-block combinations of the 4 new feature

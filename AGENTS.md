@@ -94,6 +94,14 @@
 - Use one `Closes #...` line per issue when a PR intentionally resolves multiple issues.
 - Keep closure references explicit so orchestration and audit flows can advance automatically on merge.
 
+# Issue Closure Policy
+
+- Closing a GitHub issue signals completion to the orchestrator, which will mark the corresponding plan task as `done`.
+- If you need to close an issue **without** marking the task as completed (e.g., to re-dispatch with updated criteria),
+  close it as **"not planned"** (`gh issue close --reason "not planned"`). The orchestrator ignores not-planned closures.
+- Never close an orchestrator-task issue with a regular close unless the task is genuinely finished and its acceptance
+  criteria are met.
+
 # Codex Review Connector
 
 - The repo owner has a `chatgpt-codex-connector` GitHub App installed that automatically reviews every pull request.
