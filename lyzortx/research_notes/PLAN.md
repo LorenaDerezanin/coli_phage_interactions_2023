@@ -143,7 +143,7 @@ graph LR
 
 - **Guiding Principle:** Lock v1 benchmark split and add bootstrap confidence intervals. ST03 already provides
   leakage-safe host-group and phage-family holdouts.
-- [ ] Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
+- [x] Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
 - [ ] Before/after comparison of v0 vs v1 with error bucket analysis
 
 ## Track G: Modeling Pipeline
@@ -153,7 +153,7 @@ graph LR
 - [x] Train LightGBM binary classifier on v1 expanded feature set
 - [x] Calibrate GBM outputs with isotonic and Platt scaling
 - [x] Run feature-block ablation suite proving which features deliver lift
-- [ ] Compute SHAP explanations for per-pair and global feature importance
+- [x] Compute SHAP explanations for per-pair and global feature importance
 - [ ] Run feature-subset sweep to find best block combination for top-3 ranking
 
 ## Track H: In-Silico Cocktail Recommendation
@@ -172,7 +172,7 @@ graph LR
       `lyzortx/research_notes/external_data/source_registry.csv`.
 - [x] For VHRdb ingest, keep source-fidelity fields
 - [x] Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
-- [ ] Define harmonization protocol for Tier A datasets
+- [x] Define harmonization protocol for Tier A datasets
 - [ ] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata
 - [ ] Define confidence tiers for external labels
 - [ ] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable
