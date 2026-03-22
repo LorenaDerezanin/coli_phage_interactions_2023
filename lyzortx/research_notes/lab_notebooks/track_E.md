@@ -178,3 +178,91 @@ documented in the steel-thread notebook.
 
 Join TE01 and TE02 into the Track F ablation stack, then decide the correct behavior for TE02 under explicit
 phage-family holdouts before using it in the final dual-axis evaluation suite.
+
+### 2026-03-22: TE03 Isolation-host distance feature block
+
+#### What was implemented
+
+- Added a dedicated Track E builder:
+  `lyzortx/pipeline/track_e/steps/build_isolation_host_distance_feature_block.py`.
+- Wired the builder into the Track E entrypoint and README:
+  - `lyzortx/pipeline/track_e/run_track_e.py`
+  - `lyzortx/pipeline/track_e/README.md`
+- Reused the audited Track C v1 pair table as the target-host contract instead of rebuilding target-host embeddings or
+  defense vectors from scratch:
+  - input pair grid:
+    `lyzortx/generated_outputs/track_c/v1_host_feature_pair_table/pair_table_v1.csv`
+  - target-host inputs reused from that pair table:
+    - `host_phylogeny_umap_00` through `host_phylogeny_umap_07`
+    - all retained `host_defense_subtype_*` columns
+- Sourced isolation-host profiles from the raw host feature tables:
+  - `data/genomics/bacteria/umap_phylogeny/coli_umap_8_dims.tsv`
+  - `data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv`
+- Kept the TE03 contract deliberately narrow rather than padding it with weak extras. The builder emits `3`
+  per-pair features:
+  - `isolation_host_umap_euclidean_distance`
+  - `isolation_host_defense_jaccard_distance`
+  - `isolation_host_feature_available`
+- Matched retained Track C defense columns back to raw defense-finder subtype names with the same slugification rule
+  used in TC04 so the target-host and isolation-host vectors stay aligned.
+- Added supporting artifacts for traceability:
+  - `isolation_host_distance_feature_metadata_v1.csv`
+  - `phage_isolation_host_coverage_v1.csv`
+  - `isolation_host_feature_coverage_v1.csv`
+  - `isolation_host_distance_manifest_v1.json`
+- Added regression tests in `lyzortx/tests/test_isolation_host_distance_feature_block.py` covering:
+  - Jaccard-distance behavior, including the empty-union case
+  - per-pair distance emission with a missing isolation host
+  - end-to-end emission of the feature matrix, metadata, coverage tables, and manifest
+
+#### Output summary
+
+- The generated TE03 output directory is
+  `lyzortx/generated_outputs/track_e/isolation_host_distance_feature_block/`.
+- The main joinable artifact is `isolation_host_distance_features_v1.csv`.
+- Supporting outputs are:
+  - `isolation_host_distance_feature_metadata_v1.csv`
+  - `phage_isolation_host_coverage_v1.csv`
+  - `isolation_host_feature_coverage_v1.csv`
+  - `isolation_host_distance_manifest_v1.json`
+- Final matrix size: `35,424` rows (`369` bacteria x `96` phages) with `3` engineered TE03 features plus the pair join
+  keys.
+- Coverage is high but not fake-complete:
+  - `33 / 34` distinct phage isolation hosts have both source profiles available
+  - `92 / 96` phages have usable isolation-host features
+  - `33,948 / 35,424` pairs (`95.8%`) have `isolation_host_feature_available = 1`
+  - `1,476 / 35,424` pairs (`4.2%`) are unavailable because the isolation host is missing from the source feature
+    tables
+- The missing case is explicit rather than silently guessed:
+  - only `LF110` lacks both UMAP and defense profiles in the checked-in source tables
+  - the affected phages are `LF110_P1`, `LF110_P2`, `LF110_P3`, and `LF110_P4`
+- Distance distributions on the available subset:
+  - `isolation_host_umap_euclidean_distance`: mean `14.786`, median `15.893`, max `27.202`
+  - `isolation_host_defense_jaccard_distance`: mean `0.767`, median `0.786`, max `1.0`
+  - `21` available pairs have defense Jaccard distance `0.0`
+  - no available pairs have UMAP distance `0.0`
+- The closest non-identical UMAP neighbors in the emitted matrix were very tight, for example:
+  - `H1-003-0105-C-R` with `411_P1` and `411_P2`: distance `0.0168`
+  - `H1-003-0115-L-R` with `411_P1` and `411_P2`: distance `0.0187`
+  - `IAI46` with `LF7074_P1`: distance `0.0269`
+
+#### Interpretation
+
+1. The right simplification for TE03 was to ship the two required distances plus one explicit availability flag, not to
+   invent filler features. The acceptance criteria only demand the distance signals, and the single flag is enough to
+   keep the block numerically safe without hiding the one real coverage hole.
+2. Isolation-host distance is now a genuine pairwise signal rather than a disguised phage ID proxy. The same phage gets
+   a different TE03 value against each candidate target host because the distance is computed against that host's UMAP
+   and defense profile.
+3. The lack of zero UMAP distances on the available subset means none of the tested panel hosts are literally identical
+   to the checked-in isolation hosts in the 8D phylogeny embedding, which is plausible and useful: TE03 is measuring
+   proximity, not mostly exact-self matches.
+4. The real limitation is source coverage, not implementation. `LF110` exists in phage metadata but is absent from the
+   checked-in UMAP and defense tables, so the defensible behavior is to mark those four phages as unavailable instead of
+   pretending to know their isolation-host profile.
+
+#### Next steps
+
+Join TE03 with TE01 and TE02 in the Track F ablation suite, then test whether the combined pairwise stack reduces the
+current popular-phage bias on host-group holdouts and the hard-to-lyse strain slices already documented elsewhere in
+the notebooks.
