@@ -6,6 +6,16 @@
 - Use `pre-commit run pymarkdown --all-files` for optional manual lint checks.
 - After auto-fixes, stage updated files explicitly before committing.
 
+# Knowledge Persistence Policy
+
+- Almost all learnings, rules, corrections, and project context must be written to `AGENTS.md` files (root or
+  subfolder), **not** to user memory. `AGENTS.md` is shared, version-controlled, and benefits every agent and
+  contributor. User memory is private and ephemeral.
+- Reserve user memory exclusively for truly personal information that does not belong in a shared repo file (e.g., the
+  user's role, private account details, or confidential partner names).
+- When in doubt, default to `AGENTS.md`. The bar for writing to user memory instead should be very high — roughly 0.1%
+  of cases.
+
 # Environment Policy
 
 - **Local development:** Use the `phage_env` micromamba environment. Activate it with `micromamba activate phage_env`.
@@ -160,7 +170,20 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - When fixing a bug, write a failing test first that proves the regression, then implement the fix to make it pass
   (TDD-style).
 - Place tests under `lyzortx/tests/` unless the user explicitly requests a different location.
+- **Never write tests for functions defined only in the test file itself.** Tests must exercise real production code. If
+  there is no production function to test, either the logic belongs in a helper under `lyzortx/` or it does not need a
+  test.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
+
+# External Service Integration Development
+
+- When writing code that interacts with an external service (GitHub API, GitHub Actions, CI systems, public databases
+  like NCBI/UniProt/PDB, etc.), first explore and test the integration manually against the live service (e.g.,
+  `gh api`, `curl`, CLI tools) to understand the real data shapes and edge cases.
+- Based on that learning, extract core logic into pure, reusable functions under `lyzortx/` and write unit tests for
+  those functions.
+- Do not skip the manual exploration step and guess at API behavior. Do not write unit tests that mock everything
+  without first verifying assumptions against the real service.
 
 # Git Staging Policy
 

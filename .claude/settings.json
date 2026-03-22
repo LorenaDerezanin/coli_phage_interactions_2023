@@ -3,10 +3,12 @@
     "allow": [
       "Bash(gh issue list *)",
       "Bash(gh issue view *)",
+      "Bash(gh repo view *)",
       "Bash(gh workflow run *)",
       "Bash(git fetch *)",
       "Bash(git log *)",
       "Bash(grep *)",
+      "Bash(python -m pytest lyzortx/tests/*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:developers.openai.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
