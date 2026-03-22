@@ -435,7 +435,7 @@ tracks:
       - Runs without error on a fresh clone with only phage_env dependencies
     - id: TJ02
       title: Freeze environment specs and seeds for v1 benchmark run
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - requirements.txt and phage_env environment spec locked for exact versions

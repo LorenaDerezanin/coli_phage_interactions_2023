@@ -183,7 +183,7 @@ graph LR
 
 - **Guiding Principle:** One-command regeneration and environment freezing for v1 pipeline.
 - [x] One command to regenerate all v1 outputs from raw data
-- [ ] Freeze environment specs and seeds for v1 benchmark run Model: `gpt-5.4-mini`.
+- [x] Freeze environment specs and seeds for v1 benchmark run
 
 ## Track P: Presentation Artifacts
 
