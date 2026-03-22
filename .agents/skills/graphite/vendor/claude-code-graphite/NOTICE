@@ -1,0 +1,9 @@
+Vendored from claude-code-graphite. Files in this directory are pristine
+upstream copies and should not be modified directly. Project-specific
+customizations live in the parent SKILL.md.
+
+Original work:
+  Repository: https://github.com/georgeguimaraes/claude-code-graphite
+  Version:    0.1.1 (plugins/graphite/ subtree)
+  Copyright:  2026 George Ye
+  License:    Apache License, Version 2.0 (see LICENSE in this directory)
