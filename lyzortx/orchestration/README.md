@@ -91,6 +91,8 @@ stateDiagram-v2
   workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
 - `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
+- `review_threads.py` — fetches unresolved PR review threads via GraphQL and formats them into a Codex feedback prompt.
+  Includes a signing instruction so Codex identifies itself in every reply ("Posted by Codex \<model\>").
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
 - `ci_token_usage.py` — CLI for token/cost analysis across all LLM-invoking workflows (Codex + Claude).
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.

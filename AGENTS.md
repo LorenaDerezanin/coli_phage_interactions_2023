@@ -78,9 +78,10 @@
 
 - Never push directly to main. All changes go through pull requests.
 - Create a feature branch, push it, and open a PR.
-- Always rebase on main before starting work — whether implementing a new task or addressing review feedback.
-- Always rebase on main before pushing. For plain git: `git fetch origin main && git rebase origin/main`. For Graphite
-  stacks: `gt sync` to pull trunk and restack, or `gt restack` to rebase the current stack on its trunk.
+- Always rebase on main before starting work and again before every push. The orchestrator continuously lands automated
+  PRs, so main moves frequently — never assume your local main is current even if you pulled recently.
+  For plain git: `git fetch origin main && git rebase origin/main`. For Graphite stacks: `gt sync` to pull trunk and
+  restack, or `gt restack` to rebase the current stack on its trunk.
 
 # PR Description Maintenance
 
