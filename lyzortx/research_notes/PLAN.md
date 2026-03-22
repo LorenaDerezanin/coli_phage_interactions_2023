@@ -136,7 +136,7 @@ graph LR
 - **Guiding Principle:** RBP-receptor compatibility, defense evasion proxy, and phylogenetic distance features that
   break the popular-phage bias.
 - [x] Build RBP-receptor compatibility features from curated genus-receptor lookup
-- [ ] Build defense evasion proxy features from training-fold collaborative filtering
+- [x] Build defense evasion proxy features from training-fold collaborative filtering
 - [ ] Build phylogenetic distance to isolation host features
 
 ## Track F: Evaluation Protocol

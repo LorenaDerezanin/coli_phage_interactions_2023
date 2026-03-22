@@ -233,7 +233,7 @@ tracks:
     - id: TE02
       title: Build defense evasion proxy features from training-fold collaborative
         filtering
-      status: pending
+      status: done
       acceptance_criteria:
       - For each phage family, compute average lysis rate against each defense subtype
         from training data only
