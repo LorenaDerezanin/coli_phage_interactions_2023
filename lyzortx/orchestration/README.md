@@ -162,9 +162,8 @@ the sole judge of thread resolution (can resolve/unresolve threads via GraphQL m
 
 ### codex-pr-lifecycle.yml
 
-- `pull_request_review.submitted`: triggers on `COMMENTED` reviews from `chatgpt-codex-connector[bot]` or `claude[bot]`
-  only. Reviews from other users are excluded to prevent feedback loops (Codex replies via `ORCHESTRATOR_PAT` post as
-  the PAT holder).
+- `pull_request_review.submitted`: triggers on any `COMMENTED` review on PRs with the `orchestrator-task` label.
+  Non-orchestrator PRs are ignored. The 3-round cap (`codex-review-round-N` labels) prevents infinite loops.
 - `workflow_dispatch`: manual trigger with a PR number.
 
 Two jobs: `auto-merge-on-approve` (merges on Claude's `APPROVED` review) and `address-feedback` (Codex fix loop). A

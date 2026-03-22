@@ -7,9 +7,9 @@
 - `claude-pr-review.yml` uses `anthropics/claude-code-action@v1` to auto-review `orchestrator-task`-labeled PRs on
   open/push, and supports interactive `@claude` mentions on any PR. Requires the `ANTHROPIC_API_KEY` repository secret.
   Claude posts reviews as `claude[bot]` (the action's own OIDC app identity).
-- `codex-pr-lifecycle.yml` triggers on COMMENTED reviews from `chatgpt-codex-connector[bot]` or `claude[bot]` only.
-  Reviews from other users (including the ORCHESTRATOR_PAT holder) are excluded to prevent feedback loops. A concurrency
-  group ensures only one lifecycle run per PR at a time.
+- `codex-pr-lifecycle.yml` triggers on COMMENTED reviews on PRs with the `orchestrator-task` label. The 3-round cap
+  (`codex-review-round-N` labels) prevents infinite loops. A concurrency group ensures only one lifecycle run per PR at
+  a time.
 
 # Concurrency and Thread Safety
 
