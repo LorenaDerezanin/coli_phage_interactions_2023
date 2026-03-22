@@ -82,6 +82,11 @@
 - Always rebase on main before pushing. For plain git: `git fetch origin main && git rebase origin/main`. For Graphite
   stacks: `gt sync` to pull trunk and restack, or `gt restack` to rebase the current stack on its trunk.
 
+# PR Description Maintenance
+
+- After every push to a PR branch, update the PR title and description to reflect the current state of all commits in
+  the branch. The title and body should accurately summarize what the PR does — not just the initial commit.
+
 # PR and Issue Linkage Policy
 
 - Any PR that addresses a tracked GitHub issue must include `Closes #<issue_number>` in its description.
