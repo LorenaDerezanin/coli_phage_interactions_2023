@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze token usage across Codex CI workflow runs.
+"""Analyze token usage and cost across Codex CI and Claude PR review runs.
 
 Usage:
     python -m lyzortx.orchestration.ci_token_usage            # recent overview
@@ -20,6 +20,9 @@ from dataclasses import dataclass
 REPO = "LorenaDerezanin/coli_phage_interactions_2023"
 IMPLEMENT_WORKFLOW = "codex-implement.yml"
 LIFECYCLE_WORKFLOW = "codex-pr-lifecycle.yml"
+REVIEW_WORKFLOW = "claude-pr-review.yml"
+
+ALL_WORKFLOWS = [IMPLEMENT_WORKFLOW, LIFECYCLE_WORKFLOW, REVIEW_WORKFLOW]
 
 # Regex to strip ANSI escape codes from log output.
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -32,6 +35,11 @@ GH_LOG_PREFIX_RE = re.compile(r"^[^\t]*\t[^\t]*\t\S+Z\s*")
 # Codex logs: a line containing "tokens used", then the next line has the number.
 TOKEN_HEADER_RE = re.compile(r"tokens?\s+used", re.IGNORECASE)
 TOKEN_VALUE_RE = re.compile(r"^(\d[\d,]*)$")
+
+# Claude code action logs a JSON result block with "total_cost_usd".
+COST_USD_RE = re.compile(r'"total_cost_usd"\s*:\s*([\d.]+)')
+NUM_TURNS_RE = re.compile(r'"num_turns"\s*:\s*(\d+)')
+DURATION_MS_RE = re.compile(r'"duration_ms"\s*:\s*(\d+)')
 
 # Waste-detection patterns.
 WASTE_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -87,6 +95,40 @@ def extract_token_count(log_text: str) -> int | None:
 
 
 @dataclass
+class ClaudeActionResult:
+    """Parsed result block from a Claude code action run."""
+
+    cost_usd: float = 0.0
+    num_turns: int = 0
+    duration_ms: int = 0
+
+
+def extract_claude_action_result(log_text: str) -> ClaudeActionResult | None:
+    """Extract cost/turns/duration from a Claude code action JSON result block.
+
+    The claude-code-action logs a JSON object with ``total_cost_usd``,
+    ``num_turns``, and ``duration_ms`` near the end of the run.
+    """
+    clean = strip_ansi(log_text)
+    # Strip log prefixes so we're working with raw content.
+    lines = [strip_log_prefix(line) for line in clean.splitlines()]
+    text = "\n".join(lines)
+
+    cost_match = COST_USD_RE.search(text)
+    if not cost_match:
+        return None
+
+    turns_match = NUM_TURNS_RE.search(text)
+    duration_match = DURATION_MS_RE.search(text)
+
+    return ClaudeActionResult(
+        cost_usd=float(cost_match.group(1)),
+        num_turns=int(turns_match.group(1)) if turns_match else 0,
+        duration_ms=int(duration_match.group(1)) if duration_match else 0,
+    )
+
+
+@dataclass
 class WasteReport:
     """Aggregated waste-pattern counts from a single run's log."""
 
@@ -122,6 +164,7 @@ class RunInfo:
     display_title: str = ""
     event: str = ""
     tokens: int | None = None
+    claude_result: ClaudeActionResult | None = None
     waste: WasteReport | None = None
 
 
@@ -255,10 +298,33 @@ def _run_association(run: RunInfo) -> str:
     return ""
 
 
+def _is_review_workflow(run: RunInfo) -> bool:
+    """Return True if *run* is from the Claude PR review workflow."""
+    return run.workflow == "Claude PR Review"
+
+
+def _enrich_run(run: RunInfo, log: str) -> None:
+    """Extract token count and/or Claude action result from a run log."""
+    run.tokens = extract_token_count(log)
+    run.claude_result = extract_claude_action_result(log)
+
+
+def _usage_str(run: RunInfo) -> str:
+    """Return a human-readable usage string for a run.
+
+    Codex runs report token counts; Claude review runs report USD cost.
+    """
+    if run.tokens is not None:
+        return f"{run.tokens:,} tok"
+    if run.claude_result and run.claude_result.cost_usd > 0:
+        return f"${run.claude_result.cost_usd:.2f}"
+    return "N/A"
+
+
 def cmd_overview(limit: int) -> None:
-    """Print a summary of recent Codex CI runs."""
+    """Print a summary of recent CI runs (Codex + Claude review)."""
     all_runs: list[RunInfo] = []
-    for wf in [IMPLEMENT_WORKFLOW, LIFECYCLE_WORKFLOW]:
+    for wf in ALL_WORKFLOWS:
         for entry in list_runs(wf, limit=limit):
             all_runs.append(_build_run_info(entry))
 
@@ -267,41 +333,51 @@ def cmd_overview(limit: int) -> None:
     all_runs = all_runs[:limit]
 
     if not all_runs:
-        print("No Codex workflow runs found.")
+        print("No workflow runs found.")
         return
 
-    # Fetch token counts.
+    # Fetch token counts / costs.
     for run in all_runs:
         log = get_run_log(run.run_id)
-        run.tokens = extract_token_count(log)
+        _enrich_run(run, log)
 
     # Build table.
     rows = []
     for r in all_runs:
         assoc = _run_association(r)
-        tokens_str = f"{r.tokens:,}" if r.tokens is not None else "N/A"
-        rows.append([r.run_id, r.workflow[:30], r.date, r.conclusion or r.status, tokens_str, assoc])
+        rows.append([r.run_id, r.workflow[:30], r.date, r.conclusion or r.status, _usage_str(r), assoc])
 
-    headers = ["Run ID", "Workflow", "Date", "Status", "Tokens", "PR/Issue"]
+    headers = ["Run ID", "Workflow", "Date", "Status", "Usage", "PR/Issue"]
     print(format_table(rows, headers))
 
-    # Summary stats.
-    token_values = [r.tokens for r in all_runs if r.tokens is not None]
-    success_tokens = [r.tokens for r in all_runs if r.tokens is not None and r.conclusion == "success"]
-    failure_tokens = [r.tokens for r in all_runs if r.tokens is not None and r.conclusion == "failure"]
+    # Summary stats — split by workflow type.
+    codex_runs = [r for r in all_runs if not _is_review_workflow(r)]
+    review_runs = [r for r in all_runs if _is_review_workflow(r)]
+
+    token_values = [r.tokens for r in codex_runs if r.tokens is not None]
+    success_tokens = [r.tokens for r in codex_runs if r.tokens is not None and r.conclusion == "success"]
+    failure_tokens = [r.tokens for r in codex_runs if r.tokens is not None and r.conclusion == "failure"]
 
     print()
-    print(f"Total tokens: {sum(token_values):,}" if token_values else "Total tokens: N/A")
+    if token_values:
+        print(f"Codex total tokens: {sum(token_values):,}")
     if success_tokens:
-        print(f"Avg tokens (success): {sum(success_tokens) // len(success_tokens):,}")
+        print(f"Codex avg tokens (success): {sum(success_tokens) // len(success_tokens):,}")
     if failure_tokens:
-        print(f"Avg tokens (failure): {sum(failure_tokens) // len(failure_tokens):,}")
+        print(f"Codex avg tokens (failure): {sum(failure_tokens) // len(failure_tokens):,}")
+
+    cost_values = [r.claude_result.cost_usd for r in review_runs if r.claude_result and r.claude_result.cost_usd > 0]
+    if cost_values:
+        print(f"Claude review total cost: ${sum(cost_values):.2f}")
+        print(f"Claude review avg cost:   ${sum(cost_values) / len(cost_values):.2f}")
+        print(f"Claude review runs:       {len(cost_values)}")
 
 
 def cmd_ticket(issue_number: int) -> None:
     """Print token spend breakdown for a given orchestrator ticket."""
     implement_runs = list_runs(IMPLEMENT_WORKFLOW, limit=100)
     lifecycle_runs = list_runs(LIFECYCLE_WORKFLOW, limit=100)
+    review_runs = list_runs(REVIEW_WORKFLOW, limit=100)
 
     # Get issue title to match implement runs by display title.
     issue_raw = _gh(["issue", "view", str(issue_number), "--json", "title"])
@@ -344,7 +420,10 @@ def cmd_ticket(issue_number: int) -> None:
     # Match lifecycle runs by PR branch.
     life_matched = [r for r in lifecycle_runs if pr_branch and r.get("headBranch") == pr_branch]
 
-    def _print_runs(label: str, runs: list[dict]) -> int:
+    # Match Claude review runs by PR branch.
+    claude_matched = [r for r in review_runs if pr_branch and r.get("headBranch") == pr_branch]
+
+    def _print_codex_runs(label: str, runs: list[dict]) -> int:
         total = 0
         if not runs:
             return 0
@@ -352,7 +431,6 @@ def cmd_ticket(issue_number: int) -> None:
         for entry in runs:
             rid = str(entry["databaseId"])
             conclusion = entry.get("conclusion") or entry.get("status", "")
-            # Skip runs that never invoked Codex.
             if conclusion in ("skipped",):
                 print(f"  Run {rid}: {conclusion} — skipped")
                 continue
@@ -365,21 +443,45 @@ def cmd_ticket(issue_number: int) -> None:
         print()
         return total
 
-    impl_tokens = _print_runs("Implementation runs", impl_matched)
-    life_tokens = _print_runs("Review lifecycle runs", life_matched)
+    def _print_claude_runs(label: str, runs: list[dict]) -> float:
+        total_cost = 0.0
+        if not runs:
+            return 0.0
+        print(f"=== {label} ===")
+        for entry in runs:
+            rid = str(entry["databaseId"])
+            conclusion = entry.get("conclusion") or entry.get("status", "")
+            if conclusion in ("skipped",):
+                print(f"  Run {rid}: {conclusion} — skipped")
+                continue
+            log = get_run_log(rid)
+            result = extract_claude_action_result(log)
+            if result and result.cost_usd > 0:
+                print(f"  Run {rid}: {conclusion} — ${result.cost_usd:.2f} ({result.num_turns} turns)")
+                total_cost += result.cost_usd
+            else:
+                print(f"  Run {rid}: {conclusion} — N/A")
+        print()
+        return total_cost
 
-    total = impl_tokens + life_tokens
-    print(f"Implementation tokens: {impl_tokens:,}")
-    print(f"Review tokens:        {life_tokens:,}")
-    print(f"Total tokens:         {total:,}")
-    if total > 0:
-        print(f"Review overhead:      {life_tokens / total * 100:.1f}%")
+    impl_tokens = _print_codex_runs("Implementation runs", impl_matched)
+    life_tokens = _print_codex_runs("Review lifecycle runs (Codex)", life_matched)
+    claude_cost = _print_claude_runs("Claude review runs", claude_matched)
+
+    codex_total = impl_tokens + life_tokens
+    print(f"Implementation tokens:  {impl_tokens:,}")
+    print(f"Lifecycle tokens:       {life_tokens:,}")
+    print(f"Codex total tokens:     {codex_total:,}")
+    if claude_cost > 0:
+        print(f"Claude review cost:     ${claude_cost:.2f}")
+    if codex_total > 0:
+        print(f"Lifecycle overhead:     {life_tokens / codex_total * 100:.1f}%")
 
 
 def cmd_waste(limit: int) -> None:
     """Print token waste analysis across recent runs."""
     all_runs: list[RunInfo] = []
-    for wf in [IMPLEMENT_WORKFLOW, LIFECYCLE_WORKFLOW]:
+    for wf in ALL_WORKFLOWS:
         for entry in list_runs(wf, limit=limit):
             all_runs.append(_build_run_info(entry))
 
@@ -387,24 +489,24 @@ def cmd_waste(limit: int) -> None:
     all_runs = all_runs[:limit]
 
     if not all_runs:
-        print("No Codex workflow runs found.")
+        print("No workflow runs found.")
         return
 
     for run in all_runs:
         log = get_run_log(run.run_id)
-        run.tokens = extract_token_count(log)
+        _enrich_run(run, log)
         run.waste = detect_waste(log)
 
     rows = []
     for r in all_runs:
         w = r.waste or WasteReport()
-        tokens_str = f"{r.tokens:,}" if r.tokens is not None else "N/A"
         rows.append(
             [
                 r.run_id,
+                r.workflow[:20],
                 r.date,
                 r.conclusion or r.status,
-                tokens_str,
+                _usage_str(r),
                 str(w.env_discovery),
                 str(w.failed_commands),
                 str(w.git_config_failures),
@@ -415,9 +517,10 @@ def cmd_waste(limit: int) -> None:
 
     headers = [
         "Run ID",
+        "Workflow",
         "Date",
         "Status",
-        "Tokens",
+        "Usage",
         "Env Fumble",
         "Failed Cmd",
         "Git Cfg",

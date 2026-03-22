@@ -1,8 +1,8 @@
 ---
 name: ci-token-usage
 description: >-
-  Analyze token usage and waste across Codex CI workflow runs — overview, per-ticket
-  breakdown, and waste detection.
+  Analyze token usage and cost across Codex CI and Claude PR review workflow
+  runs — overview, per-ticket breakdown, and waste detection.
 user-invocable: true
 allowed-tools: Bash, Read
 argument-hint: "[--runs N] [--ticket <issue_number>] [--waste]"
@@ -10,8 +10,11 @@ argument-hint: "[--runs N] [--ticket <issue_number>] [--waste]"
 
 # CI Token Usage Analysis
 
-Analyze token consumption across Codex CI workflow runs for the
-`LorenaDerezanin/coli_phage_interactions_2023` repository.
+Analyze token consumption and cost across Codex CI workflow runs and Claude PR
+review runs for the `LorenaDerezanin/coli_phage_interactions_2023` repository.
+
+Codex runs (implement + lifecycle) report token counts. Claude review runs
+report USD cost, number of turns, and duration.
 
 ## How to run
 
@@ -30,9 +33,8 @@ Route on `$ARGUMENTS`:
 ### No arguments (or `--runs N`)
 
 Show a recent overview of the last N workflow runs (default 10):
-- Run ID, workflow name, date, status, tokens used, associated PR/issue
-- Total tokens across all runs
-- Average tokens per successful run vs failed run
+- Run ID, workflow name, date, status, usage (tokens or USD cost), associated PR/issue
+- Summary stats split by Codex (tokens) and Claude review (USD cost)
 
 ```bash
 python -m lyzortx.orchestration.ci_token_usage
@@ -41,10 +43,10 @@ python -m lyzortx.orchestration.ci_token_usage --runs 20
 
 ### `--ticket <issue_number>`
 
-Track ALL token spend for a given orchestrator ticket:
-1. The implement run that created the PR
-2. All lifecycle (review feedback) runs for that PR
-3. Total tokens burned for the ticket
+Track ALL spend for a given orchestrator ticket:
+1. Implementation runs (Codex) — token counts
+2. Lifecycle review runs (Codex) — token counts
+3. Claude PR review runs — USD cost and turn counts
 4. Breakdown: implementation vs review rounds
 
 ```bash

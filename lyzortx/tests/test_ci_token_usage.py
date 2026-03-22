@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from lyzortx.orchestration.ci_token_usage import (
+    ClaudeActionResult,
     WasteReport,
     detect_waste,
+    extract_claude_action_result,
     extract_token_count,
     format_table,
     strip_ansi,
@@ -81,6 +83,62 @@ class TestExtractTokenCount:
         """The year 2026 in a timestamp must not be mistaken for a token count."""
         log = "Job\tStep\t2026-03-19T22:22:13Z tokens used\nJob\tStep\t2026-03-19T22:22:14Z 83,123\n"
         assert extract_token_count(log) == 83123
+
+
+class TestExtractClaudeActionResult:
+    def test_basic_extraction(self) -> None:
+        log = (
+            '  "type": "result",\n'
+            '  "subtype": "success",\n'
+            '  "is_error": false,\n'
+            '  "duration_ms": 68687,\n'
+            '  "num_turns": 14,\n'
+            '  "total_cost_usd": 0.37855475,\n'
+            '  "permission_denials_count": 0\n'
+            "}"
+        )
+        result = extract_claude_action_result(log)
+        assert result is not None
+        assert result.cost_usd == 0.37855475
+        assert result.num_turns == 14
+        assert result.duration_ms == 68687
+
+    def test_with_gh_actions_log_prefix(self) -> None:
+        log = (
+            'Claude Auto Review\tUNKNOWN STEP\t2026-03-22T08:27:03.2908567Z   "is_error": false,\n'
+            'Claude Auto Review\tUNKNOWN STEP\t2026-03-22T08:27:03.2908796Z   "duration_ms": 121126,\n'
+            'Claude Auto Review\tUNKNOWN STEP\t2026-03-22T08:27:03.2909177Z   "num_turns": 20,\n'
+            'Claude Auto Review\tUNKNOWN STEP\t2026-03-22T08:27:03.2909177Z   "total_cost_usd": 0.84,\n'
+        )
+        result = extract_claude_action_result(log)
+        assert result is not None
+        assert result.cost_usd == 0.84
+        assert result.num_turns == 20
+        assert result.duration_ms == 121126
+
+    def test_with_ansi_codes(self) -> None:
+        log = '\x1b[32m"total_cost_usd": 1.23,\x1b[0m\n"num_turns": 5,\n"duration_ms": 50000,\n'
+        result = extract_claude_action_result(log)
+        assert result is not None
+        assert result.cost_usd == 1.23
+        assert result.num_turns == 5
+
+    def test_no_result_block(self) -> None:
+        log = "just some random log output\nwithout any JSON result block"
+        assert extract_claude_action_result(log) is None
+
+    def test_missing_turns_and_duration(self) -> None:
+        log = '"total_cost_usd": 0.50\n'
+        result = extract_claude_action_result(log)
+        assert result is not None
+        assert result.cost_usd == 0.50
+        assert result.num_turns == 0
+        assert result.duration_ms == 0
+
+    def test_returns_dataclass(self) -> None:
+        log = '"total_cost_usd": 0.10,\n"num_turns": 3,\n"duration_ms": 1000,\n'
+        result = extract_claude_action_result(log)
+        assert isinstance(result, ClaudeActionResult)
 
 
 class TestDetectWaste:
