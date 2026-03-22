@@ -30,8 +30,6 @@ def main(argv: list[str] | None = None) -> None:
         build_tier_b_weak_label_ingest.main([])
     if args.step in {"external-confidence-tiers", "all"}:
         build_external_label_confidence_tiers.main([])
-    elif args.step not in {"weak-label-ingest", "external-confidence-tiers", "all"}:
-        raise ValueError(f"Unsupported step: {args.step}")
 
 
 if __name__ == "__main__":
