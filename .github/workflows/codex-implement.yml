@@ -113,10 +113,9 @@ jobs:
       - name: Verify Codex created a PR
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          # Use --json filtering instead of --search to avoid GitHub search index lag.
-          PR_JSON=$(gh pr list --state open --json number,headRefName,body \
-            --jq "[.[] | select(.body | test(\"[Cc]loses #${ISSUE_NUM}\\\\b\"))] | .[0]")
-          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
+          # Use Python instead of gh pr list --search to avoid GitHub search index lag.
+          PR_JSON=$(python -m lyzortx.orchestration.find_pr_for_issue "$ISSUE_NUM")
+          if [ $? -ne 0 ] || [ -z "$PR_JSON" ]; then
             echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
             exit 1
           fi
