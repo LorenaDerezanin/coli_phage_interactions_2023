@@ -390,7 +390,7 @@ tracks:
       model: gpt-5.4-mini
     - id: TI07
       title: Define confidence tiers for external labels
-      status: pending
+      status: done
       model: gpt-5.4
     - id: TI08
       title: 'Integrate external data as non-blocking enhancer: internal-only baseline
