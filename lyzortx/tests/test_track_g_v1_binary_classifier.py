@@ -1,7 +1,15 @@
 import csv
 
+import numpy as np
+
 from lyzortx.pipeline.track_g import run_track_g
 from lyzortx.pipeline.track_g.steps import calibrate_gbm_outputs
+from lyzortx.pipeline.track_g.steps.compute_shap_explanations import (
+    build_global_feature_importance_rows,
+    classify_strain_difficulty,
+    select_recommendation_rows,
+    top_feature_contributions,
+)
 from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import (
     build_ablation_arms,
     partition_track_c_columns,
@@ -215,13 +223,18 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("feature-block-ablation"),
     )
+    monkeypatch.setattr(
+        run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("compute-shap"),
+    )
 
     run_track_g.main(["--step", "train-v1-binary"])
     assert calls == ["train-v1-binary"]
 
     calls.clear()
     run_track_g.main(["--step", "all"])
-    assert calls == ["train-v1-binary", "calibrate-gbm", "feature-block-ablation"]
+    assert calls == ["train-v1-binary", "calibrate-gbm", "feature-block-ablation", "compute-shap"]
 
 
 def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
@@ -241,6 +254,11 @@ def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
         run_track_g.run_feature_block_ablation_suite,
         "main",
         lambda argv: calls.append("feature-block-ablation"),
+    )
+    monkeypatch.setattr(
+        run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("compute-shap"),
     )
 
     run_track_g.main(["--step", "calibrate-gbm"])
@@ -265,9 +283,134 @@ def test_run_track_g_dispatches_tg03_ablation_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("feature-block-ablation"),
     )
+    monkeypatch.setattr(
+        run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("compute-shap"),
+    )
 
     run_track_g.main(["--step", "feature-block-ablation"])
     assert calls == ["feature-block-ablation"]
+
+
+def test_run_track_g_dispatches_tg04_shap_step(monkeypatch) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        run_track_g.train_v1_binary_classifier,
+        "main",
+        lambda argv: calls.append("train-v1-binary"),
+    )
+    monkeypatch.setattr(
+        run_track_g.calibrate_gbm_outputs,
+        "main",
+        lambda argv: calls.append("calibrate-gbm"),
+    )
+    monkeypatch.setattr(
+        run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("feature-block-ablation"),
+    )
+    monkeypatch.setattr(
+        run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("compute-shap"),
+    )
+
+    run_track_g.main(["--step", "compute-shap"])
+    assert calls == ["compute-shap"]
+
+
+def test_select_recommendation_rows_keeps_top_k_per_bacteria() -> None:
+    selected = select_recommendation_rows(
+        [
+            {"pair_id": "B1__P1", "bacteria": "B1", "phage": "P1", "pred_lightgbm_isotonic": "0.6"},
+            {"pair_id": "B1__P2", "bacteria": "B1", "phage": "P2", "pred_lightgbm_isotonic": "0.9"},
+            {"pair_id": "B1__P3", "bacteria": "B1", "phage": "P3", "pred_lightgbm_isotonic": "0.8"},
+            {"pair_id": "B2__P1", "bacteria": "B2", "phage": "P1", "pred_lightgbm_isotonic": "0.4"},
+            {"pair_id": "B2__P2", "bacteria": "B2", "phage": "P2", "pred_lightgbm_isotonic": "0.5"},
+        ],
+        recommendation_count=2,
+    )
+
+    assert [(row["bacteria"], row["phage"], row["recommendation_rank"]) for row in selected] == [
+        ("B1", "P2", "1"),
+        ("B1", "P3", "2"),
+        ("B2", "P2", "1"),
+        ("B2", "P1", "2"),
+    ]
+
+
+def test_top_feature_contributions_splits_positive_and_negative_drivers() -> None:
+    contributions = top_feature_contributions(
+        np.array([0.7, -0.2, 0.1, -0.5]),
+        np.array([1.0, 0.0, 0.3, 1.0]),
+        ["feat_a", "feat_b", "feat_c", "feat_d"],
+        top_k=2,
+    )
+
+    assert [item["feature_name"] for item in contributions["positive"]] == ["feat_a", "feat_c"]
+    assert [item["feature_name"] for item in contributions["negative"]] == ["feat_d", "feat_b"]
+
+
+def test_build_global_feature_importance_rows_orders_by_mean_abs_shap() -> None:
+    feature_space = FeatureSpace(
+        categorical_columns=("host_pathotype",),
+        numeric_columns=("phage_gc_content", "lookup_available", "host_defense_diversity"),
+        track_c_additional_columns=("host_defense_diversity",),
+        track_d_columns=("phage_gc_content",),
+        track_e_columns=("lookup_available",),
+    )
+
+    rows = build_global_feature_importance_rows(
+        np.array(
+            [
+                [0.8, 0.2, -0.1],
+                [0.4, 0.1, -0.3],
+            ]
+        ),
+        ["phage_gc_content", "lookup_available", "host_defense_diversity"],
+        feature_space,
+    )
+
+    assert [row["feature_name"] for row in rows] == [
+        "phage_gc_content",
+        "host_defense_diversity",
+        "lookup_available",
+    ]
+    assert rows[0]["feature_block"] == "track_d_phage_genomic"
+    assert rows[1]["feature_block"] == "track_c_host_genomic"
+    assert rows[2]["feature_block"] == "track_e_pairwise"
+
+
+def test_classify_strain_difficulty_uses_confidence_and_hits() -> None:
+    assert (
+        classify_strain_difficulty(
+            top_score=0.84,
+            score_gap=0.22,
+            mean_margin_from_half=0.24,
+            top3_hit=True,
+        )
+        == "easy"
+    )
+    assert (
+        classify_strain_difficulty(
+            top_score=0.41,
+            score_gap=0.02,
+            mean_margin_from_half=0.05,
+            top3_hit=False,
+        )
+        == "hard"
+    )
+    assert (
+        classify_strain_difficulty(
+            top_score=0.62,
+            score_gap=0.07,
+            mean_margin_from_half=0.12,
+            top3_hit=True,
+        )
+        == "moderate"
+    )
 
 
 def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:

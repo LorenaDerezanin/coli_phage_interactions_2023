@@ -242,3 +242,84 @@
    assuming TE01-TE03 should remain in the final default stack unchanged.
 3. If Track G keeps the full model as the deployment default, consider a follow-up feature-selection or regularization
    pass so the weaker pairwise block does not dilute the stronger defense/phage-genomic signal on the fixed holdout.
+
+### 2026-03-22: TG04 implemented (TreeExplainer SHAP explanations for pair-level and global Track G importance)
+
+#### What was implemented
+
+- Added the TG04 SHAP step at `lyzortx/pipeline/track_g/steps/compute_shap_explanations.py`.
+- Updated `lyzortx/pipeline/track_g/run_track_g.py`, `lyzortx/pipeline/track_g/README.md`, `requirements.txt`, and
+  `lyzortx/tests/test_track_g_v1_binary_classifier.py` so Track G now exposes a dedicated `compute-shap` step with:
+  - pinned `shap==0.51.0` dependency support
+  - CLI dispatch coverage for the new step
+  - pure-function tests for recommendation selection, SHAP contribution extraction, global-importance aggregation, and
+    strain-difficulty labeling
+- TG04 now:
+  - bootstraps missing TG01 and TG02 artifacts automatically when needed
+  - refits the tuned final LightGBM from TG01 on the leakage-safe non-holdout training subset
+  - runs `shap.TreeExplainer` on the full hard-trainable panel
+  - writes reusable artifacts under `lyzortx/generated_outputs/track_g/tg04_shap_explanations/`
+
+#### Output summary
+
+- TG04 output directory:
+  - `tg04_recommendation_pair_explanations.csv`
+  - `tg04_global_feature_importance.csv`
+  - `tg04_per_strain_difficulty_summary.csv`
+  - `tg04_shap_summary.json`
+- Coverage:
+  - `1,107` explained recommendation pairs (`369` strains x top `3` phages each)
+  - `596` vectorized features ranked by global mean absolute SHAP value
+  - `369` per-strain difficulty summaries
+- Top global SHAP features across the hard-trainable panel:
+  - `host_n_infections` (`1.182724` mean absolute SHAP)
+  - `receptor_variant_training_positive_count` (`0.571720`)
+  - `phage_gc_content` (`0.217465`)
+  - `phage_genome_length_nt` (`0.202838`)
+  - `host_lps_type=R1` (`0.158946`)
+  - `defense_evasion_mean_score` (`0.130089`)
+  - `isolation_host_defense_jaccard_distance` (`0.122925`)
+- Per-strain difficulty counts:
+  - `17` easy
+  - `80` moderate
+  - `272` hard
+- Representative pair-level explanations:
+  - strain `001-023` / phage `LF82_P9` ranked `1` with isotonic score `0.941176`; strongest positive SHAP driver:
+    `host_n_infections` (`+1.428614`)
+  - strain `001-031-c1` / phage `LF82_P8` ranked `1` with isotonic score `0.625000`; strongest positive driver:
+    `phage_genome_length_nt` (`+0.464397`), strongest negative driver: `host_n_infections` (`-1.361511`)
+- Common per-strain summary drivers:
+  - easy strains were most often separated by `phage_gc_content` or
+    `receptor_variant_training_positive_count`
+  - hard strains were usually characterized by compressed isotonic top scores plus negative pressure from
+    `host_n_infections`, `host_lps_type=R1`, or phage tetra-SVD dimensions such as `phage_genome_tetra_svd_07`
+
+#### Interpretation
+
+1. TG04 met the acceptance target for pair-level explanations. Every strain now has explicit top-3 recommendation rows
+   with the leading positive and negative SHAP drivers for each recommended phage, which answers why the model surfaced
+   those phages rather than just reporting ranks.
+2. The strongest global signal still comes from the legacy v0 infection-breadth feature. `host_n_infections` is far
+   ahead of the rest of the panel, which means Track G is still leaning heavily on broad host susceptibility signal even
+   after adding the genomic and pairwise blocks.
+3. The next tier of importance is biologically richer. The second-ranked feature is the pairwise
+   `receptor_variant_training_positive_count`, and the next major contributors are phage-genomic variables
+   (`phage_gc_content`, `phage_genome_length_nt`, `phage_viridic_mds_00`) plus pairwise defense/isolation terms. That
+   is consistent with TG03: the added blocks are contributing real explanatory signal even if they do not displace the
+   strongest v0 baseline feature.
+4. Most strains fell into the current "hard" bucket, but the reason is usually score compression rather than total
+   recommendation failure. Many hard rows still have `top3_hit=1`; they are marked hard because the isotonic top scores
+   are tied or nearly tied, so TG04 is surfacing a confidence-separation problem more than a top-3 recall problem.
+5. Easy strains tend to be ones where phage-genomic or receptor-compatibility features create a clear margin. Hard
+   strains are disproportionately the ones where `host_n_infections` or `host_lps_type=R1` pushes many phages in the
+   same direction, leaving the model with limited separation among the top candidates.
+
+#### Next steps
+
+1. Revisit the TG02 isotonic mapping or ranking tie-break policy so TG04's hard/easy summary is not dominated by score
+   compression among otherwise correct top-3 recommendations.
+2. Consider a follow-up analysis that removes or caps the influence of `host_n_infections` to test whether the richer
+   receptor, defense, and phage-genomic features become more discriminative once that broad susceptibility prior is
+   weakened.
+3. Use the per-pair SHAP rows to inspect the remaining false positive top-ranked phages for the hardest strains before
+   changing feature blocks; the explanation artifacts now make that review straightforward.

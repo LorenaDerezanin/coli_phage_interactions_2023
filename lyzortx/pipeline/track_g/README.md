@@ -11,6 +11,8 @@ This command runs the implemented Track G modeling step:
    write outputs under `lyzortx/generated_outputs/track_g/tg02_gbm_calibration/`
 3. `feature-block-ablation`: run TG03 LightGBM ablations on the fixed ST0.3 holdout split and write outputs under
    `lyzortx/generated_outputs/track_g/tg03_feature_block_ablation_suite/`
+4. `compute-shap`: compute TG04 TreeExplainer SHAP explanations for the tuned LightGBM and write outputs under
+   `lyzortx/generated_outputs/track_g/tg04_shap_explanations/`
 
 The TG01 trainer reuses the canonical ST0.2 / ST0.3 leakage-safe contract:
 
@@ -46,3 +48,12 @@ The TG03 ablation directory includes:
 3. `tg03_ablation_cv_candidate_results.csv`: candidate-level CV summaries for each ablation arm
 4. `tg03_ablation_pair_predictions.csv`: non-holdout out-of-fold and final holdout probabilities for each arm
 5. `tg03_ablation_holdout_top3_rankings.csv`: holdout top-3 rankings for each arm
+
+The TG04 SHAP explanation directory includes:
+
+1. `tg04_recommendation_pair_explanations.csv`: top-3 per-strain phage recommendations with top positive and negative
+   SHAP drivers for each recommended pair
+2. `tg04_global_feature_importance.csv`: global mean-absolute SHAP ranking across the full hard-trainable panel
+3. `tg04_per_strain_difficulty_summary.csv`: per-strain easy/moderate/hard summary with top drivers and confidence
+   separation metrics
+4. `tg04_shap_summary.json`: top global drivers, difficulty counts, and input hashes for notebook/report reuse
