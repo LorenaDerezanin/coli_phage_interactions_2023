@@ -204,6 +204,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     protocol = {
         "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
         "step_name": "st03_build_splits",
+        "split_protocol_id": "steel_thread_v0_st03_split_v1",
         "split_type": "grouped_host_split",
         "split_rules": {
             "group_key": "cv_group",

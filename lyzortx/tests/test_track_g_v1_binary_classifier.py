@@ -1,3 +1,4 @@
+import json
 import csv
 
 import numpy as np
@@ -577,6 +578,7 @@ def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:
     predictions_path = tmp_path / "tg01_pair_predictions.csv"
     st02_path = tmp_path / "st02_pair_table.csv"
     st03_path = tmp_path / "st03_split_assignments.csv"
+    protocol_path = tmp_path / "st03_split_protocol.json"
     output_dir = tmp_path / "tg02"
 
     with predictions_path.open("w", newline="", encoding="utf-8") as handle:
@@ -718,6 +720,21 @@ def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:
         ]:
             writer.writerow({"pair_id": pair_id, "is_strict_trainable": flag})
 
+    protocol_path.write_text(
+        json.dumps(
+            {
+                "split_protocol_id": "steel_thread_v0_st03_split_v1",
+                "split_type": "grouped_host_split",
+                "split_rules": {
+                    "holdout_group_fraction": 0.2,
+                    "n_cv_folds": 5,
+                    "split_salt": "steel_thread_v0_st03_split_v1",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
     exit_code = calibrate_gbm_outputs.main(
         [
             "--tg01-predictions-path",
@@ -726,8 +743,12 @@ def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:
             str(st02_path),
             "--st03-split-assignments-path",
             str(st03_path),
+            "--st03-split-protocol-path",
+            str(protocol_path),
             "--output-dir",
             str(output_dir),
+            "--bootstrap-samples",
+            "50",
             "--skip-prerequisites",
         ]
     )
@@ -740,6 +761,8 @@ def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:
         prediction_rows = list(csv.DictReader(handle))
     with (output_dir / "tg02_ranked_predictions.csv").open("r", newline="", encoding="utf-8") as handle:
         ranking_rows = list(csv.DictReader(handle))
+    with (output_dir / "tg02_benchmark_summary.json").open("r", encoding="utf-8") as handle:
+        benchmark_summary = json.load(handle)
 
     assert len(summary_rows) == 12
     assert {row["variant"] for row in summary_rows} == {"raw", "isotonic", "platt"}
@@ -749,3 +772,14 @@ def test_tg02_calibration_outputs_expected_files_and_rows(tmp_path) -> None:
     assert prediction_rows[0]["is_strict_trainable"] in {"0", "1"}
     assert len(ranking_rows) == 8
     assert ranking_rows[0]["rank_lightgbm_isotonic"] == "1"
+    assert benchmark_summary["split_protocol"]["split_protocol_id"] == "steel_thread_v0_st03_split_v1"
+    assert set(benchmark_summary["label_slices"]) == {"full_label", "strict_confidence"}
+    assert benchmark_summary["label_slices"]["full_label"]["metrics"]["roc_auc"] is not None
+    assert benchmark_summary["label_slices"]["full_label"]["bootstrap_ci"]["roc_auc"]["bootstrap_samples"] == 50
+    assert (
+        0.0
+        <= benchmark_summary["label_slices"]["strict_confidence"]["bootstrap_ci"]["topk_hit_rate_all_strains"][
+            "ci_low_topk_hit_rate_all_strains"
+        ]
+        <= 1.0
+    )

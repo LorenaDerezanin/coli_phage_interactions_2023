@@ -27,6 +27,7 @@
   "protocol_summary": {
     "holdout_group_fraction": 0.2,
     "n_cv_folds": 5,
+    "split_protocol_id": "steel_thread_v0_st03_split_v1",
     "split_salt": "steel_thread_v0_st03_split_v1",
     "split_type": "grouped_host_split",
     "step_name": "st03_build_splits"

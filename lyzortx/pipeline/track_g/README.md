@@ -40,6 +40,11 @@ The TG02 calibration directory includes:
 2. `tg02_pair_predictions_calibrated.csv`: pair-level raw and calibrated LightGBM probabilities
 3. `tg02_ranked_predictions.csv`: isotonic-ranked per-strain predictions with raw and Platt scores for comparison
 4. `tg02_calibration_artifacts.json`: fitted isotonic thresholds, Platt coefficients, and input hashes
+5. `tg02_benchmark_summary.json`: v1 benchmark protocol summary with dual-slice point estimates and bootstrap CIs for
+   ROC-AUC, Brier score, ECE, and top-3 hit rate
+
+The benchmark summary is locked to the ST0.3 split protocol (`steel_thread_v0_st03_split_v1`) so downstream Track F
+and Track G analyses stay on the same canonical evaluation contract.
 
 The TG03 ablation directory includes:
 
