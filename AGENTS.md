@@ -80,7 +80,7 @@
 - Create a feature branch, push it, and open a PR.
 - Always rebase on main before starting work — whether implementing a new task or addressing review feedback.
 - Always rebase on main before pushing. For plain git: `git fetch origin main && git rebase origin/main`. For Graphite
-  stacks: `gt stack restack` to rebase the entire stack on its trunk.
+  stacks: `gt sync` to pull trunk and restack, or `gt restack` to rebase the current stack on its trunk.
 
 # PR and Issue Linkage Policy
 
@@ -124,6 +124,18 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - PR title pattern: `[ORCH][TASK_ID] Brief description`.
 - PR body MUST include `Closes #<issue_number>` (the orchestrator issue that dispatched the task).
 - Add the `orchestrator-task` label: `gh pr create --label orchestrator-task`.
+
+# Graphite Stacked PRs
+
+- This repo uses Graphite CLI (`gt`) for stacked PR workflows. Use `gt` commands instead of `git` for commit, branch,
+  and push operations.
+- When a task naturally decomposes into multiple sequential, dependent changes, use the `/graphite` skill to create a
+  stack of PRs rather than one large PR.
+- Prefer stacked PRs when: the diff would exceed ~300 lines, the work has clear layered stages (data, logic,
+  integration), or review would benefit from smaller focused units.
+- Each PR in a stack must be atomic and pass CI independently.
+- Always pass `--no-interactive` to `gt submit` and other commands that support it.
+- Use `gt sync` instead of `git fetch && git rebase` to stay current with trunk.
 
 # Agent Transparency
 
