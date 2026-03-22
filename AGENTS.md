@@ -132,15 +132,17 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 
 # Graphite Stacked PRs
 
-- This repo uses Graphite CLI (`gt`) for stacked PR workflows. Use `gt` commands instead of `git` for commit, branch,
-  and push operations.
+- Use plain `git` for single-branch workflows (one PR, no stack). Only use Graphite CLI (`gt`) when creating stacked
+  PRs.
+- **This repo is not synced with Graphite's remote service.** `gt submit` and other remote-dependent commands will
+  fail. Use `git push` (with `-u` for new branches) instead of `gt submit` for pushing.
+- Use `gt create` (not the deprecated `gt commit` or `gt commit create`) for creating new branches with commits in a
+  stack. Always pass `--no-interactive`.
 - When a task naturally decomposes into multiple sequential, dependent changes, use the `/graphite` skill to create a
   stack of PRs rather than one large PR.
 - Prefer stacked PRs when: the diff would exceed ~300 lines, the work has clear layered stages (data, logic,
   integration), or review would benefit from smaller focused units.
 - Each PR in a stack must be atomic and pass CI independently.
-- Always pass `--no-interactive` to `gt submit` and other commands that support it.
-- Use `gt sync` instead of `git fetch && git rebase` to stay current with trunk.
 
 # Agent Transparency
 
