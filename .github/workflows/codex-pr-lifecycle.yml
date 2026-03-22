@@ -1,8 +1,11 @@
 name: Codex PR Lifecycle
 
+# Triggered exclusively by workflow_dispatch — either from the Claude PR
+# Review workflow (after it posts a COMMENTED review) or manually.
+# This eliminates the self-trigger loop where Codex thread replies (posted
+# via ORCHESTRATOR_PAT as the repo owner) fired pull_request_review events
+# that cancelled the in-progress Codex run via the concurrency group.
 on:
-  pull_request_review:
-    types: [submitted]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -18,50 +21,14 @@ permissions:
 # Only one lifecycle run per PR at a time. New runs cancel in-progress ones
 # to prevent race conditions on the review round cap label.
 concurrency:
-  group: codex-lifecycle-pr-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  group: codex-lifecycle-pr-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
-  # ── Auto-merge on Claude approval ───────────────────────────────────
-  # Scoped to claude[bot] only. Human approvals should be merged
-  # manually — auto-merge on bot approval is safe because the bot
-  # follows deterministic review rules.
-  auto-merge-on-approve:
-    name: Auto-merge on Approval
-    if: >-
-      github.event.review.state == 'approved'
-      && github.event.review.user.login == 'claude[bot]'
-      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    env:
-      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
-    steps:
-      - name: Resolve PR number
-        id: pr
-        run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-          echo "number=${PR_NUM}" >> "$GITHUB_OUTPUT"
-
-      - name: Auto-merge
-        run: |
-          PR_NUM="${{ steps.pr.outputs.number }}"
-          gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto \
-            --body "Auto-merged after Claude approval and passing CI."
-          echo "Auto-merge enabled for PR #${PR_NUM}. Will merge when required checks pass."
-
-  # ── Address feedback from any commented review on orchestrator PRs ───
-  # Gated on the orchestrator-task label so non-orchestrator PRs are ignored.
+  # ── Address feedback from Claude review on orchestrator PRs ──────────
   # The 3-round cap (codex-review-round-N labels) prevents infinite loops.
-  # workflow_dispatch is always allowed for manual retriggers.
   address-feedback:
     name: Address Review Feedback
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      || (
-        github.event.review.state == 'commented'
-        && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
-      )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
@@ -72,11 +39,7 @@ jobs:
       - name: Resolve PR number and branch
         id: pr
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_NUM="${{ inputs.pr_number }}"
-          else
-            PR_NUM="${{ github.event.pull_request.number }}"
-          fi
+          PR_NUM="${{ inputs.pr_number }}"
           echo "number=${PR_NUM}" >> "$GITHUB_OUTPUT"
           BRANCH=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
@@ -107,9 +70,7 @@ jobs:
           echo "Unresolved threads: ${UNRESOLVED_COUNT}"
 
       - name: No feedback — label as clean
-        if: >-
-          github.event_name != 'workflow_dispatch'
-          && steps.comments.outputs.has_feedback == 'false'
+        if: steps.comments.outputs.has_feedback == 'false'
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
