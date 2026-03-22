@@ -79,3 +79,9 @@ git push                         # Push the fixed branch (gt submit will not wor
 
 Do **not** run `gt continue -a` immediately after `gt sync` — there is no in-progress operation to continue
 at that point.
+
+### When to use Graphite vs plain git
+
+Use Graphite (`gt`) **only** when creating stacked PRs. For single-branch workflows (one PR, no stack), use plain
+`git` commands for branching, committing, and pushing. Graphite adds overhead and branch-naming surprises (e.g.,
+`gt create` generates its own branch name from the commit message) that are unnecessary for non-stacked work.
