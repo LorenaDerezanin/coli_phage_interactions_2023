@@ -10,6 +10,7 @@ from lyzortx.orchestration.orchestrator import IssueRef
 from lyzortx.orchestration.orchestrator import Task
 from lyzortx.orchestration.orchestrator import choose_preferred_issue
 from lyzortx.orchestration.orchestrator import extract_task_id_from_issue
+from lyzortx.orchestration.orchestrator import sync_status_from_issues
 from lyzortx.orchestration.parse_model_directive import extract_model
 
 
@@ -45,6 +46,7 @@ def test_choose_preferred_issue_prefers_open_over_closed() -> None:
         task_id="IM03_ST04B_ABLATIONS",
         number=11,
         state="open",
+        state_reason="",
         title="open issue",
         html_url="https://example.com/open",
         updated_at="2026-03-08T22:00:00Z",
@@ -53,6 +55,7 @@ def test_choose_preferred_issue_prefers_open_over_closed() -> None:
         task_id="IM03_ST04B_ABLATIONS",
         number=10,
         state="closed",
+        state_reason="completed",
         title="closed issue",
         html_url="https://example.com/closed",
         updated_at="2026-03-08T22:30:00Z",
@@ -66,6 +69,7 @@ def test_choose_preferred_issue_prefers_more_recent_when_states_match() -> None:
         task_id="IM04_ST05B_ST06C_DUAL_SLICE_BOOTSTRAP",
         number=20,
         state="closed",
+        state_reason="completed",
         title="older",
         html_url="https://example.com/older",
         updated_at="2026-03-08T21:00:00Z",
@@ -74,6 +78,7 @@ def test_choose_preferred_issue_prefers_more_recent_when_states_match() -> None:
         task_id="IM04_ST05B_ST06C_DUAL_SLICE_BOOTSTRAP",
         number=21,
         state="closed",
+        state_reason="completed",
         title="newer",
         html_url="https://example.com/newer",
         updated_at="2026-03-08T22:00:00Z",
@@ -199,3 +204,66 @@ def test_load_pending_tasks_accepts_tasks_with_model(tmp_path: Path) -> None:
     tasks = load_pending_tasks(plan_path)
     assert len(tasks) == 1
     assert tasks[0].model == "gpt-5.4-mini"
+
+
+# --- sync_status_from_issues: state_reason handling ---
+
+
+def _make_issue_ref(
+    task_id: str = "TX01",
+    state: str = "open",
+    state_reason: str = "",
+) -> IssueRef:
+    return IssueRef(
+        task_id=task_id,
+        number=1,
+        state=state,
+        state_reason=state_reason,
+        title="test",
+        html_url="https://example.com",
+        updated_at="2026-03-22T00:00:00Z",
+    )
+
+
+def test_sync_marks_completed_when_closed_as_completed() -> None:
+    """Issue closed with state_reason='completed' (PR merged) marks task done."""
+    task = _make_task(track="G", task_id="TG04")
+    task_status: dict[str, str] = {"TG04": "in_progress"}
+    issues = {"TG04": _make_issue_ref("TG04", state="closed", state_reason="completed")}
+    sync_status_from_issues([task], task_status, issues)
+    assert task_status["TG04"] == "completed"
+
+
+def test_sync_does_not_complete_when_closed_as_not_planned() -> None:
+    """Issue closed with state_reason='not_planned' (manual close) must NOT mark task done."""
+    task = _make_task(track="G", task_id="TG04")
+    task_status: dict[str, str] = {"TG04": "in_progress"}
+    issues = {"TG04": _make_issue_ref("TG04", state="closed", state_reason="not_planned")}
+    sync_status_from_issues([task], task_status, issues)
+    assert task_status["TG04"] == "pending"
+
+
+def test_sync_preserves_blocked_when_closed_as_not_planned() -> None:
+    """A blocked task closed as not_planned should stay blocked."""
+    task = _make_task(track="G", task_id="TG04")
+    task_status: dict[str, str] = {"TG04": "blocked"}
+    issues = {"TG04": _make_issue_ref("TG04", state="closed", state_reason="not_planned")}
+    sync_status_from_issues([task], task_status, issues)
+    assert task_status["TG04"] == "blocked"
+
+
+def test_sync_marks_in_progress_when_open() -> None:
+    """Open issue means task is in progress."""
+    task = _make_task(track="G", task_id="TG04")
+    task_status: dict[str, str] = {"TG04": "pending"}
+    issues = {"TG04": _make_issue_ref("TG04", state="open")}
+    sync_status_from_issues([task], task_status, issues)
+    assert task_status["TG04"] == "in_progress"
+
+
+def test_sync_pending_when_no_issue() -> None:
+    """Task with no matching issue stays pending."""
+    task = _make_task(track="G", task_id="TG04")
+    task_status: dict[str, str] = {"TG04": "pending"}
+    sync_status_from_issues([task], task_status, {})
+    assert task_status["TG04"] == "pending"

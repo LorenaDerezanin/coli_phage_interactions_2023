@@ -52,6 +52,7 @@ class IssueRef:
     task_id: str
     number: int
     state: str
+    state_reason: str  # "completed" | "not_planned" | "" (open issues)
     title: str
     html_url: str
     updated_at: str
@@ -279,6 +280,7 @@ class GitHubClient:
                     task_id=task_id,
                     number=int(item.get("number", 0)),
                     state=str(item.get("state", "")),
+                    state_reason=str(item.get("state_reason") or ""),
                     title=str(item.get("title", "")),
                     html_url=str(item.get("html_url", "")),
                     updated_at=str(item.get("updated_at", "")),
@@ -337,6 +339,7 @@ class GitHubClient:
             task_id=task.task_id,
             number=int(created.get("number", 0)),
             state=str(created.get("state", "open")),
+            state_reason="",
             title=str(created.get("title", title)),
             html_url=str(created.get("html_url", "")),
             updated_at=str(created.get("updated_at", utc_now_iso())),
@@ -369,7 +372,15 @@ def sync_status_from_issues(
             task_status[task.task_id] = previous if previous == "blocked" else "pending"
             continue
 
-        task_status[task.task_id] = "completed" if issue_ref.state == "closed" else "in_progress"
+        # Only mark completed when closed as "completed" (PR merged / done).
+        # Issues closed as "not_planned" (manual close) stay in_progress to
+        # avoid incorrectly marking unfinished tasks as done in plan.yml.
+        if issue_ref.state == "closed" and issue_ref.state_reason == "completed":
+            task_status[task.task_id] = "completed"
+        elif issue_ref.state == "closed":
+            task_status[task.task_id] = previous if previous == "blocked" else "pending"
+        else:
+            task_status[task.task_id] = "in_progress"
         issue_index[task.task_id] = {
             "number": issue_ref.number,
             "state": issue_ref.state,
