@@ -128,7 +128,7 @@ graph LR
 - **Guiding Principle:** RBP features, genome k-mer embeddings, and phage distance embeddings from existing genomic
   data.
 - [x] Build RBP feature block from RBP_list.csv annotations
-- [ ] Build genome k-mer embedding features from phage FNA files
+- [x] Build genome k-mer embedding features from phage FNA files
 - [ ] Build phage distance embedding from VIRIDIC phylogenetic tree
 
 ## Track E: Pairwise Compatibility Features

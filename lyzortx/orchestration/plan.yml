@@ -199,7 +199,7 @@ tracks:
       - Output CSV joinable on phage column with ~5-8 features
     - id: TD02
       title: Build genome k-mer embedding features from phage FNA files
-      status: pending
+      status: done
       acceptance_criteria:
       - Compute tetranucleotide (k=4) frequency vectors from 97 FNA genomes
       - Reduce via SVD to 20-30 dimensions
