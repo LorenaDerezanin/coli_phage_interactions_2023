@@ -153,6 +153,16 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   integration), or review would benefit from smaller focused units.
 - Each PR in a stack must be atomic and pass CI independently.
 
+# Custom Skills
+
+- Custom skills live in `.agents/skills/` (the canonical path). `.claude/skills` is a symlink pointing there for Claude
+  Code's skill scanner.
+- **When searching for skill files, always use `.agents/skills/` — Glob does not follow symlinks**, so searching
+  `.claude/skills/` will return nothing.
+- Use the `/skill-creator` skill to create, modify, and benchmark new skills. Do not hand-author `SKILL.md` files from
+  scratch when the skill-creator can scaffold them.
+- Vendoring policy and directory conventions are documented in `.agents/skills/AGENTS.md`.
+
 # Agent Transparency
 
 - When an agent posts comments on GitHub (PR reviews, issue comments, etc.) using a human's credentials or a shared PAT,
