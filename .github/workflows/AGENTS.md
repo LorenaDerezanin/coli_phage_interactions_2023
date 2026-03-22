@@ -11,6 +11,16 @@
   Reviews from other users (including the ORCHESTRATOR_PAT holder) are excluded to prevent feedback loops. A concurrency
   group ensures only one lifecycle run per PR at a time.
 
+# Concurrency and Thread Safety
+
+- When adding or editing a workflow, consider whether parallel runs could cause problems (duplicate issues, race
+  conditions on shared state, conflicting pushes to the same branch). If they can, add a `concurrency` group.
+- Choose `cancel-in-progress: true` when only the latest run matters (e.g., PR reviews superseded by new pushes).
+  Choose `cancel-in-progress: false` when every run carries unique side effects that must not be dropped (e.g.,
+  orchestrator ticks that mark tasks done or create issues).
+- Workflows triggered by multiple event types (e.g., `issues.closed` + `workflow_dispatch`) are especially prone to
+  parallel runs — a single merge can fire both triggers simultaneously.
+
 # Workflow Logic Encapsulation
 
 - Keep inline YAML expressions simple (single `contains()`, direct equality checks). If the expression is getting

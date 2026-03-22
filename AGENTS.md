@@ -201,6 +201,10 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   those functions.
 - Do not skip the manual exploration step and guess at API behavior. Do not write unit tests that mock everything
   without first verifying assumptions against the real service.
+- **Never read large API responses directly into the conversation or stdout.** External APIs (especially NCBI, UniProt,
+  PDB, and other biological databases) can return megabytes of XML/JSON that will exhaust the context window. Always:
+  (1) write the response to a file, (2) check the file size before reading, (3) if large, inspect only the first few
+  lines or use a targeted query (e.g., `head`, field extraction, or pagination) instead of loading the full response.
 
 # Git Staging Policy
 
