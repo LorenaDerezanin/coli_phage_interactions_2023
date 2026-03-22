@@ -282,7 +282,7 @@ tracks:
     tasks:
     - id: TG01
       title: Train LightGBM binary classifier on v1 expanded feature set
-      status: pending
+      status: done
       acceptance_criteria:
       - LightGBM with hyperparameter tuning via 5-fold CV on existing leakage-safe
         cv_groups
