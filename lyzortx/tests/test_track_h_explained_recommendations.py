@@ -2,6 +2,8 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from lyzortx.pipeline.track_h.steps.build_explained_recommendations import (
     bootstrap_probability_intervals,
     build_explained_recommendation_rows,
@@ -409,3 +411,76 @@ def test_main_writes_track_h_outputs(tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["holdout_strain_count"] == 1
     assert manifest["recommendation_row_count"] == 3
+
+
+def test_main_requires_split_cv5_fold_in_tg02_input(tmp_path: Path) -> None:
+    tg02_path = tmp_path / "tg02_missing_fold.csv"
+    tg04_path = tmp_path / "tg04.csv"
+    output_dir = tmp_path / "out"
+
+    _write_csv(
+        tg02_path,
+        fieldnames=[
+            "pair_id",
+            "bacteria",
+            "phage",
+            "phage_family",
+            "split_holdout",
+            "prediction_context",
+            "is_strict_trainable",
+            "label_hard_any_lysis",
+            "pred_lightgbm_raw",
+            "pred_lightgbm_isotonic",
+            "pred_lightgbm_platt",
+        ],
+        rows=[
+            {
+                "pair_id": "a1",
+                "bacteria": "A",
+                "phage": "p1",
+                "phage_family": "F1",
+                "split_holdout": "holdout_test",
+                "prediction_context": "holdout",
+                "is_strict_trainable": "1",
+                "label_hard_any_lysis": "1",
+                "pred_lightgbm_raw": "0.91",
+                "pred_lightgbm_isotonic": "0.88",
+                "pred_lightgbm_platt": "0.86",
+            }
+        ],
+    )
+
+    _write_csv(
+        tg04_path,
+        fieldnames=[
+            "pair_id",
+            "bacteria",
+            "phage",
+            "recommendation_rank",
+            "top_positive_feature_1",
+            "top_positive_shap_1",
+            "top_positive_feature_2",
+            "top_positive_shap_2",
+            "top_positive_feature_3",
+            "top_positive_shap_3",
+            "top_negative_feature_1",
+            "top_negative_shap_1",
+            "top_negative_feature_2",
+            "top_negative_shap_2",
+            "top_negative_feature_3",
+            "top_negative_shap_3",
+        ],
+        rows=[],
+    )
+
+    with pytest.raises(ValueError, match="split_cv5_fold"):
+        main(
+            [
+                "--tg02-predictions-path",
+                str(tg02_path),
+                "--tg04-explanations-path",
+                str(tg04_path),
+                "--output-dir",
+                str(output_dir),
+            ]
+        )

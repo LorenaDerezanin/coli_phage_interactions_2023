@@ -22,6 +22,7 @@ TG02_REQUIRED_COLUMNS: Tuple[str, ...] = (
     "phage",
     "phage_family",
     "split_holdout",
+    "split_cv5_fold",
     "prediction_context",
     "is_strict_trainable",
     "label_hard_any_lysis",
