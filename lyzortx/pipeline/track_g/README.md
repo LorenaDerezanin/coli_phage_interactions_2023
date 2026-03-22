@@ -13,6 +13,8 @@ This command runs the implemented Track G modeling step:
    `lyzortx/generated_outputs/track_g/tg03_feature_block_ablation_suite/`
 4. `compute-shap`: compute TG04 TreeExplainer SHAP explanations for the tuned LightGBM and write outputs under
    `lyzortx/generated_outputs/track_g/tg04_shap_explanations/`
+5. `feature-subset-sweep`: run TG05 2-block and 3-block subset sweeps with TG01-locked LightGBM hyperparameters and
+   write outputs under `lyzortx/generated_outputs/track_g/tg05_feature_subset_sweep/`
 
 The TG01 trainer reuses the canonical ST0.2 / ST0.3 leakage-safe contract:
 
@@ -57,3 +59,13 @@ The TG04 SHAP explanation directory includes:
 3. `tg04_per_strain_difficulty_summary.csv`: per-strain easy/moderate/hard summary with top drivers and confidence
    separation metrics
 4. `tg04_shap_summary.json`: top global drivers, difficulty counts, and input hashes for notebook/report reuse
+
+The TG05 feature-subset sweep directory includes:
+
+1. `tg05_feature_subset_summary.json`: per-arm metrics, TG01 locked hyperparameters, and winner selection metadata
+2. `tg05_feature_subset_metrics.csv`: holdout ROC-AUC, top-3 hit rate, and Brier for every 2-block and 3-block arm
+3. `tg05_feature_subset_pair_predictions.csv`: non-holdout OOF and final holdout probabilities for every evaluated arm
+4. `tg05_feature_subset_holdout_top3_rankings.csv`: holdout top-3 rankings for every evaluated arm
+5. `tg05_locked_v1_feature_config.json`: locked v1 feature-block decision for downstream Track F/H/P work
+6. `tg05_locked_v1_feature_columns.csv`: concrete categorical/numeric columns for both the panel-default and
+   deployment-realistic locked configurations
