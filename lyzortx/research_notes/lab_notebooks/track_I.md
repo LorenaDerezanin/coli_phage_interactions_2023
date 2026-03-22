@@ -114,3 +114,31 @@ missing BioSample context instead of silently collapsing those cases.
 - TI07 is now an explicit policy boundary between ingestion and training. That is the right abstraction: TI06 preserves
   raw provenance, TI07 translates provenance into training trust, and TI08 can stay focused on optional integration
   rather than re-litigating confidence semantics inside the model pipeline.
+
+### 2026-03-22: TI08 External data as a non-blocking enhancer
+
+#### Executive summary
+
+TI08 now turns the TI07 confidence output into an explicit training-cohort layer rather than forcing external data into
+the baseline path. The new step under `lyzortx/pipeline/track_i/steps/build_external_training_cohorts.py` always emits
+an `internal_only` arm from ST0.2, then stages optional external additions in the planned order
+`+VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B`. When the TI07 artifact is absent, the step still succeeds and
+produces a runnable internal-only cohort plus zero-lift summaries for the future external arms.
+
+#### Findings
+
+- The right TI08 seam was dataset assembly, not estimator surgery. Rewriting baseline trainers to consume partial
+  external supervision now would have coupled baseline reproducibility to still-evolving source harmonization and
+  ablation policy.
+- TI07 already provides the exact integration boundary needed for safe enhancement: every external row arrives with a
+  source ID, confidence tier, include/exclude decision, and training weight.
+- Preserving a `first_training_arm` assignment per row is cleaner than materializing six separate training tables. It
+  keeps provenance intact, makes TI09's ordered ablations mechanical, and avoids duplicating the same row into many
+  output files.
+
+#### Interpretation
+
+- Track I now has a non-blocking external integration layer: internal-only remains the default runnable baseline, while
+  approved external labels can be layered in deterministically when they are present.
+- This is the correct amount of implementation for TI08. It makes the enhancement path executable and testable without
+  prematurely claiming that the current model trainers should already consume every external row.
