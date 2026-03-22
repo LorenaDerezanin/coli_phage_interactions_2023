@@ -171,3 +171,27 @@ def test_write_rendered_plan_uses_pymarkdown_fix(monkeypatch: pytest.MonkeyPatch
 
     assert captured["config_path"].endswith(".pymarkdown.yaml")
     assert output_path.read_text(encoding="utf-8") == "# Title\n\n<!-- fixed -->\n"
+
+
+def test_load_plan_parses_model_field(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: Task with model
+                status: pending
+                model: gpt-5.4-mini
+    """)
+    graph = load_plan(_write_plan(tmp_path, content))
+    ta01 = next(t for t in graph.tasks if t.task_id == "TA01")
+    assert ta01.model == "gpt-5.4-mini"
+
+
+def test_load_plan_model_defaults_to_none(tmp_path: Path) -> None:
+    graph = load_plan(_write_plan(tmp_path))
+    ta01 = next(t for t in graph.tasks if t.task_id == "TA01")
+    assert ta01.model is None

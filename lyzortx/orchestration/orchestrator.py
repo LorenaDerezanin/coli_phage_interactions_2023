@@ -42,6 +42,7 @@ class Task:
     acceptance_criteria: list[str]
     plan_checkbox_text: str | None
     track: str = ""
+    model: str = ""
 
 
 @dataclass(frozen=True)
@@ -94,7 +95,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
     from lyzortx.orchestration.plan_parser import load_plan
 
     graph = load_plan(plan_path)
-    return [
+    tasks = [
         Task(
             task_id=pt.task_id,
             title=pt.title,
@@ -106,10 +107,15 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             acceptance_criteria=_load_acceptance_criteria(plan_path, pt.task_id),
             plan_checkbox_text=pt.title,
             track=pt.track,
+            model=pt.model or "",
         )
         for pt in graph.tasks
         if pt.status != "done"
     ]
+    missing_model = [t.task_id for t in tasks if not t.model]
+    if missing_model:
+        raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+    return tasks
 
 
 def mark_task_done_in_plan(plan_path: Path, plan_md_path: Path, task_id: str) -> None:
@@ -292,6 +298,7 @@ class GitHubClient:
         acceptance = "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
         body_parts = [
             f"<!-- {TASK_ID_MARKER}: {task.task_id} -->",
+            f"<!-- model: {task.model} -->" if task.model else "",
             "## Orchestrator Task",
             f"- Task ID: `{task.task_id}`",
             f"- Executor: `{task.executor}`",

@@ -22,6 +22,7 @@ class PlanTask:
     ordinal: int  # 1-based position within track
     implemented_in: str | None = None
     baseline: str | None = None
+    model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ def load_plan(plan_path: Path) -> PlanGraph:
                     ordinal=i + 1,
                     implemented_in=raw.get("implemented_in"),
                     baseline=raw.get("baseline"),
+                    model=raw.get("model"),
                 )
             )
 

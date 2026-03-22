@@ -162,12 +162,32 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
+      - name: Extract model from linked issue
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        id: model
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          BODY=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json body --jq '.body')
+          ISSUE_NUM=$(echo "$BODY" | grep -oP '(?<=Closes #)\d+' | head -1)
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "::error::No linked issue found in PR #${PR_NUM} body."
+            exit 1
+          fi
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body')
+          MODEL=$(echo "$ISSUE_BODY" | python -m lyzortx.orchestration.parse_model_directive)
+          if [ -z "$MODEL" ]; then
+            echo "::error::No model directive in issue #${ISSUE_NUM}."
+            exit 1
+          fi
+          echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+          echo "Using model: ${MODEL} (from issue #${ISSUE_NUM})"
+
       - name: Fix with Codex
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.4
+          model: ${{ steps.model.outputs.model }}
           allow-bots: true
           sandbox: danger-full-access
           prompt-file: /tmp/codex_feedback.txt

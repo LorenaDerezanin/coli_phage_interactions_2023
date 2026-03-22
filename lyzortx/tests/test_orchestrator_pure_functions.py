@@ -8,6 +8,7 @@ from lyzortx.orchestration.orchestrator import IssueRef
 from lyzortx.orchestration.orchestrator import Task
 from lyzortx.orchestration.orchestrator import choose_preferred_issue
 from lyzortx.orchestration.orchestrator import extract_task_id_from_issue
+from lyzortx.orchestration.parse_model_directive import extract_model
 
 
 def test_extract_task_id_from_body_marker() -> None:
@@ -126,3 +127,38 @@ def test_task_track_defaults_to_empty_string() -> None:
         plan_checkbox_text=None,
     )
     assert task.track == ""
+
+
+def test_task_model_defaults_to_empty_string() -> None:
+    task = Task(
+        task_id="X01",
+        title="t",
+        description="d",
+        dependencies=[],
+        executor="agent",
+        command=None,
+        expected_paths=[],
+        acceptance_criteria=[],
+        plan_checkbox_text=None,
+    )
+    assert task.model == ""
+
+
+def test_extract_model_from_issue_body() -> None:
+    body = "<!-- ORCH_TASK_ID: TG04 -->\n<!-- model: gpt-5.4-mini -->\n## Task"
+    assert extract_model(body) == "gpt-5.4-mini"
+
+
+def test_extract_model_full_model() -> None:
+    body = "<!-- model: gpt-5.4 -->\nSome content"
+    assert extract_model(body) == "gpt-5.4"
+
+
+def test_extract_model_missing() -> None:
+    body = "<!-- ORCH_TASK_ID: TG04 -->\n## Task with no model"
+    assert extract_model(body) is None
+
+
+def test_extract_model_whitespace_tolerance() -> None:
+    body = "<!--  model:  gpt-5.4-mini  -->"
+    assert extract_model(body) == "gpt-5.4-mini"

@@ -43,6 +43,23 @@ jobs:
           token: ${{ secrets.ORCHESTRATOR_PAT }}
           fetch-depth: 0
 
+      - name: Extract model from issue
+        id: model
+        run: |
+          ISSUE_NUM="${{ steps.issue.outputs.number }}"
+          BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body')
+          MODEL=$(echo "$BODY" | python3 -c "
+          import re, sys
+          m = re.search(r'<!--\s*model:\s*(\S+)\s*-->', sys.stdin.read())
+          print(m.group(1) if m else '')
+          ")
+          if [ -z "$MODEL" ]; then
+            echo "::error::No model directive found in issue #${ISSUE_NUM} body. Add <!-- model: <id> --> to the issue."
+            exit 1
+          fi
+          echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+          echo "Using model: ${MODEL}"
+
       - name: Build prompt
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
@@ -93,7 +110,7 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.4
+          model: ${{ steps.model.outputs.model }}
           sandbox: danger-full-access
           prompt-file: /tmp/codex_prompt.txt
 
