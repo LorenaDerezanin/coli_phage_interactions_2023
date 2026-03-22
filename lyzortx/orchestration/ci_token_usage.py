@@ -71,6 +71,7 @@ def _rate_for_model(model: str, run_date: str) -> tuple[float, float, str] | Non
     if not entries:
         return None
     # Entries are newest-first; pick the first one whose as_of <= run_date.
+    # Comparison works because YYYY-MM-DD strings sort lexicographically.
     for input_rate, output_rate, as_of in entries:
         if as_of <= run_date:
             return input_rate, output_rate, as_of
@@ -155,7 +156,7 @@ def extract_codex_model(log_text: str) -> str | None:
 class ClaudeActionResult:
     """Parsed result block from a Claude code action run."""
 
-    cost_usd: float = 0.0
+    cost_usd: float | None = None
     num_turns: int = 0
     duration_ms: int = 0
 
@@ -522,7 +523,7 @@ def cmd_ticket(issue_number: int) -> None:
             elif run.cost_usd is None:
                 detail = "no LLM invocation"
             print(f"  Run {rid}: {conclusion} — {cost_label}  {detail}")
-            if run.cost_usd:
+            if run.cost_usd is not None:
                 total_cost += run.cost_usd
         print()
         return total_cost

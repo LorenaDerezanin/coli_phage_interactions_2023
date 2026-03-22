@@ -138,7 +138,16 @@ that invoke Codex, e.g. PR#91 at $0.34). Log-based detection handles this mixed-
 were cancelled or skipped. Similarly, 4 lifecycle runs were cancelled for PR#87/Issue#21. This is not token waste
 (cancelled runs do not consume LLM resources) but does consume GitHub Actions minutes.
 
+#### Per-ticket drill-down
+
+Two tickets verified with `--ticket`:
+
+- **Issue #104 (TG03):** Codex implementation $1.36 (120,957 tok, gpt-5.4) + Claude review $0.84 (20 turns) =
+  **$2.20 total**. Lifecycle run correctly shows `no LLM`.
+- **Issue #98 (TE03):** Codex implementation $1.29 + 2 Claude reviews ($0.40 at 17 turns + $1.01 at 35 turns) =
+  **$2.71 total**. Cancelled/skipped concurrency runs correctly show zero cost.
+
 #### Tool used
 
-Report generated with: `python -m lyzortx.orchestration.ci_token_usage --runs 100`
+Report generated with: `python -m lyzortx.orchestration.ci_token_usage --runs 100` and `--ticket 104` / `--ticket 98`
 (see `.agents/skills/ci-token-usage/` for skill documentation and design decisions).
