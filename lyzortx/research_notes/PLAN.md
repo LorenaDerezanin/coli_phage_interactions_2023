@@ -160,7 +160,7 @@ graph LR
 
 - **Guiding Principle:** Top-k recommendations with SHAP-based explanations for each recommended phage.
 - [x] Benchmark policy variants for top-k recommendation and lock a non-regressing default
-- [ ] Add explained recommendations with calibrated P(lysis), CI, and SHAP features Model: `gpt-5.4-mini`.
+- [x] Add explained recommendations with calibrated P(lysis), CI, and SHAP features
 
 ## Track I: External Data and Literature Integration
 
