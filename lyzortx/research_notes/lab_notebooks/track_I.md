@@ -73,6 +73,8 @@ plus a manifest and source summary under `lyzortx/generated_outputs/track_i/tier
 - BioSample metadata is nested rather than flat; the host signal lives in XML attributes such as `host`,
   `isolation_host`, and `isolation_source`, so the importer has to merge those attributes back onto the virus report
   row instead of assuming a single tabular export.
+- BioSample `host_disease` metadata was available in the source XML but not previously surfaced in the exported
+  weak-label table; the ingest step now retains it as an additional provenance field for downstream QC and slicing.
 - Track A raw-name lists use pipe-delimited values, so the canonical-resolution helper needs to split `|` as well as
   commas and semicolons to make alias cross-referencing work reliably.
 
