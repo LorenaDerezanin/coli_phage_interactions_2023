@@ -11,6 +11,7 @@ from lyzortx.orchestration.orchestrator import Task
 from lyzortx.orchestration.orchestrator import choose_preferred_issue
 from lyzortx.orchestration.orchestrator import extract_task_id_from_issue
 from lyzortx.orchestration.orchestrator import sync_status_from_issues
+from lyzortx.orchestration.find_pr_for_issue import pr_closes_issue
 from lyzortx.orchestration.parse_model_directive import extract_model
 
 
@@ -267,3 +268,39 @@ def test_sync_pending_when_no_issue() -> None:
     task_status: dict[str, str] = {"TG04": "pending"}
     sync_status_from_issues([task], task_status, {})
     assert task_status["TG04"] == "pending"
+
+
+# --- pr_closes_issue ---
+
+
+def test_pr_closes_issue_exact_match() -> None:
+    assert pr_closes_issue("Closes #120", 120)
+
+
+def test_pr_closes_issue_lowercase() -> None:
+    assert pr_closes_issue("closes #120", 120)
+
+
+def test_pr_closes_issue_no_prefix_collision() -> None:
+    """#12 must not match #120."""
+    assert not pr_closes_issue("Closes #120", 12)
+
+
+def test_pr_closes_issue_no_suffix_collision() -> None:
+    """#120 must not match #12."""
+    assert not pr_closes_issue("Closes #12", 120)
+
+
+def test_pr_closes_issue_in_longer_body() -> None:
+    body = "## Summary\nFixes the thing.\n\nCloses #42\n"
+    assert pr_closes_issue(body, 42)
+
+
+def test_pr_closes_issue_missing() -> None:
+    assert not pr_closes_issue("No closure reference here", 42)
+
+
+def test_pr_closes_issue_multiple_references() -> None:
+    body = "Closes #10\nCloses #20\n"
+    assert pr_closes_issue(body, 20)
+    assert not pr_closes_issue(body, 200)
