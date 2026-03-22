@@ -87,6 +87,7 @@ stateDiagram-v2
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
 - `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
+- `ci_token_usage.py` — CLI for token/cost analysis across all LLM-invoking workflows (Codex + Claude).
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.
 - `.github/workflows/codex-implement.yml` — CI trigger: Codex implements new `orchestrator-task` issues.
 - `.github/workflows/codex-pr-lifecycle.yml` — CI trigger: Codex addresses review feedback on PRs.
