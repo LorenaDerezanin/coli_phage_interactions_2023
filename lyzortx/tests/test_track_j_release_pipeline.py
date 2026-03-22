@@ -51,6 +51,55 @@ def test_run_track_j_dispatches_release_sequence_in_dependency_order(monkeypatch
     ]
 
 
+def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, capsys) -> None:
+    foundation_calls: list[str] = []
+    feature_calls: list[str] = []
+    release_calls: list[str] = []
+
+    monkeypatch.setattr(
+        run_track_j,
+        "foundation_runners",
+        lambda: (
+            ("foundation-a", lambda: foundation_calls.append("foundation-a")),
+            ("foundation-b", lambda: foundation_calls.append("foundation-b")),
+        ),
+    )
+    monkeypatch.setattr(
+        run_track_j,
+        "feature_block_runners",
+        lambda: (("feature-a", lambda: feature_calls.append("feature-a")),),
+    )
+    monkeypatch.setattr(run_track_j.run_track_d, "main", lambda argv: release_calls.append("track-d"))
+    monkeypatch.setattr(run_track_j.run_track_e, "main", lambda argv: release_calls.append("track-e"))
+    monkeypatch.setattr(run_track_j.run_track_g, "main", lambda argv: release_calls.append("track-g"))
+    monkeypatch.setattr(run_track_j.run_track_h, "main", lambda argv: release_calls.append("track-h"))
+
+    foundation_runners = tuple(run_track_j._runners_for_step("foundation"))
+    feature_runners = tuple(run_track_j._runners_for_step("feature-blocks"))
+    modeling_runners = tuple(run_track_j._runners_for_step("modeling"))
+    recommendation_runners = tuple(run_track_j._runners_for_step("recommendations"))
+
+    assert [name for name, _ in foundation_runners] == ["foundation-a", "foundation-b"]
+    assert [name for name, _ in feature_runners] == ["feature-a"]
+    assert [name for name, _ in modeling_runners] == ["track-d", "track-e", "track-g"]
+    assert [name for name, _ in recommendation_runners] == ["track-h"]
+
+    run_track_j.main(["--step", "all"])
+
+    assert foundation_calls == ["foundation-a", "foundation-b"]
+    assert feature_calls == ["feature-a"]
+    assert release_calls == ["track-d", "track-e", "track-g", "track-h"]
+    assert capsys.readouterr().out.splitlines() == [
+        "[track-j] foundation-a",
+        "[track-j] foundation-b",
+        "[track-j] feature-a",
+        "[track-j] track-d",
+        "[track-j] track-e",
+        "[track-j] track-g",
+        "[track-j] track-h",
+    ]
+
+
 def test_run_track_j_can_limit_to_feature_blocks(monkeypatch) -> None:
     calls: list[str] = []
 

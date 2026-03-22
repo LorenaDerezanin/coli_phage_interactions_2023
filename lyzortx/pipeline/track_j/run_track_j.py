@@ -45,17 +45,6 @@ def feature_block_runners() -> Tuple[StepRunner, ...]:
     )
 
 
-def release_runners() -> Tuple[StepRunner, ...]:
-    return (
-        *foundation_runners(),
-        *feature_block_runners(),
-        ("track-d", lambda: run_track_d.main(["--step", "all"])),
-        ("track-e", lambda: run_track_e.main(["--step", "all"])),
-        ("track-g", lambda: run_track_g.main(["--step", "all"])),
-        ("track-h", lambda: run_track_h.main(["--step", "all"])),
-    )
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -68,23 +57,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _runners_for_step(step: str) -> Iterable[StepRunner]:
-    runners = release_runners()
+    foundation = foundation_runners()
+    features = feature_block_runners()
+    rest: Tuple[StepRunner, ...] = (
+        ("track-d", lambda: run_track_d.main(["--step", "all"])),
+        ("track-e", lambda: run_track_e.main(["--step", "all"])),
+        ("track-g", lambda: run_track_g.main(["--step", "all"])),
+        ("track-h", lambda: run_track_h.main(["--step", "all"])),
+    )
     if step == "foundation":
-        return runners[:4]
+        return foundation
     if step == "feature-blocks":
-        return runners[4:8]
+        return features
     if step == "modeling":
-        return runners[8:11]
+        return rest[:3]
     if step == "recommendations":
-        return runners[11:]
+        return rest[3:]
     if step == "all":
-        return runners
+        return (*foundation, *features, *rest)
     raise ValueError(f"Unsupported step: {step}")
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    for _, runner in _runners_for_step(args.step):
+    for name, runner in _runners_for_step(args.step):
+        print(f"[track-j] {name}")
         runner()
 
 
