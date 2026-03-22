@@ -167,3 +167,31 @@ sequence explicit instead of burying it inside the cohort integration step.
 TI09 is now executable as a standalone, ordered ablation pass. That keeps the Track I pipeline modular: TI08 preserves
 integration trust, and TI09 turns that trusted cohort into a strict source-by-source ablation sequence that TI10 can
 use for lift and failure-mode analysis.
+
+### 2026-03-22: TI10 Incremental lift and failure modes
+
+#### Executive summary
+
+TI10 now adds `lyzortx/pipeline/track_i/steps/build_incremental_lift_failure_analysis.py`, which reads the TI08
+training cohort and TI09 strict-ablation summary to quantify incremental lift at each source-addition step and to
+separate external rows by datasource and confidence tier. The step writes three traceable outputs under
+`lyzortx/generated_outputs/track_i/incremental_lift_failure_analysis/`: an arm-level lift summary, a source/tier lift
+summary, and a failure-mode summary.
+
+#### Findings
+
+- The arm-level lift view is still the cleanest way to express incremental gain: cumulative rows, pairs, and training
+  weight all rise monotonically across the strict ablation sequence, while the new deltas make the stepwise lift
+  explicit instead of implicit.
+- Datasource and confidence-tier slices are better interpreted as trust strata than as model metrics. High-confidence
+  VHRdb rows stay in the retained training path, while lower-confidence or unresolved rows are surfaced separately so
+  their noise burden is visible.
+- Failure modes now resolve into a small set of repeatable buckets: confidence-based exclusion, source disagreement,
+  non-`ok` QC states, and unresolved entity mapping. That makes it easier to tell whether a datasource is limited by
+  raw label quality or by downstream normalization problems.
+
+#### Interpretation
+
+TI10 is a reporting layer, not a new modeling policy. It makes the progression from TI08 to TI09 auditable at the arm
+level and gives the notebook a concrete place to document where lift comes from and which datasource/tier combinations
+still fail for reasons that are mechanistic rather than model-specific.
