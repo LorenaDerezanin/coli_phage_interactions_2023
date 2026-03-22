@@ -115,7 +115,7 @@ jobs:
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           # Use --json filtering instead of --search to avoid GitHub search index lag.
           PR_JSON=$(gh pr list --state open --json number,headRefName,body \
-            --jq "[.[] | select(.body | test(\"Closes #${ISSUE_NUM}\"))] | .[0]")
+            --jq "[.[] | select(.body | test(\"[Cc]loses #${ISSUE_NUM}\\\\b\"))] | .[0]")
           if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
             echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
             exit 1
