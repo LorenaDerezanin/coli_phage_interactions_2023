@@ -163,6 +163,7 @@ def test_normalize_ncbi_virus_rows_merges_biosample_metadata_and_flags_conflicts
             "biosample_host": "Escherichia coli",
             "biosample_isolation_host": "Escherichia coli K-12",
             "biosample_isolation_source": "feces",
+            "biosample_host_disease": "healthy",
             "biosample_title": "phage isolate",
         }
     }
@@ -202,6 +203,7 @@ def test_normalize_ncbi_virus_rows_merges_biosample_metadata_and_flags_conflicts
     assert normalized[0]["phage"] == "phage alpha"
     assert normalized[0]["phage_id"] == "PHG0001"
     assert normalized[0]["source_qc_flag"] == "ok"
+    assert normalized[0]["source_biosample_host_disease"] == "healthy"
     assert normalized[1]["source_qc_flag"] == "host_conflict"
     assert normalized[1]["source_disagreement_flag"] == "1"
 
@@ -320,6 +322,7 @@ def test_main_emits_combined_weak_label_outputs(tmp_path) -> None:
       <Attribute attribute_name="host" harmonized_name="host">Escherichia coli</Attribute>
       <Attribute attribute_name="isolation_host" harmonized_name="isolation_host">Escherichia coli K-12</Attribute>
       <Attribute attribute_name="isolation_source" harmonized_name="isolation_source">feces</Attribute>
+      <Attribute attribute_name="host_disease" harmonized_name="host_disease">healthy</Attribute>
     </Attributes>
   </BioSample>
 </BioSampleSet>
@@ -356,6 +359,7 @@ def test_main_emits_combined_weak_label_outputs(tmp_path) -> None:
     assert len(combined) == 4
     assert {row["source_system"] for row in combined} == {"virus_host_db", "ncbi_virus_biosample"}
     assert any(row["source_qc_flag"] == "host_conflict" for row in combined)
+    assert any(row["source_biosample_host_disease"] == "healthy" for row in combined)
     assert any(row["bacteria_id"] == "BAC0001" for row in combined)
     assert any(row["phage_id"] == "PHG0001" for row in combined)
 
