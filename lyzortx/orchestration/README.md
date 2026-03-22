@@ -19,6 +19,8 @@ stateDiagram-v2
 
     pr_created --> codex_review : codex-connector bot <br> auto-reviews PR <br> (GitHub App hook)
 
+    note right of codex_implement : Model from plan.yml <br> via issue body directive
+
     codex_review --> has_feedback : review has <br> inline comments
     codex_review --> no_issues : review has <br> no feedback
 
@@ -83,7 +85,10 @@ stateDiagram-v2
 ## Components
 
 - `plan.yml` — task definitions (source of truth).
-- `plan_parser.py` — pure functions: `load_plan`, `is_task_ready`, `select_ready_tasks`, `mark_task_done`.
+- `plan_parser.py` — pure functions: `load_plan`, `is_task_ready`, `select_ready_tasks`, `mark_task_done`. Parses
+  `model` field from task entries.
+- `parse_model_directive.py` — extracts model ID from `<!-- model: ... -->` HTML comments in issue bodies. Used by CI
+  workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
 - `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
@@ -138,8 +143,9 @@ first dispatch.
 - `issues.opened` / `issues.reopened`: triggers when an issue with the `orchestrator-task` label is created.
 - `workflow_dispatch`: manual trigger with an issue number.
 
-Builds a prompt from the issue body and acceptance criteria, then runs Codex (gpt-5.4) to implement the task and create
-a PR.
+Builds a prompt from the issue body and acceptance criteria, extracts the model directive (`<!-- model: ... -->`) from
+the issue body, then runs Codex with the specified model to implement the task and create a PR. The model directive is
+required — the workflow fails if it is missing.
 
 ### claude-pr-review.yml
 
@@ -160,12 +166,18 @@ the sole judge of thread resolution (can resolve/unresolve threads via GraphQL m
 Two jobs: `auto-merge-on-approve` (merges on Claude's `APPROVED` review) and `address-feedback` (Codex fix loop). A
 concurrency group ensures only one lifecycle run per PR at a time, preventing race conditions on the review round cap.
 If the review has unresolved threads, Codex addresses them (up to 3 rounds). If no unresolved threads, the PR is
-labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled `needs-human-review`.
+labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled `needs-human-review`. The fix loop extracts
+the model from the linked issue (via the PR body's `Closes #N` reference) to use the same model as the original
+implementation.
 
 ## Agent Instructions in Dispatched Issues
 
 Each dispatched issue includes:
 
 - Task description and acceptance criteria (from `plan.yml`).
+- Model directive as an HTML comment: `<!-- model: gpt-5.4-mini -->`. The model is set per-task in `plan.yml` and
+  emitted by `orchestrator.py` when creating the issue. Both `codex-implement.yml` and `codex-pr-lifecycle.yml` extract
+  this directive and pass it to the Codex action. The `model` field is required for all pending tasks — the orchestrator
+  raises `ValueError` if any pending task is missing it.
 - Instruction to write findings to `lyzortx/research_notes/lab_notebooks/track_<track>.md`.
 - PR creation instructions using `gh pr create` with `Closes #<issue>`.

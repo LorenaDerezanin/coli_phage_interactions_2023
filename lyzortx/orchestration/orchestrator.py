@@ -41,7 +41,8 @@ class Task:
     expected_paths: list[str]
     acceptance_criteria: list[str]
     plan_checkbox_text: str | None
-    track: str = ""
+    track: str
+    model: str
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class IssueRef:
     task_id: str
     number: int
     state: str
+    state_reason: str  # "completed" | "not_planned" | "" (open issues)
     title: str
     html_url: str
     updated_at: str
@@ -94,7 +96,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
     from lyzortx.orchestration.plan_parser import load_plan
 
     graph = load_plan(plan_path)
-    return [
+    tasks = [
         Task(
             task_id=pt.task_id,
             title=pt.title,
@@ -106,10 +108,15 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             acceptance_criteria=_load_acceptance_criteria(plan_path, pt.task_id),
             plan_checkbox_text=pt.title,
             track=pt.track,
+            model=pt.model or "",
         )
         for pt in graph.tasks
         if pt.status != "done"
     ]
+    missing_model = [t.task_id for t in tasks if not t.model]
+    if missing_model:
+        raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+    return tasks
 
 
 def mark_task_done_in_plan(plan_path: Path, plan_md_path: Path, task_id: str) -> None:
@@ -273,6 +280,7 @@ class GitHubClient:
                     task_id=task_id,
                     number=int(item.get("number", 0)),
                     state=str(item.get("state", "")),
+                    state_reason=str(item.get("state_reason") or ""),
                     title=str(item.get("title", "")),
                     html_url=str(item.get("html_url", "")),
                     updated_at=str(item.get("updated_at", "")),
@@ -292,6 +300,7 @@ class GitHubClient:
         acceptance = "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
         body_parts = [
             f"<!-- {TASK_ID_MARKER}: {task.task_id} -->",
+            f"<!-- model: {task.model} -->",
             "## Orchestrator Task",
             f"- Task ID: `{task.task_id}`",
             f"- Executor: `{task.executor}`",
@@ -330,6 +339,7 @@ class GitHubClient:
             task_id=task.task_id,
             number=int(created.get("number", 0)),
             state=str(created.get("state", "open")),
+            state_reason="",
             title=str(created.get("title", title)),
             html_url=str(created.get("html_url", "")),
             updated_at=str(created.get("updated_at", utc_now_iso())),
@@ -362,7 +372,15 @@ def sync_status_from_issues(
             task_status[task.task_id] = previous if previous == "blocked" else "pending"
             continue
 
-        task_status[task.task_id] = "completed" if issue_ref.state == "closed" else "in_progress"
+        # Only mark completed when closed as "completed" (PR merged / done).
+        # Issues closed as "not_planned" (manual close) stay in_progress to
+        # avoid incorrectly marking unfinished tasks as done in plan.yml.
+        if issue_ref.state == "closed" and issue_ref.state_reason == "completed":
+            task_status[task.task_id] = "completed"
+        elif issue_ref.state == "closed":
+            task_status[task.task_id] = previous if previous == "blocked" else "pending"
+        else:
+            task_status[task.task_id] = "in_progress"
         issue_index[task.task_id] = {
             "number": issue_ref.number,
             "state": issue_ref.state,
@@ -505,6 +523,10 @@ def run_once(
         append_history(state, "run_once_skipped", reason="label_setup_failed", note=str(exc))
         return {"action": "skipped", "reason": "label_setup_failed", "note": str(exc)}
 
+    missing_model = [pt.task_id for pt in candidates if not pt.model]
+    if missing_model:
+        raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+
     dispatched: list[dict[str, Any]] = []
     for pt in candidates:
         criteria = _load_acceptance_criteria(effective_plan_path, pt.task_id)
@@ -519,6 +541,7 @@ def run_once(
             acceptance_criteria=criteria,
             plan_checkbox_text=pt.title,
             track=pt.track,
+            model=pt.model or "",
         )
         result = _dispatch_one_agent_task(task, state, issues_by_task, github_client)
         dispatched.append(result)

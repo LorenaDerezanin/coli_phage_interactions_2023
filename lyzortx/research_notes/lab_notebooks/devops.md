@@ -151,3 +151,143 @@ Two tickets verified with `--ticket`:
 
 Report generated with: `python -m lyzortx.orchestration.ci_token_usage --runs 100` and `--ticket 104` / `--ticket 98`
 (see `.agents/skills/ci-token-usage/` for skill documentation and design decisions).
+
+### 2026-03-22: Per-task model selection for Codex CI and orchestrator safety fix
+
+#### Executive summary
+
+Added per-task LLM model selection to the Codex orchestration pipeline. Each task in `plan.yml` now has a required
+`model` field (`gpt-5.4` or `gpt-5.4-mini`) that flows through the orchestrator into CI workflows. 5 complex tasks
+(SHAP, feature sweep, harmonization protocol, confidence tiers, external data integration) use `gpt-5.4`; 11
+straightforward tasks (stats, visualization, parameterized loops, docs) use `gpt-5.4-mini` at ~70% lower cost. Projected
+savings: ~48% on implementation runs (~$8.25 saved across the remaining 16 tasks). During rollout, discovered and fixed
+a latent orchestrator bug where manually closing an issue would incorrectly mark its task as done — now gated on
+GitHub's `state_reason` field.
+
+#### Problem statement
+
+All Codex implementation runs use `gpt-5.4` regardless of task complexity. The CI token usage baseline above shows 8
+implementation runs consuming 856K tokens at an average of $1.07/run. Many tasks are straightforward (bootstrap CIs, bar
+charts, parameterized training loops) and don't need the full model. `gpt-5.4-mini` costs ~70% less ($0.75/1M input,
+$4.50/1M output vs $2.50/$15.00) and scores 54.4% on SWE-Bench Pro with a 400K context window — sufficient for this
+repo's tasks.
+
+#### Design decisions
+
+**1. Model field lives in plan.yml, not in the workflow or issue template.**
+
+The user runs a single planning conversation with subscription-model Claude Opus 4.6 to assign models to all pending
+tasks at once. This avoids an additional LLM call at dispatch time and keeps model assignment as a reviewable data change
+in version control. The `plan.yml` file already contains implementation-adjacent fields (`implemented_in`, `baseline`),
+so `model` fits the existing schema pattern.
+
+Alternative considered: parsing model from the issue body at dispatch time (set by the orchestrator based on heuristics).
+Rejected because it requires either a second LLM call per dispatch or hand-coded heuristics that would be fragile.
+
+**2. Model is a required field — no defaults, no fallbacks.**
+
+`Task.model` is a required positional field on the dataclass (no default value). `load_pending_tasks()` and `run_once()`
+both validate that every pending task has a non-empty model before proceeding, raising `ValueError` if any are missing.
+The `codex-implement.yml` workflow also fails with `::error::` if the model directive is absent from the issue body.
+
+This was a deliberate tightening during implementation. The initial version had `model: str = ""` with validation after
+construction, but the user correctly identified that a default empty string is a silent fallback that defeats the purpose.
+Making it required at the type level means you cannot construct a `Task` without specifying a model, which is enforced by
+Python's `TypeError` on missing arguments to frozen dataclasses.
+
+**3. Model travels as an HTML comment in the issue body: `<!-- model: gpt-5.4-mini -->`.**
+
+The orchestrator emits this directive when creating issues. Both `codex-implement.yml` and `codex-pr-lifecycle.yml`
+extract it using `parse_model_directive.py`, a small pure-function module that reads stdin and prints the model ID.
+
+Why an HTML comment rather than a visible field: the directive is machine-readable metadata, not something the
+implementing agent needs to see or act on. HTML comments don't render in GitHub's issue view, keeping the issue body
+clean for human readers.
+
+Why a dedicated Python module rather than inline `grep -oP`: PCRE lookbehind (`grep -P`) portability is uncertain across
+CI runner images. A 12-line Python script is portable, testable, and reusable from both workflows.
+
+**4. Lifecycle (review feedback) runs use the same model as the original implementation.**
+
+`codex-pr-lifecycle.yml` extracts the linked issue number from the PR body (`Closes #N`), fetches that issue's body, and
+extracts the model directive from it. This ensures consistency: if TG04 was implemented with `gpt-5.4`, all review
+feedback rounds also use `gpt-5.4`.
+
+Alternative considered: always use the cheaper model for feedback rounds since they're typically simpler fixes. Rejected
+for now — consistency is more important until we have data on whether mini handles feedback adequately.
+
+**5. Two-PR rollout: data first, then code.**
+
+PR #109 (merged) added the `model` field to all 16 pending tasks in `plan.yml` as a pure data change. The existing
+`load_plan()` function ignores unknown YAML fields, so this was a no-op. PR #112 wires the field through the system.
+This separation allows model assignments to be reviewed and adjusted independently of code changes, and ensures a clean
+rollback path if the wiring has issues.
+
+#### Model assignments
+
+5 tasks assigned `gpt-5.4` (complex reasoning, architectural design, domain interpretation):
+
+| Task | Rationale |
+|------|-----------|
+| TG04 — SHAP explanations | TreeExplainer integration (new to codebase), cross-referencing ablation + model outputs, prescriptive recommendation of which feature blocks to keep |
+| TG05 — Feature-subset sweep | 10 combinatorial model runs, comparison logic, locks final v1 feature config for all downstream tracks |
+| TI05 — Harmonization protocol | Multi-source schema design, domain-critical decisions cascading to TI06–TI10 |
+| TI07 — Confidence tiers | Subjective tier design + weighting strategy, cascades to TI08/TI09 |
+| TI08 — External data integration | Conditional injection architecture, leakage prevention, fallback handling |
+
+11 tasks assigned `gpt-5.4-mini` (stats, visualization, parameterized loops, docs):
+
+| Task | Rationale |
+|------|-----------|
+| TF01 — Bootstrap CIs | Standard NumPy resampling, dual-slice filtering already exists in codebase |
+| TF02 — v0 vs v1 comparison | Side-by-side metric table, algorithmic error bucket identification |
+| TH02 — Explained recommendations | Data assembly from TG02+TG04 outputs, formatting |
+| TI06 — Tier B ingestion | ID cross-referencing, lookup joins, follows TI04 patterns |
+| TI09 — Sequential ablations | Parameterized loop over TG01 training, metric collection |
+| TI10 — Lift tracking | GroupBy aggregation + failure mode detection |
+| TJ01 — One-command regeneration | Orchestration script calling existing run_track_*.py |
+| TJ02 — Environment freeze | Documentation + version pinning |
+| TP01 — Digital phagogram | Plotly/Matplotlib visualization |
+| TP02 — Panel coverage heatmap | Standard Seaborn heatmap |
+| TP03 — Feature lift bar chart | Bar chart from existing TG03 CSV |
+
+Each task was evaluated on four axes: novelty (new pattern vs reuse), domain criticality (does a mistake cascade?),
+reasoning depth (multi-step logic vs straightforward assembly), and established patterns (can it largely copy TG01/TG03
+structure?).
+
+#### Projected cost impact
+
+Assuming average ~107K tokens per run (observed today):
+
+- **Status quo (all gpt-5.4):** 16 × $1.07 ≈ $17.12
+- **With model selection:** (5 × $1.07) + (11 × $0.32) ≈ $5.35 + $3.52 ≈ $8.87
+- **Estimated savings:** ~48% on implementation runs
+
+This does not include lifecycle runs, which scale proportionally.
+
+#### Orchestrator safety fix: state_reason gate for issue closure
+
+During implementation, we closed 4 pre-existing orchestrator-task issues (#22, #25, #70, #106) that predated model
+selection. This exposed a latent bug: the orchestrator's `sync_status_from_issues` treated any closed issue as
+"completed," which would incorrectly mark unfinished tasks as done in `plan.yml`.
+
+GitHub's REST API provides `state_reason` on issues: `"completed"` (closed by PR merge or explicitly marked done) vs
+`"not_planned"` (manually closed without completion). The fix:
+
+- Added `state_reason` field to the `IssueRef` dataclass.
+- `list_task_issues()` now parses `state_reason` from the API response.
+- `sync_status_from_issues()` only marks a task "completed" when `state_reason == "completed"`. Issues closed as
+  `"not_planned"` revert to their previous status (pending or blocked), preserving the task's position in the dispatch
+  queue.
+
+This is a correctness fix independent of model selection — the bug existed before but was never triggered because issues
+were only closed by PR merges (which set `state_reason: "completed"`). The model-selection migration was the first time
+issues were manually closed for housekeeping.
+
+Tests added: 5 test cases covering all `state_reason` paths (completed, not_planned, open, blocked preservation,
+no-issue fallback).
+
+#### PRs
+
+- PR #109 (merged): data-only — added `model` field to all 16 pending tasks in `plan.yml`.
+- PR #112: wired model through orchestrator, workflows, and added state_reason safety gate.
