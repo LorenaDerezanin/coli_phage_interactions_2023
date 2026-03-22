@@ -386,7 +386,7 @@ tracks:
     - id: TI06
       title: 'Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample
         metadata'
-      status: pending
+      status: done
       model: gpt-5.4-mini
     - id: TI07
       title: Define confidence tiers for external labels

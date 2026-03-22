@@ -173,7 +173,7 @@ graph LR
 - [x] For VHRdb ingest, keep source-fidelity fields
 - [x] Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
 - [x] Define harmonization protocol for Tier A datasets
-- [ ] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata Model: `gpt-5.4-mini`.
+- [x] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata
 - [ ] Define confidence tiers for external labels Model: `gpt-5.4`.
 - [ ] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable Model: `gpt-5.4`.
 - [ ] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B Model:
