@@ -83,3 +83,34 @@ plus a manifest and source summary under `lyzortx/generated_outputs/track_i/tier
 TI06 should be treated as source-shape normalization, not final confidence-tier assignment. The code now preserves the
 weak-label provenance required for downstream TI07 tiering while keeping the pipeline honest about disagreement and
 missing BioSample context instead of silently collapsing those cases.
+
+### 2026-03-22: TI07 External-label confidence tiers
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_i/steps/build_external_label_confidence_tiers.py`, a dedicated TI07 policy step that
+  reads external ingest outputs and assigns a unified `external_label_confidence_tier`, numeric confidence score, and
+  training weight per record.
+- Kept the policy deliberately small and executable instead of inventing many bespoke bins: base confidence comes from
+  source family (`A` assay-backed external sources > curated metadata knowledgebases > repository/submitter metadata),
+  and row-level degradations apply for disagreement, non-`ok` QC flags, and unresolved entity mapping.
+- Updated `lyzortx/pipeline/track_i/run_track_i.py` so Track I can run the new confidence-tier step directly or as part
+  of `--step all`.
+- Added unit tests covering the intended source-family ordering, downgrade behavior for unresolved mappings, and
+  end-to-end artifact emission for mixed Tier A and Tier B inputs.
+
+#### Findings
+
+- A four-bin policy (`high`, `medium`, `low`, `exclude`) is enough for the current external landscape; adding finer
+  subclasses now would create unstable distinctions before TI08/TI09 provide empirical feedback.
+- The most important row-level degradations are provenance-quality failures rather than subtle biological heuristics:
+  disagreement, bad QC states, and unresolved canonical mapping are strong enough to demote or exclude a record without
+  pretending we can rescue it by hand-crafted weighting.
+- This design gives TI08 a concrete interface now: every external row can be filtered or down-weighted mechanically
+  without coupling integration logic to source-specific if/else blocks.
+
+#### Interpretation
+
+- TI07 is now an explicit policy boundary between ingestion and training. That is the right abstraction: TI06 preserves
+  raw provenance, TI07 translates provenance into training trust, and TI08 can stay focused on optional integration
+  rather than re-litigating confidence semantics inside the model pipeline.
