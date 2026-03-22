@@ -21,14 +21,14 @@ repository.
   `lyzortx/orchestration/ci_token_usage.py` and includes an `as_of` date per
   entry so historical runs use the rate that was current when they ran.
 
-## Pricing verification
+## Pricing verification (once per session)
 
-Before presenting results to the user, **verify that the cached OpenAI rates
-are still current**. Check `_OPENAI_RATES` in
-`lyzortx/orchestration/ci_token_usage.py` — each entry has an `as_of` date. If
-the newest `as_of` is more than ~60 days old, fetch the current rates from
-<https://developers.openai.com/api/docs/pricing> and update the table (add a
-new entry with the new date; keep old entries for historical accuracy).
+Before presenting results, **always verify that the cached OpenAI rates are
+still current**. Check `_OPENAI_RATES` in
+`lyzortx/orchestration/ci_token_usage.py`, then fetch
+<https://developers.openai.com/api/docs/pricing> and compare. If rates have
+changed, update the table (add a new entry with today's date; keep old entries
+for historical accuracy). This check only needs to happen once per conversation.
 
 ## How to run
 
