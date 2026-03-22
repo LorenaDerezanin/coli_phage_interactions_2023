@@ -8,6 +8,7 @@
   open/push, and supports interactive `@claude` mentions on any PR. Requires the `ANTHROPIC_API_KEY` repository secret.
   Claude posts reviews as `claude[bot]` (the action's own OIDC app identity).
 - `codex-pr-lifecycle.yml` triggers on COMMENTED reviews from `chatgpt-codex-connector[bot]` or `claude[bot]` only.
+  Both jobs additionally require the `orchestrator-task` label on the PR (`workflow_dispatch` bypasses the label check).
   Reviews from other users (including the ORCHESTRATOR_PAT holder) are excluded to prevent feedback loops. A concurrency
   group ensures only one lifecycle run per PR at a time.
 
