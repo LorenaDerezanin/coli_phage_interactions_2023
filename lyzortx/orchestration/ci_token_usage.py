@@ -374,7 +374,7 @@ def _enrich_run(run: RunInfo, log: str) -> None:
     # Compute cost.
     if run.tokens is not None and run.model:
         run.cost_usd = estimate_codex_cost(run.tokens, run.model, run.date)
-    elif run.claude_result and run.claude_result.cost_usd > 0:
+    elif run.claude_result and run.claude_result.cost_usd is not None:
         run.cost_usd = run.claude_result.cost_usd
 
 

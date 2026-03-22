@@ -174,6 +174,12 @@ class TestExtractClaudeActionResult:
         result = extract_claude_action_result(log)
         assert isinstance(result, ClaudeActionResult)
 
+    def test_zero_cost(self) -> None:
+        log = '"total_cost_usd": 0,\n"num_turns": 1,\n"duration_ms": 500,\n'
+        result = extract_claude_action_result(log)
+        assert result is not None
+        assert result.cost_usd == 0.0
+
 
 class TestDetectWaste:
     def test_env_discovery(self) -> None:
