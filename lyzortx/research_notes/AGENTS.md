@@ -12,6 +12,8 @@ Entries are written by agents dispatched through the orchestrator pipeline:
 3. When an agent implements a task, the orchestrator issue body instructs it to write findings to
    `lyzortx/research_notes/lab_notebooks/track_{TRACK}.md` following the existing entry format.
 4. `project.md` is used for cross-track strategic decisions and plan-level notes that are not specific to one track.
+5. `devops.md` records coding infrastructure changes: CI/CD workflows, tooling, automation, token/cost analysis,
+   developer experience improvements, and other non-science engineering decisions.
 
 ## Entry format
 

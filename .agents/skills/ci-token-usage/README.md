@@ -91,6 +91,11 @@ The overview and waste tables use a single `Cost` column that shows `$X.XX` for 
 regardless of whether it came from Codex token estimation or Claude's exact `total_cost_usd`. This makes cross-workflow
 cost comparison straightforward.
 
+## Lab notebook
+
+Token usage snapshots and cost analysis are recorded in `lyzortx/research_notes/lab_notebooks/devops.md`, the lab
+notebook for all coding infrastructure changes (CI/CD, tooling, automation, developer experience).
+
 ## Adding a new workflow
 
 1. Add a `NEW_WORKFLOW = "filename.yml"` constant and append it to `ALL_WORKFLOWS`.
