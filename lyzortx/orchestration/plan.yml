@@ -427,7 +427,7 @@ tracks:
     tasks:
     - id: TJ01
       title: One command to regenerate all v1 outputs from raw data
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Single entry point regenerates feature blocks, model, calibration, recommendations,
