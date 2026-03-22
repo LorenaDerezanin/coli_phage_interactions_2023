@@ -71,6 +71,7 @@ def build_actual_summary(intermediate_dir: Path) -> Dict[str, Any]:
         },
         "protocol_summary": {
             "step_name": protocol["step_name"],
+            "split_protocol_id": protocol["split_protocol_id"],
             "split_type": protocol["split_type"],
             "n_cv_folds": protocol["split_rules"]["n_cv_folds"],
             "holdout_group_fraction": protocol["split_rules"]["holdout_group_fraction"],

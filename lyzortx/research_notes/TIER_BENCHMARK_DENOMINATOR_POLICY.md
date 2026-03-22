@@ -116,7 +116,7 @@ Every benchmark table/report must include:
 - `host_denominator_n`
 - `phage_denominator_n`
 - `label_slice`: `full_label` or `strict_confidence`
-- `split_protocol_id`
+- `split_protocol_id`: for the locked ST0.3 benchmark, `steel_thread_v0_st03_split_v1`
 - `metric_name`
 - `metric_value`
 - `support_n` (when metric-specific support differs from cohort denominator)
