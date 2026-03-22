@@ -152,7 +152,7 @@ graph LR
   interpretation.
 - [x] Train LightGBM binary classifier on v1 expanded feature set
 - [x] Calibrate GBM outputs with isotonic and Platt scaling
-- [ ] Run feature-block ablation suite proving which features deliver lift
+- [x] Run feature-block ablation suite proving which features deliver lift
 - [ ] Compute SHAP explanations for per-pair and global feature importance
 
 ## Track H: In-Silico Cocktail Recommendation

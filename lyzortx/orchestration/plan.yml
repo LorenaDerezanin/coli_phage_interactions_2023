@@ -297,7 +297,7 @@ tracks:
       - Target ECE < 0.03 on full-label
     - id: TG03
       title: Run feature-block ablation suite proving which features deliver lift
-      status: pending
+      status: done
       acceptance_criteria:
       - 'Ablation arms: v0 features only, +defense subtypes, +OMP receptors, +phage
         genomic, +pairwise compatibility, all features'
