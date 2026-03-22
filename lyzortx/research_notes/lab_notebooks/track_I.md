@@ -142,3 +142,28 @@ produces a runnable internal-only cohort plus zero-lift summaries for the future
   approved external labels can be layered in deterministically when they are present.
 - This is the correct amount of implementation for TI08. It makes the enhancement path executable and testable without
   prematurely claiming that the current model trainers should already consume every external row.
+
+### 2026-03-22: TI09 Strict ablation sequence
+
+#### Executive summary
+
+TI09 now has a dedicated Track I step that reads the TI08 cohort output and materializes the planned strict ablation
+order `internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B`. The step writes a reproducible summary
+table and manifest under `lyzortx/generated_outputs/track_i/strict_ablation_sequence/`, making the source-addition
+sequence explicit instead of burying it inside the cohort integration step.
+
+#### Findings
+
+- The strict ablation task is a sequencing problem, not a redefinition of the TI08 cohort contract. Reusing TI08 output
+  keeps the implementation honest: the new step only reasons about the order in which rows become eligible for the
+  cumulative arms.
+- Treating `+Tier B` as a final planned addition works cleanly because the TI08 rows already preserve the underlying
+  source-system provenance for Virus-Host DB and NCBI Virus/BioSample separately.
+- The new summary records both the planned source additions and the observed cumulative source coverage, which makes it
+  easy to spot when a planned arm exists but contributes no rows yet.
+
+#### Interpretation
+
+TI09 is now executable as a standalone, ordered ablation pass. That keeps the Track I pipeline modular: TI08 preserves
+integration trust, and TI09 turns that trusted cohort into a strict source-by-source ablation sequence that TI10 can
+use for lift and failure-mode analysis.

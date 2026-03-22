@@ -156,10 +156,20 @@ def test_run_track_i_dispatches_ti08_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("training-cohorts"),
     )
+    monkeypatch.setattr(
+        run_track_i.build_strict_ablation_sequence,
+        "main",
+        lambda argv: calls.append("strict-ablation-sequence"),
+    )
 
     run_track_i.main(["--step", "training-cohorts"])
     assert calls == ["training-cohorts"]
 
     calls.clear()
     run_track_i.main(["--step", "all"])
-    assert calls == ["weak-label-ingest", "external-confidence-tiers", "training-cohorts"]
+    assert calls == [
+        "weak-label-ingest",
+        "external-confidence-tiers",
+        "training-cohorts",
+        "strict-ablation-sequence",
+    ]
