@@ -572,3 +572,70 @@ the approach, the deployment metric sets honest expectations.
 The concern does not invalidate Tracks C, D, or E. The genomic features are the right features — they just need to be
 evaluated separately from the panel-artifact features. TG05 is the right place to do this, and the task is already
 pending.
+
+### 2026-03-22: TG05 results — deployment-realistic model outperforms panel model on ranking
+
+#### TG05 sweep results
+
+The feature-subset sweep (PR #156) evaluated all 10 two-block and three-block combinations of the four new feature
+blocks (defense, OMP, phage-genomic, pairwise) with fixed TG01 hyperparameters on the ST03 holdout (65 strains).
+
+**Panel-evaluation results (all arms include v0 baseline + host_n_infections):**
+
+| Arm | AUC | Top-3 (all) | Top-3 (susceptible) | Brier |
+|-----|-----|-------------|---------------------|-------|
+| TG01 all-features reference | 0.9091 | 87.7% | 90.5% | 0.113 |
+| defense + phage-genomic | 0.9082 | 89.2% | 92.1% | 0.111 |
+| OMP + pairwise | 0.9066 | 89.2% | 92.1% | 0.116 |
+| **defense + OMP + phage-genomic (WINNER)** | **0.9108** | 87.7% | 90.5% | **0.110** |
+| defense + phage-genomic + pairwise | 0.9082 | 84.6% | 87.3% | 0.113 |
+
+Winner: **defense + OMP + phage-genomic** — best AUC (0.9108), best Brier (0.110), pairwise block excluded. The winner
+selection rule required AUC ≥ TG01 all-features (0.9091), then maximized top-3. Only this arm cleared the AUC gate.
+
+**Deployment-realistic result (winner minus host_n_infections):**
+
+| | AUC | Top-3 (all) | Top-3 (susceptible) | Brier |
+|--|-----|-------------|---------------------|-------|
+| Panel model | 0.911 | 87.7% | 90.5% | 0.110 |
+| Deployment-realistic | 0.835 | **92.3%** | **95.2%** | 0.158 |
+
+#### Interpretation
+
+1. **Removing `host_n_infections` improves ranking.** The deployment-realistic model achieves 92.3% top-3 hit rate —
+   higher than any panel-evaluation arm. This is counterintuitive but mechanistically sound: `host_n_infections` tells
+   the model "this strain is broadly susceptible" which biases it toward recommending the same popular broad-range
+   phages. Without that shortcut, the model is forced to use defense subtypes, OMP receptor variants, and phage k-mer
+   profiles to make strain-specific picks. Those features produce better *rankings* even though they produce worse
+   *pairwise discrimination* (AUC drops from 0.911 to 0.835).
+
+2. **AUC and top-3 measure fundamentally different things.** AUC measures how well the model separates lytic from
+   non-lytic pairs across the entire probability range. Top-3 measures whether the correct phages end up in the top 3
+   slots per strain. A feature that improves average-case AUC can hurt top-3 by pushing a marginally-higher-scoring
+   wrong phage above a correct one. `host_n_infections` is exactly this kind of feature — it improves the average but
+   dilutes the per-strain signal.
+
+3. **The pairwise block (Track E) was correctly excluded.** No subset containing pairwise cleared the AUC gate while
+   improving top-3. The genus-level receptor lookup (TE01) was too coarse — 80% coverage but no within-genus
+   specificity. The defense evasion proxy (TE02) showed up at SHAP rank #6 globally, suggesting the signal exists but
+   the current encoding doesn't capture it well enough. Worth revisiting in v2 with finer-grained lookups (per-species
+   or per-RBP-family), but not worth forcing into v1.
+
+4. **The winner selection rule was too conservative.** Two 2-block arms (defense + phage-genomic, OMP + pairwise) both
+   hit 89.2% top-3 but were disqualified because their AUC was 0.001–0.003 below the all-features reference. On 65
+   holdout strains, AUC differences this small are noise. The rule prevented the sweep from selecting these
+   higher-ranking arms. For future sweeps, the AUC gate should use a tolerance (e.g., AUC ≥ reference − 0.005) rather
+   than a strict ≥.
+
+5. **Two numbers for partners.** The locked v1 model gives CDMO partners two honest benchmarks:
+   - Panel evaluation (87.7% top-3, AUC 0.911): what the model does on fully characterized strains
+   - Novel-strain prediction (92.3% top-3, AUC 0.835): what to expect for a new clinical isolate with only a genome
+
+   The 92.3% clears our 90% target. The 0.835 AUC means per-pair probability estimates are less reliable for novel
+   strains, so recommendations should be presented as a ranked shortlist, not as calibrated P(lysis) values.
+
+#### Track P acceptance criteria updated
+
+All three Track P tasks (TP01, TP02, TP03) now require presenting both the panel model and the deployment-realistic
+model side by side. Partners need to see both: the panel model validates the approach, the deployment-realistic model
+sets honest expectations for their use case.
