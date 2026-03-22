@@ -189,5 +189,5 @@ graph LR
 
 - **Guiding Principle:** Visualizations and demo materials for partner demonstrations.
 - [x] Build digital phagogram visualization for per-strain phage ranking
-- [ ] Build panel coverage heatmap across strain diversity Model: `gpt-5.4-mini`.
+- [x] Build panel coverage heatmap across strain diversity
 - [ ] Build feature lift visualization from ablation suite results Model: `gpt-5.4-mini`.

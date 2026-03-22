@@ -461,7 +461,7 @@ tracks:
       - Suitable for interactive live demos
     - id: TP02
       title: Build panel coverage heatmap across strain diversity
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - 96-phage panel predicted coverage shown as heatmap
