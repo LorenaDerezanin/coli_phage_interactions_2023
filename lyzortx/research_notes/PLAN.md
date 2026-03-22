@@ -177,7 +177,7 @@ graph LR
 - [x] Define confidence tiers for external labels
 - [x] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable
 - [x] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B
-- [ ] Track incremental lift and failure modes by datasource and confidence tier Model: `gpt-5.4-mini`.
+- [x] Track incremental lift and failure modes by datasource and confidence tier
 
 ## Track J: Reproducibility and Release Quality
 

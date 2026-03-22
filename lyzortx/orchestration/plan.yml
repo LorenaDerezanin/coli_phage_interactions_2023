@@ -405,7 +405,7 @@ tracks:
     - id: TI10
       title: Track incremental lift and failure modes by datasource and confidence
         tier
-      status: pending
+      status: done
       model: gpt-5.4-mini
   J:
     name: Reproducibility and Release Quality
