@@ -9,6 +9,8 @@ This command runs the implemented Track G modeling step:
    `lyzortx/generated_outputs/track_g/tg01_v1_binary_classifier/`
 2. `calibrate-gbm`: fit isotonic and Platt calibrators on TG01 LightGBM outputs using the ST0.3 fold contract and
    write outputs under `lyzortx/generated_outputs/track_g/tg02_gbm_calibration/`
+3. `feature-block-ablation`: run TG03 LightGBM ablations on the fixed ST0.3 holdout split and write outputs under
+   `lyzortx/generated_outputs/track_g/tg03_feature_block_ablation_suite/`
 
 The TG01 trainer reuses the canonical ST0.2 / ST0.3 leakage-safe contract:
 
@@ -34,3 +36,13 @@ The TG02 calibration directory includes:
 2. `tg02_pair_predictions_calibrated.csv`: pair-level raw and calibrated LightGBM probabilities
 3. `tg02_ranked_predictions.csv`: isotonic-ranked per-strain predictions with raw and Platt scores for comparison
 4. `tg02_calibration_artifacts.json`: fitted isotonic thresholds, Platt coefficients, and input hashes
+
+The TG03 ablation directory includes:
+
+1. `tg03_ablation_summary.json`: per-arm metrics, best hyperparameters, feature-block membership, and lift vs the
+   `v0_features_only` reference arm
+2. `tg03_ablation_metrics.csv`: flat arm-level table with holdout AUC, top-3 hit rate, Brier, CV summaries, and deltas
+   vs v0
+3. `tg03_ablation_cv_candidate_results.csv`: candidate-level CV summaries for each ablation arm
+4. `tg03_ablation_pair_predictions.csv`: non-holdout out-of-fold and final holdout probabilities for each arm
+5. `tg03_ablation_holdout_top3_rankings.csv`: holdout top-3 rankings for each arm

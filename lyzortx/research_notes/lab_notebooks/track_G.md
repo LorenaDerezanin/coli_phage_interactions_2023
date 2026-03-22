@@ -140,3 +140,105 @@
    comparisons because it has the best holdout log-loss.
 3. In TG03, test whether the remaining strict-confidence calibration gap is driven by feature ablations, class-balance
    shifts, or group-specific error concentration rather than the choice of calibrator alone.
+
+### 2026-03-22: TG03 implemented (feature-block ablation suite on the fixed holdout split)
+
+#### What was implemented
+
+- Added the TG03 ablation runner at `lyzortx/pipeline/track_g/steps/run_feature_block_ablation_suite.py`.
+- Updated `lyzortx/pipeline/track_g/run_track_g.py`, `lyzortx/pipeline/track_g/README.md`, and
+  `lyzortx/tests/test_track_g_v1_binary_classifier.py` so Track G now exposes a dedicated
+  `feature-block-ablation` step with unit coverage for:
+  - Track C column partitioning into defense vs remaining host-genomic features
+  - the required TG03 arm sequence
+  - CLI dispatch of the new Track G step
+- TG03 now:
+  - bootstraps missing ST0.1-ST0.3 plus Track C/D/E prerequisite artifacts when needed
+  - locks one LightGBM model family and one ST0.3 holdout contract across all arms so lift is attributable to feature
+    blocks rather than a model-family swap
+  - evaluates the six required arms with v0 as the direct reference point in every comparison:
+    - `v0_features_only`
+    - `plus_defense_subtypes`
+    - `plus_omp_receptors`
+    - `plus_phage_genomic`
+    - `plus_pairwise_compatibility`
+    - `all_features`
+  - writes reusable artifacts under `lyzortx/generated_outputs/track_g/tg03_feature_block_ablation_suite/`
+- Scope note required by the current plan wording:
+  - the `+OMP receptors` arm includes the full non-defense Track C host-genomic remainder (`22` OMP one-hot columns plus
+    the `2` categorical capsule/LPS columns and `8` host-phylogeny UMAP dimensions) because TG03 does not define a
+    separate acceptance arm for those residual host-genomic features
+
+#### Output summary
+
+- TG03 output directory:
+  - `tg03_ablation_summary.json`
+  - `tg03_ablation_metrics.csv`
+  - `tg03_ablation_cv_candidate_results.csv`
+  - `tg03_ablation_pair_predictions.csv`
+  - `tg03_ablation_holdout_top3_rankings.csv`
+- Arm sizes:
+  - v0 only: `19` categorical + `9` numeric features
+  - +defense subtypes: `19` categorical + `91` numeric features
+  - +OMP receptors: `21` categorical + `42` numeric features
+  - +phage genomic: `19` categorical + `43` numeric features
+  - +pairwise compatibility: `19` categorical + `23` numeric features
+  - all features: `21` categorical + `170` numeric features
+- Holdout metrics on the same ST0.3 split (`65` strains, `6,235` hard-trainable pairs):
+  - v0 only:
+    - ROC-AUC `0.908023`
+    - top-3 hit rate (all strains) `0.861538`
+    - Brier `0.113537`
+  - +defense subtypes:
+    - ROC-AUC `0.906666`
+    - top-3 hit rate `0.907692`
+    - Brier `0.114083`
+    - vs v0: top-3 `+0.046154`, AUC `-0.001357`, Brier `-0.000546`
+  - +OMP receptors:
+    - ROC-AUC `0.910112`
+    - top-3 hit rate `0.876923`
+    - Brier `0.112338`
+    - vs v0: top-3 `+0.015385`, AUC `+0.002089`, Brier improvement `+0.001199`
+  - +phage genomic:
+    - ROC-AUC `0.908743`
+    - top-3 hit rate `0.907692`
+    - Brier `0.112097`
+    - vs v0: top-3 `+0.046154`, AUC `+0.000720`, Brier improvement `+0.001440`
+  - +pairwise compatibility:
+    - ROC-AUC `0.905398`
+    - top-3 hit rate `0.876923`
+    - Brier `0.117343`
+    - vs v0: top-3 `+0.015385`, AUC `-0.002625`, Brier `-0.003806`
+  - all features:
+    - ROC-AUC `0.909089`
+    - top-3 hit rate `0.876923`
+    - Brier `0.113112`
+    - vs v0: top-3 `+0.015385`, AUC `+0.001066`, Brier improvement `+0.000425`
+
+#### Interpretation
+
+1. The v0 baseline remains strong. A LightGBM trained on only the audited ST0.4 metadata features already reaches
+   holdout ROC-AUC `0.908023` and top-3 hit rate `0.861538`, so TG03 is measuring lift on top of a hard baseline
+   rather than rescuing a weak reference model.
+2. The clearest single-block ranking lift comes from defense subtypes and phage-genomic features. Both raise holdout
+   top-3 from `0.861538` to `0.907692` (`+3` strains hit in the top 3), which is the largest ranking gain in the
+   suite.
+3. The strongest discrimination/calibration-style lift comes from the host-genomic remainder grouped under the
+   `+OMP receptors` arm. That arm posts the best holdout AUC (`0.910112`) and improves Brier to `0.112338`, even
+   though its top-3 lift is smaller than the defense/phage-genomic arms.
+4. The pairwise compatibility block is not yet a clean win on this holdout. It gives a modest top-3 improvement over
+   v0, but it degrades both AUC and Brier relative to the reference arm, which suggests the current TE01-TE03 stack is
+   noisier or less transferable on this split than the host-only and phage-genomic additions.
+5. The combined all-features arm does not dominate every metric. It modestly beats v0 on AUC and Brier, but its holdout
+   top-3 hit rate (`0.876923`) is below the best single-block arms. The honest claim is therefore narrower than "more
+   features always helps": the current expanded stack adds some useful signal, but the strongest holdout ranking lift is
+   concentrated in the defense and phage-genomic blocks rather than the full union.
+
+#### Next steps
+
+1. Use the TG03 ablation results to scope TG04 explanations around the blocks that actually delivered holdout lift:
+   defense subtypes, host-genomic remainder, and phage-genomic features.
+2. Inspect the pairwise-only and all-features holdout misses in `tg03_ablation_holdout_top3_rankings.csv` before
+   assuming TE01-TE03 should remain in the final default stack unchanged.
+3. If Track G keeps the full model as the deployment default, consider a follow-up feature-selection or regularization
+   pass so the weaker pairwise block does not dilute the stronger defense/phage-genomic signal on the fixed holdout.
