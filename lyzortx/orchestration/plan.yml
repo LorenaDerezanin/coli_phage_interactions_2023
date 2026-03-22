@@ -258,6 +258,7 @@ tracks:
     - id: TF01
       title: Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Existing ST03 split locked as the canonical v1 evaluation protocol
       - Bootstrap CIs (1000 resamples of holdout strains) for top-3 hit rate, AUC,
@@ -266,6 +267,7 @@ tracks:
     - id: TF02
       title: Before/after comparison of v0 vs v1 with error bucket analysis
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Side-by-side metrics table for v0 (metadata logreg) vs v1 (genomic GBM)
       - Error bucket analysis showing which v0 holdout misses v1 fixed and why
@@ -306,6 +308,7 @@ tracks:
     - id: TG04
       title: Compute SHAP explanations for per-pair and global feature importance
       status: pending
+      model: gpt-5.4
       acceptance_criteria:
       - TreeExplainer SHAP values for GBM model
       - Per-pair explanations answering why each phage was recommended for each strain
@@ -316,6 +319,7 @@ tracks:
     - id: TG05
       title: Run feature-subset sweep to find best block combination for top-3 ranking
       status: pending
+      model: gpt-5.4
       acceptance_criteria:
       - Train models on all 2-block and 3-block combinations of the 4 new feature
         blocks (defense, OMP, phage-genomic, pairwise)
@@ -339,6 +343,7 @@ tracks:
       title: Add explained recommendations with calibrated P(lysis), CI, and SHAP
         features
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Each top-3 recommendation includes calibrated P(lysis), 95% CI, and top-3
         SHAP features
@@ -376,25 +381,31 @@ tracks:
     - id: TI05
       title: Define harmonization protocol for Tier A datasets
       status: pending
+      model: gpt-5.4
     - id: TI06
       title: 'Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample
         metadata'
       status: pending
+      model: gpt-5.4-mini
     - id: TI07
       title: Define confidence tiers for external labels
       status: pending
+      model: gpt-5.4
     - id: TI08
       title: 'Integrate external data as non-blocking enhancer: internal-only baseline
         must remain runnable'
       status: pending
+      model: gpt-5.4
     - id: TI09
       title: 'Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL
         -> +KlebPhaCol -> +GPB -> +Tier B'
       status: pending
+      model: gpt-5.4-mini
     - id: TI10
       title: Track incremental lift and failure modes by datasource and confidence
         tier
       status: pending
+      model: gpt-5.4-mini
   J:
     name: Reproducibility and Release Quality
     description: One-command regeneration and environment freezing for v1 pipeline.
@@ -408,6 +419,7 @@ tracks:
     - id: TJ01
       title: One command to regenerate all v1 outputs from raw data
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Single entry point regenerates feature blocks, model, calibration, recommendations,
         and report
@@ -415,6 +427,7 @@ tracks:
     - id: TJ02
       title: Freeze environment specs and seeds for v1 benchmark run
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - requirements.txt and phage_env environment spec locked for exact versions
         used
@@ -429,6 +442,7 @@ tracks:
     - id: TP01
       title: Build digital phagogram visualization for per-strain phage ranking
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - For any input strain shows ranked phage list with P(lysis), confidence band,
         and top SHAP features
@@ -436,6 +450,7 @@ tracks:
     - id: TP02
       title: Build panel coverage heatmap across strain diversity
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - 96-phage panel predicted coverage shown as heatmap
       - Axes are host phylogroup x phage family, colored by predicted lysis probability
@@ -443,6 +458,7 @@ tracks:
     - id: TP03
       title: Build feature lift visualization from ablation suite results
       status: pending
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Bar chart showing prediction improvement by feature block from TG03 ablation
       - Clear narrative from metadata-only through each feature addition
