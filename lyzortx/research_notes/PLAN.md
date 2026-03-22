@@ -154,7 +154,7 @@ graph LR
 - [x] Calibrate GBM outputs with isotonic and Platt scaling
 - [x] Run feature-block ablation suite proving which features deliver lift
 - [x] Compute SHAP explanations for per-pair and global feature importance
-- [ ] Run feature-subset sweep to find best block combination for top-3 ranking Model: `gpt-5.4`.
+- [x] Run feature-subset sweep to find best block combination for top-3 ranking
 
 ## Track H: In-Silico Cocktail Recommendation
 
