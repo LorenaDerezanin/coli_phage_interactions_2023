@@ -191,6 +191,36 @@ def test_load_plan_parses_model_field(tmp_path: Path) -> None:
     assert ta01.model == "gpt-5.4-mini"
 
 
+def test_render_plan_shows_model_on_pending_tasks(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: First task
+                status: pending
+                model: gpt-5.4-mini
+              - id: TA02
+                title: Second task
+                status: done
+                model: gpt-5.4
+    """)
+    plan = load_plan_yaml(_write_plan(tmp_path, content))
+    md = render_plan(plan)
+    assert "Model: `gpt-5.4-mini`" in md
+    # Done tasks should NOT show model
+    assert "Model: `gpt-5.4`" not in md
+
+
+def test_render_plan_no_model_on_pending_without_field(tmp_path: Path) -> None:
+    plan = load_plan_yaml(_write_plan(tmp_path))
+    md = render_plan(plan)
+    assert "Model:" not in md
+
+
 def test_load_plan_model_defaults_to_none(tmp_path: Path) -> None:
     graph = load_plan(_write_plan(tmp_path))
     ta01 = next(t for t in graph.tasks if t.task_id == "TA01")
