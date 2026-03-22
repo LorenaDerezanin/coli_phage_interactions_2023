@@ -64,3 +64,37 @@ while restricting the final feature CSV to canonical panel phages keeps the down
 
 Combine this block with the pending RBP annotations (`TD01`) and VIRIDIC distance embedding (`TD03`), then measure
 whether the added phage-side signal improves holdout performance beyond the current identity-heavy baselines.
+
+### 2026-03-22: TD03 phage VIRIDIC distance embedding feature block
+
+#### What was implemented
+
+Added `lyzortx/pipeline/track_d/steps/build_phage_distance_embedding.py` and wired it into
+`lyzortx/pipeline/track_d/run_track_d.py` as the `viridic-distance` step. The builder parses
+`data/genomics/phages/tree/96_viridic_distance_phylogenetic_tree_algo=upgma.nwk`, computes patristic leaf-to-leaf
+distances directly from branch lengths, fits a deterministic metric MDS embedding, and emits a panel-joinable feature
+CSV with 8 VIRIDIC distance coordinates.
+
+#### Output summary
+
+Outputs are written under `lyzortx/generated_outputs/track_d/phage_distance_embedding/`:
+
+- `phage_distance_embedding_features.csv`: 96 canonical panel phages with 8 numeric MDS features plus the `phage` key
+- `phage_viridic_tree_pairwise_distances.csv`: explicit pairwise tree distances for audit and downstream checks
+- `phage_distance_embedding_feature_metadata.csv`: column-level transform and provenance metadata
+- `manifest.json`: regeneration command, effective embedding dimensionality, MDS stress, and output inventory
+
+On the current repo data, the VIRIDIC tree leaf names match the canonical 96-phage panel exactly, so the builder can
+enforce a strict no-alias join contract. The pairwise-distance extraction is therefore lossless with respect to the
+tree leaves, and the final feature block remains directly mergeable on `phage`.
+
+#### Interpretation
+
+This closes the tree-derived geometry gap for Track D with a compact phage feature block that captures relatedness
+beyond exact identity or simple family labels. Using the VIRIDIC UPGMA tree as the distance source should help
+downstream models generalize across related phages while keeping the feature contract purely numeric and join-safe.
+
+#### Next steps
+
+Merge this embedding with the genome-composition and pending RBP feature blocks, then test whether the combined phage
+representation improves phage-family holdouts and reduces the current popular-phage bias in pairwise models.
