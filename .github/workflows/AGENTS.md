@@ -6,11 +6,13 @@
   `lyzortx/`. This is informational only (`continue-on-error: true`) and does not block merges.
 - `claude-pr-review.yml` uses `anthropics/claude-code-action@v1` to auto-review `orchestrator-task`-labeled PRs on
   open/push, and supports interactive `@claude` mentions on any PR. Requires the `ANTHROPIC_API_KEY` repository secret.
-  Claude posts reviews as `claude[bot]` (the action's own OIDC app identity).
-- `codex-pr-lifecycle.yml` has two jobs, both gated on the `orchestrator-task` label (`workflow_dispatch` bypasses the
-  label check). `auto-merge-on-approve` merges on Claude approval; `address-feedback` runs the Codex fix loop on
-  COMMENTED reviews. The 3-round cap (`codex-review-round-N` labels) prevents infinite loops. A concurrency group
-  ensures only one lifecycle run per PR at a time.
+  Claude posts reviews as `claude[bot]` (the action's own OIDC app identity). After reviewing, it dispatches downstream
+  actions: auto-merge on approval, or `codex-pr-lifecycle.yml` on commented reviews.
+- `codex-pr-lifecycle.yml` is triggered exclusively via `workflow_dispatch` (from `claude-pr-review.yml` or manually).
+  It runs the Codex fix loop for unresolved review threads. The 3-round cap (`codex-review-round-N` labels) prevents
+  infinite loops. A concurrency group ensures only one lifecycle run per PR at a time. The `workflow_dispatch`-only
+  trigger prevents a self-cancellation loop where Codex thread replies (posted via ORCHESTRATOR_PAT) would fire
+  `pull_request_review` events that cancel the in-progress run.
 
 # Concurrency and Thread Safety
 

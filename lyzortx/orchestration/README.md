@@ -24,7 +24,7 @@ stateDiagram-v2
     codex_review --> has_feedback : review has <br> inline comments
     codex_review --> no_issues : review has <br> no feedback
 
-    has_feedback --> round_check : codex-pr-lifecycle.yml <br> checks review round
+    has_feedback --> round_check : claude-pr-review.yml <br> dispatches codex-pr-lifecycle.yml <br> which checks review round
 
     round_check --> codex_fix : round < 3
     round_check --> needs_human : round >= 3 <br> label needs-human-review
@@ -68,7 +68,7 @@ stateDiagram-v2
 | `codex-implement.yml` | GitHub Actions workflow | Reacts to new `orchestrator-task` issues; runs Codex to implement and open a PR |
 | `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews every PR (installed on repo owner's account). Always posts `COMMENTED` reviews, never `APPROVED`. |
 | `claude-pr-review.yml` | GitHub Actions workflow | Auto-reviews every PR on open/push via `claude-code-action`. Claude (Opus 4.6) submits formal `APPROVE`/`COMMENT` reviews and manages thread resolution. Posts as `claude[bot]`. |
-| `codex-pr-lifecycle.yml` | GitHub Actions workflow | Reacts to bot reviews; orchestrates fix rounds, labels PR, or auto-merges on Claude approval. Uses concurrency groups to prevent parallel runs per PR. |
+| `codex-pr-lifecycle.yml` | GitHub Actions workflow | Dispatched by `claude-pr-review.yml` after a COMMENTED review; orchestrates Codex fix rounds and labels PRs. Uses concurrency groups to prevent parallel runs per PR. |
 | Human reviewer | Person | Final approval and merge for non-Codex PRs or when auto-merge fails |
 
 ## Architecture
@@ -158,17 +158,19 @@ required — the workflow fails if it is missing.
 
 Claude reads `AGENTS.md` review guidelines, submits formal `APPROVE` or `COMMENT` reviews via MCP GitHub tools, and is
 the sole judge of thread resolution (can resolve/unresolve threads via GraphQL mutations). Requires the
-`ANTHROPIC_API_KEY` repository secret.
+`ANTHROPIC_API_KEY` repository secret. After reviewing, it dispatches downstream actions: auto-merge on approval, or
+`codex-pr-lifecycle.yml` on commented reviews.
 
 ### codex-pr-lifecycle.yml
 
-- `pull_request_review.submitted`: triggers on any `COMMENTED` review on PRs with the `orchestrator-task` label.
-  Non-orchestrator PRs are ignored. The 3-round cap (`codex-review-round-N` labels) prevents infinite loops.
-- `workflow_dispatch`: manual trigger with a PR number.
+- `workflow_dispatch`: triggered by `claude-pr-review.yml` after a COMMENTED review, or manually with a PR number.
 
-Two jobs, both gated on the `orchestrator-task` label (`workflow_dispatch` bypasses the label check):
-`auto-merge-on-approve` (merges on Claude's `APPROVED` review) and `address-feedback` (Codex fix loop). A concurrency
-group ensures only one lifecycle run per PR at a time, preventing race conditions on the review round cap.
+The `workflow_dispatch`-only trigger prevents a self-cancellation loop: when Codex replies to review threads using the
+`ORCHESTRATOR_PAT`, GitHub emits `pull_request_review` events as the PAT owner. Previously these events re-triggered the
+lifecycle workflow and cancelled the in-progress Codex run via the concurrency group.
+
+The `address-feedback` job runs the Codex fix loop. A concurrency group ensures only one lifecycle run per PR at a time,
+preventing race conditions on the review round cap.
 If the review has unresolved threads, Codex addresses them (up to 3 rounds). If no unresolved threads, the PR is
 labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled `needs-human-review`. The fix loop extracts
 the model from the linked issue (via the PR body's `Closes #N` reference) to use the same model as the original

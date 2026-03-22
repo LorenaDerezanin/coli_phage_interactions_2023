@@ -13,6 +13,7 @@ permissions:
   pull-requests: write
   issues: write
   id-token: write
+  actions: write
 
 concurrency:
   group: claude-review-pr-${{ github.event.pull_request.number || github.event.issue.number }}
@@ -83,6 +84,30 @@ jobs:
                - mcp__github__submit_pending_pull_request_review to submit:
                  "APPROVE" if no substantive issues remain. "COMMENT" if there are suggestions.
                  NEVER use "REQUEST_CHANGES".
+
+      # After Claude reviews, check the outcome and trigger downstream actions.
+      # Auto-merge on approval; dispatch Codex lifecycle on commented reviews.
+      - name: Check review outcome and dispatch
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
+            --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state')
+
+          if [ "$LATEST_REVIEW" = "APPROVED" ]; then
+            echo "Claude approved — enabling auto-merge."
+            gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto \
+              --body "Auto-merged after Claude approval and passing CI."
+          elif [ "$LATEST_REVIEW" = "COMMENTED" ]; then
+            echo "Claude left comments — dispatching Codex lifecycle."
+            gh workflow run codex-pr-lifecycle.yml \
+              --repo "${{ github.repository }}" \
+              --field pr_number="$PR_NUM"
+          else
+            echo "Unexpected review state: ${LATEST_REVIEW}. No action taken."
+          fi
 
   # ── Interactive @claude mentions in PR / issue comments ──────────────
   interactive:
