@@ -41,8 +41,8 @@ class Task:
     expected_paths: list[str]
     acceptance_criteria: list[str]
     plan_checkbox_text: str | None
-    track: str = ""
-    model: str = ""
+    track: str
+    model: str
 
 
 @dataclass(frozen=True)
@@ -298,7 +298,7 @@ class GitHubClient:
         acceptance = "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
         body_parts = [
             f"<!-- {TASK_ID_MARKER}: {task.task_id} -->",
-            f"<!-- model: {task.model} -->" if task.model else "",
+            f"<!-- model: {task.model} -->",
             "## Orchestrator Task",
             f"- Task ID: `{task.task_id}`",
             f"- Executor: `{task.executor}`",
@@ -512,6 +512,10 @@ def run_once(
         append_history(state, "run_once_skipped", reason="label_setup_failed", note=str(exc))
         return {"action": "skipped", "reason": "label_setup_failed", "note": str(exc)}
 
+    missing_model = [pt.task_id for pt in candidates if not pt.model]
+    if missing_model:
+        raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+
     dispatched: list[dict[str, Any]] = []
     for pt in candidates:
         criteria = _load_acceptance_criteria(effective_plan_path, pt.task_id)
@@ -526,6 +530,7 @@ def run_once(
             acceptance_criteria=criteria,
             plan_checkbox_text=pt.title,
             track=pt.track,
+            model=pt.model or "",
         )
         result = _dispatch_one_agent_task(task, state, issues_by_task, github_client)
         dispatched.append(result)

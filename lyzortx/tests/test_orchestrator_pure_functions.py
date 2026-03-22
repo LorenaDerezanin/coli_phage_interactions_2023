@@ -94,6 +94,7 @@ def _make_task(track: str, task_id: str = "TX01") -> Task:
         acceptance_criteria=[],
         plan_checkbox_text=None,
         track=track,
+        model="gpt-5.4-mini",
     )
 
 
@@ -116,34 +117,20 @@ def test_agent_instruction_uses_track_for_notebook_path(track: str, expected_pat
     assert f"`{expected_path}`" in instruction
 
 
-def test_task_track_defaults_to_empty_string() -> None:
-    task = Task(
-        task_id="X01",
-        title="t",
-        description="d",
-        dependencies=[],
-        executor="agent",
-        command=None,
-        expected_paths=[],
-        acceptance_criteria=[],
-        plan_checkbox_text=None,
-    )
-    assert task.track == ""
-
-
-def test_task_model_defaults_to_empty_string() -> None:
-    task = Task(
-        task_id="X01",
-        title="t",
-        description="d",
-        dependencies=[],
-        executor="agent",
-        command=None,
-        expected_paths=[],
-        acceptance_criteria=[],
-        plan_checkbox_text=None,
-    )
-    assert task.model == ""
+def test_task_requires_track_and_model() -> None:
+    """Task requires track and model — omitting either raises TypeError."""
+    with pytest.raises(TypeError):
+        Task(
+            task_id="X01",
+            title="t",
+            description="d",
+            dependencies=[],
+            executor="agent",
+            command=None,
+            expected_paths=[],
+            acceptance_criteria=[],
+            plan_checkbox_text=None,
+        )
 
 
 def test_extract_model_from_issue_body() -> None:
