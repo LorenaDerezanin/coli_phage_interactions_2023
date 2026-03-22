@@ -143,7 +143,7 @@ graph LR
 
 - **Guiding Principle:** Lock v1 benchmark split and add bootstrap confidence intervals. ST03 already provides
   leakage-safe host-group and phage-family holdouts.
-- [x] Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
+- [ ] Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics Model: `gpt-5.4-mini`.
 - [ ] Before/after comparison of v0 vs v1 with error bucket analysis Model: `gpt-5.4-mini`.
 
 ## Track G: Modeling Pipeline
