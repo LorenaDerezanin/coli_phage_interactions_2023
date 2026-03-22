@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
 
 from lyzortx.pipeline.track_e.steps import (
     build_defense_evasion_proxy_feature_block,
+    build_isolation_host_distance_feature_block,
     build_rbp_receptor_compatibility_feature_block,
 )
 
@@ -20,7 +21,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["rbp-receptor-compatibility", "defense-evasion-proxy", "all"],
+        choices=["rbp-receptor-compatibility", "defense-evasion-proxy", "isolation-host-distance", "all"],
         default="all",
         help="Track E step to run. 'all' runs the implemented Track E feature builders.",
     )
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> None:
         build_rbp_receptor_compatibility_feature_block.main([])
     if args.step in {"defense-evasion-proxy", "all"}:
         build_defense_evasion_proxy_feature_block.main([])
+    if args.step in {"isolation-host-distance", "all"}:
+        build_isolation_host_distance_feature_block.main([])
 
 
 if __name__ == "__main__":
