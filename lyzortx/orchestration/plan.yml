@@ -207,7 +207,7 @@ tracks:
       - Output CSV joinable on phage column with ~25-30 features
     - id: TD03
       title: Build phage distance embedding from VIRIDIC phylogenetic tree
-      status: pending
+      status: done
       acceptance_criteria:
       - Extract pairwise distances from 96_viridic_distance_phylogenetic_tree_algo=upgma.nwk
       - Compute MDS embedding to 5-8 dimensions

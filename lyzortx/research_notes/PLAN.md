@@ -129,7 +129,7 @@ graph LR
   data.
 - [x] Build RBP feature block from RBP_list.csv annotations
 - [x] Build genome k-mer embedding features from phage FNA files
-- [ ] Build phage distance embedding from VIRIDIC phylogenetic tree
+- [x] Build phage distance embedding from VIRIDIC phylogenetic tree
 
 ## Track E: Pairwise Compatibility Features
 
