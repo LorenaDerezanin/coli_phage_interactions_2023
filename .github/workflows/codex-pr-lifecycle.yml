@@ -31,6 +31,7 @@ jobs:
     if: >-
       github.event.review.state == 'approved'
       && github.event.review.user.login == 'claude[bot]'
+      && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
@@ -49,23 +50,17 @@ jobs:
             --body "Auto-merged after Claude approval and passing CI."
           echo "Auto-merge enabled for PR #${PR_NUM}. Will merge when required checks pass."
 
-  # ── Address feedback from any commented review ───────────────────────
-  # Only triggers on COMMENTED reviews from known reviewer bots:
-  #   - chatgpt-codex-connector[bot]: Codex review bot
-  #   - claude[bot]: Claude (via claude-code-action with OIDC app token)
-  # This prevents a feedback loop: Codex replies via ORCHESTRATOR_PAT post as
-  # the PAT holder, which would re-trigger this workflow endlessly if we
-  # accepted all COMMENTED reviews. workflow_dispatch is always allowed.
+  # ── Address feedback from any commented review on orchestrator PRs ───
+  # Gated on the orchestrator-task label so non-orchestrator PRs are ignored.
+  # The 3-round cap (codex-review-round-N labels) prevents infinite loops.
+  # workflow_dispatch is always allowed for manual retriggers.
   address-feedback:
     name: Address Review Feedback
     if: >-
       github.event_name == 'workflow_dispatch'
       || (
         github.event.review.state == 'commented'
-        && (
-          github.event.review.user.login == 'chatgpt-codex-connector[bot]'
-          || github.event.review.user.login == 'claude[bot]'
-        )
+        && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
