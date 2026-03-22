@@ -48,7 +48,23 @@ Return GitHub PR URLs, not Graphite web URLs.
 `requirements.txt` must stay alphabetically sorted with exact version pins. Do not accept-theirs blindly —
 resolve manually by merging both sides and re-sorting.
 
-### Sync command
+### Sync and conflict workflow (overrides base skill)
 
 Use `gt sync` instead of `git fetch && git rebase` to stay current with trunk (aligns with AGENTS.md Branch
 Protection policy).
+
+**Important correction to the base skill's conflict flow:** `gt sync` does **not** pause on conflicts. It
+restacks only branches that can be restacked cleanly and reports any conflicted branches. To resolve:
+
+```bash
+gt sync                          # Pull trunk, restack clean branches, report conflicts
+# gt sync reports: "Could not restack branch-X"
+gt checkout branch-X             # Go to the conflicted branch
+gt restack                       # This is where the actual conflict resolution happens
+# ... resolve conflicts in editor ...
+gt continue -a                   # Stage resolved files and continue the restack
+gt submit --no-interactive       # Push the fixed stack
+```
+
+Do **not** run `gt continue -a` immediately after `gt sync` — there is no in-progress operation to continue
+at that point.
