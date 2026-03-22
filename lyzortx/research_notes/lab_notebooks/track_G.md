@@ -323,3 +323,97 @@
    weakened.
 3. Use the per-pair SHAP rows to inspect the remaining false positive top-ranked phages for the hardest strains before
    changing feature blocks; the explanation artifacts now make that review straightforward.
+
+### 2026-03-22: TG05 implemented (feature-subset sweep with TG01-locked hyperparameters)
+
+#### What was implemented
+
+- Added the TG05 sweep runner at `lyzortx/pipeline/track_g/steps/run_feature_subset_sweep.py`.
+- Updated `lyzortx/pipeline/track_g/run_track_g.py`, `lyzortx/pipeline/track_g/README.md`, and
+  `lyzortx/tests/test_track_g_v1_binary_classifier.py` so Track G now exposes a dedicated
+  `feature-subset-sweep` step with coverage for:
+  - the required 2-block and 3-block arm enumeration across `defense`, `OMP`, `phage-genomic`, and `pairwise`
+  - deployment-realistic exclusion of label-derived features
+  - winner selection under the "maximize top-3 without degrading AUC" rule
+  - CLI dispatch of the new Track G step
+- Added the committed lock artifact `lyzortx/pipeline/track_g/v1_feature_configuration.json` so downstream Tracks F, H,
+  and P have one versioned source of truth for the final v1 block selection.
+- TG05 now:
+  - reuses the current TG01 winning LightGBM hyperparameters exactly (`learning_rate=0.05`, `min_child_samples=25`,
+    `n_estimators=300`, `num_leaves=31`) with no per-arm retuning
+  - evaluates every 2-block and 3-block subset on the fixed ST0.3 holdout with the v0 baseline always retained
+  - compares every arm against the TG01 all-features reference
+  - runs a deployment-realistic sensitivity arm for the winning subset with label-derived columns removed
+  - writes reusable artifacts under `lyzortx/generated_outputs/track_g/tg05_feature_subset_sweep/`
+
+#### Output summary
+
+- TG05 output directory:
+  - `tg05_feature_subset_summary.json`
+  - `tg05_feature_subset_metrics.csv`
+  - `tg05_feature_subset_pair_predictions.csv`
+  - `tg05_feature_subset_holdout_top3_rankings.csv`
+  - `tg05_locked_v1_feature_config.json`
+  - `tg05_locked_v1_feature_columns.csv`
+- Fixed TG01 all-features reference on the same ST0.3 holdout:
+  - ROC-AUC `0.909089`
+  - top-3 hit rate (all strains) `0.876923`
+  - top-3 hit rate (susceptible strains only) `0.904762`
+  - Brier `0.113112`
+- 2-block subset metrics:
+  - defense + OMP: ROC-AUC `0.908669`, top-3 `0.861538`, susceptible-only top-3 `0.888889`, Brier `0.111799`
+  - defense + phage-genomic: ROC-AUC `0.908152`, top-3 `0.892308`, susceptible-only top-3 `0.920635`, Brier
+    `0.111438`
+  - defense + pairwise: ROC-AUC `0.907992`, top-3 `0.876923`, susceptible-only top-3 `0.904762`, Brier `0.115016`
+  - OMP + phage-genomic: ROC-AUC `0.910628`, top-3 `0.876923`, susceptible-only top-3 `0.904762`, Brier `0.110634`
+  - OMP + pairwise: ROC-AUC `0.906642`, top-3 `0.892308`, susceptible-only top-3 `0.920635`, Brier `0.115722`
+  - phage-genomic + pairwise: ROC-AUC `0.908279`, top-3 `0.876923`, susceptible-only top-3 `0.904762`, Brier
+    `0.113942`
+- 3-block subset metrics:
+  - defense + OMP + phage-genomic: ROC-AUC `0.910766`, top-3 `0.876923`, susceptible-only top-3 `0.904762`, Brier
+    `0.109543`
+  - defense + OMP + pairwise: ROC-AUC `0.908013`, top-3 `0.876923`, susceptible-only top-3 `0.904762`, Brier
+    `0.114248`
+  - defense + phage-genomic + pairwise: ROC-AUC `0.908221`, top-3 `0.846154`, susceptible-only top-3 `0.873016`,
+    Brier `0.113342`
+  - OMP + phage-genomic + pairwise: ROC-AUC `0.907683`, top-3 `0.876923`, susceptible-only top-3 `0.904762`, Brier
+    `0.113839`
+- Locked winner:
+  - panel-default winner: `defense + OMP + phage-genomic`
+  - panel-default metrics: ROC-AUC `0.910766`, top-3 `0.876923`, Brier `0.109543`
+  - vs TG01 all-features: AUC `+0.001677`, top-3 `+0.000000`, Brier improvement `+0.003569`
+- Deployment-realistic sensitivity for the locked winner:
+  - removed columns: `host_n_infections`
+  - `receptor_variant_training_positive_count` did not apply because the pairwise block was not selected
+  - holdout ROC-AUC `0.835178`
+  - holdout top-3 hit rate (all strains) `0.923077`
+  - holdout top-3 hit rate (susceptible strains only) `0.952381`
+  - holdout Brier `0.157767`
+
+#### Interpretation
+
+1. The pairwise block does not survive the fixed-parameter sweep. No subset containing pairwise cleared the AUC gate
+   and also improved the TG01 all-features ranking outcome, so the cleanest default v1 configuration drops pairwise
+   features entirely for now.
+2. The winning subset is the three-block host/phage stack: defense + OMP + phage-genomic. It does **not** improve
+   top-3 beyond TG01's all-features model, but it preserves the same top-3 hit rate while improving both AUC
+   (`0.910766` vs `0.909089`) and Brier (`0.109543` vs `0.113112`). Under the stated acceptance rule, that is the
+   correct winner.
+3. Two 2-block arms (`defense + phage-genomic` and `OMP + pairwise`) achieved the numerically highest top-3 rate
+   (`0.892308`), but both degraded AUC relative to TG01 all-features and therefore failed the selection gate.
+4. The deployment-realistic sensitivity cut both ways. Removing `host_n_infections` from the locked winner improved
+   top-3 ranking on this holdout (`0.923077`) but materially worsened pair-level discrimination and calibration
+   (`ROC-AUC 0.835178`, `Brier 0.157767`). The honest conclusion is not "drop `host_n_infections` everywhere"; it is
+   that ranking and calibrated pairwise classification respond differently once that label-derived prior is removed.
+5. The final v1 lock for downstream work should therefore be: keep the v0 baseline plus `defense`, `OMP`, and
+   `phage-genomic`; exclude `pairwise` from the default panel model; retain the deployment-realistic no-
+   `host_n_infections` sensitivity numbers as the novel-strain cautionary benchmark rather than the default model.
+
+#### Next steps
+
+1. Use `lyzortx/pipeline/track_g/v1_feature_configuration.json` as the default feature-block contract for Track F/H/P
+   instead of the prior all-features assumption.
+2. Treat the pairwise block as a follow-up refinement target rather than part of the frozen v1 baseline; the current
+   TE01-TE03 implementation does not justify inclusion in the locked default model.
+3. When reporting deployment expectations for truly novel strains, cite the deployment-realistic TG05 sensitivity arm
+   alongside the panel-default metrics so ranking gains are not confused with well-calibrated pairwise probabilities.
