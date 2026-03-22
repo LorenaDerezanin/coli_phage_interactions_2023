@@ -242,7 +242,7 @@ tracks:
       - Leakage verified by computing on training fold only, never holdout
     - id: TE03
       title: Build phylogenetic distance to isolation host features
-      status: pending
+      status: done
       acceptance_criteria:
       - UMAP Euclidean distance between target host and phage isolation host
       - Defense Jaccard distance between target host and phage isolation host

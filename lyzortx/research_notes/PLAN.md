@@ -137,7 +137,7 @@ graph LR
   break the popular-phage bias.
 - [x] Build RBP-receptor compatibility features from curated genus-receptor lookup
 - [x] Build defense evasion proxy features from training-fold collaborative filtering
-- [ ] Build phylogenetic distance to isolation host features
+- [x] Build phylogenetic distance to isolation host features
 
 ## Track F: Evaluation Protocol
 
