@@ -188,6 +188,6 @@ graph LR
 ## Track P: Presentation Artifacts
 
 - **Guiding Principle:** Visualizations and demo materials for partner demonstrations.
-- [ ] Build digital phagogram visualization for per-strain phage ranking Model: `gpt-5.4-mini`.
+- [x] Build digital phagogram visualization for per-strain phage ranking
 - [ ] Build panel coverage heatmap across strain diversity Model: `gpt-5.4-mini`.
 - [ ] Build feature lift visualization from ablation suite results Model: `gpt-5.4-mini`.
