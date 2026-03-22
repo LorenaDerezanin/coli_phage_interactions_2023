@@ -133,10 +133,14 @@ python -m lyzortx.orchestration.render_plan
 - `repository_dispatch`: API/CLI command trigger.
 - `issues.closed`: when an `orchestrator-task` issue closes, marks the task done and dispatches the next ready task.
 
+A concurrency group (`orchestrator`) queues runs instead of running in parallel, preventing duplicate issue creation
+when multiple trigger events fire simultaneously.
+
 On each tick the workflow commits `plan.yml` and `PLAN.md` changes back to the repo.
 
 Default `max_active_tasks` is `1` (CLI) or `50` (CI workflow). The `orchestrator-task` label is created automatically on
-first dispatch.
+first dispatch. Dispatched issues also receive a `model-{id}` label (e.g., `model-gpt-5.4-mini`) for at-a-glance model
+visibility.
 
 ### codex-implement.yml
 

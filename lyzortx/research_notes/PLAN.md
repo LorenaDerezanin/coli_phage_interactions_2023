@@ -144,7 +144,7 @@ graph LR
 - **Guiding Principle:** Lock v1 benchmark split and add bootstrap confidence intervals. ST03 already provides
   leakage-safe host-group and phage-family holdouts.
 - [x] Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
-- [ ] Before/after comparison of v0 vs v1 with error bucket analysis
+- [ ] Before/after comparison of v0 vs v1 with error bucket analysis Model: `gpt-5.4-mini`.
 
 ## Track G: Modeling Pipeline
 
@@ -154,13 +154,13 @@ graph LR
 - [x] Calibrate GBM outputs with isotonic and Platt scaling
 - [x] Run feature-block ablation suite proving which features deliver lift
 - [x] Compute SHAP explanations for per-pair and global feature importance
-- [ ] Run feature-subset sweep to find best block combination for top-3 ranking
+- [ ] Run feature-subset sweep to find best block combination for top-3 ranking Model: `gpt-5.4`.
 
 ## Track H: In-Silico Cocktail Recommendation
 
 - **Guiding Principle:** Top-k recommendations with SHAP-based explanations for each recommended phage.
 - [x] Benchmark policy variants for top-k recommendation and lock a non-regressing default
-- [ ] Add explained recommendations with calibrated P(lysis), CI, and SHAP features
+- [ ] Add explained recommendations with calibrated P(lysis), CI, and SHAP features Model: `gpt-5.4-mini`.
 
 ## Track I: External Data and Literature Integration
 
@@ -173,21 +173,22 @@ graph LR
 - [x] For VHRdb ingest, keep source-fidelity fields
 - [x] Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
 - [x] Define harmonization protocol for Tier A datasets
-- [ ] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata
-- [ ] Define confidence tiers for external labels
-- [ ] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable
-- [ ] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B
-- [ ] Track incremental lift and failure modes by datasource and confidence tier
+- [ ] Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata Model: `gpt-5.4-mini`.
+- [ ] Define confidence tiers for external labels Model: `gpt-5.4`.
+- [ ] Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable Model: `gpt-5.4`.
+- [ ] Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B Model:
+      `gpt-5.4-mini`.
+- [ ] Track incremental lift and failure modes by datasource and confidence tier Model: `gpt-5.4-mini`.
 
 ## Track J: Reproducibility and Release Quality
 
 - **Guiding Principle:** One-command regeneration and environment freezing for v1 pipeline.
-- [ ] One command to regenerate all v1 outputs from raw data
-- [ ] Freeze environment specs and seeds for v1 benchmark run
+- [ ] One command to regenerate all v1 outputs from raw data Model: `gpt-5.4-mini`.
+- [ ] Freeze environment specs and seeds for v1 benchmark run Model: `gpt-5.4-mini`.
 
 ## Track P: Presentation Artifacts
 
 - **Guiding Principle:** Visualizations and demo materials for partner demonstrations.
-- [ ] Build digital phagogram visualization for per-strain phage ranking
-- [ ] Build panel coverage heatmap across strain diversity
-- [ ] Build feature lift visualization from ablation suite results
+- [ ] Build digital phagogram visualization for per-strain phage ranking Model: `gpt-5.4-mini`.
+- [ ] Build panel coverage heatmap across strain diversity Model: `gpt-5.4-mini`.
+- [ ] Build feature lift visualization from ablation suite results Model: `gpt-5.4-mini`.
