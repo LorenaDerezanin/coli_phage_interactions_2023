@@ -235,8 +235,8 @@ class GitHubClient:
             details = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"GitHub API {method} {path} failed ({exc.code}): {details}") from exc
 
-    def ensure_task_label_exists(self) -> None:
-        encoded_name = urllib.parse.quote(ISSUE_LABEL, safe="")
+    def ensure_label_exists(self, name: str, color: str, description: str) -> None:
+        encoded_name = urllib.parse.quote(name, safe="")
         existing = self._request(
             "GET",
             f"/repos/{self.repo}/labels/{encoded_name}",
@@ -248,12 +248,11 @@ class GitHubClient:
         self._request(
             "POST",
             f"/repos/{self.repo}/labels",
-            {
-                "name": ISSUE_LABEL,
-                "color": "1D76DB",
-                "description": "Orchestrator-managed task issue",
-            },
+            {"name": name, "color": color, "description": description},
         )
+
+    def ensure_task_label_exists(self) -> None:
+        self.ensure_label_exists(ISSUE_LABEL, "1D76DB", "Orchestrator-managed task issue")
 
     def list_task_issues(self) -> dict[str, IssueRef]:
         issues_by_task: dict[str, IssueRef] = {}
@@ -326,10 +325,15 @@ class GitHubClient:
         ]
         body = "\n".join(body_parts)
 
+        labels = [ISSUE_LABEL]
+        if task.model:
+            model_label = f"model-{task.model}"
+            self.ensure_label_exists(model_label, "C5DEF5", f"Codex model: {task.model}")
+            labels.append(model_label)
         payload = {
             "title": title,
             "body": body,
-            "labels": [ISSUE_LABEL],
+            "labels": labels,
         }
         created = self._request("POST", f"/repos/{self.repo}/issues", payload)
         if not isinstance(created, dict):
