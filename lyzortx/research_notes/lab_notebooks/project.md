@@ -508,3 +508,67 @@ Two PRs to minimize risk:
    per-run tokens. After a few tasks run with model selection, we can compare actual mini vs full token usage.
 3. **When should a task be upgraded from mini to full?** If a gpt-5.4-mini run fails, the model assignment can be
    changed in plan.yml and the orchestrator re-dispatched. No code change needed.
+
+### 2026-03-22: Label leakage concern — deployment-realistic evaluation needed
+
+#### Problem identified
+
+The TG04 SHAP analysis revealed that the two highest-impact features in the v1 model are derived from training labels,
+not from genomic content:
+
+| SHAP rank | Feature | Mean |SHAP| | Source |
+|-----------|---------|------------|--------|
+| 1 | `host_n_infections` | 1.183 | Panel metadata: count of lytic phages per strain |
+| 2 | `receptor_variant_training_positive_count` | 0.572 | TE01: training-fold lysis frequency per receptor variant |
+
+These features are powerful within-panel predictors but are **unavailable for truly novel strains** in a deployment
+scenario. A new clinical isolate arrives with a genome assembly — you can derive its defense systems, receptor variants,
+LPS type, and phylogenomic embedding, but you cannot know `host_n_infections` (you haven't screened it yet) or
+`receptor_variant_training_positive_count` (its specific receptor variant may not appear in the training data).
+
+The model leans heavily on these: `host_n_infections` alone has 2x the SHAP impact of the next feature. This means the
+holdout metrics (AUC 0.910, top-3 89.2%) are **optimistic for real-world deployment** because the holdout strains are
+from the same experimental panel and their receptor variants overlap with training strains.
+
+#### What is genuinely novel genomic signal?
+
+The SHAP ranking after the two panel-artifact features shows real genomic signal:
+
+| SHAP rank | Feature | Mean |SHAP| | Deployment-available? |
+|-----------|---------|------------|----------------------|
+| 3 | `phage_gc_content` | 0.217 | Yes — from genome |
+| 4 | `phage_genome_length_nt` | 0.203 | Yes — from genome |
+| 5 | `host_lps_type=R1` | 0.159 | Yes — from genome assembly |
+| 6 | `defense_evasion_mean_score` | 0.130 | Partially — rates from training, defense profile from genome |
+| 7 | `isolation_host_defense_jaccard_distance` | 0.123 | Yes — computable from genome |
+
+These features have 5–10x smaller SHAP values than the panel artifacts. The model *is* learning genomic signal, but the
+panel-memorization features dominate.
+
+#### Why this matters
+
+If we present the 89.2% top-3 hit rate to CDMO partners as "what the model can do for your new clinical isolate," we
+are overpromising. The honest number — what the model achieves using only features available at deployment time — will be
+lower. That's the number partners need to trust.
+
+This also explains the ablation paradox from the previous note: adding the pairwise compatibility block (which includes
+`receptor_variant_training_positive_count`) shifts the model's attention toward collaborative-filtering signal that is
+strong on average but misleading for specific holdout strains.
+
+#### Plan adjustment
+
+Added two acceptance criteria to TG05 (feature-subset sweep):
+
+1. Include a **deployment-realistic arm** that excludes all features derived from training labels
+   (`host_n_infections`, `receptor_variant_training_positive_count`) to measure generalization to truly novel strains.
+2. Report both **panel-evaluation** and **deployment-realistic** metrics for the winning configuration.
+
+This gives us two numbers to present: the panel metric (what the model does on known strains with full context) and the
+deployment metric (what a CDMO partner should expect for a new isolate). Both are valuable — the panel metric validates
+the approach, the deployment metric sets honest expectations.
+
+#### No other plan changes needed
+
+The concern does not invalidate Tracks C, D, or E. The genomic features are the right features — they just need to be
+evaluated separately from the panel-artifact features. TG05 is the right place to do this, and the task is already
+pending.

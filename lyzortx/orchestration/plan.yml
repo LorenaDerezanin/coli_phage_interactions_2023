@@ -323,10 +323,18 @@ tracks:
       acceptance_criteria:
       - Train models on all 2-block and 3-block combinations of the 4 new feature
         blocks (defense, OMP, phage-genomic, pairwise)
+      - Reuse the TG01 winning hyperparameters for all sweep arms — do NOT run
+        per-arm hyperparameter search. The goal is to isolate the feature-block
+        effect, not confound it with per-arm tuning differences.
       - Report top-3 hit rate, AUC, and Brier on the same ST03 holdout for each combo
       - Identify the winning subset that maximizes top-3 hit rate without degrading
         AUC
       - Compare winning subset against the TG01 all-features model
+      - Include a deployment-realistic arm that excludes all features derived from
+        training labels (host_n_infections, receptor_variant_training_positive_count)
+        to measure generalization to truly novel strains
+      - Report both panel-evaluation and deployment-realistic metrics for the winning
+        configuration
       - Lock the final v1 feature configuration for downstream Track F, H, and P
   H:
     name: In-Silico Cocktail Recommendation
