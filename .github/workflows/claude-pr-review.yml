@@ -98,8 +98,20 @@ jobs:
 
           if [ "$LATEST_REVIEW" = "APPROVED" ]; then
             echo "Claude approved — enabling auto-merge."
-            gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto \
-              --body "Auto-merged after Claude approval and passing CI."
+            MERGE_OK=false
+            for attempt in 1 2 3; do
+              if gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto \
+                   --body "Auto-merged after Claude approval and passing CI." 2>&1; then
+                MERGE_OK=true
+                break
+              fi
+              echo "Auto-merge attempt ${attempt} failed, retrying in 10s..."
+              sleep 10
+            done
+            if [ "$MERGE_OK" != "true" ]; then
+              echo "::error::Auto-merge failed after 3 attempts"
+              exit 1
+            fi
           elif [ "$LATEST_REVIEW" = "COMMENTED" ]; then
             echo "Claude left comments — dispatching Codex lifecycle."
             gh workflow run codex-pr-lifecycle.yml \
