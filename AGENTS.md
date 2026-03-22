@@ -137,7 +137,9 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - When implementing an orchestrator task, create the PR using `gh pr create` from the CLI.
 - PR title pattern: `[ORCH][TASK_ID] Brief description`.
 - PR body MUST include `Closes #<issue_number>` (the orchestrator issue that dispatched the task).
-- Add the `orchestrator-task` label: `gh pr create --label orchestrator-task`.
+- Add the `orchestrator-task` label: `--label orchestrator-task`.
+- **Always use a HEREDOC for the body** — never `--body "...\n..."`. Use the `/gh create-pr` command for the
+  canonical template.
 
 # Graphite Stacked PRs
 
@@ -152,6 +154,16 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - Prefer stacked PRs when: the diff would exceed ~300 lines, the work has clear layered stages (data, logic,
   integration), or review would benefit from smaller focused units.
 - Each PR in a stack must be atomic and pass CI independently.
+
+# Custom Skills
+
+- Custom skills live in `.agents/skills/` (the canonical path). `.claude/skills` is a symlink pointing there for Claude
+  Code's skill scanner.
+- **When searching for skill files, always use `.agents/skills/` — Glob does not follow symlinks**, so searching
+  `.claude/skills/` will return nothing.
+- Use the `/skill-creator` skill to create, modify, and benchmark new skills. Do not hand-author `SKILL.md` files from
+  scratch when the skill-creator can scaffold them.
+- Vendoring policy and directory conventions are documented in `.agents/skills/AGENTS.md`.
 
 # Agent Transparency
 
