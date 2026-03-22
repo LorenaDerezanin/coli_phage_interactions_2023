@@ -257,7 +257,7 @@ tracks:
     tasks:
     - id: TF01
       title: Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
-      status: done
+      status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
       - Existing ST03 split locked as the canonical v1 evaluation protocol
