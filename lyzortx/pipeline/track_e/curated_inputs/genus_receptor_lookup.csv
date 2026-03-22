@@ -1,0 +1,10 @@
+match_level,taxon,target_receptors,target_family,evidence_note
+genus,Lambdavirus,LAMB,protein,"Lambda-like coliphages classically use LamB; keep exact-genus override because subfamily is missing in the source metadata."
+genus,Vectrevirus,CAPSULE,surface_glycan,"Curate as capsule-targeting from the K1/K5-like vectrevirus literature and tail-spike/depolymerase usage."
+subfamily,Tevenvirinae,OMPC|LPS_CORE,mixed,"T-even-like myophages commonly require OmpC with LPS/coreceptor context, so keep both targets."
+subfamily,Enquatrovirinae,NFRA,protein,"N4-like coliphages use the NfrA/NfrB adsorption system; map to the in-repo NFRA host locus."
+subfamily,Ounavirinae,O_ANTIGEN|LPS_CORE,surface_glycan,"FelixO1-like phages are primarily LPS/O-antigen adsorbers."
+subfamily,Braunvirinae,O_ANTIGEN|LPS_CORE,surface_glycan,"Braunvirinae entries in the current panel are treated as LPS/O-antigen targeting."
+subfamily,Studiervirinae,O_ANTIGEN|LPS_CORE,surface_glycan,"T7-like podophages are treated as surface-glycan targeting by default in this narrowed lookup."
+subfamily,Molineuxvirinae,O_ANTIGEN|LPS_CORE,surface_glycan,"Molineuxvirinae entries are treated as surface-glycan targeting in this narrowed lookup."
+subfamily,Stephanstirmvirinae,O_ANTIGEN|LPS_CORE,surface_glycan,"Stephanstirmvirinae entries are treated as surface-glycan targeting in this narrowed lookup."
