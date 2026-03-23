@@ -249,6 +249,14 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   (1) write the response to a file, (2) check the file size before reading, (3) if large, inspect only the first few
   lines or use a targeted query (e.g., `head`, field extraction, or pagination) instead of loading the full response.
 
+# CI and Workflow Changes
+
+- Before committing changes to GitHub Actions workflows or shell logic that runs in CI, manually test the affected
+  commands locally. Workflow syntax errors and shell bugs are expensive to debug through push-and-wait cycles.
+- This applies especially to Bash commands and shell snippets in workflow steps. Run the equivalent commands (e.g.,
+  `gh pr view`, `gh pr merge`, `printf`, variable substitutions) against a real PR or issue to verify output format and
+  quoting behavior before committing.
+
 # Path Style in Commands
 
 - Agents are always invoked from the repository root. Use **relative paths** in all shell commands — `git`, `grep`,
