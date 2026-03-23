@@ -1,0 +1,49 @@
+tracks:
+  X:
+    name: Foundation
+    description: Build the base layer.
+    stage: 0
+    depends_on: []
+    tasks:
+    - id: TX01
+      title: Set up schema
+      status: done
+      implemented_in: src/schema.py
+      baseline: baselines/tx01.json
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Schema file exists
+      - Passes validation
+    - id: TX02
+      title: Add migration support
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - Migrations run without error
+  Y:
+    name: Integration
+    description: Wire components together.
+    stage: 1
+    depends_on:
+    - X
+    tasks:
+    - id: TY01
+      title: Connect API to schema
+      status: done
+      acceptance_criteria:
+      - API returns valid responses
+      - Error codes documented
+  Z:
+    name: Release
+    stage: 2
+    depends_on:
+    - X
+    - Y
+    tasks:
+    - id: TZ01
+      title: Cut release candidate
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - All tests pass on clean checkout
+      - Version tag applied

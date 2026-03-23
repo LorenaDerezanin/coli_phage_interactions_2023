@@ -116,6 +116,9 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
     missing_model = [t.task_id for t in tasks if not t.model]
     if missing_model:
         raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+    missing_criteria = [t.task_id for t in tasks if not t.acceptance_criteria]
+    if missing_criteria:
+        raise ValueError(f"Pending tasks missing required 'acceptance_criteria' in plan.yml: {missing_criteria}")
     return tasks
 
 

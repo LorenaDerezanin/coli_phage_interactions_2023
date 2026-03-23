@@ -417,3 +417,44 @@
    TE01-TE03 implementation does not justify inclusion in the locked default model.
 3. When reporting deployment expectations for truly novel strains, cite the deployment-realistic TG05 sensitivity arm
    alongside the panel-default metrics so ranking gains are not confused with well-calibrated pairwise probabilities.
+
+### 2026-03-23: Label leakage identified — v1 model invalidated, cleanup planned
+
+#### Executive summary
+
+The TG04 SHAP analysis and TG05 deployment-realistic arm together revealed that the v1 model is dominated by two
+label-derived features. `host_n_infections` (mean |SHAP| 1.18, 2x the next feature) is a direct count of how many
+phages lyse each host — the training label repackaged as a feature. `receptor_variant_training_positive_count` (0.57)
+counts training-positive pairs per receptor cluster. Both leak the answer into the feature space. The locked v1
+"panel-default" configuration is therefore invalid for any deployment claim, and the "deployment-realistic" arm was the
+honest model all along.
+
+#### Evidence
+
+- TG04 global SHAP: `host_n_infections` at 1.18 mean |SHAP| is 2x the next feature and 5x the strongest genuinely
+  independent feature (`phage_gc_content` at 0.22).
+- TG05 deployment-realistic arm: removing `host_n_infections` from the locked winner *improved* top-3 hit rate from
+  0.877 to 0.923 (+4.6pp) but dropped AUC from 0.911 to 0.835 (-7.6pp) and worsened Brier from 0.110 to 0.158.
+- The ranking improvement on removal is the smoking gun: the model ranks better without the feature because
+  `host_n_infections` compresses scores for hosts with similar infection breadth, hurting top-3 discrimination. The AUC
+  drop reflects loss of the calibration prior, not loss of genuine predictive signal.
+
+#### What this means for the pipeline
+
+- `host_n_infections` is created in `st02_build_pair_table.py` as a rename of `n_infections` from the raw pair table.
+- `receptor_variant_training_positive_count` is created in Track E's `build_rbp_receptor_compatibility_feature_block.py`.
+- Both must be deleted from the feature pipeline entirely — not gated, not optional, removed.
+- The dual-arm config (`v1_config_keys.py`, `v1_feature_configuration.json` panel_default vs
+  deployment_realistic_sensitivity) was designed around preserving the leaked model as one arm. With the leaked features
+  deleted, there is only one model and the config should be a flat feature list.
+- Track P (presentation artifacts) was built entirely around the dual-arm rendering and has been deleted.
+- TG06 through TG09 have been added to clean up, retrain, verify downstream tracks, and investigate whether non-leaky
+  features can close the calibration gap.
+
+#### Why the TG05 "next steps" were insufficient
+
+The TG05 entry recommended keeping the panel-default model with `host_n_infections` and citing the deployment-realistic
+numbers "alongside" it. This framing preserved a leaked model as the primary configuration and treated the clean model as
+a sensitivity check. The correct framing is the opposite: the leaked features are a bug, the clean model is the only
+valid model, and the question is whether the clean model's calibration can be improved — not whether to keep the leaked
+one around.

@@ -102,8 +102,8 @@ def test_render_plan_contains_tracks(tmp_path: Path) -> None:
     md = render_plan(plan)
     assert "## Track A: Foundation" in md
     assert "## Track B: Build-Out" in md
-    assert "- [x] First task" in md
-    assert "- [ ] Second task" in md
+    assert "- [x] **TA01** First task" in md
+    assert "- [ ] **TA02** Second task" in md
     assert "```mermaid" in md
     assert "ta --> tb" in md
 
@@ -125,10 +125,10 @@ def test_render_plan_wraps_long_task_metadata(tmp_path: Path) -> None:
     plan = load_plan_yaml(_write_plan(tmp_path, content))
     md = render_plan(plan)
     assert (
-        "- [x] Define a task title that is long enough to force wrapping once implementation metadata is appended."
+        "- [x] **TA01** Define a task title that is long enough to force wrapping once implementation metadata is"
     ) in md
-    assert "      `lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`." in md
-    assert "      `lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`." in md
+    assert "`lyzortx/pipeline/steel_thread_v0/steps/st01_label_policy.py`" in md
+    assert "`lyzortx/pipeline/steel_thread_v0/baselines/st01_expected_metrics.json`" in md
     assert all(len(line) <= 120 for line in md.splitlines())
 
 
@@ -191,7 +191,7 @@ def test_load_plan_parses_model_field(tmp_path: Path) -> None:
     assert ta01.model == "gpt-5.4-mini"
 
 
-def test_render_plan_shows_model_on_pending_tasks(tmp_path: Path) -> None:
+def test_render_plan_shows_model_on_all_tasks(tmp_path: Path) -> None:
     content = textwrap.dedent("""\
         tracks:
           A:
@@ -211,8 +211,7 @@ def test_render_plan_shows_model_on_pending_tasks(tmp_path: Path) -> None:
     plan = load_plan_yaml(_write_plan(tmp_path, content))
     md = render_plan(plan)
     assert "Model: `gpt-5.4-mini`" in md
-    # Done tasks should NOT show model
-    assert "Model: `gpt-5.4`" not in md
+    assert "Model: `gpt-5.4`" in md
 
 
 def test_render_plan_no_model_on_pending_without_field(tmp_path: Path) -> None:

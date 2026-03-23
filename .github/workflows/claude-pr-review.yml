@@ -98,10 +98,12 @@ jobs:
 
           if [ "$LATEST_REVIEW" = "APPROVED" ]; then
             echo "Claude approved — enabling auto-merge."
+            PR_BODY=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json body --jq '.body')
+            MERGE_BODY=$(printf '%s\n\nAuto-merged after Claude approval and passing CI.' "$PR_BODY")
             MERGE_OK=false
             for attempt in 1 2 3; do
               if gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto \
-                   --body "Auto-merged after Claude approval and passing CI." 2>&1; then
+                   --body "$MERGE_BODY" 2>&1; then
                 MERGE_OK=true
                 break
               fi

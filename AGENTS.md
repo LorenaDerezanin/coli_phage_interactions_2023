@@ -215,6 +215,11 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   there is no production function to test, either the logic belongs in a helper under `lyzortx/` or it does not need a
   test.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
+- **One fixture per behavior** — Each test should construct the smallest self-contained input that exercises exactly one
+  behavior. Do not share a large kitchen-sink fixture across many tests; instead, inline a minimal fixture in each test
+  (or in a local helper) so the reader can see input and expected output together without scrolling. For rendering or
+  serialization tests, assert on the actual output (e.g., specific strings in the rendered HTML/Markdown), not only on
+  intermediate data structures.
 
 # Coding Principles
 
@@ -244,12 +249,24 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   (1) write the response to a file, (2) check the file size before reading, (3) if large, inspect only the first few
   lines or use a targeted query (e.g., `head`, field extraction, or pagination) instead of loading the full response.
 
-# Git Command Style
+# CI and Workflow Changes
 
-- Agents are always invoked from the repository root. Use relative paths (e.g., `git log -- lyzortx/`), not `git -C`.
-- Why: the `.claude/settings.json` permissions allowlist uses patterns like `Bash(git log *)` and `Bash(git fetch *)`.
-  The `-C <path>` flag changes the command shape and may fall outside the allowed patterns, causing unnecessary
-  permission prompts.
+- Before committing changes to GitHub Actions workflows or shell logic that runs in CI, manually test the affected
+  commands locally. Workflow syntax errors and shell bugs are expensive to debug through push-and-wait cycles.
+- This applies especially to Bash commands and shell snippets in workflow steps. Run the equivalent commands (e.g.,
+  `gh pr view`, `gh pr merge`, `printf`, variable substitutions) against a real PR or issue to verify output format and
+  quoting behavior before committing.
+
+# Path Style in Commands
+
+- Agents are always invoked from the repository root. Use **relative paths** in all shell commands — `git`, `grep`,
+  `pytest`, file reads, and any other tool invocation.
+- Never use absolute paths (e.g., `/Users/zoltan/github/coli_phage_interactions_2023/lyzortx/...`) in Bash commands.
+- Why: `.claude/settings.json` permissions use glob patterns like `Bash(git log *)` and `Bash(pytest -q lyzortx/tests/*)`.
+  Absolute paths change the command shape and fall outside the allowed patterns, causing unnecessary permission prompts
+  and making patterns non-portable across machines.
+- Examples: `git log -- lyzortx/`, `pytest -q lyzortx/tests/`, `find lyzortx/ -name '*.py'` — not their absolute-path
+  equivalents.
 
 # Git Staging Policy
 

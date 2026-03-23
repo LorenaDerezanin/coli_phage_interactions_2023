@@ -185,7 +185,7 @@ Each dispatched issue includes:
 - Task description and acceptance criteria (from `plan.yml`).
 - Model directive as an HTML comment: `<!-- model: gpt-5.4-mini -->`. The model is set per-task in `plan.yml` and
   emitted by `orchestrator.py` when creating the issue. Both `codex-implement.yml` and `codex-pr-lifecycle.yml` extract
-  this directive and pass it to the Codex action. The `model` field is required for all pending tasks — the orchestrator
-  raises `ValueError` if any pending task is missing it.
+  this directive and pass it to the Codex action. Both `model` and `acceptance_criteria` are required for all pending
+  tasks — the orchestrator raises `ValueError` if either is missing.
 - Instruction to write findings to `lyzortx/research_notes/lab_notebooks/track_<track>.md`.
 - PR creation instructions using `gh pr create` with `Closes #<issue>`.

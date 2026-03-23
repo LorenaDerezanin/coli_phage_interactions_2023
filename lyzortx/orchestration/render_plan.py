@@ -90,10 +90,11 @@ def _render_mermaid(tracks: dict[str, Any]) -> str:
 
 def _render_task_line(task: dict[str, Any]) -> str:
     check = "x" if task.get("status") == "done" else " "
+    task_id = task.get("id", "")
     title = task["title"]
-    parts = [
-        f"{title}." if task.get("status") == "done" and (task.get("implemented_in") or task.get("baseline")) else title
-    ]
+    prefix = f"**{task_id}** " if task_id else ""
+    has_metadata = task.get("implemented_in") or task.get("baseline") or task.get("model")
+    parts = [f"{prefix}{title}." if has_metadata else f"{prefix}{title}"]
     impl = task.get("implemented_in")
     if impl and task.get("status") == "done":
         parts.append(f"Implemented in `{impl}`.")
@@ -101,16 +102,35 @@ def _render_task_line(task: dict[str, Any]) -> str:
     if baseline and task.get("status") == "done":
         parts.append(f"Regression baseline: `{baseline}`.")
     model = task.get("model")
-    if model and task.get("status") != "done":
+    if model:
         parts.append(f"Model: `{model}`.")
-    return textwrap.fill(
-        " ".join(parts),
-        width=MAX_PROSE_WIDTH,
-        initial_indent=f"- [{check}] ",
-        subsequent_indent="      ",
-        break_long_words=False,
-        break_on_hyphens=False,
-    )
+
+    lines = [
+        textwrap.fill(
+            " ".join(parts),
+            width=MAX_PROSE_WIDTH,
+            initial_indent=f"- [{check}] ",
+            subsequent_indent="      ",
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+    ]
+
+    criteria = task.get("acceptance_criteria")
+    if criteria:
+        for criterion in criteria:
+            lines.append(
+                textwrap.fill(
+                    criterion,
+                    width=MAX_PROSE_WIDTH,
+                    initial_indent="  - ",
+                    subsequent_indent="    ",
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+            )
+
+    return "\n".join(lines)
 
 
 def render_plan(plan: dict[str, Any]) -> str:

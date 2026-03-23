@@ -159,52 +159,58 @@ def test_extract_model_whitespace_tolerance() -> None:
     assert extract_model(body) == "gpt-5.4-mini"
 
 
-def test_load_pending_tasks_raises_on_missing_model(tmp_path: Path) -> None:
-    """Pending tasks without a model field must cause a ValueError."""
-    import textwrap
+def _write_pending_task_plan(tmp_path: Path, **task_fields: str | list[str]) -> Path:
+    """Write a minimal plan.yml with one pending task. Override fields via kwargs."""
+    import yaml
 
-    from lyzortx.orchestration.orchestrator import load_pending_tasks
-
-    content = textwrap.dedent("""\
-        tracks:
-          A:
-            name: Foundation
-            stage: 0
-            depends_on: []
-            tasks:
-              - id: TA01
-                title: Task without model
-                status: pending
-    """)
+    task = {"id": "TA01", "title": "Test task", "status": "pending"}
+    task.update(task_fields)
+    content = yaml.dump(
+        {"tracks": {"A": {"name": "Foundation", "stage": 0, "depends_on": [], "tasks": [task]}}},
+        default_flow_style=False,
+    )
     plan_path = tmp_path / "plan.yml"
     plan_path.write_text(content, encoding="utf-8")
+    return plan_path
+
+
+def test_load_pending_tasks_raises_on_missing_model(tmp_path: Path) -> None:
+    """Pending tasks without a model field must cause a ValueError."""
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    plan_path = _write_pending_task_plan(tmp_path, acceptance_criteria=["Some criterion"])
     with pytest.raises(ValueError, match="missing required 'model' field"):
         load_pending_tasks(plan_path)
 
 
-def test_load_pending_tasks_accepts_tasks_with_model(tmp_path: Path) -> None:
-    """Pending tasks with a model field should load without error."""
-    import textwrap
-
+def test_load_pending_tasks_raises_on_missing_acceptance_criteria(tmp_path: Path) -> None:
+    """Pending tasks without acceptance_criteria must cause a ValueError."""
     from lyzortx.orchestration.orchestrator import load_pending_tasks
 
-    content = textwrap.dedent("""\
-        tracks:
-          A:
-            name: Foundation
-            stage: 0
-            depends_on: []
-            tasks:
-              - id: TA01
-                title: Task with model
-                status: pending
-                model: gpt-5.4-mini
-    """)
-    plan_path = tmp_path / "plan.yml"
-    plan_path.write_text(content, encoding="utf-8")
+    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini")
+    with pytest.raises(ValueError, match="missing required 'acceptance_criteria'"):
+        load_pending_tasks(plan_path)
+
+
+def test_load_pending_tasks_accepts_complete_task(tmp_path: Path) -> None:
+    """Pending tasks with model and acceptance_criteria should load without error."""
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini", acceptance_criteria=["Output exists"])
     tasks = load_pending_tasks(plan_path)
     assert len(tasks) == 1
     assert tasks[0].model == "gpt-5.4-mini"
+    assert tasks[0].acceptance_criteria == ["Output exists"]
+
+
+def test_load_pending_tasks_works_on_real_plan() -> None:
+    """Smoke test: load_pending_tasks succeeds on the real plan.yml."""
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    tasks = load_pending_tasks(Path("lyzortx/orchestration/plan.yml"))
+    for t in tasks:
+        assert t.model, f"Task {t.task_id} missing model"
+        assert t.acceptance_criteria, f"Task {t.task_id} missing acceptance_criteria"
 
 
 # --- sync_status_from_issues: state_reason handling ---
