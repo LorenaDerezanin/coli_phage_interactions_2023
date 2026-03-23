@@ -12,6 +12,16 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import safe_round
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_BRIER_SCORE,
+    HOLDOUT_ROC_AUC,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
+    HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY,
+    PANEL_DEFAULT,
+    WINNER_LABEL,
+)
 
 DEFAULT_TG03_SUMMARY_PATH = Path(
     "lyzortx/generated_outputs/track_g/tg03_feature_block_ablation_suite/tg03_ablation_summary.json"
@@ -119,19 +129,19 @@ def _fallback_tg05_summary() -> Dict[str, object]:
             "num_leaves": 31,
         },
         "final_feature_lock": {
-            "winner_label": "defense + OMP + phage-genomic",
+            WINNER_LABEL: "defense + OMP + phage-genomic",
             "winner_subset_blocks": ["defense", "omp", "phage_genomic"],
-            "panel_evaluation_metrics": {
-                "holdout_roc_auc": 0.910766,
-                "holdout_top3_hit_rate_all_strains": 0.876923,
-                "holdout_brier_score": 0.109543,
+            PANEL_DEFAULT: {
+                HOLDOUT_ROC_AUC: 0.910766,
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: 0.876923,
+                HOLDOUT_BRIER_SCORE: 0.109543,
             },
-            "deployment_realistic_metrics": {
-                "holdout_roc_auc": 0.835178,
-                "holdout_top3_hit_rate_all_strains": 0.923077,
-                "holdout_top3_hit_rate_susceptible_only": 0.952381,
-                "holdout_brier_score": 0.157767,
-                "excluded_columns": ["host_n_infections"],
+            DEPLOYMENT_REALISTIC_SENSITIVITY: {
+                HOLDOUT_ROC_AUC: 0.835178,
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: 0.923077,
+                HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY: 0.952381,
+                HOLDOUT_BRIER_SCORE: 0.157767,
+                EXCLUDED_LABEL_DERIVED_COLUMNS: ["host_n_infections"],
             },
         },
     }
@@ -193,8 +203,8 @@ def build_feature_lift_bundle(
     reference = rows[0]
     best_lift = _best_lift_row(rows)
     tg05_lock = tg05_summary["final_feature_lock"]  # type: ignore[index]
-    panel_default = tg05_lock["panel_evaluation_metrics"]  # type: ignore[index]
-    deployment = tg05_lock["deployment_realistic_metrics"]  # type: ignore[index]
+    panel_metrics = tg05_lock[PANEL_DEFAULT]  # type: ignore[index]
+    deployment = tg05_lock[DEPLOYMENT_REALISTIC_SENSITIVITY]  # type: ignore[index]
 
     narrative = [
         "Metadata-only is the anchor for the lift story.",
@@ -217,24 +227,20 @@ def build_feature_lift_bundle(
         "tg05_callout": {
             "task_id": tg05_summary.get("task_id", "TG05"),
             "source": tg05_source,
-            "winner_label": tg05_lock["winner_label"],
-            "panel_default": {
-                "holdout_roc_auc": safe_round(float(panel_default["holdout_roc_auc"])),
-                "holdout_top3_hit_rate_all_strains": safe_round(
-                    float(panel_default["holdout_top3_hit_rate_all_strains"])
-                ),
-                "holdout_brier_score": safe_round(float(panel_default["holdout_brier_score"])),
+            WINNER_LABEL: tg05_lock[WINNER_LABEL],
+            PANEL_DEFAULT: {
+                HOLDOUT_ROC_AUC: safe_round(float(panel_metrics[HOLDOUT_ROC_AUC])),
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: safe_round(float(panel_metrics[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS])),
+                HOLDOUT_BRIER_SCORE: safe_round(float(panel_metrics[HOLDOUT_BRIER_SCORE])),
             },
-            "deployment_realistic_sensitivity": {
-                "holdout_roc_auc": safe_round(float(deployment["holdout_roc_auc"])),
-                "holdout_top3_hit_rate_all_strains": safe_round(float(deployment["holdout_top3_hit_rate_all_strains"])),
-                "holdout_top3_hit_rate_susceptible_only": safe_round(
-                    float(deployment["holdout_top3_hit_rate_susceptible_only"])
+            DEPLOYMENT_REALISTIC_SENSITIVITY: {
+                HOLDOUT_ROC_AUC: safe_round(float(deployment[HOLDOUT_ROC_AUC])),
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: safe_round(float(deployment[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS])),
+                HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY: safe_round(
+                    float(deployment[HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY])
                 ),
-                "holdout_brier_score": safe_round(float(deployment["holdout_brier_score"])),
-                "excluded_label_derived_columns": list(
-                    deployment.get("excluded_label_derived_columns", deployment.get("excluded_columns", []))
-                ),
+                HOLDOUT_BRIER_SCORE: safe_round(float(deployment[HOLDOUT_BRIER_SCORE])),
+                EXCLUDED_LABEL_DERIVED_COLUMNS: list(deployment[EXCLUDED_LABEL_DERIVED_COLUMNS]),
             },
         },
     }
@@ -327,13 +333,11 @@ def render_feature_lift_visualization_html(bundle: Mapping[str, object]) -> str:
     tg05_source = bundle["tg05_callout"]["source"]  # type: ignore[index]
     reference = rows[0]
     best_lift = max(rows[1:], key=lambda row: float(row["top3_lift_pp_vs_metadata"])) if len(rows) > 1 else rows[0]
-    top3_gain = float(callout["deployment_realistic_sensitivity"]["holdout_top3_hit_rate_all_strains"]) - float(
-        callout["panel_default"]["holdout_top3_hit_rate_all_strains"]
-    )
+    deploy = callout[DEPLOYMENT_REALISTIC_SENSITIVITY]
+    panel = callout[PANEL_DEFAULT]
+    top3_gain = float(deploy[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]) - float(panel[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS])
     top3_gain_pp = top3_gain * 100.0
-    auc_drop = float(callout["panel_default"]["holdout_roc_auc"]) - float(
-        callout["deployment_realistic_sensitivity"]["holdout_roc_auc"]
-    )
+    auc_drop = float(panel[HOLDOUT_ROC_AUC]) - float(deploy[HOLDOUT_ROC_AUC])
     bar_chart = _render_bar_chart(rows)
     narrative_cards = []
     for row in rows:
@@ -353,7 +357,7 @@ def render_feature_lift_visualization_html(bundle: Mapping[str, object]) -> str:
             """
         )
 
-    excluded = ", ".join(callout["deployment_realistic_sensitivity"]["excluded_label_derived_columns"])
+    excluded = ", ".join(deploy[EXCLUDED_LABEL_DERIVED_COLUMNS])
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -581,11 +585,11 @@ def render_feature_lift_visualization_html(bundle: Mapping[str, object]) -> str:
         </div>
         <div class="stat">
           <div class="label">TG05 deployment top-3</div>
-          <div class="value">{float(callout["deployment_realistic_sensitivity"]["holdout_top3_hit_rate_all_strains"]):.1%}</div>
+          <div class="value">{float(deploy[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.1%}</div>
         </div>
         <div class="stat">
           <div class="label">TG05 deployment AUC</div>
-          <div class="value">{float(callout["deployment_realistic_sensitivity"]["holdout_roc_auc"]):.3f}</div>
+          <div class="value">{float(deploy[HOLDOUT_ROC_AUC]):.3f}</div>
         </div>
       </div>
     </section>
@@ -619,12 +623,12 @@ def render_feature_lift_visualization_html(bundle: Mapping[str, object]) -> str:
     <section class="callout">
       <h2>TG05 deployment-realistic callout</h2>
       <p>
-        The locked winner is <strong>{callout["winner_label"]}</strong>. In panel mode it reaches
-        <strong>{float(callout["panel_default"]["holdout_top3_hit_rate_all_strains"]):.1%}</strong> top-3 with AUC
-        <strong>{float(callout["panel_default"]["holdout_roc_auc"]):.3f}</strong>. Removing
-        <code>{excluded}</code> lifts top-3 to <strong>{float(callout["deployment_realistic_sensitivity"]["holdout_top3_hit_rate_all_strains"]):.1%}</strong>
-        and susceptible-only top-3 to <strong>{float(callout["deployment_realistic_sensitivity"]["holdout_top3_hit_rate_susceptible_only"]):.1%}</strong>,
-        but pairwise discrimination drops to <strong>{float(callout["deployment_realistic_sensitivity"]["holdout_roc_auc"]):.3f}</strong>.
+        The locked winner is <strong>{callout[WINNER_LABEL]}</strong>. In panel mode it reaches
+        <strong>{float(panel[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.1%}</strong> top-3 with AUC
+        <strong>{float(panel[HOLDOUT_ROC_AUC]):.3f}</strong>. Removing
+        <code>{excluded}</code> lifts top-3 to <strong>{float(deploy[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.1%}</strong>
+        and susceptible-only top-3 to <strong>{float(deploy[HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY]):.1%}</strong>,
+        but pairwise discrimination drops to <strong>{float(deploy[HOLDOUT_ROC_AUC]):.3f}</strong>.
         That is the honest deployment tradeoff.
       </p>
       <div class="badges">
@@ -682,7 +686,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"- Best lift arm: {bundle['best_lift_arm']}")
     print(
         f"- TG05 deployment-realistic top-3: "
-        f"{float(bundle['tg05_callout']['deployment_realistic_sensitivity']['holdout_top3_hit_rate_all_strains']):.1%}"
+        f"{float(bundle['tg05_callout'][DEPLOYMENT_REALISTIC_SENSITIVITY][HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.1%}"
     )
     print(f"- Output directory: {args.output_dir}")
     return 0
