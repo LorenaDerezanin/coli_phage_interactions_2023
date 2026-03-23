@@ -191,7 +191,7 @@ def test_load_plan_parses_model_field(tmp_path: Path) -> None:
     assert ta01.model == "gpt-5.4-mini"
 
 
-def test_render_plan_shows_model_on_pending_tasks(tmp_path: Path) -> None:
+def test_render_plan_shows_model_on_all_tasks(tmp_path: Path) -> None:
     content = textwrap.dedent("""\
         tracks:
           A:
@@ -211,8 +211,7 @@ def test_render_plan_shows_model_on_pending_tasks(tmp_path: Path) -> None:
     plan = load_plan_yaml(_write_plan(tmp_path, content))
     md = render_plan(plan)
     assert "Model: `gpt-5.4-mini`" in md
-    # Done tasks should NOT show model
-    assert "Model: `gpt-5.4`" not in md
+    assert "Model: `gpt-5.4`" in md
 
 
 def test_render_plan_no_model_on_pending_without_field(tmp_path: Path) -> None:

@@ -639,3 +639,53 @@ selection rule required AUC ≥ TG01 all-features (0.9091), then maximized top-3
 All three Track P tasks (TP01, TP02, TP03) now require presenting both the panel model and the deployment-realistic
 model side by side. Partners need to see both: the panel model validates the approach, the deployment-realistic model
 sets honest expectations for their use case.
+
+### 2026-03-23: Label leakage invalidates v1 model — plan restructured
+
+#### Executive summary
+
+Review of the TG04 SHAP results revealed that the v1 model's two strongest features (`host_n_infections` with mean
+|SHAP| 1.18 and `receptor_variant_training_positive_count` at 0.57) are derived from training labels, not independent
+inputs. The v1 "panel-default" model is not predicting — it is memorizing. The plan has been restructured to delete these
+features, retrain from scratch, and report whatever comes out as the honest v1 baseline. The prior dual-arm
+panel/deployment framing is abandoned: there is only one model, the leakage-clean one.
+
+#### What was decided
+
+1. **Label-leaked features are a bug, not a variant.** `host_n_infections` is literally "how many phages lyse this host"
+   repackaged as a feature. `receptor_variant_training_positive_count` counts training-positive pairs per receptor
+   cluster. Both encode the answer. Keeping them as an "optional panel-only arm" would be dishonest.
+
+2. **Track P deleted.** All three presentation artifacts (digital phagogram, coverage heatmap, feature lift
+   visualization) were designed around the dual-arm leaked model. The code, tests, and lab notebook have been removed.
+   Visualizations will be rebuilt from scratch after the clean model is established.
+
+3. **Track I made a dead end.** All 10 Track I tasks are done, but no Track I output feeds into any downstream track.
+   TI09/TI10 count rows but never retrain a model with external data. Track I remains in the plan as completed work but
+   nothing depends on it until external data is actually wired into model training.
+
+4. **Track G extended with four new tasks:**
+   - TG06: Delete leaked features from ST02, Track E, and Track G code
+   - TG07: Retrain, recalibrate, re-run SHAP and ablation on the clean feature set
+   - TG08: Re-run Track F evaluation and Track H recommendations, verify Track J end-to-end
+   - TG09: Investigate whether non-leaky features can close the ~7.6pp AUC gap
+
+5. **Track J depends only on G now** (removed F, H, I from depends_on to match what TJ01 actually runs).
+
+6. **Track F and H descriptions updated** to note their current metrics are invalidated and will be re-run as part of
+   TG08.
+
+#### Why the prior dual-arm framing was wrong
+
+The 2026-03-22 project entry framed two numbers for partners: panel evaluation (AUC 0.911) and novel-strain prediction
+(AUC 0.835). The implicit message was "the model works great on known strains and somewhat worse on novel ones." The
+actual message should have been: "the model's best feature is the training labels in disguise, and the 0.911 AUC is
+inflated by that leakage." The deployment-realistic arm was the honest model all along — it should have been the only
+model from the start.
+
+#### What metrics to expect after cleanup
+
+The deployment-realistic numbers from TG05 (top-3 92.3%, AUC 0.835, Brier 0.158) are the current best estimate for the
+clean model, but the actual TG07 retrain may produce different numbers since the feature pipeline itself changes (not
+just column exclusion at prediction time). TG09 will investigate whether the AUC gap can be partially closed with
+non-leaky features.

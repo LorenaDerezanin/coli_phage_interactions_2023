@@ -101,16 +101,35 @@ def _render_task_line(task: dict[str, Any]) -> str:
     if baseline and task.get("status") == "done":
         parts.append(f"Regression baseline: `{baseline}`.")
     model = task.get("model")
-    if model and task.get("status") != "done":
+    if model:
         parts.append(f"Model: `{model}`.")
-    return textwrap.fill(
-        " ".join(parts),
-        width=MAX_PROSE_WIDTH,
-        initial_indent=f"- [{check}] ",
-        subsequent_indent="      ",
-        break_long_words=False,
-        break_on_hyphens=False,
-    )
+
+    lines = [
+        textwrap.fill(
+            " ".join(parts),
+            width=MAX_PROSE_WIDTH,
+            initial_indent=f"- [{check}] ",
+            subsequent_indent="      ",
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+    ]
+
+    criteria = task.get("acceptance_criteria")
+    if criteria:
+        for criterion in criteria:
+            lines.append(
+                textwrap.fill(
+                    criterion,
+                    width=MAX_PROSE_WIDTH,
+                    initial_indent="  - ",
+                    subsequent_indent="    ",
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+            )
+
+    return "\n".join(lines)
 
 
 def render_plan(plan: dict[str, Any]) -> str:
