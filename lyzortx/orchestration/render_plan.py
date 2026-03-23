@@ -90,9 +90,13 @@ def _render_mermaid(tracks: dict[str, Any]) -> str:
 
 def _render_task_line(task: dict[str, Any]) -> str:
     check = "x" if task.get("status") == "done" else " "
+    task_id = task.get("id", "")
     title = task["title"]
+    prefix = f"**{task_id}** " if task_id else ""
     parts = [
-        f"{title}." if task.get("status") == "done" and (task.get("implemented_in") or task.get("baseline")) else title
+        f"{prefix}{title}."
+        if task.get("status") == "done" and (task.get("implemented_in") or task.get("baseline"))
+        else f"{prefix}{title}"
     ]
     impl = task.get("implemented_in")
     if impl and task.get("status") == "done":

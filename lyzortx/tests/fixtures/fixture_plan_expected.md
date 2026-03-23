@@ -26,21 +26,22 @@ graph LR
 ## Track X: Foundation
 
 - **Guiding Principle:** Build the base layer.
-- [x] Set up schema. Implemented in `src/schema.py`. Regression baseline: `baselines/tx01.json`. Model: `gpt-5.4-mini`.
+- [x] **TX01** Set up schema. Implemented in `src/schema.py`. Regression baseline: `baselines/tx01.json`. Model:
+      `gpt-5.4-mini`.
   - Schema file exists
   - Passes validation
-- [ ] Add migration support Model: `gpt-5.4`.
+- [ ] **TX02** Add migration support Model: `gpt-5.4`.
   - Migrations run without error
 
 ## Track Y: Integration
 
 - **Guiding Principle:** Wire components together.
-- [x] Connect API to schema
+- [x] **TY01** Connect API to schema
   - API returns valid responses
   - Error codes documented
 
 ## Track Z: Release
 
-- [ ] Cut release candidate Model: `gpt-5.4`.
+- [ ] **TZ01** Cut release candidate Model: `gpt-5.4`.
   - All tests pass on clean checkout
   - Version tag applied

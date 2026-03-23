@@ -337,7 +337,7 @@ tracks:
         to measure generalization to truly novel strains
       - Report both panel-evaluation and deployment-realistic metrics for the winning
         configuration
-      - Lock the final v1 feature configuration for downstream Track F, H, and P
+      - Lock the final v1 feature configuration for downstream Track F and H
     - id: TG06
       title: Delete label-leaked features from the feature pipeline
       status: pending
