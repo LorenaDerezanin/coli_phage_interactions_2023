@@ -1,19 +1,54 @@
 {
-  "task_id": "TG05",
+  "task_id": "TG07",
+  "source_lock_task_id": "TG05",
   "selection_policy": "Among 2-block and 3-block panel-evaluation subsets, keep arms with holdout ROC-AUC >= TG01 all-features holdout ROC-AUC, then choose the highest holdout top-3 hit rate. Ties break on higher ROC-AUC, then lower Brier score, then arm_id.",
-  "winner_arm_id": "subset_defense__omp__phage_genomic",
-  "winner_label": "defense + OMP + phage-genomic",
+  "winner_arm_id": "subset_defense__phage_genomic__pairwise",
+  "winner_label": "defense + phage-genomic + pairwise",
   "winner_subset_blocks": [
     "defense",
-    "omp",
-    "phage_genomic"
+    "phage_genomic",
+    "pairwise"
   ],
-  "holdout_roc_auc": 0.910766,
-  "holdout_brier_score": 0.109543,
-  "holdout_top3_hit_rate_all_strains": 0.876923,
-  "holdout_top3_hit_rate_susceptible_only": 0.904762,
-  "tg01_all_features_reference_holdout_roc_auc": 0.909089,
-  "tg01_all_features_reference_holdout_brier_score": 0.113112,
-  "tg01_all_features_reference_holdout_top3_hit_rate_all_strains": 0.876923,
-  "tg01_all_features_reference_holdout_top3_hit_rate_susceptible_only": 0.904762
+  "holdout_roc_auc": 0.835975,
+  "holdout_brier_score": 0.156534,
+  "holdout_top3_hit_rate_all_strains": 0.923077,
+  "holdout_top3_hit_rate_susceptible_only": 0.952381,
+  "calibration_metrics": {
+    "full_label": {
+      "isotonic": {
+        "roc_auc": 0.834808,
+        "top3_hit_rate_all_strains": 0.907692,
+        "top3_hit_rate_susceptible_only": 0.936508,
+        "brier_score": 0.138814,
+        "ece": 0.0588
+      },
+      "platt": {
+        "roc_auc": 0.835754,
+        "top3_hit_rate_all_strains": 0.923077,
+        "top3_hit_rate_susceptible_only": 0.952381,
+        "brier_score": 0.139367,
+        "ece": 0.053467
+      }
+    },
+    "strict_confidence": {
+      "isotonic": {
+        "roc_auc": 0.893293,
+        "top3_hit_rate_all_strains": 0.828125,
+        "top3_hit_rate_susceptible_only": 0.898305,
+        "brier_score": 0.104318,
+        "ece": 0.137049
+      },
+      "platt": {
+        "roc_auc": 0.894254,
+        "top3_hit_rate_all_strains": 0.8125,
+        "top3_hit_rate_susceptible_only": 0.881356,
+        "brier_score": 0.103877,
+        "ece": 0.141089
+      }
+    }
+  },
+  "tg01_all_features_reference_holdout_roc_auc": 0.835754,
+  "tg01_all_features_reference_holdout_brier_score": 0.156187,
+  "tg01_all_features_reference_holdout_top3_hit_rate_all_strains": 0.923077,
+  "tg01_all_features_reference_holdout_top3_hit_rate_susceptible_only": 0.952381
 }
