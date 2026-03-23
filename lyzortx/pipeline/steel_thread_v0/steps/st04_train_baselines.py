@@ -47,7 +47,6 @@ NUMERIC_FEATURE_COLUMNS = [
     "host_capsule_groupiv_s",
     "host_capsule_wzy_stricte",
     "host_n_defense_systems",
-    "host_n_infections",
     "phage_genome_size",
 ]
 

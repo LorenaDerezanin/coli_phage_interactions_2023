@@ -21,22 +21,6 @@ from lyzortx.pipeline.steel_thread_v0.steps.st04_train_baselines import (
     NUMERIC_FEATURE_COLUMNS as V0_NUMERIC_FEATURE_COLUMNS,
 )
 from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import partition_track_c_columns
-from lyzortx.pipeline.track_g.v1_config_keys import (
-    DEPLOYMENT_REALISTIC_SENSITIVITY,
-    EXCLUDED_LABEL_DERIVED_COLUMNS,
-    HOLDOUT_BRIER_SCORE,
-    HOLDOUT_ROC_AUC,
-    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
-    HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY,
-    LABEL_DERIVED_COLUMNS_REVIEWED,
-    LOCKED_V1_FEATURE_CONFIGURATION,
-    PANEL_DEFAULT,
-    SELECTION_POLICY,
-    TG01_ALL_FEATURES_REFERENCE,
-    WINNER_ARM_ID,
-    WINNER_LABEL,
-    WINNER_SUBSET_BLOCKS,
-)
 from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     IDENTIFIER_COLUMNS,
     FeatureSpace,
@@ -54,10 +38,6 @@ from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
 )
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
 
-LABEL_DERIVED_COLUMNS: Tuple[str, ...] = (
-    "host_n_infections",
-    "receptor_variant_training_positive_count",
-)
 BLOCK_ORDER: Tuple[str, ...] = ("defense", "omp", "phage_genomic", "pairwise")
 BLOCK_DISPLAY_NAMES: Mapping[str, str] = {
     "defense": "defense",
@@ -272,25 +252,6 @@ def build_all_features_reference_arm(feature_space: FeatureSpace) -> SweepArm:
         evaluation_mode="panel_evaluation",
         categorical_columns=feature_space.categorical_columns,
         numeric_columns=feature_space.numeric_columns,
-    )
-
-
-def build_deployment_realistic_arm(winning_arm: SweepArm) -> SweepArm:
-    label_derived = tuple(
-        column
-        for column in LABEL_DERIVED_COLUMNS
-        if column in set(winning_arm.categorical_columns + winning_arm.numeric_columns)
-    )
-    return SweepArm(
-        arm_id=f"{winning_arm.arm_id}__deployment_realistic",
-        display_name=f"{winning_arm.display_name} (deployment-realistic)",
-        subset_blocks=winning_arm.subset_blocks,
-        evaluation_mode="deployment_realistic",
-        categorical_columns=tuple(
-            column for column in winning_arm.categorical_columns if column not in set(label_derived)
-        ),
-        numeric_columns=tuple(column for column in winning_arm.numeric_columns if column not in set(label_derived)),
-        excluded_columns=label_derived,
     )
 
 
@@ -516,71 +477,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         all_features_auc=float(tg01_lock["holdout_binary_metrics"]["roc_auc"]),
     )
     winning_arm = next(arm for arm in panel_arms if arm.arm_id == winner["arm_id"])
-    deployment_arm = build_deployment_realistic_arm(winning_arm)
-    deployment_feature_space = FeatureSpace(
-        categorical_columns=deployment_arm.categorical_columns,
-        numeric_columns=deployment_arm.numeric_columns,
-        track_c_additional_columns=feature_space.track_c_additional_columns,
-        track_d_columns=feature_space.track_d_columns,
-        track_e_columns=feature_space.track_e_columns,
-    )
-    deployment_fold_datasets = prepare_fold_datasets(merged_rows, deployment_feature_space)
-    deployment_cv_prediction_rows = score_rows_with_cv_predictions(
-        deployment_fold_datasets,
-        estimator_factory=lightgbm_factory,
-        best_params=locked_params,
-        probability_column="predicted_probability",
-    )
-    _, _, _, deployment_holdout_rows, deployment_holdout_probabilities = fit_final_estimator(
-        merged_rows,
-        deployment_feature_space,
-        estimator_factory=lightgbm_factory,
-        params=locked_params,
-    )
-    deployment_scored_rows: List[Dict[str, object]] = []
-    for row, probability in zip(deployment_holdout_rows, deployment_holdout_probabilities):
-        scored = dict(row)
-        scored["predicted_probability"] = probability
-        scored["prediction_context"] = "holdout_final"
-        deployment_scored_rows.append(scored)
-    deployment_holdout_y = [int(str(row["label_hard_any_lysis"])) for row in deployment_scored_rows]
-    deployment_binary_metrics = compute_binary_metrics(
-        deployment_holdout_y,
-        [float(row["predicted_probability"]) for row in deployment_scored_rows],
-    )
-    deployment_top3_metrics = compute_top3_hit_rate(deployment_scored_rows, probability_key="predicted_probability")
-    deployment_summary = summarize_arm(
-        deployment_arm,
-        deployment_binary_metrics,
-        deployment_top3_metrics,
-        tg01_all_features_binary_metrics=tg01_lock["holdout_binary_metrics"],
-        tg01_all_features_top3_metrics=tg01_lock["holdout_top3_metrics"],
-    )
-    metrics_rows.append(deployment_summary)
-    summary_arms[deployment_arm.arm_id] = deployment_summary
-    for row in deployment_cv_prediction_rows + deployment_scored_rows:
-        prediction_rows.append(
-            {
-                "arm_id": deployment_arm.arm_id,
-                "arm_label": deployment_arm.display_name,
-                "evaluation_mode": deployment_arm.evaluation_mode,
-                "pair_id": row["pair_id"],
-                "bacteria": row["bacteria"],
-                "phage": row["phage"],
-                "split_holdout": row["split_holdout"],
-                "split_cv5_fold": row["split_cv5_fold"],
-                "label_hard_any_lysis": row["label_hard_any_lysis"],
-                "prediction_context": row["prediction_context"],
-                "predicted_probability": safe_round(float(row["predicted_probability"])),
-            }
-        )
-    ranking_rows.extend(
-        build_top3_ranking_rows(
-            deployment_scored_rows,
-            probability_key="predicted_probability",
-            model_label=deployment_arm.arm_id,
-        )
-    )
 
     for row in metrics_rows:
         row["is_winning_panel_subset"] = (
@@ -590,30 +486,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     winning_panel_summary = summary_arms[winner["arm_id"]]
     final_feature_lock = {
         "task_id": "TG05",
-        LOCKED_V1_FEATURE_CONFIGURATION: {
-            SELECTION_POLICY: (
-                "Among 2-block and 3-block panel-evaluation subsets, keep arms with holdout ROC-AUC >= TG01 "
-                "all-features holdout ROC-AUC, then choose the highest holdout top-3 hit rate. Ties break on "
-                "higher ROC-AUC, then lower Brier score, then arm_id."
-            ),
-            WINNER_ARM_ID: winner["arm_id"],
-            WINNER_LABEL: winner["arm_label"],
-            WINNER_SUBSET_BLOCKS: list(winning_arm.subset_blocks),
-            PANEL_DEFAULT: winning_panel_summary,
-            DEPLOYMENT_REALISTIC_SENSITIVITY: {
-                **deployment_summary,
-                EXCLUDED_LABEL_DERIVED_COLUMNS: list(deployment_arm.excluded_columns),
-            },
-            TG01_ALL_FEATURES_REFERENCE: {
-                HOLDOUT_ROC_AUC: tg01_lock["holdout_binary_metrics"]["roc_auc"],
-                HOLDOUT_BRIER_SCORE: tg01_lock["holdout_binary_metrics"]["brier_score"],
-                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: tg01_lock["holdout_top3_metrics"]["top3_hit_rate_all_strains"],
-                HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY: tg01_lock["holdout_top3_metrics"][
-                    "top3_hit_rate_susceptible_only"
-                ],
-            },
-            LABEL_DERIVED_COLUMNS_REVIEWED: list(LABEL_DERIVED_COLUMNS),
-        },
+        "selection_policy": (
+            "Among 2-block and 3-block panel-evaluation subsets, keep arms with holdout ROC-AUC >= TG01 "
+            "all-features holdout ROC-AUC, then choose the highest holdout top-3 hit rate. Ties break on "
+            "higher ROC-AUC, then lower Brier score, then arm_id."
+        ),
+        "winner_arm_id": winner["arm_id"],
+        "winner_label": winner["arm_label"],
+        "winner_subset_blocks": list(winning_arm.subset_blocks),
+        "holdout_roc_auc": winning_panel_summary["holdout_roc_auc"],
+        "holdout_brier_score": winning_panel_summary["holdout_brier_score"],
+        "holdout_top3_hit_rate_all_strains": winning_panel_summary["holdout_top3_hit_rate_all_strains"],
+        "holdout_top3_hit_rate_susceptible_only": winning_panel_summary["holdout_top3_hit_rate_susceptible_only"],
+        "tg01_all_features_reference_holdout_roc_auc": tg01_lock["holdout_binary_metrics"]["roc_auc"],
+        "tg01_all_features_reference_holdout_brier_score": tg01_lock["holdout_binary_metrics"]["brier_score"],
+        "tg01_all_features_reference_holdout_top3_hit_rate_all_strains": tg01_lock["holdout_top3_metrics"][
+            "top3_hit_rate_all_strains"
+        ],
+        "tg01_all_features_reference_holdout_top3_hit_rate_susceptible_only": tg01_lock["holdout_top3_metrics"][
+            "top3_hit_rate_susceptible_only"
+        ],
     }
 
     summary = {
@@ -632,7 +524,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         },
         "arms": summary_arms,
         "winning_panel_subset_arm_id": winner["arm_id"],
-        "final_feature_lock": final_feature_lock[LOCKED_V1_FEATURE_CONFIGURATION],
+        "final_feature_lock": final_feature_lock,
         "inputs": {
             "tg01_summary": {"path": str(args.tg01_summary_path), "sha256": _sha256(args.tg01_summary_path)},
             "st02_pair_table": {"path": str(args.st02_pair_table_path), "sha256": _sha256(args.st02_pair_table_path)},
@@ -724,22 +616,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "column_name": column,
                 }
                 for column in winning_arm.numeric_columns
-            ]
-            + [
-                {
-                    "evaluation_mode": "deployment_realistic",
-                    "feature_role": "categorical",
-                    "column_name": column,
-                }
-                for column in deployment_arm.categorical_columns
-            ]
-            + [
-                {
-                    "evaluation_mode": "deployment_realistic",
-                    "feature_role": "numeric",
-                    "column_name": column,
-                }
-                for column in deployment_arm.numeric_columns
             ],
             ("evaluation_mode", "feature_role", "column_name"),
         ),
@@ -750,11 +626,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(
         f"- Winning panel subset: {winner['arm_label']} | holdout ROC-AUC {winner['holdout_roc_auc']} | "
         f"top-3 {winner['holdout_top3_hit_rate_all_strains']} | Brier {winner['holdout_brier_score']}"
-    )
-    print(
-        f"- Deployment-realistic winner: holdout ROC-AUC {deployment_summary['holdout_roc_auc']} | "
-        f"top-3 {deployment_summary['holdout_top3_hit_rate_all_strains']} | "
-        f"Brier {deployment_summary['holdout_brier_score']}"
     )
     print(f"- Output directory: {args.output_dir}")
     return 0

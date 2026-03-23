@@ -96,7 +96,6 @@ def test_run_lightgbm_sanity_check_confirms_lift_with_strong_v1_signal() -> None
                     "host_capsule_groupiv_s": "0",
                     "host_capsule_wzy_stricte": "0",
                     "host_n_defense_systems": "0",
-                    "host_n_infections": "0",
                     "phage_morphotype": "morph",
                     "phage_family": "fam",
                     "phage_genus": "gen",
@@ -169,7 +168,6 @@ def test_run_lightgbm_sanity_check_confirms_lift_with_strong_v1_signal() -> None
             "host_capsule_groupiv_s",
             "host_capsule_wzy_stricte",
             "host_n_defense_systems",
-            "host_n_infections",
             "phage_genome_size",
             "host_surface_klebsiella_capsule_type_missing",
             "host_phylogeny_umap_00",
@@ -209,7 +207,7 @@ def test_main_writes_host_matrix_pair_table_and_manifests(tmp_path: Path, monkey
             "pair_id,bacteria,phage,label_hard_any_lysis,host_pathotype,host_clermont_phylo,host_origin,host_lps_type,"
             "host_o_type,host_h_type,host_collection,host_abc_serotype,host_mouse_killed_10,host_capsule_abc,"
             "host_capsule_groupiv_e,host_capsule_groupiv_e_stricte,host_capsule_groupiv_s,host_capsule_wzy_stricte,"
-            "host_n_defense_systems,host_n_infections,phage_morphotype,phage_family,phage_genus,phage_species,"
+            "host_n_defense_systems,phage_morphotype,phage_family,phage_genus,phage_species,"
             "phage_subfamily,phage_old_family,phage_old_genus,phage_host,phage_host_phylo,phage_genome_size,"
             "pair_host_phylo_equals_phage_host_phylo\n"
             "B1__P1,B1,P1,1,pt,A,gut,R1,O1,H1,set1,,0,0,0,0,0,0,1,0,morph,fam,gen,spec,sub,oldfam,oldgen,H,A,100,1\n"

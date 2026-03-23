@@ -220,20 +220,20 @@ graph LR
   - Report top-3 hit rate, AUC, and Brier on the same ST03 holdout for each combo
   - Identify the winning subset that maximizes top-3 hit rate without degrading AUC
   - Compare winning subset against the TG01 all-features model
-  - Include a deployment-realistic arm that excludes all features derived from training labels (host_n_infections,
-    receptor_variant_training_positive_count) to measure generalization to truly novel strains
+  - Include a deployment-realistic arm that excludes all features derived from training labels
+    (legacy_label_breadth_count, legacy_receptor_support_count) to measure generalization to truly novel strains
   - Report both panel-evaluation and deployment-realistic metrics for the winning configuration
   - Lock the final v1 feature configuration for downstream Track F and H
 - [ ] **TG06** Delete label-leaked features from the feature pipeline. Model: `gpt-5.4-mini`.
-  - Remove host_n_infections: delete the (n_infections, host_n_infections) rename in st02_build_pair_table.py and drop
-    the column from ST02 output
-  - Remove receptor_variant_training_positive_count: delete its construction in
-    build_rbp_receptor_compatibility_feature_block.py (Track E) and drop it from the TE01 output schema
+  - Remove legacy_label_breadth_count: delete the (n_infections, legacy_label_breadth_count) rename in
+    st02_build_pair_table.py and drop the column from ST02 output
+  - Remove legacy_receptor_support_count: delete its construction in build_rbp_receptor_compatibility_feature_block.py
+    (Track E) and drop it from the TE01 output schema
   - Remove the LABEL_DERIVED_COLUMNS list in run_feature_subset_sweep.py and the deployment-realistic arm logic that
     depends on it
   - Delete v1_config_keys.py and simplify v1_feature_configuration.json to a single flat feature config (no
     panel_default vs deployment_realistic_sensitivity split)
-  - Grep the entire lyzortx/ tree for host_n_infections and receptor_variant_training_positive_count — zero hits must
+  - Grep the entire lyzortx/ tree for legacy_label_breadth_count and legacy_receptor_support_count — zero hits must
     remain
   - All existing tests pass after deletions
 - [ ] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set. Model: `gpt-5.4-mini`.
@@ -249,7 +249,7 @@ graph LR
     pipeline
   - The old label-leaked metrics must not appear in any output
 - [ ] **TG09** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
-  - Identify why AUC drops ~7.6pp when host_n_infections is removed
+  - Identify why AUC drops ~7.6pp when legacy_label_breadth_count is removed
   - Propose and test at least two candidate replacement features that do not leak training labels
   - Report whether any candidate recovers >50% of the AUC gap without degrading top-3 hit rate
   - If no candidate closes the gap, accept the clean calibration as the honest v1 baseline

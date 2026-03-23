@@ -28,7 +28,6 @@ HOST_FEATURE_MAP: Sequence[Tuple[str, str]] = (
     ("Capsule_GroupIV_s", "host_capsule_groupiv_s"),
     ("Capsule_Wzy_stricte", "host_capsule_wzy_stricte"),
     ("n_defense_systems", "host_n_defense_systems"),
-    ("n_infections", "host_n_infections"),
 )
 
 PHAGE_FEATURE_MAP: Sequence[Tuple[str, str]] = (
