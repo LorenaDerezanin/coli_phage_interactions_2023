@@ -12,6 +12,14 @@ from pathlib import Path
 import pytest
 
 from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import FeatureSpace
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
+    LOCKED_V1_FEATURE_CONFIGURATION,
+    PANEL_DEFAULT,
+    WINNER_SUBSET_BLOCKS,
+)
 from lyzortx.pipeline.track_p.steps.build_digital_phagogram import (
     build_arm_display_rows,
     build_locked_arm_feature_spaces,
@@ -30,7 +38,7 @@ def v1_config() -> dict:
 
 @pytest.fixture(scope="module")
 def v1_lock(v1_config: dict) -> dict:
-    return v1_config["locked_v1_feature_configuration"]
+    return v1_config[LOCKED_V1_FEATURE_CONFIGURATION]
 
 
 # ---------------------------------------------------------------------------
@@ -39,18 +47,18 @@ def v1_lock(v1_config: dict) -> dict:
 
 
 def test_v1_config_has_keys_read_by_digital_phagogram(v1_lock: dict) -> None:
-    assert "winner_subset_blocks" in v1_lock
-    assert isinstance(v1_lock["winner_subset_blocks"], list)
-    assert "deployment_realistic_sensitivity" in v1_lock
-    deployment = v1_lock["deployment_realistic_sensitivity"]
-    assert "excluded_label_derived_columns" in deployment
-    assert isinstance(deployment["excluded_label_derived_columns"], list)
+    assert WINNER_SUBSET_BLOCKS in v1_lock
+    assert isinstance(v1_lock[WINNER_SUBSET_BLOCKS], list)
+    assert DEPLOYMENT_REALISTIC_SENSITIVITY in v1_lock
+    deployment = v1_lock[DEPLOYMENT_REALISTIC_SENSITIVITY]
+    assert EXCLUDED_LABEL_DERIVED_COLUMNS in deployment
+    assert isinstance(deployment[EXCLUDED_LABEL_DERIVED_COLUMNS], list)
 
 
 def test_v1_config_has_panel_default_metrics(v1_lock: dict) -> None:
-    assert "panel_default" in v1_lock
-    panel = v1_lock["panel_default"]
-    assert "holdout_top3_hit_rate_all_strains" in panel
+    assert PANEL_DEFAULT in v1_lock
+    panel = v1_lock[PANEL_DEFAULT]
+    assert HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS in panel
 
 
 # ---------------------------------------------------------------------------
@@ -88,8 +96,8 @@ def test_build_locked_arm_feature_spaces_uses_config_keys(v1_lock: dict) -> None
     feature_space = _make_feature_space()
     spaces = build_locked_arm_feature_spaces(
         feature_space,
-        winner_subset_blocks=v1_lock["winner_subset_blocks"],
-        excluded_columns=v1_lock["deployment_realistic_sensitivity"]["excluded_label_derived_columns"],
+        winner_subset_blocks=v1_lock[WINNER_SUBSET_BLOCKS],
+        excluded_columns=v1_lock[DEPLOYMENT_REALISTIC_SENSITIVITY][EXCLUDED_LABEL_DERIVED_COLUMNS],
     )
     assert set(spaces) == {"panel", "deployment"}
 

@@ -7,6 +7,16 @@ test validates the fallback's keys match what build_feature_lift_bundle reads.
 
 from __future__ import annotations
 
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_BRIER_SCORE,
+    HOLDOUT_ROC_AUC,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
+    HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY,
+    PANEL_DEFAULT,
+    WINNER_LABEL,
+)
 from lyzortx.pipeline.track_p import run_track_p
 from lyzortx.pipeline.track_p.steps.build_feature_lift_visualization import (
     _fallback_tg05_summary,
@@ -56,22 +66,22 @@ def _tg03_summary() -> dict:
 
 
 def _tg05_summary() -> dict:
-    """TG05 summary fixture matching the schema produced by run_feature_subset_sweep."""
+    """TG05 summary fixture matching the unified v1 config key schema."""
     return {
         "task_id": "TG05",
         "final_feature_lock": {
-            "winner_label": "defense + OMP + phage-genomic",
-            "panel_evaluation_metrics": {
-                "holdout_roc_auc": 0.910766,
-                "holdout_top3_hit_rate_all_strains": 0.876923,
-                "holdout_brier_score": 0.109543,
+            WINNER_LABEL: "defense + OMP + phage-genomic",
+            PANEL_DEFAULT: {
+                HOLDOUT_ROC_AUC: 0.910766,
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: 0.876923,
+                HOLDOUT_BRIER_SCORE: 0.109543,
             },
-            "deployment_realistic_metrics": {
-                "holdout_roc_auc": 0.835178,
-                "holdout_top3_hit_rate_all_strains": 0.923077,
-                "holdout_top3_hit_rate_susceptible_only": 0.952381,
-                "holdout_brier_score": 0.157767,
-                "excluded_columns": ["host_n_infections"],
+            DEPLOYMENT_REALISTIC_SENSITIVITY: {
+                HOLDOUT_ROC_AUC: 0.835178,
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: 0.923077,
+                HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY: 0.952381,
+                HOLDOUT_BRIER_SCORE: 0.157767,
+                EXCLUDED_LABEL_DERIVED_COLUMNS: ["host_n_infections"],
             },
         },
     }
@@ -85,17 +95,17 @@ def _tg05_summary() -> dict:
 def test_fallback_tg05_summary_has_required_keys() -> None:
     fallback = _fallback_tg05_summary()
     lock = fallback["final_feature_lock"]
-    assert "panel_evaluation_metrics" in lock
-    assert "deployment_realistic_metrics" in lock
-    deployment = lock["deployment_realistic_metrics"]
+    assert PANEL_DEFAULT in lock
+    assert DEPLOYMENT_REALISTIC_SENSITIVITY in lock
+    deployment = lock[DEPLOYMENT_REALISTIC_SENSITIVITY]
     for key in (
-        "holdout_roc_auc",
-        "holdout_top3_hit_rate_all_strains",
-        "holdout_top3_hit_rate_susceptible_only",
-        "holdout_brier_score",
+        HOLDOUT_ROC_AUC,
+        HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
+        HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY,
+        HOLDOUT_BRIER_SCORE,
     ):
         assert key in deployment, f"missing {key} in fallback deployment metrics"
-    assert "excluded_columns" in deployment or "excluded_label_derived_columns" in deployment
+    assert EXCLUDED_LABEL_DERIVED_COLUMNS in deployment
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +157,8 @@ def test_bundle_reads_tg05_summary_keys_without_error() -> None:
         tg05_source={"path": None, "sha256": None},
     )
     callout = bundle["tg05_callout"]
-    assert "deployment_realistic_sensitivity" in callout
-    assert callout["deployment_realistic_sensitivity"]["holdout_roc_auc"] == 0.835178
+    assert DEPLOYMENT_REALISTIC_SENSITIVITY in callout
+    assert callout[DEPLOYMENT_REALISTIC_SENSITIVITY][HOLDOUT_ROC_AUC] == 0.835178
 
 
 def test_bundle_uses_fallback_keys_without_error() -> None:
@@ -160,7 +170,7 @@ def test_bundle_uses_fallback_keys_without_error() -> None:
         tg03_source={"path": None, "sha256": None},
         tg05_source={"path": None, "sha256": None},
     )
-    assert bundle["tg05_callout"]["deployment_realistic_sensitivity"]["holdout_top3_hit_rate_all_strains"] == 0.923077
+    assert bundle["tg05_callout"][DEPLOYMENT_REALISTIC_SENSITIVITY][HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS] == 0.923077
 
 
 # ---------------------------------------------------------------------------

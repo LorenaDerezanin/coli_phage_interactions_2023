@@ -21,6 +21,22 @@ from lyzortx.pipeline.steel_thread_v0.steps.st04_train_baselines import (
     NUMERIC_FEATURE_COLUMNS as V0_NUMERIC_FEATURE_COLUMNS,
 )
 from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import partition_track_c_columns
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_BRIER_SCORE,
+    HOLDOUT_ROC_AUC,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
+    HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY,
+    LABEL_DERIVED_COLUMNS_REVIEWED,
+    LOCKED_V1_FEATURE_CONFIGURATION,
+    PANEL_DEFAULT,
+    SELECTION_POLICY,
+    TG01_ALL_FEATURES_REFERENCE,
+    WINNER_ARM_ID,
+    WINNER_LABEL,
+    WINNER_SUBSET_BLOCKS,
+)
 from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     IDENTIFIER_COLUMNS,
     FeatureSpace,
@@ -574,27 +590,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     winning_panel_summary = summary_arms[winner["arm_id"]]
     final_feature_lock = {
         "task_id": "TG05",
-        "locked_v1_feature_configuration": {
-            "selection_policy": (
+        LOCKED_V1_FEATURE_CONFIGURATION: {
+            SELECTION_POLICY: (
                 "Among 2-block and 3-block panel-evaluation subsets, keep arms with holdout ROC-AUC >= TG01 "
                 "all-features holdout ROC-AUC, then choose the highest holdout top-3 hit rate. Ties break on "
                 "higher ROC-AUC, then lower Brier score, then arm_id."
             ),
-            "winner_arm_id": winner["arm_id"],
-            "winner_label": winner["arm_label"],
-            "winner_subset_blocks": list(winning_arm.subset_blocks),
-            "panel_evaluation_metrics": winning_panel_summary,
-            "deployment_realistic_metrics": deployment_summary,
-            "deployment_realistic_excluded_columns": list(deployment_arm.excluded_columns),
-            "tg01_all_features_reference_metrics": {
-                "holdout_roc_auc": tg01_lock["holdout_binary_metrics"]["roc_auc"],
-                "holdout_brier_score": tg01_lock["holdout_binary_metrics"]["brier_score"],
-                "holdout_top3_hit_rate_all_strains": tg01_lock["holdout_top3_metrics"]["top3_hit_rate_all_strains"],
-                "holdout_top3_hit_rate_susceptible_only": tg01_lock["holdout_top3_metrics"][
+            WINNER_ARM_ID: winner["arm_id"],
+            WINNER_LABEL: winner["arm_label"],
+            WINNER_SUBSET_BLOCKS: list(winning_arm.subset_blocks),
+            PANEL_DEFAULT: winning_panel_summary,
+            DEPLOYMENT_REALISTIC_SENSITIVITY: {
+                **deployment_summary,
+                EXCLUDED_LABEL_DERIVED_COLUMNS: list(deployment_arm.excluded_columns),
+            },
+            TG01_ALL_FEATURES_REFERENCE: {
+                HOLDOUT_ROC_AUC: tg01_lock["holdout_binary_metrics"]["roc_auc"],
+                HOLDOUT_BRIER_SCORE: tg01_lock["holdout_binary_metrics"]["brier_score"],
+                HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: tg01_lock["holdout_top3_metrics"]["top3_hit_rate_all_strains"],
+                HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY: tg01_lock["holdout_top3_metrics"][
                     "top3_hit_rate_susceptible_only"
                 ],
             },
-            "label_derived_columns": list(LABEL_DERIVED_COLUMNS),
+            LABEL_DERIVED_COLUMNS_REVIEWED: list(LABEL_DERIVED_COLUMNS),
         },
     }
 
@@ -614,7 +632,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         },
         "arms": summary_arms,
         "winning_panel_subset_arm_id": winner["arm_id"],
-        "final_feature_lock": final_feature_lock["locked_v1_feature_configuration"],
+        "final_feature_lock": final_feature_lock[LOCKED_V1_FEATURE_CONFIGURATION],
         "inputs": {
             "tg01_summary": {"path": str(args.tg01_summary_path), "sha256": _sha256(args.tg01_summary_path)},
             "st02_pair_table": {"path": str(args.st02_pair_table_path), "sha256": _sha256(args.st02_pair_table_path)},

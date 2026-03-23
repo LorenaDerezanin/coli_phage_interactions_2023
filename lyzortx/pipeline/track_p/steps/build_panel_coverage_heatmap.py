@@ -16,6 +16,13 @@ import numpy as np
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    LOCKED_V1_FEATURE_CONFIGURATION,
+    WINNER_LABEL,
+    WINNER_SUBSET_BLOCKS,
+)
 from lyzortx.pipeline.track_p.steps.build_digital_phagogram import (
     build_locked_arm_feature_spaces,
     ensure_prerequisite_outputs,
@@ -337,15 +344,15 @@ def build_panel_coverage_bundle(
         reverse=True,
     )[:8]
 
-    locked = config["locked_v1_feature_configuration"]
+    locked = config[LOCKED_V1_FEATURE_CONFIGURATION]
     fallback_initial = _fallback_strain(panel_rows_by_strain)
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "task_id": "TP02",
         "initial_bacteria": initial_bacteria if initial_bacteria in panel_rows_by_strain else fallback_initial,
-        "locked_v1_feature_configuration": locked,
-        "panel_label": f"{locked['winner_label']} (panel-default)",
-        "deployment_label": f"{locked['winner_label']} (deployment-realistic)",
+        LOCKED_V1_FEATURE_CONFIGURATION: locked,
+        "panel_label": f"{locked[WINNER_LABEL]} (panel-default)",
+        "deployment_label": f"{locked[WINNER_LABEL]} (deployment-realistic)",
         "row_axis": "host_phylogroup",
         "col_axis": "phage_family",
         "row_order": row_order,
@@ -850,11 +857,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pair_feature_blocks=(track_e_rbp_rows, track_e_defense_rows, track_e_isolation_rows),
     )
 
-    lock = locked_config["locked_v1_feature_configuration"]
+    lock = locked_config[LOCKED_V1_FEATURE_CONFIGURATION]
     arm_spaces = build_locked_arm_feature_spaces(
         all_feature_space,
-        winner_subset_blocks=lock["winner_subset_blocks"],
-        excluded_columns=lock["deployment_realistic_sensitivity"]["excluded_label_derived_columns"],
+        winner_subset_blocks=lock[WINNER_SUBSET_BLOCKS],
+        excluded_columns=lock[DEPLOYMENT_REALISTIC_SENSITIVITY][EXCLUDED_LABEL_DERIVED_COLUMNS],
     )
     params = dict(tg05_summary["locked_lightgbm_hyperparameters"])
     arm_results: Dict[str, Dict[str, object]] = {}

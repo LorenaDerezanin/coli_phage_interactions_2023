@@ -11,6 +11,12 @@ from pathlib import Path
 
 import pytest
 
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    LOCKED_V1_FEATURE_CONFIGURATION,
+    WINNER_LABEL,
+)
 from lyzortx.pipeline.track_p.steps.build_panel_coverage_heatmap import (
     aggregate_heatmap_layer,
     build_panel_coverage_bundle,
@@ -42,10 +48,10 @@ def _row(bacteria: str, phage: str, phylogroup: str, family: str, probability: f
 
 
 def test_v1_config_has_keys_read_by_panel_coverage_heatmap(v1_config: dict) -> None:
-    lock = v1_config["locked_v1_feature_configuration"]
-    assert "winner_label" in lock
-    assert "deployment_realistic_sensitivity" in lock
-    assert "excluded_label_derived_columns" in lock["deployment_realistic_sensitivity"]
+    lock = v1_config[LOCKED_V1_FEATURE_CONFIGURATION]
+    assert WINNER_LABEL in lock
+    assert DEPLOYMENT_REALISTIC_SENSITIVITY in lock
+    assert EXCLUDED_LABEL_DERIVED_COLUMNS in lock[DEPLOYMENT_REALISTIC_SENSITIVITY]
 
 
 # ---------------------------------------------------------------------------

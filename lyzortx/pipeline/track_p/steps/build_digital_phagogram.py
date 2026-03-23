@@ -24,6 +24,15 @@ from lyzortx.pipeline.steel_thread_v0.steps.st04_train_baselines import (
     NUMERIC_FEATURE_COLUMNS as V0_NUMERIC_FEATURE_COLUMNS,
 )
 from lyzortx.pipeline.track_g.steps import run_feature_subset_sweep, train_v1_binary_classifier
+from lyzortx.pipeline.track_g.v1_config_keys import (
+    DEPLOYMENT_REALISTIC_SENSITIVITY,
+    EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
+    LOCKED_V1_FEATURE_CONFIGURATION,
+    PANEL_DEFAULT,
+    WINNER_LABEL,
+    WINNER_SUBSET_BLOCKS,
+)
 from lyzortx.pipeline.track_g.steps.compute_shap_explanations import (
     _dense_row,
     format_contribution_summary,
@@ -422,17 +431,17 @@ def build_phagogram_bundle(
                 "deployment_rows": list(deployment_rows_by_strain[strain]),
             }
         )
-    locked = config["locked_v1_feature_configuration"]
+    locked = config[LOCKED_V1_FEATURE_CONFIGURATION]
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "task_id": "TP01",
         "initial_bacteria": bacteria,
         "display_limit": display_limit,
-        "locked_v1_feature_configuration": locked,
-        "panel_label": locked["winner_label"],
-        "deployment_label": f"{locked['winner_label']} (deployment-realistic)",
-        "panel_metrics": locked["panel_default"],
-        "deployment_metrics": locked["deployment_realistic_sensitivity"],
+        LOCKED_V1_FEATURE_CONFIGURATION: locked,
+        "panel_label": locked[WINNER_LABEL],
+        "deployment_label": f"{locked[WINNER_LABEL]} (deployment-realistic)",
+        "panel_metrics": locked[PANEL_DEFAULT],
+        "deployment_metrics": locked[DEPLOYMENT_REALISTIC_SENSITIVITY],
         "tg05_locked_lightgbm_hyperparameters": tg05_summary["locked_lightgbm_hyperparameters"],
         "strain_count": len(strains),
         "strains": strains,
@@ -443,9 +452,9 @@ def render_digital_phagogram_html(bundle: Mapping[str, object]) -> str:
     payload = json.dumps(bundle, separators=(",", ":"), sort_keys=True)
     panel_metrics = bundle["panel_metrics"]
     deployment_metrics = bundle["deployment_metrics"]
-    winner_blocks = ", ".join(bundle["locked_v1_feature_configuration"]["winner_subset_blocks"])
+    winner_blocks = ", ".join(bundle[LOCKED_V1_FEATURE_CONFIGURATION][WINNER_SUBSET_BLOCKS])
     excluded = ", ".join(
-        bundle["locked_v1_feature_configuration"]["deployment_realistic_sensitivity"]["excluded_label_derived_columns"]
+        bundle[LOCKED_V1_FEATURE_CONFIGURATION][DEPLOYMENT_REALISTIC_SENSITIVITY][EXCLUDED_LABEL_DERIVED_COLUMNS]
     )
     html = """<!doctype html>
 <html lang="en">
@@ -967,8 +976,8 @@ def render_digital_phagogram_html(bundle: Mapping[str, object]) -> str:
         html = html.replace("{{", "{").replace("}}", "}")
     return (
         html.replace("__PAYLOAD__", payload)
-        .replace("__PANEL_TOP3__", f"{float(panel_metrics['holdout_top3_hit_rate_all_strains']):.3f}")
-        .replace("__DEPLOYMENT_TOP3__", f"{float(deployment_metrics['holdout_top3_hit_rate_all_strains']):.3f}")
+        .replace("__PANEL_TOP3__", f"{float(panel_metrics[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.3f}")
+        .replace("__DEPLOYMENT_TOP3__", f"{float(deployment_metrics[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.3f}")
         .replace("__DISPLAY_LIMIT__", str(bundle["display_limit"]))
         .replace("__WINNER_BLOCKS__", winner_blocks)
         .replace("__EXCLUDED__", excluded)
@@ -1022,11 +1031,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pair_feature_blocks=(track_e_rbp_rows, track_e_defense_rows, track_e_isolation_rows),
     )
 
-    lock = locked_config["locked_v1_feature_configuration"]
+    lock = locked_config[LOCKED_V1_FEATURE_CONFIGURATION]
     arm_spaces = build_locked_arm_feature_spaces(
         all_feature_space,
-        winner_subset_blocks=lock["winner_subset_blocks"],
-        excluded_columns=lock["deployment_realistic_sensitivity"]["excluded_label_derived_columns"],
+        winner_subset_blocks=lock[WINNER_SUBSET_BLOCKS],
+        excluded_columns=lock[DEPLOYMENT_REALISTIC_SENSITIVITY][EXCLUDED_LABEL_DERIVED_COLUMNS],
     )
     params = dict(tg05_summary["locked_lightgbm_hyperparameters"])
     arm_results: Dict[str, Dict[str, object]] = {}
