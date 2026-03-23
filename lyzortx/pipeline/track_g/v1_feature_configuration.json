@@ -20,7 +20,7 @@
         "top3_hit_rate_all_strains": 0.907692,
         "top3_hit_rate_susceptible_only": 0.936508,
         "brier_score": 0.138814,
-        "ece": 0.0588
+        "ece": 0.058800
       },
       "platt": {
         "roc_auc": 0.835754,

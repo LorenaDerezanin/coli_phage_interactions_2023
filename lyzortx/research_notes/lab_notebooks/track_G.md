@@ -487,6 +487,13 @@ the old identifiers so the tree-level grep check is clean.
 
 ### 2026-03-23: TG07 implemented (clean retrain, recalibration, SHAP, and ablation rerun)
 
+#### Executive summary
+
+TG07 reran Track G after the TG06 leak cleanup to validate the clean feature set end to end. The retrain, calibration
+reruns, SHAP refresh, and ablation sweep all completed successfully on the leakage-free configuration, and the v1
+feature lock was updated to reflect the cleaned winner arm and metrics. The main outcome is a stable clean baseline that
+preserves the expected ranking performance without the leaked features.
+
 #### What was implemented
 
 - Reran the full Track G pipeline after TG06 on the leakage-free feature set with the same TG01 LightGBM
