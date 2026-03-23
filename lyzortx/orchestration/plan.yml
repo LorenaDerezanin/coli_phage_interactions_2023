@@ -341,7 +341,7 @@ tracks:
     - id: TG06
       title: Delete label-leaked features from the feature pipeline
       status: pending
-      model: gpt-5.4
+      model: gpt-5.4-mini
       acceptance_criteria:
       - 'Remove host_n_infections: delete the (n_infections, host_n_infections) rename
         in st02_build_pair_table.py and drop the column from ST02 output'
@@ -358,7 +358,7 @@ tracks:
     - id: TG07
       title: Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set
       status: pending
-      model: gpt-5.4
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
       - Recalibrate (isotonic + Platt) and report AUC, top-3, Brier, ECE
@@ -368,7 +368,7 @@ tracks:
     - id: TG08
       title: Re-run downstream tracks and verify end-to-end pipeline
       status: pending
-      model: gpt-5.4
+      model: gpt-5.4-mini
       acceptance_criteria:
       - Re-run explained recommendations (Track H) against clean model outputs
       - Re-run v0-vs-v1 evaluation (Track F) against clean model metrics

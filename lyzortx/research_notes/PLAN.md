@@ -224,7 +224,7 @@ graph LR
     receptor_variant_training_positive_count) to measure generalization to truly novel strains
   - Report both panel-evaluation and deployment-realistic metrics for the winning configuration
   - Lock the final v1 feature configuration for downstream Track F and H
-- [ ] **TG06** Delete label-leaked features from the feature pipeline Model: `gpt-5.4`.
+- [ ] **TG06** Delete label-leaked features from the feature pipeline Model: `gpt-5.4-mini`.
   - Remove host_n_infections: delete the (n_infections, host_n_infections) rename in st02_build_pair_table.py and drop
     the column from ST02 output
   - Remove receptor_variant_training_positive_count: delete its construction in
@@ -236,13 +236,13 @@ graph LR
   - Grep the entire lyzortx/ tree for host_n_infections and receptor_variant_training_positive_count — zero hits must
     remain
   - All existing tests pass after deletions
-- [ ] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set Model: `gpt-5.4`.
+- [ ] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set Model: `gpt-5.4-mini`.
   - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
   - Recalibrate (isotonic + Platt) and report AUC, top-3, Brier, ECE
   - Re-run SHAP explanations on the clean model
   - Re-run feature-block ablation on the clean feature set
   - Update v1_feature_configuration.json with the clean model metrics
-- [ ] **TG08** Re-run downstream tracks and verify end-to-end pipeline Model: `gpt-5.4`.
+- [ ] **TG08** Re-run downstream tracks and verify end-to-end pipeline Model: `gpt-5.4-mini`.
   - Re-run explained recommendations (Track H) against clean model outputs
   - Re-run v0-vs-v1 evaluation (Track F) against clean model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error on the clean
