@@ -224,7 +224,7 @@ graph LR
     (legacy_label_breadth_count, legacy_receptor_support_count) to measure generalization to truly novel strains
   - Report both panel-evaluation and deployment-realistic metrics for the winning configuration
   - Lock the final v1 feature configuration for downstream Track F and H
-- [ ] **TG06** Delete label-leaked features from the feature pipeline. Model: `gpt-5.4-mini`.
+- [x] **TG06** Delete label-leaked features from the feature pipeline. Model: `gpt-5.4-mini`.
   - Remove legacy_label_breadth_count: delete the (n_infections, legacy_label_breadth_count) rename in
     st02_build_pair_table.py and drop the column from ST02 output
   - Remove legacy_receptor_support_count: delete its construction in build_rbp_receptor_compatibility_feature_block.py
