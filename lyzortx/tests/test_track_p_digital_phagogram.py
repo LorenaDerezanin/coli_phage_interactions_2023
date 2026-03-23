@@ -15,6 +15,7 @@ from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import FeatureSpa
 from lyzortx.pipeline.track_g.v1_config_keys import (
     DEPLOYMENT_REALISTIC_SENSITIVITY,
     EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
     LOCKED_V1_FEATURE_CONFIGURATION,
     PANEL_DEFAULT,
     WINNER_SUBSET_BLOCKS,
@@ -57,7 +58,7 @@ def test_v1_config_has_keys_read_by_digital_phagogram(v1_lock: dict) -> None:
 def test_v1_config_has_panel_default_metrics(v1_lock: dict) -> None:
     assert PANEL_DEFAULT in v1_lock
     panel = v1_lock[PANEL_DEFAULT]
-    assert "holdout_top3_hit_rate_all_strains" in panel
+    assert HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS in panel
 
 
 # ---------------------------------------------------------------------------

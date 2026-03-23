@@ -20,6 +20,7 @@ from lyzortx.pipeline.track_g.v1_config_keys import (
     DEPLOYMENT_REALISTIC_SENSITIVITY,
     EXCLUDED_LABEL_DERIVED_COLUMNS,
     LOCKED_V1_FEATURE_CONFIGURATION,
+    WINNER_LABEL,
     WINNER_SUBSET_BLOCKS,
 )
 from lyzortx.pipeline.track_p.steps.build_digital_phagogram import (
@@ -350,8 +351,8 @@ def build_panel_coverage_bundle(
         "task_id": "TP02",
         "initial_bacteria": initial_bacteria if initial_bacteria in panel_rows_by_strain else fallback_initial,
         LOCKED_V1_FEATURE_CONFIGURATION: locked,
-        "panel_label": f"{locked['winner_label']} (panel-default)",
-        "deployment_label": f"{locked['winner_label']} (deployment-realistic)",
+        "panel_label": f"{locked[WINNER_LABEL]} (panel-default)",
+        "deployment_label": f"{locked[WINNER_LABEL]} (deployment-realistic)",
         "row_axis": "host_phylogroup",
         "col_axis": "phage_family",
         "row_order": row_order,

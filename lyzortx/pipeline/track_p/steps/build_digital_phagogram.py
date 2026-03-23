@@ -27,8 +27,10 @@ from lyzortx.pipeline.track_g.steps import run_feature_subset_sweep, train_v1_bi
 from lyzortx.pipeline.track_g.v1_config_keys import (
     DEPLOYMENT_REALISTIC_SENSITIVITY,
     EXCLUDED_LABEL_DERIVED_COLUMNS,
+    HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS,
     LOCKED_V1_FEATURE_CONFIGURATION,
     PANEL_DEFAULT,
+    WINNER_LABEL,
     WINNER_SUBSET_BLOCKS,
 )
 from lyzortx.pipeline.track_g.steps.compute_shap_explanations import (
@@ -436,8 +438,8 @@ def build_phagogram_bundle(
         "initial_bacteria": bacteria,
         "display_limit": display_limit,
         LOCKED_V1_FEATURE_CONFIGURATION: locked,
-        "panel_label": locked["winner_label"],
-        "deployment_label": f"{locked['winner_label']} (deployment-realistic)",
+        "panel_label": locked[WINNER_LABEL],
+        "deployment_label": f"{locked[WINNER_LABEL]} (deployment-realistic)",
         "panel_metrics": locked[PANEL_DEFAULT],
         "deployment_metrics": locked[DEPLOYMENT_REALISTIC_SENSITIVITY],
         "tg05_locked_lightgbm_hyperparameters": tg05_summary["locked_lightgbm_hyperparameters"],
@@ -974,8 +976,8 @@ def render_digital_phagogram_html(bundle: Mapping[str, object]) -> str:
         html = html.replace("{{", "{").replace("}}", "}")
     return (
         html.replace("__PAYLOAD__", payload)
-        .replace("__PANEL_TOP3__", f"{float(panel_metrics['holdout_top3_hit_rate_all_strains']):.3f}")
-        .replace("__DEPLOYMENT_TOP3__", f"{float(deployment_metrics['holdout_top3_hit_rate_all_strains']):.3f}")
+        .replace("__PANEL_TOP3__", f"{float(panel_metrics[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.3f}")
+        .replace("__DEPLOYMENT_TOP3__", f"{float(deployment_metrics[HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS]):.3f}")
         .replace("__DISPLAY_LIMIT__", str(bundle["display_limit"]))
         .replace("__WINNER_BLOCKS__", winner_blocks)
         .replace("__EXCLUDED__", excluded)

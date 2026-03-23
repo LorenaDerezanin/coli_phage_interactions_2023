@@ -21,6 +21,7 @@ from lyzortx.pipeline.track_g.v1_config_keys import (
     HOLDOUT_TOP3_HIT_RATE_SUSCEPTIBLE_ONLY,
     PANEL_DEFAULT,
     WINNER_LABEL,
+    WINNER_SUBSET_BLOCKS,
 )
 
 DEFAULT_TG03_SUMMARY_PATH = Path(
@@ -130,7 +131,7 @@ def _fallback_tg05_summary() -> Dict[str, object]:
         },
         "final_feature_lock": {
             WINNER_LABEL: "defense + OMP + phage-genomic",
-            "winner_subset_blocks": ["defense", "omp", "phage_genomic"],
+            WINNER_SUBSET_BLOCKS: ["defense", "omp", "phage_genomic"],
             PANEL_DEFAULT: {
                 HOLDOUT_ROC_AUC: 0.910766,
                 HOLDOUT_TOP3_HIT_RATE_ALL_STRAINS: 0.876923,
