@@ -13,40 +13,6 @@
   "holdout_brier_score": 0.156534,
   "holdout_top3_hit_rate_all_strains": 0.923077,
   "holdout_top3_hit_rate_susceptible_only": 0.952381,
-  "calibration_metrics": {
-    "full_label": {
-      "isotonic": {
-        "roc_auc": 0.834808,
-        "top3_hit_rate_all_strains": 0.907692,
-        "top3_hit_rate_susceptible_only": 0.936508,
-        "brier_score": 0.138814,
-        "ece": 0.058800
-      },
-      "platt": {
-        "roc_auc": 0.835754,
-        "top3_hit_rate_all_strains": 0.923077,
-        "top3_hit_rate_susceptible_only": 0.952381,
-        "brier_score": 0.139367,
-        "ece": 0.053467
-      }
-    },
-    "strict_confidence": {
-      "isotonic": {
-        "roc_auc": 0.893293,
-        "top3_hit_rate_all_strains": 0.828125,
-        "top3_hit_rate_susceptible_only": 0.898305,
-        "brier_score": 0.104318,
-        "ece": 0.137049
-      },
-      "platt": {
-        "roc_auc": 0.894254,
-        "top3_hit_rate_all_strains": 0.8125,
-        "top3_hit_rate_susceptible_only": 0.881356,
-        "brier_score": 0.103877,
-        "ece": 0.141089
-      }
-    }
-  },
   "tg01_all_features_reference_holdout_roc_auc": 0.835754,
   "tg01_all_features_reference_holdout_brier_score": 0.156187,
   "tg01_all_features_reference_holdout_top3_hit_rate_all_strains": 0.923077,

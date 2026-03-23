@@ -496,6 +496,7 @@ preserves the expected ranking performance without the leaked features.
 
 #### What was implemented
 
+- Reran Track G through `python lyzortx/pipeline/track_g/run_track_g.py` after the TG06 leak cleanup.
 - Reran the full Track G pipeline after TG06 on the leakage-free feature set with the same TG01 LightGBM
   hyperparameters.
 - Recomputed the clean calibration outputs for isotonic and Platt scaling and captured holdout AUC, top-3, Brier,
