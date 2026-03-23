@@ -484,3 +484,66 @@ the old identifiers so the tree-level grep check is clean.
 2. Flattening the TG05 lock is the right simplification now that there is no alternate leaked arm to preserve.
 3. The remaining validation work is purely operational: confirm the full test suite and repo-wide grep stay clean after
    the cleanup.
+
+### 2026-03-23: TG07 implemented (clean retrain, recalibration, SHAP, and ablation rerun)
+
+#### Executive summary
+
+TG07 reran Track G after the TG06 leak cleanup to validate the clean feature set end to end. The retrain, calibration
+reruns, SHAP refresh, and ablation sweep all completed successfully on the leakage-free configuration, and the v1
+feature lock was updated to reflect the cleaned winner arm and metrics. The main outcome is a stable clean baseline that
+preserves the expected ranking performance without the leaked features.
+
+#### What was implemented
+
+- Reran Track G through `python lyzortx/pipeline/track_g/run_track_g.py` after the TG06 leak cleanup.
+- Reran the full Track G pipeline after TG06 on the leakage-free feature set with the same TG01 LightGBM
+  hyperparameters.
+- Recomputed the clean calibration outputs for isotonic and Platt scaling and captured holdout AUC, top-3, Brier,
+  and ECE on both the `full_label` and `strict_confidence` slices.
+- Re-ran TG03 ablation and TG04 SHAP on the clean model, then refreshed the v1 feature lock in
+  `lyzortx/pipeline/track_g/v1_feature_configuration.json`.
+
+#### Output summary
+
+- TG01 clean retrain:
+  - best LightGBM params: `learning_rate=0.05`, `min_child_samples=25`, `n_estimators=300`, `num_leaves=31`
+  - holdout ROC-AUC: `0.835754`
+  - holdout top-3 hit rate (all strains): `0.923077`
+  - holdout Brier: `0.156187`
+- TG02 clean calibration:
+  - full-label isotonic: ROC-AUC `0.834808`, top-3 `0.907692`, Brier `0.138814`, ECE `0.058800`
+  - full-label Platt: ROC-AUC `0.835754`, top-3 `0.923077`, Brier `0.139367`, ECE `0.053467`
+  - strict-confidence isotonic: ROC-AUC `0.893293`, top-3 `0.828125`, Brier `0.104318`, ECE `0.137049`
+  - strict-confidence Platt: ROC-AUC `0.894254`, top-3 `0.812500`, Brier `0.103877`, ECE `0.141089`
+- TG03 clean ablation:
+  - all-features: ROC-AUC `0.835754`, top-3 `0.923077`, Brier `0.156187`
+  - `+OMP receptors`: ROC-AUC `0.828341`, top-3 `0.907692`, Brier `0.164480`
+  - `+pairwise compatibility`: ROC-AUC `0.835709`, top-3 `0.876923`, Brier `0.159660`
+  - `+defense subtypes`: ROC-AUC `0.835093`, top-3 `0.892308`, Brier `0.161094`
+- TG04 clean SHAP:
+  - `1,107` explained recommendation pairs
+  - `594` global features ranked
+  - difficulty counts: `8` easy, `93` moderate, `268` hard
+  - top global SHAP features: `phage_genome_length_nt`, `phage_morphotype=Myoviridae`, `phage_host=PDP21`,
+    `phage_gc_content`, `defense_evasion_mean_score`, and `host_lps_type=R1`
+- TG05 clean feature lock:
+  - winner arm: `defense + phage-genomic + pairwise`
+  - holdout ROC-AUC: `0.835975`
+  - holdout top-3 hit rate (all strains): `0.923077`
+  - holdout Brier: `0.156534`
+  - clean reference arm: `all features` at ROC-AUC `0.835754`, top-3 `0.923077`, Brier `0.156187`
+- Updated lock artifact:
+  - `lyzortx/pipeline/track_g/v1_feature_configuration.json`
+
+#### Interpretation
+
+1. The clean model is now the honest baseline. The leaked-feature lift is gone, and the best remaining model sits at
+   holdout ROC-AUC `0.835975` with the same all-strain top-3 hit rate as the clean all-features reference.
+2. Calibration improves probability quality, but it does not change the ranking story. Isotonic is better on Brier,
+   Platt is slightly better on full-label ECE, and neither calibrator turns the clean model into a materially stronger
+   classifier.
+3. SHAP is now dominated by genuine phage-genomic and pairwise signals instead of label proxies, which is the main
+   validation that TG06/TG07 achieved the intended cleanup.
+4. The clean lock should be treated as the v1 baseline from here. Track F and Track H still need to be re-run against
+   this snapshot in TG08, and TG09 can focus on whether any non-leaky feature closes the remaining AUC gap.

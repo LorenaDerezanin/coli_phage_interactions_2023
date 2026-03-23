@@ -1,19 +1,20 @@
 {
-  "task_id": "TG05",
+  "task_id": "TG07",
+  "source_lock_task_id": "TG05",
   "selection_policy": "Among 2-block and 3-block panel-evaluation subsets, keep arms with holdout ROC-AUC >= TG01 all-features holdout ROC-AUC, then choose the highest holdout top-3 hit rate. Ties break on higher ROC-AUC, then lower Brier score, then arm_id.",
-  "winner_arm_id": "subset_defense__omp__phage_genomic",
-  "winner_label": "defense + OMP + phage-genomic",
+  "winner_arm_id": "subset_defense__phage_genomic__pairwise",
+  "winner_label": "defense + phage-genomic + pairwise",
   "winner_subset_blocks": [
     "defense",
-    "omp",
-    "phage_genomic"
+    "phage_genomic",
+    "pairwise"
   ],
-  "holdout_roc_auc": 0.910766,
-  "holdout_brier_score": 0.109543,
-  "holdout_top3_hit_rate_all_strains": 0.876923,
-  "holdout_top3_hit_rate_susceptible_only": 0.904762,
-  "tg01_all_features_reference_holdout_roc_auc": 0.909089,
-  "tg01_all_features_reference_holdout_brier_score": 0.113112,
-  "tg01_all_features_reference_holdout_top3_hit_rate_all_strains": 0.876923,
-  "tg01_all_features_reference_holdout_top3_hit_rate_susceptible_only": 0.904762
+  "holdout_roc_auc": 0.835975,
+  "holdout_brier_score": 0.156534,
+  "holdout_top3_hit_rate_all_strains": 0.923077,
+  "holdout_top3_hit_rate_susceptible_only": 0.952381,
+  "tg01_all_features_reference_holdout_roc_auc": 0.835754,
+  "tg01_all_features_reference_holdout_brier_score": 0.156187,
+  "tg01_all_features_reference_holdout_top3_hit_rate_all_strains": 0.923077,
+  "tg01_all_features_reference_holdout_top3_hit_rate_susceptible_only": 0.952381
 }
