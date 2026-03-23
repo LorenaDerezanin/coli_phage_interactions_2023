@@ -242,7 +242,7 @@ graph LR
   - Re-run SHAP explanations on the clean model
   - Re-run feature-block ablation on the clean feature set
   - Update v1_feature_configuration.json with the clean model metrics
-- [ ] **TG08** Re-run downstream tracks and verify end-to-end pipeline. Model: `gpt-5.4-mini`.
+- [x] **TG08** Re-run downstream tracks and verify end-to-end pipeline. Model: `gpt-5.4-mini`.
   - Re-run explained recommendations (Track H) against clean model outputs
   - Re-run v0-vs-v1 evaluation (Track F) against clean model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error on the clean

@@ -368,7 +368,7 @@ tracks:
       - Update v1_feature_configuration.json with the clean model metrics
     - id: TG08
       title: Re-run downstream tracks and verify end-to-end pipeline
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Re-run explained recommendations (Track H) against clean model outputs
