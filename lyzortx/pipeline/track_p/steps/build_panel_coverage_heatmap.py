@@ -854,7 +854,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     arm_spaces = build_locked_arm_feature_spaces(
         all_feature_space,
         winner_subset_blocks=lock["winner_subset_blocks"],
-        excluded_columns=lock["deployment_realistic"]["excluded_label_derived_columns"],
+        excluded_columns=lock["deployment_realistic_sensitivity"]["excluded_label_derived_columns"],
     )
     params = dict(tg05_summary["locked_lightgbm_hyperparameters"])
     arm_results: Dict[str, Dict[str, object]] = {}

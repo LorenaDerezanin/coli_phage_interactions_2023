@@ -432,7 +432,7 @@ def build_phagogram_bundle(
         "panel_label": locked["winner_label"],
         "deployment_label": f"{locked['winner_label']} (deployment-realistic)",
         "panel_metrics": locked["panel_default"],
-        "deployment_metrics": locked["deployment_realistic"],
+        "deployment_metrics": locked["deployment_realistic_sensitivity"],
         "tg05_locked_lightgbm_hyperparameters": tg05_summary["locked_lightgbm_hyperparameters"],
         "strain_count": len(strains),
         "strains": strains,
@@ -445,7 +445,7 @@ def render_digital_phagogram_html(bundle: Mapping[str, object]) -> str:
     deployment_metrics = bundle["deployment_metrics"]
     winner_blocks = ", ".join(bundle["locked_v1_feature_configuration"]["winner_subset_blocks"])
     excluded = ", ".join(
-        bundle["locked_v1_feature_configuration"]["deployment_realistic"]["excluded_label_derived_columns"]
+        bundle["locked_v1_feature_configuration"]["deployment_realistic_sensitivity"]["excluded_label_derived_columns"]
     )
     html = """<!doctype html>
 <html lang="en">
@@ -1026,7 +1026,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     arm_spaces = build_locked_arm_feature_spaces(
         all_feature_space,
         winner_subset_blocks=lock["winner_subset_blocks"],
-        excluded_columns=lock["deployment_realistic"]["excluded_label_derived_columns"],
+        excluded_columns=lock["deployment_realistic_sensitivity"]["excluded_label_derived_columns"],
     )
     params = dict(tg05_summary["locked_lightgbm_hyperparameters"])
     arm_results: Dict[str, Dict[str, object]] = {}
