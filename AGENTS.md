@@ -129,6 +129,8 @@
 4. **AGENTS.md compliance** — verify the PR follows all policies in this file (code placement, dependency pinning,
    generated outputs, git staging, etc.).
 5. **Clarity** — naming, structure, readability.
+6. **Coding principles** — no magic numbers/strings, constants are defined and reused, long-running steps have
+   start/end log messages with timestamps.
 
 Do NOT nitpick style — ruff handles formatting. Focus on substantive issues only. Do not invent problems.
 
@@ -214,6 +216,20 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   there is no production function to test, either the logic belongs in a helper under `lyzortx/` or it does not need a
   test.
 - Keep CI unit-test workflows enabled and green; do not merge changes that silently bypass tests.
+
+# Coding Principles
+
+- **Test data quality** — Unit tests must exercise production code. Prefer real data (or programmatically generated
+  realistic data) over hand-crafted dummy values. Real data catches edge cases that synthetic placeholders miss.
+- **No magic numbers or inline string literals** — Define named constants for repeated or meaningful values. Reuse
+  constants across the codebase rather than scattering duplicate literals. This improves readability and makes future
+  changes single-point edits.
+- **User-visible progress feedback** — Scripts that perform long-running operations must log a "starting" message before
+  and a "completed/finished" message after each significant phase. Users should never stare at a silent terminal
+  wondering whether the process is working.
+- **Timestamped logging** — Prefer logging with timestamps (e.g., via Python's `logging` module with a time-stamped
+  format) over bare `print()` calls. Timestamps make it possible to diagnose performance issues and correlate events
+  across pipeline stages.
 
 # External Service Integration Development
 
