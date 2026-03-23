@@ -30,7 +30,7 @@ graph LR
       `gpt-5.4-mini`.
   - Schema file exists
   - Passes validation
-- [ ] **TX02** Add migration support Model: `gpt-5.4`.
+- [ ] **TX02** Add migration support. Model: `gpt-5.4`.
   - Migrations run without error
 
 ## Track Y: Integration
@@ -42,6 +42,6 @@ graph LR
 
 ## Track Z: Release
 
-- [ ] **TZ01** Cut release candidate Model: `gpt-5.4`.
+- [ ] **TZ01** Cut release candidate. Model: `gpt-5.4`.
   - All tests pass on clean checkout
   - Version tag applied

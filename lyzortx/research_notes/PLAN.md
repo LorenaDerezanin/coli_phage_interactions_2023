@@ -179,11 +179,11 @@ graph LR
 - **Guiding Principle:** Lock v1 benchmark split and add bootstrap confidence intervals. ST03 already provides
   leakage-safe host-group and phage-family holdouts. TF01/TF02 are done but their metrics are invalidated by the
   label-leakage fix — they will be re-run as part of TG06.
-- [x] **TF01** Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics Model: `gpt-5.4-mini`.
+- [x] **TF01** Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics. Model: `gpt-5.4-mini`.
   - Existing ST03 split locked as the canonical v1 evaluation protocol
   - Bootstrap CIs (1000 resamples of holdout strains) for top-3 hit rate, AUC, Brier score, and ECE
   - Dual-slice reporting (full-label and strict-confidence) for all metrics
-- [x] **TF02** Before/after comparison of v0 vs v1 with error bucket analysis Model: `gpt-5.4-mini`.
+- [x] **TF02** Before/after comparison of v0 vs v1 with error bucket analysis. Model: `gpt-5.4-mini`.
   - Side-by-side metrics table for v0 (metadata logreg) vs v1 (genomic GBM)
   - Error bucket analysis showing which v0 holdout misses v1 fixed and why
   - Honest reporting of strains that remain unpredictable
@@ -205,14 +205,14 @@ graph LR
     features
   - Each arm reports AUC, top-3 hit rate, Brier on same holdout split
   - v0 baseline is reference point in all comparisons
-- [x] **TG04** Compute SHAP explanations for per-pair and global feature importance Model: `gpt-5.4`.
+- [x] **TG04** Compute SHAP explanations for per-pair and global feature importance. Model: `gpt-5.4`.
   - TreeExplainer SHAP values for GBM model
   - Per-pair explanations answering why each phage was recommended for each strain
   - Global feature importance ranking across the panel
   - Per-strain summary of what makes each strain hard or easy to predict
   - Concrete recommendation of which feature blocks to keep in final v1 model, based on SHAP evidence and TG03 ablation
     results
-- [x] **TG05** Run feature-subset sweep to find best block combination for top-3 ranking Model: `gpt-5.4`.
+- [x] **TG05** Run feature-subset sweep to find best block combination for top-3 ranking. Model: `gpt-5.4`.
   - Train models on all 2-block and 3-block combinations of the 4 new feature blocks (defense, OMP, phage-genomic,
     pairwise)
   - Reuse the TG01 winning hyperparameters for all sweep arms — do NOT run per-arm hyperparameter search. The goal is to
@@ -224,7 +224,7 @@ graph LR
     receptor_variant_training_positive_count) to measure generalization to truly novel strains
   - Report both panel-evaluation and deployment-realistic metrics for the winning configuration
   - Lock the final v1 feature configuration for downstream Track F and H
-- [ ] **TG06** Delete label-leaked features from the feature pipeline Model: `gpt-5.4-mini`.
+- [ ] **TG06** Delete label-leaked features from the feature pipeline. Model: `gpt-5.4-mini`.
   - Remove host_n_infections: delete the (n_infections, host_n_infections) rename in st02_build_pair_table.py and drop
     the column from ST02 output
   - Remove receptor_variant_training_positive_count: delete its construction in
@@ -236,19 +236,19 @@ graph LR
   - Grep the entire lyzortx/ tree for host_n_infections and receptor_variant_training_positive_count — zero hits must
     remain
   - All existing tests pass after deletions
-- [ ] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set Model: `gpt-5.4-mini`.
+- [ ] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set. Model: `gpt-5.4-mini`.
   - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
   - Recalibrate (isotonic + Platt) and report AUC, top-3, Brier, ECE
   - Re-run SHAP explanations on the clean model
   - Re-run feature-block ablation on the clean feature set
   - Update v1_feature_configuration.json with the clean model metrics
-- [ ] **TG08** Re-run downstream tracks and verify end-to-end pipeline Model: `gpt-5.4-mini`.
+- [ ] **TG08** Re-run downstream tracks and verify end-to-end pipeline. Model: `gpt-5.4-mini`.
   - Re-run explained recommendations (Track H) against clean model outputs
   - Re-run v0-vs-v1 evaluation (Track F) against clean model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error on the clean
     pipeline
   - The old label-leaked metrics must not appear in any output
-- [ ] **TG09** Investigate non-leaky features that close the calibration gap Model: `gpt-5.4`.
+- [ ] **TG09** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
   - Identify why AUC drops ~7.6pp when host_n_infections is removed
   - Propose and test at least two candidate replacement features that do not leak training labels
   - Report whether any candidate recovers >50% of the AUC gap without degrading top-3 hit rate
@@ -259,7 +259,7 @@ graph LR
 - **Guiding Principle:** Top-k recommendations with SHAP-based explanations. TH01/TH02 are done but will be re-run as
   part of TG06 against the clean model.
 - [x] **TH01** Benchmark policy variants for top-k recommendation and lock a non-regressing default
-- [x] **TH02** Add explained recommendations with calibrated P(lysis), CI, and SHAP features Model: `gpt-5.4-mini`.
+- [x] **TH02** Add explained recommendations with calibrated P(lysis), CI, and SHAP features. Model: `gpt-5.4-mini`.
   - Each top-3 recommendation includes calibrated P(lysis), 95% CI, and top-3 SHAP features
   - Output format suitable for clinician or CDMO operator review
   - Report covers all holdout strains
@@ -277,22 +277,22 @@ graph LR
   - source_datasource_id, source_disagreement_flag, and source_native_record_id columns populated
   - Unit tests verify source-fidelity preservation
 - [x] **TI04** Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
-- [x] **TI05** Define harmonization protocol for Tier A datasets Model: `gpt-5.4`.
-- [x] **TI06** Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata Model: `gpt-5.4-mini`.
-- [x] **TI07** Define confidence tiers for external labels Model: `gpt-5.4`.
-- [x] **TI08** Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable Model:
+- [x] **TI05** Define harmonization protocol for Tier A datasets. Model: `gpt-5.4`.
+- [x] **TI06** Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata. Model: `gpt-5.4-mini`.
+- [x] **TI07** Define confidence tiers for external labels. Model: `gpt-5.4`.
+- [x] **TI08** Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable. Model:
       `gpt-5.4`.
-- [x] **TI09** Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B
+- [x] **TI09** Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B.
       Model: `gpt-5.4-mini`.
-- [x] **TI10** Track incremental lift and failure modes by datasource and confidence tier Model: `gpt-5.4-mini`.
+- [x] **TI10** Track incremental lift and failure modes by datasource and confidence tier. Model: `gpt-5.4-mini`.
 
 ## Track J: Reproducibility and Release Quality
 
 - **Guiding Principle:** One-command regeneration and environment freezing for v1 pipeline. TJ01/TJ02 are done but must
   be re-verified after TG06 retrains the clean model.
-- [x] **TJ01** One command to regenerate all v1 outputs from raw data Model: `gpt-5.4-mini`.
+- [x] **TJ01** One command to regenerate all v1 outputs from raw data. Model: `gpt-5.4-mini`.
   - Single entry point regenerates feature blocks, model, calibration, recommendations, and report
   - Runs without error on a fresh clone with only phage_env dependencies
-- [x] **TJ02** Freeze environment specs and seeds for v1 benchmark run Model: `gpt-5.4-mini`.
+- [x] **TJ02** Freeze environment specs and seeds for v1 benchmark run. Model: `gpt-5.4-mini`.
   - requirements.txt and phage_env environment spec locked for exact versions used
   - Random seeds documented for reproducible model training
