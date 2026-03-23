@@ -547,3 +547,38 @@ preserves the expected ranking performance without the leaked features.
    validation that TG06/TG07 achieved the intended cleanup.
 4. The clean lock should be treated as the v1 baseline from here. Track F and Track H still need to be re-run against
    this snapshot in TG08, and TG09 can focus on whether any non-leaky feature closes the remaining AUC gap.
+
+### 2026-03-23: TG08 implemented (downstream reruns and end-to-end verification on the clean pipeline)
+
+#### Executive summary
+
+TG08 reran the release pipeline end to end with `python -m lyzortx.pipeline.track_j.run_track_j` after the TG06/TG07
+cleanup and verified that Track F-style benchmark reporting and Track H explained recommendations now consume the clean
+model artifacts. The command completed without error, regenerated the downstream artifacts under
+`lyzortx/generated_outputs/track_g/` and `lyzortx/generated_outputs/track_h/`, and a repo-local grep over
+`lyzortx/generated_outputs/` found no remaining hits for the old leaked feature names.
+
+#### What was verified
+
+- Track J completed the full dependency chain on the clean pipeline: ST0.1 through ST0.3, Track C, Track D, Track E,
+  Track G, and Track H.
+- The clean v1 benchmark summary at
+  `lyzortx/generated_outputs/track_g/tg02_gbm_calibration/tg02_benchmark_summary.json` reported:
+  - full-label ROC-AUC `0.832916`, top-3 hit rate `0.969231`, Brier `0.140478`, ECE `0.059836`
+  - strict-confidence ROC-AUC `0.893900`, top-3 hit rate `0.921875`, Brier `0.106825`, ECE `0.143201`
+- The clean feature-lock summary from
+  `lyzortx/generated_outputs/track_g/tg05_feature_subset_sweep/tg05_locked_v1_feature_config.json` selected
+  `defense + phage-genomic` with holdout ROC-AUC `0.837200`, top-3 hit rate `0.907692`, and Brier `0.159559`.
+- Track H regenerated `65` holdout-strain recommendation blocks and `195` recommendation rows in
+  `lyzortx/generated_outputs/track_h/th02_explained_recommendations/th02_explained_recommendations_report.md` against
+  the clean TG02 and TG04 artifacts.
+
+#### Interpretation
+
+1. The clean release path is executable, not just described. Running Track J from the repo root rebuilt the full
+   downstream chain without needing any leaked-feature artifact.
+2. The downstream reports are now aligned with the cleaned model. The benchmark and recommendation artifacts are
+   sourced from TG02/TG05/TG04 outputs produced after TG06, so the old label-derived feature names do not appear in the
+   generated output tree.
+3. The clean metrics are weaker than the pre-cleanup numbers, which is expected and preferable to carrying forward a
+   label leak. The pipeline now reflects the honest baseline that TG09 can improve upon without reintroducing leakage.
