@@ -236,7 +236,7 @@ graph LR
   - Grep the entire lyzortx/ tree for legacy_label_breadth_count and legacy_receptor_support_count — zero hits must
     remain
   - All existing tests pass after deletions
-- [ ] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set. Model: `gpt-5.4-mini`.
+- [x] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set. Model: `gpt-5.4-mini`.
   - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
   - Recalibrate (isotonic + Platt) and report AUC, top-3, Brier, ECE
   - Re-run SHAP explanations on the clean model

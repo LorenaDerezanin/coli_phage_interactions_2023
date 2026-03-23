@@ -358,7 +358,7 @@ tracks:
     - id: TG07
       title: Retrain, recalibrate, and re-run SHAP and ablation on the clean feature
         set
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
