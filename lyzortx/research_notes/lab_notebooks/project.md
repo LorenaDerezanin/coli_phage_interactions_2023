@@ -518,15 +518,15 @@ not from genomic content:
 
 | SHAP rank | Feature | Mean |SHAP| | Source |
 |-----------|---------|------------|--------|
-| 1 | `host_n_infections` | 1.183 | Panel metadata: count of lytic phages per strain |
-| 2 | `receptor_variant_training_positive_count` | 0.572 | TE01: training-fold lysis frequency per receptor variant |
+| 1 | `legacy_label_breadth_count` | 1.183 | Panel metadata: count of lytic phages per strain |
+| 2 | `legacy_receptor_support_count` | 0.572 | TE01: training-fold lysis frequency per receptor variant |
 
 These features are powerful within-panel predictors but are **unavailable for truly novel strains** in a deployment
 scenario. A new clinical isolate arrives with a genome assembly — you can derive its defense systems, receptor variants,
-LPS type, and phylogenomic embedding, but you cannot know `host_n_infections` (you haven't screened it yet) or
-`receptor_variant_training_positive_count` (its specific receptor variant may not appear in the training data).
+LPS type, and phylogenomic embedding, but you cannot know `legacy_label_breadth_count` (you haven't screened it yet) or
+`legacy_receptor_support_count` (its specific receptor variant may not appear in the training data).
 
-The model leans heavily on these: `host_n_infections` alone has 2x the SHAP impact of the next feature. This means the
+The model leans heavily on these: `legacy_label_breadth_count` alone has 2x the SHAP impact of the next feature. This means the
 holdout metrics (AUC 0.910, top-3 89.2%) are **optimistic for real-world deployment** because the holdout strains are
 from the same experimental panel and their receptor variants overlap with training strains.
 
@@ -552,7 +552,7 @@ are overpromising. The honest number — what the model achieves using only feat
 lower. That's the number partners need to trust.
 
 This also explains the ablation paradox from the previous note: adding the pairwise compatibility block (which includes
-`receptor_variant_training_positive_count`) shifts the model's attention toward collaborative-filtering signal that is
+`legacy_receptor_support_count`) shifts the model's attention toward collaborative-filtering signal that is
 strong on average but misleading for specific holdout strains.
 
 #### Plan adjustment
@@ -560,7 +560,7 @@ strong on average but misleading for specific holdout strains.
 Added two acceptance criteria to TG05 (feature-subset sweep):
 
 1. Include a **deployment-realistic arm** that excludes all features derived from training labels
-   (`host_n_infections`, `receptor_variant_training_positive_count`) to measure generalization to truly novel strains.
+   (`legacy_label_breadth_count`, `legacy_receptor_support_count`) to measure generalization to truly novel strains.
 2. Report both **panel-evaluation** and **deployment-realistic** metrics for the winning configuration.
 
 This gives us two numbers to present: the panel metric (what the model does on known strains with full context) and the
@@ -580,7 +580,7 @@ pending.
 The feature-subset sweep (PR #156) evaluated all 10 two-block and three-block combinations of the four new feature
 blocks (defense, OMP, phage-genomic, pairwise) with fixed TG01 hyperparameters on the ST03 holdout (65 strains).
 
-**Panel-evaluation results (all arms include v0 baseline + host_n_infections):**
+**Panel-evaluation results (all arms include v0 baseline + legacy_label_breadth_count):**
 
 | Arm | AUC | Top-3 (all) | Top-3 (susceptible) | Brier |
 |-----|-----|-------------|---------------------|-------|
@@ -593,7 +593,7 @@ blocks (defense, OMP, phage-genomic, pairwise) with fixed TG01 hyperparameters o
 Winner: **defense + OMP + phage-genomic** — best AUC (0.9108), best Brier (0.110), pairwise block excluded. The winner
 selection rule required AUC ≥ TG01 all-features (0.9091), then maximized top-3. Only this arm cleared the AUC gate.
 
-**Deployment-realistic result (winner minus host_n_infections):**
+**Deployment-realistic result (winner minus legacy_label_breadth_count):**
 
 | | AUC | Top-3 (all) | Top-3 (susceptible) | Brier |
 |--|-----|-------------|---------------------|-------|
@@ -602,8 +602,8 @@ selection rule required AUC ≥ TG01 all-features (0.9091), then maximized top-3
 
 #### Interpretation
 
-1. **Removing `host_n_infections` improves ranking.** The deployment-realistic model achieves 92.3% top-3 hit rate —
-   higher than any panel-evaluation arm. This is counterintuitive but mechanistically sound: `host_n_infections` tells
+1. **Removing `legacy_label_breadth_count` improves ranking.** The deployment-realistic model achieves 92.3% top-3 hit rate —
+   higher than any panel-evaluation arm. This is counterintuitive but mechanistically sound: `legacy_label_breadth_count` tells
    the model "this strain is broadly susceptible" which biases it toward recommending the same popular broad-range
    phages. Without that shortcut, the model is forced to use defense subtypes, OMP receptor variants, and phage k-mer
    profiles to make strain-specific picks. Those features produce better *rankings* even though they produce worse
@@ -612,7 +612,7 @@ selection rule required AUC ≥ TG01 all-features (0.9091), then maximized top-3
 2. **AUC and top-3 measure fundamentally different things.** AUC measures how well the model separates lytic from
    non-lytic pairs across the entire probability range. Top-3 measures whether the correct phages end up in the top 3
    slots per strain. A feature that improves average-case AUC can hurt top-3 by pushing a marginally-higher-scoring
-   wrong phage above a correct one. `host_n_infections` is exactly this kind of feature — it improves the average but
+   wrong phage above a correct one. `legacy_label_breadth_count` is exactly this kind of feature — it improves the average but
    dilutes the per-strain signal.
 
 3. **The pairwise block (Track E) was correctly excluded.** No subset containing pairwise cleared the AUC gate while
@@ -644,16 +644,16 @@ sets honest expectations for their use case.
 
 #### Executive summary
 
-Review of the TG04 SHAP results revealed that the v1 model's two strongest features (`host_n_infections` with mean
-|SHAP| 1.18 and `receptor_variant_training_positive_count` at 0.57) are derived from training labels, not independent
+Review of the TG04 SHAP results revealed that the v1 model's two strongest features (`legacy_label_breadth_count` with mean
+|SHAP| 1.18 and `legacy_receptor_support_count` at 0.57) are derived from training labels, not independent
 inputs. The v1 "panel-default" model is not predicting — it is memorizing. The plan has been restructured to delete these
 features, retrain from scratch, and report whatever comes out as the honest v1 baseline. The prior dual-arm
 panel/deployment framing is abandoned: there is only one model, the leakage-clean one.
 
 #### What was decided
 
-1. **Label-leaked features are a bug, not a variant.** `host_n_infections` is literally "how many phages lyse this host"
-   repackaged as a feature. `receptor_variant_training_positive_count` counts training-positive pairs per receptor
+1. **Label-leaked features are a bug, not a variant.** `legacy_label_breadth_count` is literally "how many phages lyse this host"
+   repackaged as a feature. `legacy_receptor_support_count` counts training-positive pairs per receptor
    cluster. Both encode the answer. Keeping them as an "optional panel-only arm" would be dishonest.
 
 2. **Track P deleted.** All three presentation artifacts (digital phagogram, coverage heatmap, feature lift

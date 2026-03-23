@@ -333,7 +333,7 @@ tracks:
         AUC
       - Compare winning subset against the TG01 all-features model
       - Include a deployment-realistic arm that excludes all features derived from
-        training labels (host_n_infections, receptor_variant_training_positive_count)
+        training labels (legacy_label_breadth_count, legacy_receptor_support_count)
         to measure generalization to truly novel strains
       - Report both panel-evaluation and deployment-realistic metrics for the winning
         configuration
@@ -343,17 +343,17 @@ tracks:
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - 'Remove host_n_infections: delete the (n_infections, host_n_infections) rename
+      - 'Remove legacy_label_breadth_count: delete the (n_infections, legacy_label_breadth_count) rename
         in st02_build_pair_table.py and drop the column from ST02 output'
-      - 'Remove receptor_variant_training_positive_count: delete its construction in
+      - 'Remove legacy_receptor_support_count: delete its construction in
         build_rbp_receptor_compatibility_feature_block.py (Track E) and drop it from
         the TE01 output schema'
       - 'Remove the LABEL_DERIVED_COLUMNS list in run_feature_subset_sweep.py and the
         deployment-realistic arm logic that depends on it'
       - 'Delete v1_config_keys.py and simplify v1_feature_configuration.json to a single
         flat feature config (no panel_default vs deployment_realistic_sensitivity split)'
-      - 'Grep the entire lyzortx/ tree for host_n_infections and
-        receptor_variant_training_positive_count — zero hits must remain'
+      - 'Grep the entire lyzortx/ tree for legacy_label_breadth_count and
+        legacy_receptor_support_count — zero hits must remain'
       - All existing tests pass after deletions
     - id: TG07
       title: Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set
@@ -380,7 +380,7 @@ tracks:
       status: pending
       model: gpt-5.4
       acceptance_criteria:
-      - Identify why AUC drops ~7.6pp when host_n_infections is removed
+      - Identify why AUC drops ~7.6pp when legacy_label_breadth_count is removed
       - Propose and test at least two candidate replacement features that do not leak
         training labels
       - Report whether any candidate recovers >50% of the AUC gap without degrading

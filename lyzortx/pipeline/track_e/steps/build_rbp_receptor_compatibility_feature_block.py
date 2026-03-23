@@ -21,7 +21,6 @@ OUTPUT_FEATURE_COLUMNS: Tuple[str, ...] = (
     "surface_target_present",
     "receptor_cluster_matches",
     "receptor_variant_seen_in_training_positives",
-    "receptor_variant_training_positive_count",
 )
 
 PROTEIN_TARGET_COLUMNS: Dict[str, str] = {
@@ -76,13 +75,6 @@ FEATURE_METADATA: Dict[str, Dict[str, str]] = {
         "transform": (
             "1 when any mapped receptor/surface variant for this pair was already seen among leakage-safe training "
             "positives for the exact phage."
-        ),
-    },
-    "receptor_variant_training_positive_count": {
-        "type": "integer",
-        "transform": (
-            "Sum of leakage-safe positive-training counts for the exact phage across the pair's mapped receptor/surface "
-            "variants."
         ),
     },
 }
@@ -433,7 +425,6 @@ def build_feature_rows(
         surface_target_present = int(any(host_states[target].present for target in surface_targets))
 
         protein_cluster_match_count = 0
-        exact_phage_positive_count = 0
         exact_variant_seen = 0
         for target in lookup_entry.target_receptors:
             target_state = host_states[target]
@@ -447,7 +438,6 @@ def build_feature_rows(
             positive_support = phage_counts[(str(row["phage"]), target)][target_state.variant]
             if positive_support > 0:
                 exact_variant_seen = 1
-                exact_phage_positive_count += positive_support
 
         output_row.update(
             {
@@ -457,7 +447,6 @@ def build_feature_rows(
                 "surface_target_present": surface_target_present,
                 "receptor_cluster_matches": int(protein_cluster_match_count > 0),
                 "receptor_variant_seen_in_training_positives": exact_variant_seen,
-                "receptor_variant_training_positive_count": exact_phage_positive_count,
             }
         )
         feature_rows.append(output_row)

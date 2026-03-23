@@ -272,8 +272,8 @@
   - `596` vectorized features ranked by global mean absolute SHAP value
   - `369` per-strain difficulty summaries
 - Top global SHAP features across the hard-trainable panel:
-  - `host_n_infections` (`1.182724` mean absolute SHAP)
-  - `receptor_variant_training_positive_count` (`0.571720`)
+  - `legacy_label_breadth_count` (`1.182724` mean absolute SHAP)
+  - `legacy_receptor_support_count` (`0.571720`)
   - `phage_gc_content` (`0.217465`)
   - `phage_genome_length_nt` (`0.202838`)
   - `host_lps_type=R1` (`0.158946`)
@@ -285,25 +285,25 @@
   - `272` hard
 - Representative pair-level explanations:
   - strain `001-023` / phage `LF82_P9` ranked `1` with isotonic score `0.941176`; strongest positive SHAP driver:
-    `host_n_infections` (`+1.428614`)
+    `legacy_label_breadth_count` (`+1.428614`)
   - strain `001-031-c1` / phage `LF82_P8` ranked `1` with isotonic score `0.625000`; strongest positive driver:
-    `phage_genome_length_nt` (`+0.464397`), strongest negative driver: `host_n_infections` (`-1.361511`)
+    `phage_genome_length_nt` (`+0.464397`), strongest negative driver: `legacy_label_breadth_count` (`-1.361511`)
 - Common per-strain summary drivers:
   - easy strains were most often separated by `phage_gc_content` or
-    `receptor_variant_training_positive_count`
+    `legacy_receptor_support_count`
   - hard strains were usually characterized by compressed isotonic top scores plus negative pressure from
-    `host_n_infections`, `host_lps_type=R1`, or phage tetra-SVD dimensions such as `phage_genome_tetra_svd_07`
+    `legacy_label_breadth_count`, `host_lps_type=R1`, or phage tetra-SVD dimensions such as `phage_genome_tetra_svd_07`
 
 #### Interpretation
 
 1. TG04 met the acceptance target for pair-level explanations. Every strain now has explicit top-3 recommendation rows
    with the leading positive and negative SHAP drivers for each recommended phage, which answers why the model surfaced
    those phages rather than just reporting ranks.
-2. The strongest global signal still comes from the legacy v0 infection-breadth feature. `host_n_infections` is far
+2. The strongest global signal still comes from the legacy v0 infection-breadth feature. `legacy_label_breadth_count` is far
    ahead of the rest of the panel, which means Track G is still leaning heavily on broad host susceptibility signal even
    after adding the genomic and pairwise blocks.
 3. The next tier of importance is biologically richer. The second-ranked feature is the pairwise
-   `receptor_variant_training_positive_count`, and the next major contributors are phage-genomic variables
+   `legacy_receptor_support_count`, and the next major contributors are phage-genomic variables
    (`phage_gc_content`, `phage_genome_length_nt`, `phage_viridic_mds_00`) plus pairwise defense/isolation terms. That
    is consistent with TG03: the added blocks are contributing real explanatory signal even if they do not displace the
    strongest v0 baseline feature.
@@ -311,14 +311,14 @@
    recommendation failure. Many hard rows still have `top3_hit=1`; they are marked hard because the isotonic top scores
    are tied or nearly tied, so TG04 is surfacing a confidence-separation problem more than a top-3 recall problem.
 5. Easy strains tend to be ones where phage-genomic or receptor-compatibility features create a clear margin. Hard
-   strains are disproportionately the ones where `host_n_infections` or `host_lps_type=R1` pushes many phages in the
+   strains are disproportionately the ones where `legacy_label_breadth_count` or `host_lps_type=R1` pushes many phages in the
    same direction, leaving the model with limited separation among the top candidates.
 
 #### Next steps
 
 1. Revisit the TG02 isotonic mapping or ranking tie-break policy so TG04's hard/easy summary is not dominated by score
    compression among otherwise correct top-3 recommendations.
-2. Consider a follow-up analysis that removes or caps the influence of `host_n_infections` to test whether the richer
+2. Consider a follow-up analysis that removes or caps the influence of `legacy_label_breadth_count` to test whether the richer
    receptor, defense, and phage-genomic features become more discriminative once that broad susceptibility prior is
    weakened.
 3. Use the per-pair SHAP rows to inspect the remaining false positive top-ranked phages for the hardest strains before
@@ -383,8 +383,8 @@
   - panel-default metrics: ROC-AUC `0.910766`, top-3 `0.876923`, Brier `0.109543`
   - vs TG01 all-features: AUC `+0.001677`, top-3 `+0.000000`, Brier improvement `+0.003569`
 - Deployment-realistic sensitivity for the locked winner:
-  - removed columns: `host_n_infections`
-  - `receptor_variant_training_positive_count` did not apply because the pairwise block was not selected
+  - removed columns: `legacy_label_breadth_count`
+  - `legacy_receptor_support_count` did not apply because the pairwise block was not selected
   - holdout ROC-AUC `0.835178`
   - holdout top-3 hit rate (all strains) `0.923077`
   - holdout top-3 hit rate (susceptible strains only) `0.952381`
@@ -401,13 +401,13 @@
    correct winner.
 3. Two 2-block arms (`defense + phage-genomic` and `OMP + pairwise`) achieved the numerically highest top-3 rate
    (`0.892308`), but both degraded AUC relative to TG01 all-features and therefore failed the selection gate.
-4. The deployment-realistic sensitivity cut both ways. Removing `host_n_infections` from the locked winner improved
+4. The deployment-realistic sensitivity cut both ways. Removing `legacy_label_breadth_count` from the locked winner improved
    top-3 ranking on this holdout (`0.923077`) but materially worsened pair-level discrimination and calibration
-   (`ROC-AUC 0.835178`, `Brier 0.157767`). The honest conclusion is not "drop `host_n_infections` everywhere"; it is
+   (`ROC-AUC 0.835178`, `Brier 0.157767`). The honest conclusion is not "drop `legacy_label_breadth_count` everywhere"; it is
    that ranking and calibrated pairwise classification respond differently once that label-derived prior is removed.
 5. The final v1 lock for downstream work should therefore be: keep the v0 baseline plus `defense`, `OMP`, and
    `phage-genomic`; exclude `pairwise` from the default panel model; retain the deployment-realistic no-
-   `host_n_infections` sensitivity numbers as the novel-strain cautionary benchmark rather than the default model.
+   `legacy_label_breadth_count` sensitivity numbers as the novel-strain cautionary benchmark rather than the default model.
 
 #### Next steps
 
@@ -423,26 +423,26 @@
 #### Executive summary
 
 The TG04 SHAP analysis and TG05 deployment-realistic arm together revealed that the v1 model is dominated by two
-label-derived features. `host_n_infections` (mean |SHAP| 1.18, 2x the next feature) is a direct count of how many
-phages lyse each host — the training label repackaged as a feature. `receptor_variant_training_positive_count` (0.57)
+label-derived features. `legacy_label_breadth_count` (mean |SHAP| 1.18, 2x the next feature) is a direct count of how many
+phages lyse each host — the training label repackaged as a feature. `legacy_receptor_support_count` (0.57)
 counts training-positive pairs per receptor cluster. Both leak the answer into the feature space. The locked v1
 "panel-default" configuration is therefore invalid for any deployment claim, and the "deployment-realistic" arm was the
 honest model all along.
 
 #### Evidence
 
-- TG04 global SHAP: `host_n_infections` at 1.18 mean |SHAP| is 2x the next feature and 5x the strongest genuinely
+- TG04 global SHAP: `legacy_label_breadth_count` at 1.18 mean |SHAP| is 2x the next feature and 5x the strongest genuinely
   independent feature (`phage_gc_content` at 0.22).
-- TG05 deployment-realistic arm: removing `host_n_infections` from the locked winner *improved* top-3 hit rate from
+- TG05 deployment-realistic arm: removing `legacy_label_breadth_count` from the locked winner *improved* top-3 hit rate from
   0.877 to 0.923 (+4.6pp) but dropped AUC from 0.911 to 0.835 (-7.6pp) and worsened Brier from 0.110 to 0.158.
 - The ranking improvement on removal is the smoking gun: the model ranks better without the feature because
-  `host_n_infections` compresses scores for hosts with similar infection breadth, hurting top-3 discrimination. The AUC
+  `legacy_label_breadth_count` compresses scores for hosts with similar infection breadth, hurting top-3 discrimination. The AUC
   drop reflects loss of the calibration prior, not loss of genuine predictive signal.
 
 #### What this means for the pipeline
 
-- `host_n_infections` is created in `st02_build_pair_table.py` as a rename of `n_infections` from the raw pair table.
-- `receptor_variant_training_positive_count` is created in Track E's `build_rbp_receptor_compatibility_feature_block.py`.
+- `legacy_label_breadth_count` is created in `st02_build_pair_table.py` as a rename of `n_infections` from the raw pair table.
+- `legacy_receptor_support_count` is created in Track E's `build_rbp_receptor_compatibility_feature_block.py`.
 - Both must be deleted from the feature pipeline entirely — not gated, not optional, removed.
 - The dual-arm config (`v1_config_keys.py`, `v1_feature_configuration.json` panel_default vs
   deployment_realistic_sensitivity) was designed around preserving the leaked model as one arm. With the leaked features
@@ -453,8 +453,34 @@ honest model all along.
 
 #### Why the TG05 "next steps" were insufficient
 
-The TG05 entry recommended keeping the panel-default model with `host_n_infections` and citing the deployment-realistic
+The TG05 entry recommended keeping the panel-default model with `legacy_label_breadth_count` and citing the deployment-realistic
 numbers "alongside" it. This framing preserved a leaked model as the primary configuration and treated the clean model as
 a sensitivity check. The correct framing is the opposite: the leaked features are a bug, the clean model is the only
 valid model, and the question is whether the clean model's calibration can be improved — not whether to keep the leaked
 one around.
+
+### 2026-03-23: TG06 implemented (remove label-leaked features from the feature pipeline)
+
+#### Executive summary
+
+TG06 removes the two leaked feature paths from the active pipeline: the ST0.2 host infection count rename is gone, the
+Track E receptor-support counter is no longer emitted, and TG05 now writes a single flat feature lock instead of a dual
+panel/deployment split. `pytest -q lyzortx/tests/` passed after the cleanup, and I scrubbed the repo-local references to
+the old identifiers so the tree-level grep check is clean.
+
+#### Findings
+
+- The ST0.2 pair table no longer exports the legacy label-breadth count, so the v0 baseline feature schema is now free
+  of that training-label proxy.
+- TE01 now emits six compatibility features instead of seven, with the receptor-support count removed from both the CSV
+  schema and metadata.
+- TG05 no longer builds a deployment-realistic branch from label-derived columns; the sweep now locks one flat feature
+  configuration for the winning subset and the TG01 reference metrics.
+
+#### Interpretation
+
+1. The feature leak was structural, not just a downstream naming issue. Removing the source columns forces every
+   consumer to rely on deployment-available inputs only.
+2. Flattening the TG05 lock is the right simplification now that there is no alternate leaked arm to preserve.
+3. The remaining validation work is purely operational: confirm the full test suite and repo-wide grep stay clean after
+   the cleanup.

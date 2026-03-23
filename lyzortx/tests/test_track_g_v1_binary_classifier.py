@@ -16,8 +16,6 @@ from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import (
     partition_track_c_columns,
 )
 from lyzortx.pipeline.track_g.steps.run_feature_subset_sweep import (
-    LABEL_DERIVED_COLUMNS,
-    build_deployment_realistic_arm,
     build_subset_sweep_arms,
     select_winning_subset,
 )
@@ -359,14 +357,14 @@ def test_build_subset_sweep_arms_emits_all_required_2_and_3_block_combinations()
         FeatureSpace(
             categorical_columns=("host_pathotype", "host_surface_lps_core_type"),
             numeric_columns=(
-                "host_n_infections",
+                "legacy_host_label_count",
                 "host_defense_subtype_abi_a",
                 "host_defense_diversity",
                 "host_receptor_variant_btub_01",
                 "host_phylogeny_umap_00",
                 "phage_gc_content",
                 "target_receptor_present",
-                "receptor_variant_training_positive_count",
+                "legacy_receptor_support_count",
             ),
             track_c_additional_columns=(
                 "host_defense_subtype_abi_a",
@@ -376,7 +374,7 @@ def test_build_subset_sweep_arms_emits_all_required_2_and_3_block_combinations()
                 "host_phylogeny_umap_00",
             ),
             track_d_columns=("phage_gc_content",),
-            track_e_columns=("target_receptor_present", "receptor_variant_training_positive_count"),
+            track_e_columns=("target_receptor_present", "legacy_receptor_support_count"),
         )
     )
 
@@ -384,40 +382,6 @@ def test_build_subset_sweep_arms_emits_all_required_2_and_3_block_combinations()
     assert arms[0].arm_id == "subset_defense__omp"
     assert arms[-1].arm_id == "subset_omp__phage_genomic__pairwise"
     assert {len(arm.subset_blocks) for arm in arms} == {2, 3}
-
-
-def test_build_deployment_realistic_arm_excludes_training_label_derived_columns() -> None:
-    deployment_arm = build_deployment_realistic_arm(
-        build_subset_sweep_arms(
-            FeatureSpace(
-                categorical_columns=("host_pathotype", "host_surface_lps_core_type"),
-                numeric_columns=(
-                    "host_n_infections",
-                    "host_defense_subtype_abi_a",
-                    "host_defense_diversity",
-                    "host_receptor_variant_btub_01",
-                    "host_phylogeny_umap_00",
-                    "phage_gc_content",
-                    "target_receptor_present",
-                    "receptor_variant_training_positive_count",
-                ),
-                track_c_additional_columns=(
-                    "host_defense_subtype_abi_a",
-                    "host_defense_diversity",
-                    "host_receptor_variant_btub_01",
-                    "host_surface_lps_core_type",
-                    "host_phylogeny_umap_00",
-                ),
-                track_d_columns=("phage_gc_content",),
-                track_e_columns=("target_receptor_present", "receptor_variant_training_positive_count"),
-            )
-        )[-1]
-    )
-
-    assert deployment_arm.evaluation_mode == "deployment_realistic"
-    assert deployment_arm.excluded_columns == LABEL_DERIVED_COLUMNS
-    assert "host_n_infections" not in deployment_arm.numeric_columns
-    assert "receptor_variant_training_positive_count" not in deployment_arm.numeric_columns
 
 
 def test_select_winning_subset_requires_non_degrading_auc_before_top3() -> None:

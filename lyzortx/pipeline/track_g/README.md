@@ -71,6 +71,5 @@ The TG05 feature-subset sweep directory includes:
 2. `tg05_feature_subset_metrics.csv`: holdout ROC-AUC, top-3 hit rate, and Brier for every 2-block and 3-block arm
 3. `tg05_feature_subset_pair_predictions.csv`: non-holdout OOF and final holdout probabilities for every evaluated arm
 4. `tg05_feature_subset_holdout_top3_rankings.csv`: holdout top-3 rankings for every evaluated arm
-5. `tg05_locked_v1_feature_config.json`: locked v1 feature-block decision for downstream Track F/H/P work
-6. `tg05_locked_v1_feature_columns.csv`: concrete categorical/numeric columns for both the panel-default and
-   deployment-realistic locked configurations
+5. `tg05_locked_v1_feature_config.json`: flat locked v1 feature-block decision for downstream Track F/H/P work
+6. `tg05_locked_v1_feature_columns.csv`: concrete categorical/numeric columns for the locked subset

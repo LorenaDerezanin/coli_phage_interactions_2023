@@ -102,7 +102,7 @@ def test_build_explained_recommendation_rows_merges_probability_and_shap_feature
             "bacteria": "A",
             "phage": "p1",
             "recommendation_rank": "1",
-            "top_positive_feature_1": "host_n_infections",
+            "top_positive_feature_1": "legacy_host_label_count",
             "top_positive_shap_1": "1.2",
             "top_positive_feature_2": "phage_gc_content",
             "top_positive_shap_2": "0.8",
@@ -129,7 +129,7 @@ def test_build_explained_recommendation_rows_merges_probability_and_shap_feature
 
     assert rows[0]["calibrated_p_lysis"] == 0.81
     assert rows[0]["calibrated_p_lysis_ci_low"] == 0.74
-    assert rows[0]["top_shap_feature_1"] == "host_n_infections"
+    assert rows[0]["top_shap_feature_1"] == "legacy_host_label_count"
     assert rows[0]["top_shap_feature_2"] == "phage_gc_content"
     assert rows[0]["top_shap_feature_3"] == "host_lps_type=R1"
 
@@ -144,7 +144,7 @@ def test_render_markdown_report_covers_all_holdout_strains() -> None:
             "top_recommended_calibrated_p_lysis": 0.8,
             "top_recommended_ci_low": 0.7,
             "top_recommended_ci_high": 0.9,
-            "top_shap_summary": "host_n_infections (+1.2000)",
+            "top_shap_summary": "legacy_host_label_count (+1.2000)",
             "top3_hit": 1,
         },
         {
@@ -167,7 +167,7 @@ def test_render_markdown_report_covers_all_holdout_strains() -> None:
             "calibrated_p_lysis": 0.8,
             "calibrated_p_lysis_ci_low": 0.7,
             "calibrated_p_lysis_ci_high": 0.9,
-            "top_shap_summary": "host_n_infections (+1.2000)",
+            "top_shap_summary": "legacy_host_label_count (+1.2000)",
         },
         {
             "bacteria": "B",
@@ -323,7 +323,7 @@ def test_main_writes_track_h_outputs(tmp_path: Path) -> None:
                 "bacteria": "A",
                 "phage": "p1",
                 "recommendation_rank": "1",
-                "top_positive_feature_1": "host_n_infections",
+                "top_positive_feature_1": "legacy_host_label_count",
                 "top_positive_shap_1": "1.2",
                 "top_positive_feature_2": "phage_gc_content",
                 "top_positive_shap_2": "0.8",
@@ -343,7 +343,7 @@ def test_main_writes_track_h_outputs(tmp_path: Path) -> None:
                 "recommendation_rank": "2",
                 "top_positive_feature_1": "phage_gc_content",
                 "top_positive_shap_1": "0.9",
-                "top_positive_feature_2": "host_n_infections",
+                "top_positive_feature_2": "legacy_host_label_count",
                 "top_positive_shap_2": "0.4",
                 "top_positive_feature_3": "",
                 "top_positive_shap_3": "",
@@ -365,7 +365,7 @@ def test_main_writes_track_h_outputs(tmp_path: Path) -> None:
                 "top_positive_shap_2": "",
                 "top_positive_feature_3": "",
                 "top_positive_shap_3": "",
-                "top_negative_feature_1": "host_n_infections",
+                "top_negative_feature_1": "legacy_host_label_count",
                 "top_negative_shap_1": "-0.2",
                 "top_negative_feature_2": "",
                 "top_negative_shap_2": "",
@@ -404,7 +404,7 @@ def test_main_writes_track_h_outputs(tmp_path: Path) -> None:
         rows = list(csv.DictReader(handle))
 
     assert len(rows) == 3
-    assert rows[0]["top_shap_feature_1"] == "host_n_infections"
+    assert rows[0]["top_shap_feature_1"] == "legacy_host_label_count"
     assert rows[0]["calibrated_p_lysis_ci_low"]
     assert rows[0]["calibrated_p_lysis_ci_high"]
 

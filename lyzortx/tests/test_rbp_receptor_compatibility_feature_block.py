@@ -214,10 +214,8 @@ def test_build_feature_rows_uses_leakage_safe_training_views() -> None:
     assert by_pair_id["B1__P1"]["protein_target_present"] == 1
     assert by_pair_id["B1__P1"]["receptor_cluster_matches"] == 1
     assert by_pair_id["B1__P1"]["receptor_variant_seen_in_training_positives"] == 1
-    assert by_pair_id["B1__P1"]["receptor_variant_training_positive_count"] == 1
 
     assert by_pair_id["B3__P1"]["receptor_cluster_matches"] == 1
-    assert by_pair_id["B3__P1"]["receptor_variant_training_positive_count"] == 2
     assert by_pair_id["B4__P2"]["surface_target_present"] == 1
     assert by_pair_id["B4__P2"]["receptor_variant_seen_in_training_positives"] == 0
 
@@ -305,5 +303,5 @@ def test_main_writes_feature_matrix_metadata_lookup_summary_and_manifest(tmp_pat
     assert any(row["column_name"] == "target_receptor_present" for row in metadata_rows)
     assert lookup_summary_rows[0]["phage"] == "P1"
     assert manifest["pair_count"] == 3
-    assert manifest["feature_count"] == 7
+    assert manifest["feature_count"] == 6
     assert manifest["lookup_coverage"]["covered_phage_count"] == 2

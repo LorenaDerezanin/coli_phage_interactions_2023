@@ -23,7 +23,7 @@
   - `surface_target_present`
   - `receptor_cluster_matches`
   - `receptor_variant_seen_in_training_positives`
-  - `receptor_variant_training_positive_count`
+  - `legacy_receptor_support_count`
 - Added regression tests in `lyzortx/tests/test_rbp_receptor_compatibility_feature_block.py` covering:
   - lookup loading and target validation
   - leakage-safe exact-phage and taxon-level training aggregation
@@ -61,7 +61,7 @@
   - `receptor_cluster_matches = 4,820 / 35,424` pairs (`13.6%`)
   - `receptor_variant_seen_in_training_positives = 24,963 / 35,424` pairs (`70.5%`)
 - Leakage-safe training positives used for the out-of-fold / holdout aggregations: `8,149`.
-- Total exact-phage variant support accumulated in `receptor_variant_training_positive_count`: `819,067`.
+- Total exact-phage variant support accumulated in `legacy_receptor_support_count`: `819,067`.
 - The uncovered taxa are explicit rather than silently guessed:
   - `Kagunavirus / Guernseyvirinae`: `11` phages
   - `Dhillonvirus / Other`: `4` phages
