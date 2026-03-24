@@ -1,5 +1,7 @@
-import json
 import csv
+import json
+import sys
+import types
 
 import numpy as np
 
@@ -24,6 +26,7 @@ from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     build_feature_space,
     compute_top3_hit_rate,
     merge_expanded_feature_rows,
+    make_lightgbm_estimator,
     select_best_candidate,
 )
 
@@ -144,6 +147,27 @@ def test_select_best_candidate_prefers_auc_then_top3_then_brier() -> None:
     )
 
     assert best["params"]["name"] == "b"
+
+
+def test_make_lightgbm_estimator_enables_determinism_without_forcing_single_thread(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeLGBMClassifier:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    fake_lightgbm = types.SimpleNamespace(LGBMClassifier=FakeLGBMClassifier)
+    monkeypatch.setitem(sys.modules, "lightgbm", fake_lightgbm)
+
+    estimator = make_lightgbm_estimator({"num_leaves": 31}, 2, base_random_state=17)
+
+    assert estimator.__class__.__name__ == "FakeLGBMClassifier"
+    assert captured["objective"] == "binary"
+    assert captured["class_weight"] == "balanced"
+    assert captured["random_state"] == 19
+    assert captured["deterministic"] is True
+    assert captured["force_col_wise"] is True
+    assert "n_jobs" not in captured
 
 
 def test_partition_track_c_columns_splits_defense_from_remaining_host_genomic() -> None:
