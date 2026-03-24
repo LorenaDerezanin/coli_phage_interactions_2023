@@ -446,3 +446,20 @@ with acceptance criteria requiring actual data downloads and >0 output rows.
 - TI03-TI06: now require downloading real data from source URLs
 - TI07-TI10: now require >0 real external rows at each stage
 - TI03-TI07 upgraded to gpt-5.4 for external service integration
+
+### 2026-03-24: TI10 source-tier verdicts and failure buckets are explicit
+
+#### What changed
+
+- `lyzortx/pipeline/track_i/steps/build_incremental_lift_failure_analysis.py` now records per-source/tier lift deltas
+  against the TI09 internal-only baseline and emits a `lift_direction` classification of `helped`, `hurt`, or
+  `neutral`.
+- The TI10 manifest now counts only actual failure buckets in `failure_modes` and keeps `clean_row_count` separate so
+  the notebook can report real failure modes without mixing them with the non-failure remainder.
+- Regression coverage now checks the new verdict column and the failure-mode split so the summary contract stays stable.
+
+#### Interpretation
+
+TI10 is now explicit about what the TI09 numbers mean. The source/tier table is no longer just a pile of deltas: it
+has a direct helped/hurt/neutral verdict for each source+tier slice, and the manifest cleanly separates true failure
+states from the rows that simply passed all checks.

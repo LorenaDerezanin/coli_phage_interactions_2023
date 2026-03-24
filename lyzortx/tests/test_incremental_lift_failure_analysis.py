@@ -143,10 +143,14 @@ def test_compute_source_tier_lift_rows_tracks_included_and_excluded_external_row
     assert vhrdb_high["first_training_arm"] == "plus_vhrdb"
     assert vhrdb_high["first_training_arm_index"] == 1
     assert vhrdb_high["mean_training_weight"] == 1.0
+    assert vhrdb_high["row_lift_vs_internal"] == 2
+    assert vhrdb_high["pair_lift_vs_internal"] == 2
+    assert vhrdb_high["lift_direction"] == "helped"
     assert vhrdb_high["row_share_of_arm"] == 0.666667
     assert virus_host_db_medium["included_row_count"] == 0
     assert virus_host_db_medium["excluded_row_count"] == 1
     assert virus_host_db_medium["first_training_arm"] == "excluded"
+    assert virus_host_db_medium["lift_direction"] == "neutral"
 
 
 def test_compute_failure_mode_rows_groups_clean_and_failure_rows() -> None:
@@ -334,7 +338,9 @@ def test_main_emits_ti10_outputs(tmp_path) -> None:
 
     manifest = json.loads((output_dir / "ti10_incremental_lift_manifest.json").read_text(encoding="utf-8"))
     assert manifest["step_name"] == "build_incremental_lift_failure_analysis"
-    assert manifest["failure_modes"]["clean"] == 1
+    assert manifest["failure_modes"] == {"source_disagreement": 1}
+    assert manifest["clean_row_count"] == 1
+    assert manifest["source_tier_summary"]["lift_direction_counts"]["helped"] == 2
 
 
 def test_run_track_i_dispatches_ti10_step(monkeypatch) -> None:
