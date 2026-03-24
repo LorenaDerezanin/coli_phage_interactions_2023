@@ -1,4 +1,7 @@
 from lyzortx.pipeline.track_g.steps.investigate_non_leaky_candidate_features import (
+    LOCKED_BASELINE_MATCH_TOLERANCE,
+    TE01_BINARY_INDICATOR_CANDIDATE_COLUMNS,
+    assert_locked_baseline_matches_rerun,
     build_candidate_arms,
     build_locked_baseline_arm,
     compute_gap_recovery_fraction,
@@ -86,6 +89,7 @@ def test_build_candidate_arms_adds_each_clean_feature_on_top_of_locked_baseline(
     assert arms[-1].candidate_column == "isolation_host_defense_jaccard_distance"
     assert "lookup_available" in arms[1].numeric_columns
     assert "phage_gc_content" in arms[1].numeric_columns
+    assert all(arm.candidate_column in TE01_BINARY_INDICATOR_CANDIDATE_COLUMNS for arm in arms[1:5])
 
 
 def test_compute_gap_recovery_fraction_uses_locked_and_leaked_auc() -> None:
@@ -144,3 +148,37 @@ def test_summarize_candidate_row_marks_acceptance_when_auc_clears_half_gap_and_t
     assert row["gap_recovery_fraction_vs_locked_v1"] == 0.507028
     assert row["top3_non_degrading_vs_locked_v1"] is True
     assert row["recovers_gt_50pct_auc_gap_without_top3_degradation"] is True
+
+
+def test_assert_locked_baseline_matches_rerun_accepts_small_rounding_differences() -> None:
+    assert_locked_baseline_matches_rerun(
+        {
+            "holdout_roc_auc": 0.8372 + (LOCKED_BASELINE_MATCH_TOLERANCE / 2.0),
+            "holdout_top3_hit_rate_all_strains": 0.907692 - (LOCKED_BASELINE_MATCH_TOLERANCE / 2.0),
+        },
+        {
+            "holdout_roc_auc": 0.8372,
+            "holdout_top3_hit_rate_all_strains": 0.907692,
+        },
+    )
+
+
+def test_assert_locked_baseline_matches_rerun_raises_on_material_drift() -> None:
+    try:
+        assert_locked_baseline_matches_rerun(
+            {
+                "holdout_roc_auc": 0.84,
+                "holdout_top3_hit_rate_all_strains": 0.91,
+            },
+            {
+                "holdout_roc_auc": 0.8372,
+                "holdout_top3_hit_rate_all_strains": 0.907692,
+            },
+        )
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected baseline rerun/config drift to raise ValueError.")
+
+    assert "holdout_roc_auc" in message
+    assert "holdout_top3_hit_rate_all_strains" in message

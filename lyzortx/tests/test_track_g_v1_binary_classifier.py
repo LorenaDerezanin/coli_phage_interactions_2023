@@ -279,6 +279,7 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "feature-block-ablation",
         "compute-shap",
         "feature-subset-sweep",
+        "non-leaky-candidate-search",
     ]
 
 

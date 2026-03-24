@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> None:
         compute_shap_explanations.main([])
     if args.step in {"feature-subset-sweep", "all"}:
         run_feature_subset_sweep.main([])
-    if args.step == "non-leaky-candidate-search":
+    if args.step in {"non-leaky-candidate-search", "all"}:
         investigate_non_leaky_candidate_features.main([])
 
 

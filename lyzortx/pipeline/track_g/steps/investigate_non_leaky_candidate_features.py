@@ -59,6 +59,13 @@ CANDIDATE_COLUMN_SOURCES: Mapping[str, str] = {
     "isolation_host_umap_euclidean_distance": "TE03 isolation-host distance",
     "isolation_host_defense_jaccard_distance": "TE03 isolation-host distance",
 }
+TE01_BINARY_INDICATOR_CANDIDATE_COLUMNS: Tuple[str, ...] = (
+    "lookup_available",
+    "target_receptor_present",
+    "protein_target_present",
+    "surface_target_present",
+)
+LOCKED_BASELINE_MATCH_TOLERANCE = 1e-6
 
 
 @dataclass(frozen=True)
@@ -222,6 +229,9 @@ def build_candidate_arms(feature_space: FeatureSpace, locked_config: Mapping[str
 
     arms = [baseline_arm]
     for column in CLEAN_PAIRWISE_CANDIDATE_COLUMNS:
+        # Keep TE01 binary indicators in numeric_columns so TG11 matches the LightGBM treatment used elsewhere.
+        # LightGBM handles 0/1 indicators numerically, and mixing categorical encoding here would make the
+        # single-feature arm comparisons harder to interpret against the locked v1 baseline.
         arms.append(
             CandidateArm(
                 arm_id=f"{baseline_arm.arm_id}__plus__{column}",
@@ -279,6 +289,32 @@ def summarize_candidate_row(
             arm.candidate_column is not None and holdout_auc > threshold_auc and top3_non_degrading
         ),
     }
+
+
+def assert_locked_baseline_matches_rerun(
+    rerun_baseline: Mapping[str, object],
+    locked_v1_config: Mapping[str, object],
+    *,
+    tolerance: float = LOCKED_BASELINE_MATCH_TOLERANCE,
+) -> None:
+    checks = (
+        ("holdout_roc_auc", "holdout_roc_auc"),
+        ("holdout_top3_hit_rate_all_strains", "holdout_top3_hit_rate_all_strains"),
+    )
+    mismatches = []
+    for rerun_key, locked_key in checks:
+        rerun_value = float(rerun_baseline[rerun_key])
+        locked_value = float(locked_v1_config[locked_key])
+        if abs(rerun_value - locked_value) > tolerance:
+            mismatches.append(
+                f"{rerun_key}: rerun={rerun_value:.6f}, locked_config={locked_value:.6f}, tolerance={tolerance:.1e}"
+            )
+    if mismatches:
+        mismatch_message = "; ".join(mismatches)
+        raise ValueError(
+            "TG11 rerun baseline diverged from the locked v1 config. Update the locked reference or investigate "
+            f"reproducibility drift before interpreting candidate deltas. {mismatch_message}"
+        )
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -378,10 +414,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         )
 
+    rerun_baseline = next(row for row in metrics_rows if row["candidate_column"] is None)
+    assert_locked_baseline_matches_rerun(rerun_baseline, locked_v1_config)
     improving_candidates = [
         row for row in metrics_rows if row["recovers_gt_50pct_auc_gap_without_top3_degradation"] is True
     ]
-    rerun_baseline = next(row for row in metrics_rows if row["candidate_column"] is None)
     best_candidate = max(
         [row for row in metrics_rows if row["candidate_column"] is not None],
         key=lambda row: (
