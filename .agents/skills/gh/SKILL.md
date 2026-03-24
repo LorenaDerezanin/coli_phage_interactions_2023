@@ -165,6 +165,22 @@ Always use `/pulls/{pr}/comments/{id}/replies`.
 **Rule:** If a thread reply fails, do not fall back to `gh pr comment`. Top-level PR comments are not threaded and
 create noise. Stop and investigate the endpoint instead.
 
+## 8. `gh pr checks` exit codes
+
+**The rule:** `gh pr checks` returns exit code 8 when any check is still pending or has been skipped. This is not a
+failure — it means "not all checks have passed yet."
+
+**Why:** Agents treat non-zero exit codes as errors by default, which can cause unnecessary retries, false error
+reports, or abandoned review workflows when checks are simply still running.
+
+**Exit codes:**
+- `0` — all checks passed
+- `1` — at least one check failed
+- `8` — no checks failed, but some are pending or skipped
+
+**How to handle:** When exit code is 8, report the status honestly ("checks still running" or "some checks skipped")
+and move on. Do not retry or treat it as a blocker unless you specifically need all checks green.
+
 ## Quick self-check before running
 
 Before executing any `gh` command that sets `--body`:
