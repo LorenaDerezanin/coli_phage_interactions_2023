@@ -368,7 +368,7 @@ graph LR
   - Augmented training set must contain >0 KlebPhaCol rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether KlebPhaCol adds, hurts, or is neutral
-- [ ] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
   - TI08 cohort must contain >0 GPB rows — fail if missing or empty
   - Add GPB rows to the best-so-far cohort
   - Augmented training set must contain >0 GPB rows after join
