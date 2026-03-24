@@ -556,7 +556,7 @@ tracks:
         annotate data/genomics/phages/FNA/LF82_P8.fna)
       - Update AGENTS.md Environment Policy to document the conda + pip dual setup
       - Update INSTALL.md to use canonical conda commands (conda create, conda activate)
-        that work with both miniconda and micromamba
+        that work with miniconda
     - id: TL02
       title: Annotate all 97 phage genomes with Pharokka
       status: pending
