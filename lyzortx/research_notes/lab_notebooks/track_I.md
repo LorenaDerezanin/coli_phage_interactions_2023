@@ -337,6 +337,40 @@ produces a runnable internal-only cohort plus zero-lift summaries for the future
 - This is the correct amount of implementation for TI08. It makes the enhancement path executable and testable without
   prematurely claiming that the current model trainers should already consume every external row.
 
+### 2026-03-24: TI08 Build training cohorts from internal + external rows
+
+#### Executive summary
+
+TI08 now emits a single cohort file that contains the internal ST0.2 rows plus the TI07 external rows, and it fails
+fast if the external side is missing or if every external row is excluded by the confidence policy. The updated
+`lyzortx/pipeline/track_i/steps/build_external_training_cohorts.py` contract preserves the legacy
+`external_label_*` fields for Track K while also surfacing the generic `confidence_tier` and `training_weight`
+columns required by the plan.
+
+#### What changed
+
+- Required TI08 external inputs now include the real TI07 CSV columns, not an optional empty fallback.
+- Internal rows are still emitted with `first_training_arm=internal_only`, so the baseline arm remains extractable from
+  the same file.
+- External rows now carry both the generic and legacy confidence/weight fields in the TI08 cohort output.
+- TI08 raises `ValueError` when no external row survives `external_label_include_in_training=1`.
+- Added regression coverage for the happy path and the all-excluded failure case.
+
+#### Findings
+
+- The old missing-external shortcut was incompatible with the task acceptance criteria because it allowed a valid TI08
+  run to produce an internal-only file.
+- The legacy `external_label_*` fields still need to remain in the cohort file because Track K and TI10 already consume
+  them directly.
+- The new generic `confidence_tier` and `training_weight` columns can coexist with those aliases without changing the
+  downstream join contract.
+
+#### Interpretation
+
+TI08 is now an actual integration boundary rather than a permissive passthrough. The cohort file can support both the
+internal-only baseline and the external-enhanced arms, but it no longer pretends that an empty or fully excluded
+external feed is an acceptable final artifact.
+
 ### 2026-03-22: TI09 Strict ablation sequence
 
 #### Executive summary

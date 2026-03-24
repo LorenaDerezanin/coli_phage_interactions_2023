@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TI08: Build internal-only and external-enhanced training cohorts without blocking the baseline."""
+"""TI08: Build internal-only and external-enhanced training cohorts from TI07 rows."""
 
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ REQUIRED_EXTERNAL_COLUMNS = (
     "label_hard_any_lysis",
     "label_strict_confidence_tier",
     "source_system",
+    "confidence_tier",
+    "training_weight",
     "external_label_confidence_tier",
     "external_label_confidence_score",
     "external_label_training_weight",
@@ -46,6 +48,8 @@ OUTPUT_APPEND_COLUMNS = [
     "source_family",
     "first_training_arm",
     "first_training_arm_index",
+    "confidence_tier",
+    "training_weight",
     "effective_training_weight",
     "integration_status",
 ]
@@ -105,7 +109,7 @@ def source_family_for_source(source_system: str) -> str:
 
 def load_external_rows(path: Path) -> List[Dict[str, str]]:
     if not path.exists():
-        return []
+        raise FileNotFoundError(f"Missing TI07 external confidence cohort: {path}")
     return [_normalize_row(row) for row in read_csv_rows(path, REQUIRED_EXTERNAL_COLUMNS)]
 
 
@@ -123,6 +127,8 @@ def build_integrated_training_rows(
                 "source_family": "internal",
                 "first_training_arm": "internal_only",
                 "first_training_arm_index": TRAINING_ARM_INDEX["internal_only"],
+                "confidence_tier": "",
+                "training_weight": "",
                 "effective_training_weight": 1.0,
                 "integration_status": "baseline_internal",
             }
@@ -139,6 +145,10 @@ def build_integrated_training_rows(
                 "source_family": source_family_for_source(source_system),
                 "first_training_arm": first_arm if include_in_training else "excluded",
                 "first_training_arm_index": TRAINING_ARM_INDEX[first_arm] if include_in_training else -1,
+                "confidence_tier": normalized.get("confidence_tier", "")
+                or normalized.get("external_label_confidence_tier", ""),
+                "training_weight": normalized.get("training_weight", "")
+                or normalized.get("external_label_training_weight", ""),
                 "effective_training_weight": (
                     float(normalized.get("external_label_training_weight", "0") or 0.0) if include_in_training else 0.0
                 ),
@@ -235,6 +245,13 @@ def main(argv: Optional[List[str]] = None) -> None:
     external_rows = load_external_rows(args.external_confidence_path)
 
     integrated_rows = build_integrated_training_rows(internal_rows, external_rows)
+    included_external_rows = [
+        row
+        for row in integrated_rows
+        if str(row["source_system"]) != "internal" and int(row["first_training_arm_index"]) >= 0
+    ]
+    if not included_external_rows:
+        raise ValueError("TI08 requires >0 external rows with external_label_include_in_training=1")
     arm_summary_rows = compute_training_arm_summary(integrated_rows)
     integration_status_rows = compute_integration_status_summary(integrated_rows)
 
