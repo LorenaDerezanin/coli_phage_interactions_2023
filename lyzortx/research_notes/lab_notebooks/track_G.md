@@ -596,15 +596,22 @@ determinism, and defer pairwise investigation to a later task.
 #### Nondeterminism root cause
 
 The sweep winner flipped because `make_lightgbm_estimator` in `train_v1_binary_classifier.py` sets `n_jobs=1` but not
-`deterministic=True`. LightGBM 4.6.0 docs confirm that `deterministic=True` + `force_col_wise=True` (already set)
-ensures stable results across runs with any thread count on the same machine.
+`deterministic=True`. The [LightGBM 4.6.0 parameter docs](https://lightgbm.readthedocs.io/en/stable/Parameters.html)
+state for the `deterministic` parameter:
+
+> setting it to true should ensure stable results when using the same data and the same parameters (and different
+> num\_threads). When you use different seeds, different LightGBM versions, the binaries compiled by different
+> compilers, or in different systems, the results are expected to be different.
+
+The docs also recommend: "to avoid potential instability due to numerical issues, please set `force_col_wise=true` or
+`force_row_wise=true` when setting `deterministic=true`." Our estimator already sets `force_col_wise=True`.
 
 Local testing confirmed:
 - Two consecutive sweep runs with `n_jobs=1` (current config): identical outputs
 - Two consecutive sweep runs with `deterministic=True`, no `n_jobs` (10 threads): identical outputs
 - Both configs produce the same winner locally
-- Local winner differs from CI winner — expected per LightGBM docs: "in different systems, the results are expected
-  to be different"
+- Local winner differs from CI winner — expected per the docs quoted above ("in different systems, the results are
+  expected to be different")
 
 The fix is: add `deterministic=True` to the estimator factory and remove `n_jobs=1` for parallelism speedup. The lock
 file should be treated as a human-approved decision rather than a regenerated output — Track J should train from the
