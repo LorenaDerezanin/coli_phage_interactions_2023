@@ -733,3 +733,12 @@ derived features in Track E itself: TE02's `defense_evasion_*` collaborative fil
 `receptor_variant_seen_in_training_positives`. These are currently excluded from v1 by the 2-block lock, but the code
 still produces them. Deleting them would make the feature pipeline honest by construction rather than by configuration,
 and would prevent future sweep runs from accidentally including them in a winning arm.
+
+#### Future: workflow tooling (Snakemake / Nextflow) — not yet
+
+Considered reimplementing the Track G pipeline in Snakemake for declarative dependencies, automatic skip of up-to-date
+steps, and built-in parallelism. Decision: defer. The pipeline is still in flux (TG09-TG11 pending), the pain points
+are scientific (leakage, nondeterminism) not operational, and the pipeline is small enough (~5 steps, ~30 min end-to-end,
+single machine) that the linear `run_track_g.py` / `run_track_j.py` runners are sufficient. Revisit when: (a) external
+data (Track I) is wired in and multiple data variants need training, (b) the pipeline grows beyond ~10 steps with
+nontrivial branching, or (c) cluster execution or robust checkpointing becomes necessary.
