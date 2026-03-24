@@ -356,13 +356,13 @@ graph LR
   - Augmented training set must contain >0 VHRdb rows after join
   - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline
   - If lift is negative or negligible, document why and do not include VHRdb in subsequent arms
-- [ ] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
   - TI08 cohort must contain >0 BASEL rows — fail if missing or empty
   - Add BASEL rows to the best-so-far cohort
   - Augmented training set must contain >0 BASEL rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether BASEL adds, hurts, or is neutral
-- [ ] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
   - TI08 cohort must contain >0 KlebPhaCol rows — fail if missing or empty
   - Add KlebPhaCol rows to the best-so-far cohort
   - Augmented training set must contain >0 KlebPhaCol rows after join

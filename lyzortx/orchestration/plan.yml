@@ -576,7 +576,7 @@ tracks:
         subsequent arms
     - id: TK02
       title: Add BASEL to training and measure cumulative lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - TI08 cohort must contain >0 BASEL rows — fail if missing or empty
@@ -586,7 +586,7 @@ tracks:
       - Document whether BASEL adds, hurts, or is neutral
     - id: TK03
       title: Add KlebPhaCol to training and measure cumulative lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - TI08 cohort must contain >0 KlebPhaCol rows — fail if missing or empty
