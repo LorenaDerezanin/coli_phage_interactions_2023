@@ -261,36 +261,53 @@ and the code preserves the uncertainty that downstream TI07 needs instead of fla
 context away. The bounded Entrez query is the right tradeoff for now: it produces real rows reproducibly and leaves the
 door open to broader retrieval later without hard-coding a fragile full-database crawl into the default Track I path.
 
-### 2026-03-22: TI07 External-label confidence tiers
+### 2026-03-24: TI07 Assign confidence tiers to all ingested external labels
 
 #### What was implemented
 
-- Added `lyzortx/pipeline/track_i/steps/build_external_label_confidence_tiers.py`, a dedicated TI07 policy step that
-  reads external ingest outputs and assigns a unified `external_label_confidence_tier`, numeric confidence score, and
-  training weight per record.
-- Kept the policy deliberately small and executable instead of inventing many bespoke bins: base confidence comes from
-  source family (`A` assay-backed external sources > curated metadata knowledgebases > repository/submitter metadata),
-  and row-level degradations apply for disagreement, non-`ok` QC flags, and unresolved entity mapping.
-- Updated `lyzortx/pipeline/track_i/run_track_i.py` so Track I can run the new confidence-tier step directly or as part
-  of `--step all`.
-- Added unit tests covering the intended source-family ordering, downgrade behavior for unresolved mappings, and
-  end-to-end artifact emission for mixed Tier A and Tier B inputs.
+- Updated `lyzortx/pipeline/track_i/steps/build_external_label_confidence_tiers.py` so TI07 now requires the real TI05
+  and TI06 outputs instead of treating external inputs as optional. The step raises `FileNotFoundError` when either
+  upstream artifact is missing and raises `ValueError` if any of the six expected sources (`vhrdb`, `basel`,
+  `klebphacol`, `gpb`, `virus_host_db`, `ncbi_virus_biosample`) contributes zero tiered rows.
+- Kept the four-bin policy small and executable: base confidence still comes from source family
+  (`A` assay-backed sources > curated metadata knowledgebase > repository metadata), and row-level degradations still
+  come from disagreement, non-`ok` QC flags, and unresolved canonical mapping.
+- Expanded the output contract so the TI07 CSV now includes the generic columns required by the plan
+  (`confidence_tier`, `training_weight`) while preserving the existing `external_label_*` aliases for downstream Track I
+  consumers.
+- Added TI07 regression coverage for the new happy path and for the fail-fast case where one expected source is absent
+  from the tiered output.
 
 #### Findings
 
-- A four-bin policy (`high`, `medium`, `low`, `exclude`) is enough for the current external landscape; adding finer
-  subclasses now would create unstable distinctions before TI08/TI09 provide empirical feedback.
-- The most important row-level degradations are provenance-quality failures rather than subtle biological heuristics:
-  disagreement, bad QC states, and unresolved canonical mapping are strong enough to demote or exclude a record without
-  pretending we can rescue it by hand-crafted weighting.
-- This design gives TI08 a concrete interface now: every external row can be filtered or down-weighted mechanically
-  without coupling integration logic to source-specific if/else blocks.
+- A live rerun on 2026-03-24 after regenerating Track A plus TI03-TI06 produced
+  `lyzortx/generated_outputs/track_i/external_label_confidence_tiers/ti07_external_label_confidence_pairs.csv` with
+  `126,402` tiered rows. Overall tier counts were `26,029` `high`, `41,647` `medium`, `58,458` `low`, and `268`
+  `exclude`.
+- Tier distribution by source on that run:
+  - `vhrdb`: `26,029` `high`, `30,643` `medium`, `0` `low`, `0` `exclude`
+  - `basel`: `0` `high`, `468` `medium`, `0` `low`, `0` `exclude`
+  - `klebphacol`: `0` `high`, `6,576` `medium`, `1,121` `low`, `0` `exclude`
+  - `gpb`: `0` `high`, `3,960` `medium`, `0` `low`, `0` `exclude`
+  - `virus_host_db`: `0` `high`, `0` `medium`, `57,337` `low`, `0` `exclude`
+  - `ncbi_virus_biosample`: `0` `high`, `0` `medium`, `0` `low`, `268` `exclude`
+- Unresolved canonical mapping is the dominant downgrade path. All `BASEL`, `GPB`, and `Virus-Host DB` rows were
+  penalized by `unresolved_entity_mapping`, and `30,643` of `56,672` `VHRdb` rows were also demoted from `high` to
+  `medium` for the same reason.
+- `KlebPhaCol` is the only source that currently lands in both `medium` and `low`: `6,576` rows were downgraded only by
+  unresolved mapping, while `1,121` rows were pushed further down by the combination of unresolved mapping and
+  `source_disagreement`.
+- The only `exclude` rows came from `NCBI Virus/BioSample`. Those rows were already weak metadata labels, and the extra
+  QC penalties (`host_conflict` or `biosample_missing`) were enough to drive all `268` rows to zero weight.
 
 #### Interpretation
 
-- TI07 is now an explicit policy boundary between ingestion and training. That is the right abstraction: TI06 preserves
-  raw provenance, TI07 translates provenance into training trust, and TI08 can stay focused on optional integration
-  rather than re-litigating confidence semantics inside the model pipeline.
+- TI07 is now an honest policy boundary rather than a permissive pass-through. It consumes the real TI03-TI06 outputs,
+  proves that every expected source contributed rows, and emits a training-ready table with explicit keep/down-weight/
+  exclude semantics.
+- The current confidence distribution also exposes the main structural bottleneck for Track I: canonical mapping, not
+  assay provenance, is what suppresses trust for most external rows. That means TI08 should treat the external-weighting
+  contract as real signal, not as a cosmetic annotation layered on top of uniformly trustworthy data.
 
 ### 2026-03-22: TI08 External data as a non-blocking enhancer
 
