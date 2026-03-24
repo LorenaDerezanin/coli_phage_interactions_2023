@@ -39,16 +39,17 @@ local production rerun is blocked until that input is restored.
 
 #### Executive summary
 
-Added the TK02 Track K runner to measure BASEL lift on top of the best-so-far TK01 cohort. The real Track G/I
-generated artifacts are not present in this checkout, so the new path was validated on a minimal fixture instead of a
-production rerun. On that fixture, BASEL was neutral: ROC-AUC, top-3, and Brier deltas vs the previous best were all
-`0.0`.
+TK02 now measures BASEL lift on top of the best-so-far TK01 cohort and fails closed if TI08 is missing, empty, or
+contains no BASEL rows that join into the locked ST03 train split. I validated the runner on a minimal fixture with
+one joinable BASEL row. On that fixture, BASEL was neutral: ROC-AUC, top-3, and Brier deltas vs the previous best
+were all `0.0`.
 
 #### What was implemented
 
 - Added shared Track K lift helpers in `lyzortx/pipeline/track_k/steps/build_source_lift_helpers.py`.
 - Added the TK02 runner at `lyzortx/pipeline/track_k/steps/build_basel_lift_report.py`.
 - Updated `lyzortx/pipeline/track_k/run_track_k.py` so `--step all` runs TK01 followed by TK02.
+- Added explicit TI08 BASEL cohort guards so the step raises on a missing file, an empty cohort, or a zero-row join.
 - The TK02 manifest now records the previous-best source systems, cumulative source set, metric deltas, and the lift
   assessment.
 
@@ -56,6 +57,7 @@ production rerun. On that fixture, BASEL was neutral: ROC-AUC, top-3, and Brier 
 
 - On the validation fixture, TK01 kept `internal_plus_vhrdb` as the best-so-far cohort.
 - TK02 evaluated `internal_plus_vhrdb_plus_basel`.
+- The fixture contained `1` BASEL row and `1` joined BASEL training row.
 - Metric deltas vs the previous best were all `0.0`:
   - ROC-AUC `0.0`
   - top-3 `0.0`
@@ -65,8 +67,8 @@ production rerun. On that fixture, BASEL was neutral: ROC-AUC, top-3, and Brier 
 #### Interpretation
 
 - BASEL is now wired as a cumulative add-on after TK01, not as a replacement path.
+- The step now refuses to silently proceed when BASEL data is absent or fails to join.
 - On the available fixture, BASEL is neutral rather than additive or harmful.
-- A production rerun can replace the fixture note once the Track G/I generated artifacts are available locally.
 
 ### 2026-03-24: TK03 KlebPhaCol cumulative lift measurement
 
