@@ -565,7 +565,7 @@ tracks:
     tasks:
     - id: TK01
       title: Add VHRdb to training and measure lift vs internal-only baseline
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - TI08 cohort must contain >0 VHRdb rows — fail if missing or empty
