@@ -302,44 +302,82 @@ graph LR
       `lyzortx/research_notes/LITERATURE.md`.
 - [x] **TI02** Build source_registry.csv for all external sources. Implemented in
       `lyzortx/research_notes/external_data/source_registry.csv`.
-- [x] **TI03** For VHRdb ingest, keep source-fidelity fields
-  - Ingested VHRdb rows preserve raw global_response and datasource_response without case folding
-  - source_datasource_id, source_disagreement_flag, and source_native_record_id columns populated
-  - Unit tests verify source-fidelity preservation
-- [x] **TI04** Tier A supervised ingestion priority: VHRdb, BASEL, KlebPhaCol, GPB
-- [x] **TI05** Define harmonization protocol for Tier A datasets. Model: `gpt-5.4`.
-- [x] **TI06** Tier B weak-label ingestion: Virus-Host DB and NCBI Virus/BioSample metadata. Model: `gpt-5.4-mini`.
-- [x] **TI07** Define confidence tiers for external labels. Model: `gpt-5.4`.
-- [x] **TI08** Integrate external data as non-blocking enhancer: internal-only baseline must remain runnable. Model:
-      `gpt-5.4`.
-- [x] **TI09** Run strict ablations in sequence: internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B.
-      Model: `gpt-5.4-mini`.
-- [x] **TI10** Track incremental lift and failure modes by datasource and confidence tier. Model: `gpt-5.4-mini`.
+- [ ] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `gpt-5.4`.
+  - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
+  - Output CSV contains >0 real bacteria-phage pairs
+  - Each row preserves raw global_response and datasource_response without case folding
+  - source_datasource_id, source_disagreement_flag, and source_native_record_id populated
+  - Raise FileNotFoundError or request error on download failure, never silently skip
+- [ ] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `gpt-5.4`.
+  - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/, GPB from https://phagebank.org/
+  - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
+  - All rows carry source_system provenance
+  - Raise on download failure, do not silently produce empty output
+- [ ] **TI05** Harmonize Tier A datasets to internal schema. Model: `gpt-5.4`.
+  - Map external bacteria and phage names to canonical IDs via Track A alias resolution
+  - Report how many external pairs overlap with the internal 404x96 panel vs are novel
+  - Output a harmonized pair table with >0 rows joinable on pair_id
+  - Raise ValueError if harmonization produces zero joinable rows
+- [ ] **TI06** Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata. Model: `gpt-5.4`.
+  - Download Virus-Host DB associations from https://www.genome.jp/virushostdb/
+  - Download NCBI Virus/BioSample metadata via Entrez API
+  - Each source produces an ingested CSV with >0 rows
+  - BioSample host_disease and isolation_host fields parsed from XML attributes
+  - Raise on empty API responses or download failures
+- [ ] **TI07** Assign confidence tiers to all ingested external labels. Model: `gpt-5.4`.
+  - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output rows
+  - Output CSV contains >0 rows with confidence_tier and training_weight columns
+  - Report tier distribution (count per tier per source) in lab notebook
+  - Raise ValueError if any source produces zero tiered rows
+- [ ] **TI08** Build training cohorts from internal + external rows. Model: `gpt-5.4-mini`.
+  - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external rows
+  - Output must contain >0 external rows — fail if all external data was excluded
+  - External rows carry source_system, confidence_tier, and training_weight
+  - Internal-only baseline arm must remain extractable from the same file
+- [ ] **TI09** Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B. Model:
+      `gpt-5.4-mini`.
+  - Retrain the locked v1 model for each cumulative source addition
+  - Each arm must train on >0 external rows from the added source
+  - Report AUC, top-3, Brier for each arm on the ST03 holdout
+  - Raise ValueError if any arm trains on zero external rows
+- [ ] **TI10** Track incremental lift and failure modes by datasource and confidence tier. Model: `gpt-5.4-mini`.
+  - Produce a summary table showing per-source lift deltas from TI09
+  - Identify failure modes with real row counts >0
+  - Report which sources helped, hurt, or were neutral based on actual metrics
 
 ## Track K: External Data Lift Measurement
 
 - **Guiding Principle:** Incrementally add Track I external sources to the v1 model and measure per-source lift. Each
   task adds exactly one source, retrains, and reports metrics against the internal-only baseline. This isolates the
   contribution of each external dataset.
-- [x] **TK01** Add VHRdb to training and measure lift vs internal-only baseline. Model: `gpt-5.4-mini`.
-  - Connect TI08 VHRdb cohort rows to Track G training pipeline
+- [ ] **TK01** Add VHRdb to training and measure lift vs internal-only baseline. Model: `gpt-5.4-mini`.
+  - TI08 cohort must contain >0 VHRdb rows — fail if missing or empty
   - Retrain with internal + VHRdb on the locked ST03 holdout split
+  - Augmented training set must contain >0 VHRdb rows after join
   - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline
   - If lift is negative or negligible, document why and do not include VHRdb in subsequent arms
-- [x] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
-  - Add BASEL rows to the best-so-far cohort (internal-only or internal+VHRdb, depending on TK01 result)
+- [ ] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+  - TI08 cohort must contain >0 BASEL rows — fail if missing or empty
+  - Add BASEL rows to the best-so-far cohort
+  - Augmented training set must contain >0 BASEL rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether BASEL adds, hurts, or is neutral
-- [x] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [ ] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+  - TI08 cohort must contain >0 KlebPhaCol rows — fail if missing or empty
   - Add KlebPhaCol rows to the best-so-far cohort
+  - Augmented training set must contain >0 KlebPhaCol rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether KlebPhaCol adds, hurts, or is neutral
-- [x] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [ ] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+  - TI08 cohort must contain >0 GPB rows — fail if missing or empty
   - Add GPB rows to the best-so-far cohort
+  - Augmented training set must contain >0 GPB rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether GPB adds, hurts, or is neutral
-- [x] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [ ] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
+  - TI08 cohort must contain >0 Tier B rows — fail if missing or empty
   - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
+  - Augmented training set must contain >0 Tier B rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether Tier B adds, hurts, or is neutral
   - If any source combination improved metrics, propose a new locked config; otherwise keep internal-only as the v1

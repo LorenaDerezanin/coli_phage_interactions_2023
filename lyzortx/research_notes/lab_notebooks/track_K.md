@@ -223,3 +223,25 @@ The cumulative comparison vs the locked internal-only baseline is:
   strictly non-harmful gain, the synthesis step will surface that arm cleanly; until then, internal-only remains the
   honest v1 baseline.
 - No final-model retrain was run for TK06 because the promotion condition was not met.
+
+### 2026-03-24: TK01-TK06 invalidated — all ran on zero external data
+
+#### Executive summary
+
+All Track K tasks (TK01-TK05) reported zero deltas because Track I never downloaded external data. Every "neutral" lift
+assessment was based on zero external rows joining into training. TK06 (PR #217) was rejected because it would have
+locked an "internal-only" decision as a scientific finding when it was actually a data-availability failure. All tasks
+set back to pending with acceptance criteria requiring >0 external rows in the augmented training set.
+
+#### Evidence
+
+- TK01 notebook: "0 joinable VHRdb rows", decision `pending_external_artifact`
+- TK02-TK05 notebooks: "validated on a minimal fixture", all deltas 0.0
+- TK01-TK05 CI runs each took 5-8 minutes (vs ~30 min for a real retrain) — too fast to have trained on real data
+- TK06 produced a comparison table with all zeros and concluded "internal-only remains the v1 baseline"
+
+#### What changed
+
+- TK01-TK06 set back to pending
+- Each task now requires >0 external rows in the augmented training set — fail if TI08 cohort is missing or empty
+- TK06 must wait for TK01-TK05 to complete on real data before synthesizing

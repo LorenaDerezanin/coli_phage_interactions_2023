@@ -136,6 +136,18 @@ gh issue close <NUMBER> --reason "not planned"
 **Why:** The orchestrator watches for issue closures and automatically marks plan tasks as `done`.
 A premature regular close advances the plan incorrectly.
 
+**Changing close reason without reopening:** `gh issue close` cannot change the reason on an already-closed issue. But
+the API can — use PATCH to change `state_reason` directly:
+
+```bash
+# Change a closed issue from "completed" to "not planned" without reopening
+gh api repos/OWNER/REPO/issues/NUMBER -X PATCH -f state=closed -f state_reason=not_planned
+```
+
+**Never reopen a closed orchestrator issue.** Reopening triggers the implementation workflow immediately. If you need to
+invalidate a completed task, change its close reason via the API as shown above. Note: changing state via the API still
+triggers an orchestrator tick, but since the issue is closed as "not planned" the orchestrator will ignore it.
+
 ## 7. GitHub API endpoint patterns
 
 **The rule:** When using `gh api` to interact with PR review comments, use the correct endpoint.

@@ -341,3 +341,25 @@ no-issue fallback).
 
 - PR #109 (merged): data-only — added `model` field to all 16 pending tasks in `plan.yml`.
 - PR #112: wired model through orchestrator, workflows, and added state_reason safety gate.
+
+### 2026-03-24: Orchestrator task invalidation — reopening issues triggers spurious runs
+
+#### Executive summary
+
+Reopening 13 closed orchestrator issues (TI03-TI10, TK01-TK05) to change their close reason from "completed" to "not
+planned" accidentally triggered 13 Codex implementation runs. The `issues.reopened` event fires the implementation
+workflow before the issue can be re-closed. The safe workaround is to change `state_reason` via the GitHub API without
+reopening: `gh api repos/OWNER/REPO/issues/NUMBER -X PATCH -f state=closed -f state_reason=not_planned`.
+
+#### Design note
+
+The root issue is that the orchestrator uses issue state changes as its trigger. Reopening an issue is indistinguishable
+from a new dispatch signal. A more robust design would trigger on merged PRs rather than closed issues — PR merges are
+unambiguous completion signals and cannot be accidentally triggered by state changes on issues.
+
+#### Future: migrate orchestrator trigger from issues to PRs
+
+Revisit when: the current trigger model causes more incidents, or the orchestrator is being refactored for other
+reasons. The change would involve updating `codex-implement.yml` to trigger on `pull_request.closed` (with
+`merged == true`) instead of `issues.reopened`/`issues.opened`, and updating `sync_status_from_issues` to read from PR
+merge state instead of issue close state.
