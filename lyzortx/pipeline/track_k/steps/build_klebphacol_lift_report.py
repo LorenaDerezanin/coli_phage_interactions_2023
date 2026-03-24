@@ -141,6 +141,15 @@ def _measure_metrics(
     return scored_rows, holdout_metrics, top3
 
 
+def load_ti08_training_cohort_rows(path: Path) -> List[Dict[str, str]]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing TI08 training cohort artifact: {path}")
+    rows = read_csv_rows(path)
+    if not rows:
+        raise ValueError(f"TI08 training cohort is empty: {path}")
+    return rows
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
     logger.info("TK03 starting: measure KlebPhaCol lift against the best-so-far Track K cohort")
@@ -188,7 +197,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
         pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
-    cohort_rows = read_csv_rows(args.ti08_training_cohort_path) if args.ti08_training_cohort_path.exists() else []
+    cohort_rows = load_ti08_training_cohort_rows(args.ti08_training_cohort_path)
 
     source_rows_by_system: Dict[str, List[Dict[str, object]]] = {}
     current_source_rows, current_source_counts = load_source_training_rows(
@@ -196,6 +205,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         cohort_rows,
         CURRENT_SOURCE_SYSTEM,
     )
+    if int(current_source_counts.get("cohort_rows", 0)) == 0:
+        raise ValueError(f"TI08 cohort contains no KlebPhaCol rows: {args.ti08_training_cohort_path}")
+    if int(current_source_counts.get("joined_rows", 0)) == 0:
+        raise ValueError(
+            "TI08 cohort contains no KlebPhaCol rows that join into the locked ST03 train split: "
+            f"{args.ti08_training_cohort_path}"
+        )
     source_rows_by_system[CURRENT_SOURCE_SYSTEM] = current_source_rows
     previous_best_source_systems = load_previous_best_source_systems(args.tk02_manifest_path)
     for source_system in previous_best_source_systems:
