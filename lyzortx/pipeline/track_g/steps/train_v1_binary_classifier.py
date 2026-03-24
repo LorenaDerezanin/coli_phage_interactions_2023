@@ -48,13 +48,6 @@ TRACK_E_REQUIRED_BLOCKS: Tuple[Tuple[str, Path], ...] = (
         ),
     ),
     (
-        "defense_evasion_proxy",
-        Path(
-            "lyzortx/generated_outputs/track_e/defense_evasion_proxy_feature_block/"
-            "defense_evasion_proxy_features_v1.csv"
-        ),
-    ),
-    (
         "isolation_host_distance",
         Path(
             "lyzortx/generated_outputs/track_e/isolation_host_distance_feature_block/"
@@ -136,15 +129,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Input Track E RBP-receptor compatibility feature CSV.",
     )
     parser.add_argument(
-        "--track-e-defense-evasion-path",
-        type=Path,
-        default=TRACK_E_REQUIRED_BLOCKS[1][1],
-        help="Input Track E defense-evasion proxy feature CSV.",
-    )
-    parser.add_argument(
         "--track-e-isolation-distance-path",
         type=Path,
-        default=TRACK_E_REQUIRED_BLOCKS[2][1],
+        default=TRACK_E_REQUIRED_BLOCKS[1][1],
         help="Input Track E isolation-host distance feature CSV.",
     )
     parser.add_argument(
@@ -533,11 +520,7 @@ def ensure_prerequisite_outputs(args: argparse.Namespace) -> None:
         build_v1_host_feature_pair_table.main([])
     if not args.track_d_genome_kmer_path.exists() or not args.track_d_distance_path.exists():
         run_track_d.main(["--step", "all"])
-    if (
-        not args.track_e_rbp_compatibility_path.exists()
-        or not args.track_e_defense_evasion_path.exists()
-        or not args.track_e_isolation_distance_path.exists()
-    ):
+    if not args.track_e_rbp_compatibility_path.exists() or not args.track_e_isolation_distance_path.exists():
         run_track_e.main(["--step", "all"])
 
 
@@ -684,7 +667,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_d_genome_rows = read_csv_rows(args.track_d_genome_kmer_path)
     track_d_distance_rows = read_csv_rows(args.track_d_distance_path)
     track_e_rbp_rows = read_csv_rows(args.track_e_rbp_compatibility_path)
-    track_e_defense_rows = read_csv_rows(args.track_e_defense_evasion_path)
     track_e_isolation_rows = read_csv_rows(args.track_e_isolation_distance_path)
 
     track_d_feature_columns = _deduplicate_preserving_order(
@@ -693,7 +675,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     track_e_feature_columns = _deduplicate_preserving_order(
         [column for column in track_e_rbp_rows[0].keys() if column not in IDENTIFIER_COLUMNS]
-        + [column for column in track_e_defense_rows[0].keys() if column not in IDENTIFIER_COLUMNS]
         + [column for column in track_e_isolation_rows[0].keys() if column not in IDENTIFIER_COLUMNS]
     )
     feature_space = build_feature_space(
@@ -706,7 +687,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_c_pair_rows,
         split_rows,
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
-        pair_feature_blocks=(track_e_rbp_rows, track_e_defense_rows, track_e_isolation_rows),
+        pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
     fold_datasets = prepare_fold_datasets(merged_rows, feature_space)
     lightgbm_factory = lambda params, seed_offset: make_lightgbm_estimator(  # noqa: E731
@@ -861,10 +842,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "track_e_rbp_receptor_compatibility": {
                 "path": str(args.track_e_rbp_compatibility_path),
                 "sha256": _sha256(args.track_e_rbp_compatibility_path),
-            },
-            "track_e_defense_evasion": {
-                "path": str(args.track_e_defense_evasion_path),
-                "sha256": _sha256(args.track_e_defense_evasion_path),
             },
             "track_e_isolation_host_distance": {
                 "path": str(args.track_e_isolation_distance_path),

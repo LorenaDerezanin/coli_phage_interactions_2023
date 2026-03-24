@@ -90,15 +90,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Input Track E RBP-receptor compatibility feature CSV.",
     )
     parser.add_argument(
-        "--track-e-defense-evasion-path",
-        type=Path,
-        default=train_v1_binary_classifier.TRACK_E_REQUIRED_BLOCKS[1][1],
-        help="Input Track E defense-evasion proxy feature CSV.",
-    )
-    parser.add_argument(
         "--track-e-isolation-distance-path",
         type=Path,
-        default=train_v1_binary_classifier.TRACK_E_REQUIRED_BLOCKS[2][1],
+        default=train_v1_binary_classifier.TRACK_E_REQUIRED_BLOCKS[1][1],
         help="Input Track E isolation-host distance feature CSV.",
     )
     parser.add_argument(
@@ -156,8 +150,6 @@ def ensure_prerequisite_outputs(args: argparse.Namespace) -> None:
             str(args.track_d_distance_path),
             "--track-e-rbp-compatibility-path",
             str(args.track_e_rbp_compatibility_path),
-            "--track-e-defense-evasion-path",
-            str(args.track_e_defense_evasion_path),
             "--track-e-isolation-distance-path",
             str(args.track_e_isolation_distance_path),
             "--skip-prerequisites",
@@ -409,7 +401,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_d_genome_rows = read_csv_rows(args.track_d_genome_kmer_path)
     track_d_distance_rows = read_csv_rows(args.track_d_distance_path)
     track_e_rbp_rows = read_csv_rows(args.track_e_rbp_compatibility_path)
-    track_e_defense_rows = read_csv_rows(args.track_e_defense_evasion_path)
     track_e_isolation_rows = read_csv_rows(args.track_e_isolation_distance_path)
     calibrated_rows = read_csv_rows(args.tg02_predictions_path, required_columns=TG02_REQUIRED_COLUMNS)
 
@@ -419,11 +410,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     track_e_feature_columns = train_v1_binary_classifier._deduplicate_preserving_order(
         [column for column in track_e_rbp_rows[0].keys() if column not in train_v1_binary_classifier.IDENTIFIER_COLUMNS]
-        + [
-            column
-            for column in track_e_defense_rows[0].keys()
-            if column not in train_v1_binary_classifier.IDENTIFIER_COLUMNS
-        ]
         + [
             column
             for column in track_e_isolation_rows[0].keys()
@@ -440,7 +426,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_c_pair_rows,
         split_rows,
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
-        pair_feature_blocks=(track_e_rbp_rows, track_e_defense_rows, track_e_isolation_rows),
+        pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
 
     lightgbm_factory = lambda params, seed_offset: train_v1_binary_classifier.make_lightgbm_estimator(  # noqa: E731
@@ -583,10 +569,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "track_e_rbp_receptor_compatibility": {
                 "path": str(args.track_e_rbp_compatibility_path),
                 "sha256": _sha256(args.track_e_rbp_compatibility_path),
-            },
-            "track_e_defense_evasion": {
-                "path": str(args.track_e_defense_evasion_path),
-                "sha256": _sha256(args.track_e_defense_evasion_path),
             },
             "track_e_isolation_host_distance": {
                 "path": str(args.track_e_isolation_distance_path),

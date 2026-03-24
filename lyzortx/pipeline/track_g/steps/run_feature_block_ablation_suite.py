@@ -96,15 +96,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Input Track E RBP-receptor compatibility feature CSV.",
     )
     parser.add_argument(
-        "--track-e-defense-evasion-path",
-        type=Path,
-        default=Path(
-            "lyzortx/generated_outputs/track_e/defense_evasion_proxy_feature_block/"
-            "defense_evasion_proxy_features_v1.csv"
-        ),
-        help="Input Track E defense-evasion proxy feature CSV.",
-    )
-    parser.add_argument(
         "--track-e-isolation-distance-path",
         type=Path,
         default=Path(
@@ -276,7 +267,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_d_genome_rows = read_csv_rows(args.track_d_genome_kmer_path)
     track_d_distance_rows = read_csv_rows(args.track_d_distance_path)
     track_e_rbp_rows = read_csv_rows(args.track_e_rbp_compatibility_path)
-    track_e_defense_rows = read_csv_rows(args.track_e_defense_evasion_path)
     track_e_isolation_rows = read_csv_rows(args.track_e_isolation_distance_path)
 
     track_d_feature_columns = tuple(
@@ -287,9 +277,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_d_feature_columns = tuple(dict.fromkeys(track_d_feature_columns))
     track_e_feature_columns = tuple(
         column
-        for column in list(track_e_rbp_rows[0].keys())
-        + list(track_e_defense_rows[0].keys())
-        + list(track_e_isolation_rows[0].keys())
+        for column in list(track_e_rbp_rows[0].keys()) + list(track_e_isolation_rows[0].keys())
         if column not in IDENTIFIER_COLUMNS
     )
     track_e_feature_columns = tuple(dict.fromkeys(track_e_feature_columns))
@@ -304,7 +292,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_c_pair_rows,
         split_rows,
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
-        pair_feature_blocks=(track_e_rbp_rows, track_e_defense_rows, track_e_isolation_rows),
+        pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
     ablation_arms = build_ablation_arms(full_feature_space)
     lightgbm_factory = lambda params, seed_offset: make_lightgbm_estimator(  # noqa: E731
@@ -475,10 +463,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "track_e_rbp_receptor_compatibility": {
                 "path": str(args.track_e_rbp_compatibility_path),
                 "sha256": _sha256(args.track_e_rbp_compatibility_path),
-            },
-            "track_e_defense_evasion": {
-                "path": str(args.track_e_defense_evasion_path),
-                "sha256": _sha256(args.track_e_defense_evasion_path),
             },
             "track_e_isolation_host_distance": {
                 "path": str(args.track_e_isolation_distance_path),
