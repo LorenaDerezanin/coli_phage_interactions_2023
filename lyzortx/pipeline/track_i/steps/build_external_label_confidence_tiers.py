@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import logging
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
+
+LOGGER = logging.getLogger(__name__)
 
 REQUIRED_SOURCE_REGISTRY_COLUMNS = (
     "source_id",
@@ -24,8 +27,16 @@ REQUIRED_SOURCE_REGISTRY_COLUMNS = (
     "notes",
 )
 REQUIRED_EXTERNAL_COLUMNS = ("pair_id", "source_system")
+EXPECTED_TIER_A_SOURCES = ("vhrdb", "basel", "klebphacol", "gpb")
+EXPECTED_TIER_B_SOURCES = ("virus_host_db", "ncbi_virus_biosample")
+EXPECTED_EXTERNAL_SOURCES = EXPECTED_TIER_A_SOURCES + EXPECTED_TIER_B_SOURCES
 
 OUTPUT_APPEND_COLUMNS = [
+    "confidence_tier",
+    "confidence_score",
+    "training_weight",
+    "confidence_reason",
+    "include_in_training",
     "external_label_confidence_tier",
     "external_label_confidence_score",
     "external_label_training_weight",
@@ -145,11 +156,17 @@ def assign_external_confidence(
     adjusted_score = max(base_score - len(penalties), 0)
     confidence_tier, training_weight, include_in_training = score_to_tier(adjusted_score, config)
     reason_parts = [f"base_{base_reason}", *penalties]
+    confidence_reason = "|".join(reason_parts)
     return {
+        "confidence_tier": confidence_tier,
+        "confidence_score": adjusted_score,
+        "training_weight": training_weight,
+        "confidence_reason": confidence_reason,
+        "include_in_training": include_in_training,
         "external_label_confidence_tier": confidence_tier,
         "external_label_confidence_score": adjusted_score,
         "external_label_training_weight": training_weight,
-        "external_label_confidence_reason": "|".join(reason_parts),
+        "external_label_confidence_reason": confidence_reason,
         "external_label_include_in_training": include_in_training,
     }
 
@@ -182,9 +199,9 @@ def compute_summary_rows(rows: Sequence[Mapping[str, object]]) -> List[Dict[str,
     by_include: Counter[str] = Counter()
 
     for row in rows:
-        tier = str(row["external_label_confidence_tier"])
+        tier = str(row["confidence_tier"])
         source_system = str(row.get("source_system", ""))
-        include = str(row["external_label_include_in_training"])
+        include = str(row["include_in_training"])
         by_tier[tier] += 1
         by_source[(source_system, tier)] += 1
         by_include[include] += 1
@@ -208,7 +225,7 @@ def compute_summary_rows(rows: Sequence[Mapping[str, object]]) -> List[Dict[str,
 def build_policy_definition(config: ExternalConfidenceConfig) -> Dict[str, object]:
     return {
         "policy_name": "track_i_external_label_confidence_tiers",
-        "policy_version": "v1",
+        "policy_version": "v2",
         "base_score_rules": {
             "3": "Tier A direct assay-backed external sources from source_registry confidence_tier=A",
             "2": "Curated metadata knowledgebases such as Virus-Host DB",
@@ -255,28 +272,70 @@ def ordered_fieldnames(rows: List[Dict[str, object]]) -> List[str]:
     return fieldnames
 
 
+def validate_required_sources_in_registry(source_registry_rows: Mapping[str, Mapping[str, str]]) -> None:
+    missing_sources = [source_id for source_id in EXPECTED_EXTERNAL_SOURCES if source_id not in source_registry_rows]
+    if missing_sources:
+        raise ValueError("TI07 source registry is missing required sources: " + ", ".join(sorted(missing_sources)))
+
+
+def require_existing_inputs(input_paths: Mapping[str, Path]) -> None:
+    missing_inputs = [f"{name}={path}" for name, path in input_paths.items() if not path.exists()]
+    if missing_inputs:
+        raise FileNotFoundError(
+            "TI07 requires the TI05 Tier A harmonization output and TI06 Tier B ingest output. Missing: "
+            + ", ".join(missing_inputs)
+        )
+
+
+def validate_source_row_counts(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    expected_sources: Sequence[str],
+    context: str,
+) -> Dict[str, int]:
+    counts = Counter(str(row.get("source_system", "")) for row in rows)
+    missing_sources = [source_id for source_id in expected_sources if counts.get(source_id, 0) == 0]
+    if missing_sources:
+        raise ValueError(f"{context} produced zero tiered rows for source(s): {', '.join(sorted(missing_sources))}")
+    return {source_id: counts[source_id] for source_id in expected_sources}
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     ensure_directory(args.output_dir)
     config = ExternalConfidenceConfig()
     source_registry_rows = load_source_registry(args.source_registry_path)
+    validate_required_sources_in_registry(source_registry_rows)
+    input_paths = {
+        "tier_a_ingest": args.tier_a_ingest_path,
+        "tier_b_ingest": args.tier_b_ingest_path,
+    }
+    require_existing_inputs(input_paths)
+    LOGGER.info("Starting TI07 external-label confidence tiering")
 
-    input_paths: Dict[str, Path] = {}
-    input_rows: List[Dict[str, str]] = []
-    if args.tier_a_ingest_path.exists():
-        input_paths["tier_a_ingest"] = args.tier_a_ingest_path
-        input_rows.extend(read_external_rows(args.tier_a_ingest_path))
-    if args.tier_b_ingest_path.exists():
-        input_paths["tier_b_ingest"] = args.tier_b_ingest_path
-        input_rows.extend(read_external_rows(args.tier_b_ingest_path))
-
-    if not input_rows:
-        raise ValueError("No external label inputs were found. Expected Tier A and/or Tier B ingest outputs.")
+    tier_a_rows = read_external_rows(args.tier_a_ingest_path)
+    validate_source_row_counts(
+        tier_a_rows,
+        expected_sources=EXPECTED_TIER_A_SOURCES,
+        context="TI07 Tier A input",
+    )
+    tier_b_rows = read_external_rows(args.tier_b_ingest_path)
+    validate_source_row_counts(
+        tier_b_rows,
+        expected_sources=EXPECTED_TIER_B_SOURCES,
+        context="TI07 Tier B input",
+    )
+    input_rows = [*tier_a_rows, *tier_b_rows]
 
     output_rows = apply_external_confidence_policy(
         input_rows,
         source_registry_rows=source_registry_rows,
         config=config,
+    )
+    source_row_counts = validate_source_row_counts(
+        output_rows,
+        expected_sources=EXPECTED_EXTERNAL_SOURCES,
+        context="TI07 output",
     )
     summary_rows = compute_summary_rows(output_rows)
     policy_definition = build_policy_definition(config)
@@ -317,8 +376,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "summary": str(summary_output_path),
                 "policy": str(policy_output_path),
             },
+            "source_row_counts": source_row_counts,
         },
     )
+    LOGGER.info("Finished TI07 external-label confidence tiering with %s rows", len(output_rows))
 
 
 if __name__ == "__main__":
