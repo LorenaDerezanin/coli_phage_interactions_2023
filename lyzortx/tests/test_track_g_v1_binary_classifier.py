@@ -25,6 +25,7 @@ from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     FeatureSpace,
     build_feature_space,
     compute_top3_hit_rate,
+    fit_final_estimator,
     merge_expanded_feature_rows,
     make_lightgbm_estimator,
     select_best_candidate,
@@ -127,6 +128,59 @@ def test_compute_top3_hit_rate_reports_all_and_susceptible_denominators() -> Non
     assert metrics["top3_hit_rate_all_strains"] == 0.5
     assert metrics["susceptible_strain_count"] == 1
     assert metrics["top3_hit_rate_susceptible_only"] == 1.0
+
+
+def test_fit_final_estimator_forwards_sample_weights_when_requested() -> None:
+    captured: dict[str, object] = {}
+
+    class FakeEstimator:
+        def fit(self, X, y, sample_weight=None):
+            captured["sample_weight"] = list(sample_weight) if sample_weight is not None else None
+            captured["train_rows"] = len(y)
+            return self
+
+        def predict_proba(self, X):
+            return np.array([[0.25, 0.75]] * X.shape[0])
+
+    rows = [
+        {
+            "pair_id": "B1__P1",
+            "bacteria": "B1",
+            "phage": "P1",
+            "split_holdout": "train_non_holdout",
+            "is_hard_trainable": "1",
+            "label_hard_any_lysis": "1",
+            "feature_a": "1.0",
+            "effective_training_weight": "0.2",
+        },
+        {
+            "pair_id": "B1__P2",
+            "bacteria": "B1",
+            "phage": "P2",
+            "split_holdout": "holdout_test",
+            "is_hard_trainable": "1",
+            "label_hard_any_lysis": "0",
+            "feature_a": "2.0",
+        },
+    ]
+    feature_space = FeatureSpace(
+        categorical_columns=(),
+        numeric_columns=("feature_a",),
+        track_c_additional_columns=(),
+        track_d_columns=(),
+        track_e_columns=(),
+    )
+
+    fit_final_estimator(
+        rows,
+        feature_space,
+        estimator_factory=lambda params, seed_offset: FakeEstimator(),
+        params={},
+        sample_weight_key="effective_training_weight",
+    )
+
+    assert captured["train_rows"] == 1
+    assert captured["sample_weight"] == [0.2]
 
 
 def test_select_best_candidate_prefers_auc_then_top3_then_brier() -> None:

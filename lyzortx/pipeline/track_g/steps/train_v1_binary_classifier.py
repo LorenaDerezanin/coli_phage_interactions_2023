@@ -562,6 +562,7 @@ def fit_final_estimator(
     *,
     estimator_factory: Callable[[Mapping[str, object], int], Any],
     params: Mapping[str, object],
+    sample_weight_key: Optional[str] = None,
 ) -> Tuple[Any, DictVectorizer, List[Dict[str, object]], List[Dict[str, object]], List[float]]:
     train_rows = [
         dict(row)
@@ -588,6 +589,9 @@ def fit_final_estimator(
         ]
     )
     y_train = [int(str(row["label_hard_any_lysis"])) for row in train_rows]
+    sample_weights = None
+    if sample_weight_key is not None:
+        sample_weights = [float(row.get(sample_weight_key, 1.0) or 1.0) for row in train_rows]
     X_eval = vectorizer.transform(
         [
             _build_feature_dict(
@@ -599,7 +603,10 @@ def fit_final_estimator(
         ]
     )
     estimator = estimator_factory(params, 0)
-    estimator.fit(X_train, y_train)
+    if sample_weights is None:
+        estimator.fit(X_train, y_train)
+    else:
+        estimator.fit(X_train, y_train, sample_weight=sample_weights)
     probabilities = _predict_probabilities(estimator, X_eval)
     return estimator, vectorizer, train_rows, eval_rows, probabilities
 

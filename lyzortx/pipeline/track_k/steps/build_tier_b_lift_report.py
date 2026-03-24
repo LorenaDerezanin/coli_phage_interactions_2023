@@ -30,6 +30,7 @@ from lyzortx.pipeline.track_k.steps.build_source_lift_helpers import (
     load_locked_v1_feature_config,
     load_previous_best_source_systems,
     load_source_training_rows,
+    load_source_training_rows_for_systems,
     load_tg01_best_params,
     sha256,
     source_systems_label,
@@ -128,6 +129,7 @@ def _measure_metrics(
         feature_space,
         estimator_factory=estimator_factory,
         params=params,
+        sample_weight_key="effective_training_weight",
     )
     scored_rows: List[Dict[str, object]] = []
     for row, probability in zip(eval_rows, probabilities):
@@ -191,14 +193,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     )
     cohort_rows = read_csv_rows(args.ti08_training_cohort_path) if args.ti08_training_cohort_path.exists() else []
 
+    current_source_rows, current_source_counts = load_source_training_rows_for_systems(
+        merged_rows,
+        cohort_rows,
+        CURRENT_SOURCE_SYSTEMS,
+    )
     source_rows_by_system: Dict[str, List[Dict[str, object]]] = {}
-    current_source_rows: List[Dict[str, object]] = []
-    current_source_counts: Dict[str, Dict[str, int]] = {}
-    for source_system in CURRENT_SOURCE_SYSTEMS:
-        rows, counts = load_source_training_rows(merged_rows, cohort_rows, source_system)
-        source_rows_by_system[source_system] = rows
-        current_source_rows.extend(rows)
-        current_source_counts[source_system] = counts
 
     previous_best_source_systems = load_previous_best_source_systems(args.tk04_manifest_path)
     for source_system in previous_best_source_systems:
@@ -210,11 +210,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     internal_training_rows = list(merged_rows)
     base_training_rows = build_training_rows(internal_training_rows, source_rows_by_system, base_source_systems)
-    augmented_training_rows = build_training_rows(
-        internal_training_rows,
-        source_rows_by_system,
-        augmented_source_systems,
-    )
+    augmented_training_rows = [*base_training_rows, *current_source_rows]
 
     estimator_factory = lambda params, seed_offset: make_lightgbm_estimator(  # noqa: E731
         params,
