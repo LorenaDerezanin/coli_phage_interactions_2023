@@ -438,3 +438,39 @@ would use this to:
 
 This would eliminate manual `blocked`/`pending` status management and make the dispatch order deterministic based on the
 dependency graph rather than YAML ordering.
+
+#### Future: implementation workflow should comment on the issue with a link to the action run
+
+Revisit when: improving observability of the orchestrator pipeline.
+
+Currently when `codex-implement.yml` picks up an issue and starts an implementation run, there is no trace on the issue
+itself. A human watching the issue has no way to know that work is in progress or where to find the logs — they have to
+go to the Actions tab and hunt for the right run.
+
+The workflow should post a comment on the dispatching issue at the start of the run, e.g.:
+"Implementation started — [View action run](https://github.com/OWNER/REPO/actions/runs/RUN_ID)."
+
+This is a single `gh issue comment` step early in the job, using `${{ github.run_id }}` to construct the URL. It gives
+immediate visibility into which issues are being worked on and provides a direct link to the logs for debugging when a
+run fails.
+
+#### Future: codex-pr-lifecycle should register as a check on the PR
+
+Revisit when: improving PR observability or refactoring the lifecycle workflow.
+
+`codex-pr-lifecycle.yml` is triggered via `workflow_dispatch`, which means it does not automatically appear in the PR's
+checks tab. A human looking at the PR sees only the CI checks from `push`/`pull_request`-triggered workflows — there is
+no indication that a Codex fix cycle is running, succeeded, or failed.
+
+The workflow should use the GitHub Checks API (`gh api repos/OWNER/REPO/check-runs`) to create a check run linked to
+the PR's head SHA at the start of the job, update it with progress, and mark it completed (success/failure) at the end.
+This makes the lifecycle run visible alongside CI checks in the PR's "Checks" tab, so reviewers can see at a glance
+whether the Codex fix cycle has completed.
+
+The check run should be created early in the job using:
+```bash
+gh api repos/OWNER/REPO/check-runs -f name="Codex PR Lifecycle" \
+  -f head_sha="$(git rev-parse HEAD)" -f status="in_progress" \
+  -f details_url="https://github.com/OWNER/REPO/actions/runs/${{ github.run_id }}"
+```
+And updated to `completed` with the appropriate conclusion at the end.
