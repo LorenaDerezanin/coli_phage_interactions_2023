@@ -589,7 +589,7 @@ model artifacts. The command completed without error, regenerated the downstream
 
 Review of TG07 and TG08 revealed two problems. First, the feature-subset sweep is nondeterministic: TG07 locked
 `defense + phage_genomic + pairwise` (AUC 0.836) but TG08's Track J end-to-end re-run picked `defense + phage_genomic`
-(AUC 0.837). Second, the pairwise block contains 6 out of 13 features derived from training labels — a softer form of
+(AUC 0.837). Second, the pairwise block contains 5 out of 13 features derived from training labels — a softer form of
 the same leakage we just cleaned up. The decision is to lock `defense + phage_genomic` as the v1 winner, fix LightGBM
 determinism, and defer pairwise investigation to a later task.
 
@@ -619,14 +619,14 @@ locked config without re-running the sweep.
 
 #### Pairwise block soft leakage
 
-Audit of the 13 pairwise features (Track E) found that 6 are derived from training labels:
+Audit of the 13 pairwise features (Track E) found that 5 are derived from training labels:
 
 - TE02 (all 4 features): `defense_evasion_mean_score`, `defense_evasion_expected_score`,
   `defense_evasion_supported_subtype_count`, `defense_evasion_family_training_pair_count` — collaborative filtering of
   phage-family × defense-subtype lysis rates from fold-excluded training labels
 - TE01: `receptor_variant_seen_in_training_positives` — binary flag from training positives
 
-The remaining 7 features are clean:
+The remaining 8 features are clean:
 - TE01: `lookup_available`, `target_receptor_present`, `protein_target_present`, `surface_target_present`,
   `receptor_cluster_matches` — curated genus-receptor lookup, no label dependency
 - TE03: `isolation_host_umap_euclidean_distance`, `isolation_host_defense_jaccard_distance`,

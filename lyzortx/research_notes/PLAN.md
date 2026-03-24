@@ -252,7 +252,7 @@ graph LR
   - Add deterministic=True to make_lightgbm_estimator in train_v1_binary_classifier.py
   - Remove n_jobs=1 from make_lightgbm_estimator (deterministic=True handles thread safety, force_col_wise=True is
     already set)
-  - Update v1_feature_configuration.json to lock defense + phage_genomic as the winner (exclude pairwise block — 6 of 13
+  - Update v1_feature_configuration.json to lock defense + phage_genomic as the winner (exclude pairwise block — 5 of 13
     features are training-label-derived)
   - Remove the feature-subset-sweep step from Track J's run_track_j.py so the lock file is treated as a human decision,
     not a regenerated output

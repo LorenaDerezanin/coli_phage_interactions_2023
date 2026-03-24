@@ -695,7 +695,7 @@ non-leaky features.
 #### Executive summary
 
 Post-merge review of TG06-TG08 found two additional problems: LightGBM nondeterminism causing the sweep winner to flip
-across runs, and 6 out of 13 pairwise features being derived from training labels (soft leakage). The v1 winner is now
+across runs, and 5 out of 13 pairwise features being derived from training labels (soft leakage). The v1 winner is now
 locked to `defense + phage_genomic` — the 2-block arm that excludes all label-derived pairwise features. LightGBM
 determinism will be fixed and the lock file will be treated as a human decision rather than a regenerated output.
 

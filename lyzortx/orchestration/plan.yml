@@ -385,7 +385,7 @@ tracks:
       - Remove n_jobs=1 from make_lightgbm_estimator (deterministic=True handles thread
         safety, force_col_wise=True is already set)
       - Update v1_feature_configuration.json to lock defense + phage_genomic as the winner
-        (exclude pairwise block — 6 of 13 features are training-label-derived)
+        (exclude pairwise block — 5 of 13 features are training-label-derived)
       - Remove the feature-subset-sweep step from Track J's run_track_j.py so the lock
         file is treated as a human decision, not a regenerated output
       - Verify two consecutive runs of run_track_g.py --step train-v1-binary produce
