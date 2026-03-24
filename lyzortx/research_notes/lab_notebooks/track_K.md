@@ -257,3 +257,20 @@ set back to pending with acceptance criteria requiring >0 external rows in the a
 - TK01-TK06 set back to pending
 - Each task now requires >0 external rows in the augmented training set — fail if TI08 cohort is missing or empty
 - TK06 must wait for TK01-TK05 to complete on real data before synthesizing
+
+### 2026-03-24: TK06 code deleted and task set back to pending
+
+#### Executive summary
+
+The TK06 synthesis step (`build_external_data_decision_report.py`) was built on top of TK01-TK05 results that were all
+empty. It locked an "internal-only" decision and wrote external_data_lock fields into v1_feature_configuration.json based
+on zero evidence. The code, test, runner integration, and config fields have been deleted. TK06 is set back to pending
+so it can be re-dispatched after TK01-TK05 complete on real data.
+
+#### What was deleted
+
+- `lyzortx/pipeline/track_k/steps/build_external_data_decision_report.py`
+- `lyzortx/tests/test_track_k_external_data_decision.py`
+- TK06 import and step from `run_track_k.py` and `steps/__init__.py`
+- `external_data_lock_task_id`, `external_data_selection_policy`, `locked_training_data_arm`, and
+  `locked_external_source_systems` fields from `v1_feature_configuration.json`

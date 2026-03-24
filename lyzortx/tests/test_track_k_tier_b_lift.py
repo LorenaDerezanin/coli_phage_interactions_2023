@@ -545,18 +545,9 @@ def test_run_track_k_dispatches_tier_b_lift(monkeypatch) -> None:
     monkeypatch.setattr(run_track_k.build_klebphacol_lift_report, "main", lambda argv: calls.append("klebphacol-lift"))
     monkeypatch.setattr(run_track_k.build_gpb_lift_report, "main", lambda argv: calls.append("gpb-lift"))
     monkeypatch.setattr(run_track_k.build_tier_b_lift_report, "main", lambda argv: calls.append("tier-b-lift"))
-    monkeypatch.setattr(
-        run_track_k.build_external_data_decision_report,
-        "main",
-        lambda argv: calls.append("external-data-decision"),
-    )
 
     run_track_k.main(["--step", "tier-b-lift"])
     assert calls == ["tier-b-lift"]
-
-    calls.clear()
-    run_track_k.main(["--step", "external-data-decision"])
-    assert calls == ["external-data-decision"]
 
     calls.clear()
     run_track_k.main(["--step", "all"])
@@ -566,5 +557,4 @@ def test_run_track_k_dispatches_tier_b_lift(monkeypatch) -> None:
         "klebphacol-lift",
         "gpb-lift",
         "tier-b-lift",
-        "external-data-decision",
     ]

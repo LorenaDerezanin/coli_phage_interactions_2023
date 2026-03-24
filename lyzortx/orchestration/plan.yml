@@ -618,7 +618,7 @@ tracks:
         keep internal-only as the v1 baseline
     - id: TK06
       title: Synthesize per-source lift results and lock the external data decision
-      status: done
+      status: pending
       model: gpt-5.4
       acceptance_criteria:
       - Summarize TK01-TK05 results in a single comparison table (source, delta AUC,
