@@ -644,3 +644,29 @@ Lock `defense + phage_genomic` (without pairwise). Reasons:
 3. Half the pairwise block is label-derived — adding it is inconsistent with the leakage cleanup
 4. The clean pairwise features (TE03 distances, TE01 curated lookups) should be evaluated individually in a future task,
    not bundled with the label-derived ones
+
+### 2026-03-24: TG09 implemented (deterministic TG01 training and human-locked v1 feature config)
+
+#### What was implemented
+
+- Updated `lyzortx/pipeline/track_g/steps/train_v1_binary_classifier.py` so `make_lightgbm_estimator` now sets
+  `deterministic=True` and no longer forces `n_jobs=1`.
+- Removed the run timestamp from the TG01 summary artifact so consecutive training runs produce byte-identical output
+  trees.
+- Updated `lyzortx/pipeline/track_g/v1_feature_configuration.json` to lock `defense + phage-genomic` as the v1 winner
+  and exclude the pairwise block from the human-approved lock.
+- Updated `lyzortx/pipeline/track_j/run_track_j.py` so Track J calls the Track G modeling steps explicitly and no
+  longer regenerates the feature-subset sweep during release runs.
+- Added tests covering the LightGBM factory flags and the new Track J release ordering.
+
+#### What was verified
+
+- `pytest -q lyzortx/tests/` passed.
+- Two consecutive runs of `python -m lyzortx.pipeline.track_g.steps.train_v1_binary_classifier --output-dir ...`
+  produced identical artifacts under `.scratch/tg01_run1b` and `.scratch/tg01_run2b`.
+
+#### Interpretation
+
+1. TG01 is now reproducible at the artifact level, not just at the metric level.
+2. Track J now treats the v1 feature lock as a human decision instead of regenerating it from the sweep.
+3. The locked v1 winner is aligned with the leak cleanup: `defense + phage-genomic` only.

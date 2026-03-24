@@ -30,7 +30,26 @@ def test_run_track_j_dispatches_release_sequence_in_dependency_order(monkeypatch
     )
     monkeypatch.setattr(run_track_j.run_track_d, "main", lambda argv: calls.append("track-d"))
     monkeypatch.setattr(run_track_j.run_track_e, "main", lambda argv: calls.append("track-e"))
-    monkeypatch.setattr(run_track_j.run_track_g, "main", lambda argv: calls.append("track-g"))
+    monkeypatch.setattr(
+        run_track_j.run_track_g.train_v1_binary_classifier,
+        "main",
+        lambda argv: calls.append("track-g-train-v1-binary"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.calibrate_gbm_outputs,
+        "main",
+        lambda argv: calls.append("track-g-calibrate-gbm"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("track-g-feature-block-ablation"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("track-g-compute-shap"),
+    )
     monkeypatch.setattr(run_track_j.run_track_h, "main", lambda argv: calls.append("track-h"))
 
     run_track_j.main([])
@@ -46,7 +65,10 @@ def test_run_track_j_dispatches_release_sequence_in_dependency_order(monkeypatch
         "track-c-v1-pair-table",
         "track-d",
         "track-e",
-        "track-g",
+        "track-g-train-v1-binary",
+        "track-g-calibrate-gbm",
+        "track-g-feature-block-ablation",
+        "track-g-compute-shap",
         "track-h",
     ]
 
@@ -71,7 +93,26 @@ def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, 
     )
     monkeypatch.setattr(run_track_j.run_track_d, "main", lambda argv: release_calls.append("track-d"))
     monkeypatch.setattr(run_track_j.run_track_e, "main", lambda argv: release_calls.append("track-e"))
-    monkeypatch.setattr(run_track_j.run_track_g, "main", lambda argv: release_calls.append("track-g"))
+    monkeypatch.setattr(
+        run_track_j.run_track_g.train_v1_binary_classifier,
+        "main",
+        lambda argv: release_calls.append("track-g-train-v1-binary"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.calibrate_gbm_outputs,
+        "main",
+        lambda argv: release_calls.append("track-g-calibrate-gbm"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: release_calls.append("track-g-feature-block-ablation"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: release_calls.append("track-g-compute-shap"),
+    )
     monkeypatch.setattr(run_track_j.run_track_h, "main", lambda argv: release_calls.append("track-h"))
 
     foundation_runners = tuple(run_track_j._runners_for_step("foundation"))
@@ -81,7 +122,14 @@ def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, 
 
     assert [name for name, _ in foundation_runners] == ["foundation-a", "foundation-b"]
     assert [name for name, _ in feature_runners] == ["feature-a"]
-    assert [name for name, _ in modeling_runners] == ["track-d", "track-e", "track-g"]
+    assert [name for name, _ in modeling_runners] == [
+        "track-d",
+        "track-e",
+        "track-g-train-v1-binary",
+        "track-g-calibrate-gbm",
+        "track-g-feature-block-ablation",
+        "track-g-compute-shap",
+    ]
     assert [name for name, _ in recommendation_runners] == ["track-h"]
 
     with caplog.at_level("INFO", logger="lyzortx.pipeline.track_j.run_track_j"):
@@ -89,7 +137,15 @@ def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, 
 
     assert foundation_calls == ["foundation-a", "foundation-b"]
     assert feature_calls == ["feature-a"]
-    assert release_calls == ["track-d", "track-e", "track-g", "track-h"]
+    assert release_calls == [
+        "track-d",
+        "track-e",
+        "track-g-train-v1-binary",
+        "track-g-calibrate-gbm",
+        "track-g-feature-block-ablation",
+        "track-g-compute-shap",
+        "track-h",
+    ]
     step_messages = [r.message for r in caplog.records if r.message.startswith("[track-j]")]
     assert step_messages == [
         "[track-j] foundation-a",
@@ -97,7 +153,10 @@ def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, 
         "[track-j] feature-a",
         "[track-j] track-d",
         "[track-j] track-e",
-        "[track-j] track-g",
+        "[track-j] track-g-train-v1-binary",
+        "[track-j] track-g-calibrate-gbm",
+        "[track-j] track-g-feature-block-ablation",
+        "[track-j] track-g-compute-shap",
         "[track-j] track-h",
     ]
 
@@ -131,7 +190,26 @@ def test_run_track_j_can_limit_to_feature_blocks(monkeypatch) -> None:
     )
     monkeypatch.setattr(run_track_j.run_track_d, "main", lambda argv: calls.append("track-d"))
     monkeypatch.setattr(run_track_j.run_track_e, "main", lambda argv: calls.append("track-e"))
-    monkeypatch.setattr(run_track_j.run_track_g, "main", lambda argv: calls.append("track-g"))
+    monkeypatch.setattr(
+        run_track_j.run_track_g.train_v1_binary_classifier,
+        "main",
+        lambda argv: calls.append("track-g-train-v1-binary"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.calibrate_gbm_outputs,
+        "main",
+        lambda argv: calls.append("track-g-calibrate-gbm"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("track-g-feature-block-ablation"),
+    )
+    monkeypatch.setattr(
+        run_track_j.run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("track-g-compute-shap"),
+    )
     monkeypatch.setattr(run_track_j.run_track_h, "main", lambda argv: calls.append("track-h"))
 
     run_track_j.main(["--step", "feature-blocks"])

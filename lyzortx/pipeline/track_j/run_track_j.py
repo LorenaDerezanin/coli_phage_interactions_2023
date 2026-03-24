@@ -66,7 +66,10 @@ def _runners_for_step(step: str) -> Iterable[StepRunner]:
     rest: Tuple[StepRunner, ...] = (
         ("track-d", lambda: run_track_d.main(["--step", "all"])),
         ("track-e", lambda: run_track_e.main(["--step", "all"])),
-        ("track-g", lambda: run_track_g.main(["--step", "all"])),
+        ("track-g-train-v1-binary", lambda: run_track_g.train_v1_binary_classifier.main([])),
+        ("track-g-calibrate-gbm", lambda: run_track_g.calibrate_gbm_outputs.main([])),
+        ("track-g-feature-block-ablation", lambda: run_track_g.run_feature_block_ablation_suite.main([])),
+        ("track-g-compute-shap", lambda: run_track_g.compute_shap_explanations.main([])),
         ("track-h", lambda: run_track_h.main(["--step", "all"])),
     )
     if step == "foundation":
@@ -74,9 +77,9 @@ def _runners_for_step(step: str) -> Iterable[StepRunner]:
     if step == "feature-blocks":
         return features
     if step == "modeling":
-        return rest[:3]
+        return rest[:6]
     if step == "recommendations":
-        return rest[3:]
+        return rest[6:]
     if step == "all":
         return (*foundation, *features, *rest)
     raise ValueError(f"Unsupported step: {step}")

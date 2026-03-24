@@ -9,7 +9,6 @@ import json
 import logging
 import warnings
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -549,7 +548,7 @@ def make_lightgbm_estimator(params: Mapping[str, object], seed_offset: int, *, b
         objective="binary",
         class_weight="balanced",
         random_state=base_random_state + seed_offset,
-        n_jobs=1,
+        deterministic=True,
         verbosity=-1,
         force_col_wise=True,
         colsample_bytree=0.8,
@@ -807,7 +806,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     top3_ranking_rows.sort(key=lambda row: (str(row["model_label"]), str(row["bacteria"]), int(row["rank"])))
 
     summary = {
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "task_id": "TG01",
         "feature_space": {
             "categorical_columns": list(feature_space.categorical_columns),
