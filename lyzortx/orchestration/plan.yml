@@ -536,7 +536,7 @@ tracks:
     - id: TI09
       title: 'Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol ->
         +GPB -> +Tier B'
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Retrain the locked v1 model for each cumulative source addition

@@ -334,7 +334,7 @@ graph LR
   - Output must contain >0 external rows — fail if all external data was excluded
   - External rows carry source_system, confidence_tier, and training_weight
   - Internal-only baseline arm must remain extractable from the same file
-- [ ] **TI09** Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B. Model:
+- [x] **TI09** Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B. Model:
       `gpt-5.4-mini`.
   - Retrain the locked v1 model for each cumulative source addition
   - Each arm must train on >0 external rows from the added source
