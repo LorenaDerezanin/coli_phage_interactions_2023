@@ -3,36 +3,37 @@
 #### Executive summary
 
 Added the TK01 Track K runner to measure VHRdb lift against the locked v1 baseline and record the result in a
-manifest plus summary tables under `lyzortx/generated_outputs/track_k/tk01_vhrdb_lift_measurement/`. The first local
-run found no joinable TI08 VHRdb rows, so the lift deltas were all `0.0` and the decision remained
-`pending_external_artifact`. The step now requires the locked TG01 summary artifact rather than silently substituting
-defaults, so the baseline comparison stays comparable to the Track G lock.
+manifest plus summary tables under `lyzortx/generated_outputs/track_k/tk01_vhrdb_lift_measurement/`. The step now
+fails closed if the TI08 cohort is missing, empty, or yields zero joinable VHRdb rows, so it no longer emits a fake
+`pending_external_artifact` placeholder. This checkout still does not contain the real TI08 generated artifact, so the
+local production rerun is blocked until that input is restored.
 
 #### What was implemented
 
 - Added a new Track K runner at `lyzortx/pipeline/track_k/run_track_k.py` and a TK01 lift-measurement step at
   `lyzortx/pipeline/track_k/steps/build_vhrdb_lift_report.py`.
 - The step reuses the locked `defense + phage-genomic` v1 feature contract, trains the baseline internal-only model,
-  then attempts to add TI08 VHRdb rows only when they join safely into the ST03 train split.
+  then adds TI08 VHRdb rows only when they join safely into the ST03 train split.
+- Added explicit guards that raise `FileNotFoundError` for a missing TI08 cohort and `ValueError` when the cohort is
+  empty or no VHRdb rows survive the join.
 - Emitted a TK01 summary CSV, top-3 ranking CSV, and manifest under
   `lyzortx/generated_outputs/track_k/tk01_vhrdb_lift_measurement/`.
 
 #### Findings
 
-- In this checkout, the run completed with `0` joinable VHRdb rows from the TI08 cohort artifact.
-- Baseline internal-only holdout metrics were:
-  - ROC-AUC `0.831075`
-  - top-3 hit rate `0.876923`
-  - Brier score `0.166377`
-- The VHRdb-augmented arm was identical because no cohort rows joined into the training split, so all deltas were `0.0`.
-- The TK01 manifest marked the decision as `pending_external_artifact`.
+- The repository snapshot used for this run does not include the TI08 cohort artifact, so the real TK01 measurement
+  cannot be reproduced here without regenerating that input.
+- The new contract now prevents a silent fallback to an internal-only placeholder when TI08 is absent.
+- On the unit-test fixture, the VHRdb arm can be joined into the locked ST03 train split and the manifest records the
+  resulting baseline-versus-augmented metrics plus a `do_not_include_vhrdb` or `keep_vhrdb_for_followup_arms`
+  decision.
 
 #### Interpretation
 
 - The Track K seam is now wired correctly: if TI08 VHRdb rows appear later, they will enter training only through the
-  locked ST03-safe path.
-- For this repository state, VHRdb should not be added to later arms yet. The code path is ready, but the local
-  artifact set does not contain joinable VHRdb training rows, so there is no empirical lift to carry forward.
+  locked ST03-safe path and the step will fail if that path produces no real VHRdb rows.
+- Because the required TI08 artifact is absent in this checkout, there is no honest basis to promote VHRdb to later
+  arms from this run alone.
 
 ### 2026-03-24: TK02 BASEL cumulative lift measurement
 
