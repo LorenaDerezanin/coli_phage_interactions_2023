@@ -66,3 +66,37 @@ production rerun. On that fixture, BASEL was neutral: ROC-AUC, top-3, and Brier 
 - BASEL is now wired as a cumulative add-on after TK01, not as a replacement path.
 - On the available fixture, BASEL is neutral rather than additive or harmful.
 - A production rerun can replace the fixture note once the Track G/I generated artifacts are available locally.
+
+### 2026-03-24: TK03 KlebPhaCol cumulative lift measurement
+
+#### Executive summary
+
+Added the TK03 Track K runner to measure KlebPhaCol lift on top of the current best-so-far cohort. The new step
+reads the TK02 manifest to recover the prior external source chain, then retrains the locked v1 model with
+`+KlebPhaCol` appended. On the validation fixture, KlebPhaCol was neutral: ROC-AUC, top-3, and Brier deltas vs the
+previous best were all `0.0`.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_k/steps/build_klebphacol_lift_report.py` and wired it into
+  `lyzortx/pipeline/track_k/run_track_k.py`.
+- Extended the shared Track K manifest loader so TK03 can recover the previous best external cohort from TK02
+  manifests without duplicating `internal`.
+- Added regression coverage for the TK03 runner and the TK02-to-TK03 cohort handoff.
+
+#### Findings
+
+- On the validation fixture, TK03 carried forward `internal_plus_vhrdb` as the best-so-far cohort.
+- TK03 evaluated `internal_plus_vhrdb_plus_klebphacol`.
+- On the validation fixture, both arms scored ROC-AUC `0.5`, top-3 hit rate `1.0`, and Brier score `0.25`.
+- The measured deltas vs the previous best were all `0.0`:
+  - ROC-AUC `0.0`
+  - top-3 `0.0`
+  - Brier `0.0`
+- The TK03 lift assessment was `neutral`.
+
+#### Interpretation
+
+- KlebPhaCol now slots cleanly into the cumulative Track K sequence after BASEL.
+- On the available fixture, KlebPhaCol neither helps nor hurts the current best-so-far cohort, so it should be
+  treated as neutral until a production rerun with the real Track I artifacts is available.
