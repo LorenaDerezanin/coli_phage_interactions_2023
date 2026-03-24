@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_k.steps import build_basel_lift_report
+from lyzortx.pipeline.track_k.steps import build_klebphacol_lift_report
 from lyzortx.pipeline.track_k.steps import build_vhrdb_lift_report
 
 
@@ -19,7 +20,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["vhrdb-lift", "basel-lift", "all"],
+        choices=["vhrdb-lift", "basel-lift", "klebphacol-lift", "all"],
         default="all",
         help="Track K step to run. 'all' runs the implemented lift-measurement steps.",
     )
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> None:
         build_vhrdb_lift_report.main([])
     if args.step in {"basel-lift", "all"}:
         build_basel_lift_report.main([])
+    if args.step in {"klebphacol-lift", "all"}:
+        build_klebphacol_lift_report.main([])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TK02: Measure the cumulative lift from adding BASEL supervision."""
+"""TK03: Measure the cumulative lift from adding KlebPhaCol supervision."""
 
 from __future__ import annotations
 
@@ -40,12 +40,12 @@ logger = logging.getLogger(__name__)
 
 LOCKED_V1_FEATURE_CONFIG_PATH = Path("lyzortx/pipeline/track_g/v1_feature_configuration.json")
 TG01_SUMMARY_PATH = Path("lyzortx/generated_outputs/track_g/tg01_v1_binary_classifier/tg01_model_summary.json")
-TK01_MANIFEST_PATH = Path("lyzortx/generated_outputs/track_k/tk01_vhrdb_lift_measurement/tk01_vhrdb_lift_manifest.json")
+TK02_MANIFEST_PATH = Path("lyzortx/generated_outputs/track_k/tk02_basel_lift_measurement/tk02_basel_lift_manifest.json")
 TI08_TRAINING_COHORT_PATH = Path(
     "lyzortx/generated_outputs/track_i/training_cohort_integration/ti08_training_cohort_rows.csv"
 )
-DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_k/tk02_basel_lift_measurement")
-CURRENT_SOURCE_SYSTEM = "basel"
+DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_k/tk03_klebphacol_lift_measurement")
+CURRENT_SOURCE_SYSTEM = "klebphacol"
 TRAIN_SPLIT = "train_non_holdout"
 NEGLIGIBLE_DELTA_TOLERANCE = 0.001
 
@@ -97,7 +97,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--v1-feature-config-path", type=Path, default=LOCKED_V1_FEATURE_CONFIG_PATH)
     parser.add_argument("--tg01-summary-path", type=Path, default=TG01_SUMMARY_PATH)
-    parser.add_argument("--tk01-manifest-path", type=Path, default=TK01_MANIFEST_PATH)
+    parser.add_argument("--tk02-manifest-path", type=Path, default=TK02_MANIFEST_PATH)
     parser.add_argument("--ti08-training-cohort-path", type=Path, default=TI08_TRAINING_COHORT_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--random-state", type=int, default=42)
@@ -143,7 +143,7 @@ def _measure_metrics(
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
-    logger.info("TK02 starting: measure BASEL lift against the best-so-far Track K cohort")
+    logger.info("TK03 starting: measure KlebPhaCol lift against the best-so-far Track K cohort")
 
     ensure_directory(args.output_dir)
 
@@ -197,7 +197,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         CURRENT_SOURCE_SYSTEM,
     )
     source_rows_by_system[CURRENT_SOURCE_SYSTEM] = current_source_rows
-    previous_best_source_systems = load_previous_best_source_systems(args.tk01_manifest_path)
+    previous_best_source_systems = load_previous_best_source_systems(args.tk02_manifest_path)
     for source_system in previous_best_source_systems:
         if source_system not in source_rows_by_system:
             source_rows_by_system[source_system], _ = load_source_training_rows(merged_rows, cohort_rows, source_system)
@@ -252,7 +252,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "arm": arm_name_for_source_systems(base_source_systems),
             "source_systems": source_systems_label(base_source_systems),
             "training_row_count": len(_trainable_rows(base_training_rows)),
-            "basel_row_count": 0,
+            "klebphacol_row_count": 0,
             "holdout_roc_auc": baseline_holdout_metrics["roc_auc"],
             "holdout_top3_hit_rate_all_strains": baseline_top3["top3_hit_rate_all_strains"],
             "holdout_brier_score": baseline_holdout_metrics["brier_score"],
@@ -264,7 +264,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "arm": arm_name_for_source_systems(augmented_source_systems),
             "source_systems": source_systems_label(augmented_source_systems),
             "training_row_count": len(_trainable_rows(augmented_training_rows)),
-            "basel_row_count": len(current_source_rows),
+            "klebphacol_row_count": len(current_source_rows),
             "holdout_roc_auc": augmented_holdout_metrics["roc_auc"],
             "holdout_top3_hit_rate_all_strains": augmented_top3["top3_hit_rate_all_strains"],
             "holdout_brier_score": augmented_holdout_metrics["brier_score"],
@@ -274,9 +274,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         },
     ]
 
-    summary_filename = "tk02_basel_lift_summary.csv"
-    rankings_filename = "tk02_basel_holdout_top3_rankings.csv"
-    manifest_path = args.output_dir / "tk02_basel_lift_manifest.json"
+    summary_filename = "tk03_klebphacol_lift_summary.csv"
+    rankings_filename = "tk03_klebphacol_holdout_top3_rankings.csv"
+    manifest_path = args.output_dir / "tk03_klebphacol_lift_manifest.json"
 
     ranking_rows = [
         *build_top3_ranking_rows(
@@ -298,7 +298,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "arm",
             "source_systems",
             "training_row_count",
-            "basel_row_count",
+            "klebphacol_row_count",
             "holdout_roc_auc",
             "holdout_top3_hit_rate_all_strains",
             "holdout_brier_score",
@@ -319,7 +319,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         manifest_path=manifest_path,
         manifest_payload={
             "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
-            "step_name": "build_basel_lift_report",
+            "step_name": "build_klebphacol_lift_report",
             "source_system_added": CURRENT_SOURCE_SYSTEM,
             "locked_feature_config_path": str(args.v1_feature_config_path),
             "locked_feature_config_sha256": sha256(args.v1_feature_config_path),
@@ -334,7 +334,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 "track_e_rbp_receptor_compatibility": str(args.track_e_rbp_compatibility_path),
                 "track_e_isolation_host_distance": str(args.track_e_isolation_distance_path),
                 "ti08_training_cohort_rows": str(args.ti08_training_cohort_path),
-                "tk01_manifest": str(args.tk01_manifest_path),
+                "tk02_manifest": str(args.tk02_manifest_path),
             },
             "input_hashes_sha256": {
                 "st02_pair_table": sha256(args.st02_pair_table_path),
@@ -349,7 +349,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                     if args.ti08_training_cohort_path.exists()
                     else {}
                 ),
-                **({"tk01_manifest": sha256(args.tk01_manifest_path)} if args.tk01_manifest_path.exists() else {}),
+                **({"tk02_manifest": sha256(args.tk02_manifest_path)} if args.tk02_manifest_path.exists() else {}),
             },
             "previous_best_source_systems": previous_best_source_systems,
             "best_source_systems": (
@@ -384,11 +384,15 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         rankings_filename=rankings_filename,
     )
 
-    logger.info("TK02 completed.")
+    logger.info("TK03 completed.")
     logger.info("- Previous best arm: %s", arm_name_for_source_systems(base_source_systems))
     logger.info("- Augmented arm: %s", arm_name_for_source_systems(augmented_source_systems))
     logger.info("- Delta ROC-AUC: %s", metric_deltas["delta_roc_auc"])
     logger.info("- Delta top-3: %s", metric_deltas["delta_top3_hit_rate_all_strains"])
     logger.info("- Delta Brier: %s", metric_deltas["delta_brier_score"])
-    logger.info("- BASEL rows joined: %s", len(current_source_rows))
+    logger.info("- KlebPhaCol rows joined: %s", len(current_source_rows))
     logger.info("- Lift assessment: %s", lift_assessment)
+
+
+if __name__ == "__main__":
+    main()

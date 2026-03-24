@@ -193,8 +193,24 @@ def load_previous_best_source_systems(previous_manifest_path: Path) -> List[str]
     with previous_manifest_path.open("r", encoding="utf-8") as handle:
         manifest = json.load(handle)
 
+    best_source_systems = manifest.get("best_source_systems")
+    if isinstance(best_source_systems, list) and best_source_systems:
+        return [str(source_system) for source_system in best_source_systems if str(source_system) != "internal"]
+
     if manifest.get("lift_decision") == "keep_vhrdb_for_followup_arms":
         return ["vhrdb"]
+
+    lift_assessment = manifest.get("lift_assessment")
+    base_source_systems = manifest.get("base_source_systems")
+    augmented_source_systems = manifest.get("augmented_source_systems")
+    if isinstance(base_source_systems, list) and isinstance(augmented_source_systems, list):
+        if lift_assessment == "adds":
+            return [
+                str(source_system) for source_system in augmented_source_systems if str(source_system) != "internal"
+            ]
+        if lift_assessment in {"hurts", "neutral"}:
+            return [str(source_system) for source_system in base_source_systems if str(source_system) != "internal"]
+
     return []
 
 
