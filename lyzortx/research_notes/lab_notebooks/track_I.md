@@ -371,30 +371,31 @@ TI08 is now an actual integration boundary rather than a permissive passthrough.
 internal-only baseline and the external-enhanced arms, but it no longer pretends that an empty or fully excluded
 external feed is an acceptable final artifact.
 
-### 2026-03-22: TI09 Strict ablation sequence
+### 2026-03-24: TI09 Strict ablation sequence
 
 #### Executive summary
 
-TI09 now has a dedicated Track I step that reads the TI08 cohort output and materializes the planned strict ablation
-order `internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B`. The step writes a reproducible summary
-table and manifest under `lyzortx/generated_outputs/track_i/strict_ablation_sequence/`, making the source-addition
-sequence explicit instead of burying it inside the cohort integration step.
+TI09 now has a dedicated Track I step that loads the TI08 cohort, rebuilds the locked v1 feature space, and retrains
+the model arm by arm in the planned strict order `internal-only -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB ->
++Tier B`. The step now computes holdout ROC-AUC, top-3 hit rate, and Brier score per arm and raises `ValueError` as
+soon as an added source contributes zero external training rows.
 
 #### Findings
 
-- The strict ablation task is a sequencing problem, not a redefinition of the TI08 cohort contract. Reusing TI08 output
-  keeps the implementation honest: the new step only reasons about the order in which rows become eligible for the
-  cumulative arms.
-- Treating `+Tier B` as a final planned addition works cleanly because the TI08 rows already preserve the underlying
-  source-system provenance for Virus-Host DB and NCBI Virus/BioSample separately.
-- The new summary records both the planned source additions and the observed cumulative source coverage, which makes it
-  easy to spot when a planned arm exists but contributes no rows yet.
+- The live end-to-end run now reaches TI09, but it stops at `+BASEL` because the locked feature grid has no joinable
+  Basel rows for the current TI08 cohort. That is the correct failure mode for this task: the step refuses to invent a
+  Basel ablation result when the added source contributes zero trainable rows.
+- The guard is doing something useful here, not just being conservative. The TI08 cohort does contain Basel rows, but
+  the TI09 join against the locked ST03 feature table leaves no Basel rows eligible for retraining, so a silent pass
+  would have produced a misleading ablation report.
+- The implementation still keeps the planned source order explicit and auditable, so if the Basel seam changes in a
+  later data refresh, the same step will immediately surface it by completing the full metric table instead of failing.
 
 #### Interpretation
 
-TI09 is now executable as a standalone, ordered ablation pass. That keeps the Track I pipeline modular: TI08 preserves
-integration trust, and TI09 turns that trusted cohort into a strict source-by-source ablation sequence that TI10 can
-use for lift and failure-mode analysis.
+TI09 is now honest. It retrains the locked model per cumulative arm, but it will not manufacture metrics when an added
+source cannot actually join onto the model feature grid. In this workspace, Basel is the blocker, so the correct
+action is to fail rather than report fake lift.
 
 ### 2026-03-22: TI10 Incremental lift and failure modes
 
