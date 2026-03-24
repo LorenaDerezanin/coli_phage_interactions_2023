@@ -340,7 +340,7 @@ graph LR
   - Each arm must train on >0 external rows from the added source
   - Report AUC, top-3, Brier for each arm on the ST03 holdout
   - Raise ValueError if any arm trains on zero external rows
-- [ ] **TI10** Track incremental lift and failure modes by datasource and confidence tier. Model: `gpt-5.4-mini`.
+- [x] **TI10** Track incremental lift and failure modes by datasource and confidence tier. Model: `gpt-5.4-mini`.
   - Produce a summary table showing per-source lift deltas from TI09
   - Identify failure modes with real row counts >0
   - Report which sources helped, hurt, or were neutral based on actual metrics
