@@ -670,3 +670,33 @@ Lock `defense + phage_genomic` (without pairwise). Reasons:
 1. TG01 is now reproducible at the artifact level, not just at the metric level.
 2. Track J now treats the v1 feature lock as a human decision instead of regenerating it from the sweep.
 3. The locked v1 winner is aligned with the leak cleanup: `defense + phage-genomic` only.
+
+### 2026-03-24: TG10 implemented (downstream reruns on the stable 2-block lock)
+
+#### What was verified
+
+- Reran `python -m lyzortx.pipeline.track_j.run_track_j` end to end from the repo root; it completed without error.
+- Track J still skips the feature-subset sweep step, so the committed `lyzortx/pipeline/track_g/v1_feature_configuration.json`
+  lock artifact was not regenerated during the release run.
+- The lock file checksum stayed byte-identical before and after the Track J run:
+  `0577ddd65c0c3d796489a0740d4a6c6c20f2d48af60f31aa4119dcdb06409283`.
+- Track F-style benchmark reporting in
+  `lyzortx/generated_outputs/track_g/tg02_gbm_calibration/tg02_benchmark_summary.json` remained on the stable v1
+  contract:
+  - full-label ROC-AUC `0.832916`
+  - full-label top-3 hit rate `0.969231`
+  - strict-confidence ROC-AUC `0.893900`
+  - strict-confidence top-3 hit rate `0.921875`
+- Track H regenerated the explained-recommendations artifact set at
+  `lyzortx/generated_outputs/track_h/th02_explained_recommendations/` with:
+  - `65` holdout strains summarized
+  - `195` recommendation rows written
+
+#### Interpretation
+
+1. The release runner is now honoring the stable lock boundary. Track J executes the downstream release chain without
+   rewriting the committed `v1_feature_configuration.json`.
+2. The downstream evaluation path remains coherent after the rerun: Track F-style benchmark reporting and Track H
+   explained recommendations still land on the same ST0.3-based release snapshot.
+3. The remaining model gap is unchanged by the rerun itself, which is expected. This task was about making sure the
+   downstream tracks can be replayed safely on the stable 2-block lock, not about changing the locked winner again.
