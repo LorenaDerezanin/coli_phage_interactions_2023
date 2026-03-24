@@ -257,7 +257,7 @@ graph LR
   - Remove the feature-subset-sweep step from Track J's run_track_j.py so the lock file is treated as a human decision,
     not a regenerated output
   - Verify two consecutive runs of run_track_g.py --step train-v1-binary produce identical outputs
-- [ ] **TG10** Re-run downstream tracks on the stable 2-block lock. Model: `gpt-5.4-mini`.
+- [x] **TG10** Re-run downstream tracks on the stable 2-block lock. Model: `gpt-5.4-mini`.
   - Re-run Track H explained recommendations against the 2-block model outputs
   - Re-run Track F v0-vs-v1 evaluation against the 2-block model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error

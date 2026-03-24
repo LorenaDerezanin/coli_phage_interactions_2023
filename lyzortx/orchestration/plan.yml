@@ -392,7 +392,7 @@ tracks:
         identical outputs
     - id: TG10
       title: Re-run downstream tracks on the stable 2-block lock
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Re-run Track H explained recommendations against the 2-block model outputs
