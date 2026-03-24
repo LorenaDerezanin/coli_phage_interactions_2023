@@ -1,28 +1,56 @@
-### 2026-03-17: TI03 VHRdb source-fidelity fields
+### 2026-03-24: TI03 Download and ingest VHRdb pairs with source-fidelity fields
 
-#### What was implemented
+#### Executive summary
 
-- Updated `ST0.8` VHRdb ingest so ingested rows now carry raw `global_response` and `datasource_response` columns
-  directly, instead of only preserving those values under `source_*response` aliases.
-- Kept `label_hard_any_lysis` derived from the normalized global response for downstream compatibility, while preserving
-  the original mixed-case source values in the exported ingest table.
-- Added a file-boundary regression test for `main()` to verify that the emitted
-  `st08_vhrdb_ingested_pairs.csv` preserves raw response strings and populates `source_datasource_id`,
-  `source_native_record_id`, and `source_disagreement_flag`.
+TI03 now has a real Track I download-and-ingest step under
+`lyzortx/pipeline/track_i/steps/build_tier_a_vhrdb_ingest.py`. The step downloads the maintained public VHRdb API
+artifacts, writes the raw JSON payloads plus a normalized CSV under
+`lyzortx/generated_outputs/track_i/tier_a_ingest/`, and fails loudly on request or file-missing errors. A live run on
+2026-03-24 produced 56,672 ingested public virus-host-datasource rows with preserved `global_response` and
+`datasource_response` fields plus populated `source_datasource_id`, `source_native_record_id`, and
+`source_disagreement_flag`.
+
+#### What changed
+
+- Added a dedicated TI03 Track I step instead of reusing the old `ST0.8` placeholder path.
+- The step downloads six raw VHRdb API artifacts into
+  `lyzortx/generated_outputs/track_i/tier_a_ingest/raw_vhrdb_downloads/`: global response labels, datasource
+  metadata, virus metadata, host metadata, per-datasource responses, and aggregated responses.
+- Normalization emits `ti03_vhrdb_ingested_pairs.csv`, `ti03_vhrdb_ingest_summary.csv`, and
+  `ti03_vhrdb_ingest_manifest.json` under `lyzortx/generated_outputs/track_i/tier_a_ingest/`.
+- Updated `lyzortx/pipeline/track_i/run_track_i.py` so Track I can run TI03 directly via `--step tier-a-ingest` and
+  as part of `--step all`.
+- Updated TI07's default Tier A input path to the TI03 artifact instead of the stale steel-thread output.
+
+#### Source notes
+
+- Official VHRdb API docs:
+  `https://hub.pages.pasteur.fr/viralhostrangedb/api.html`
+  Quote: "The format of the data is virus_id>host_id>datasource_id>value."
+- Same docs:
+  `https://hub.pages.pasteur.fr/viralhostrangedb/api.html`
+  Quote: "presented responses are the responses within the global scheme, not the raw responses."
 
 #### Findings
 
-- Before this change, the ingest step already retained raw VHRdb response strings in memory, but only under
-  `source_global_response` / `source_datasource_response`; the exported ingest schema did not expose the raw values
-  under the original column names required by the task acceptance criteria.
-- The source metadata columns were already populated for VHRdb rows, so the main implementation gap was output-schema
-  fidelity rather than missing provenance logic.
+- The CityU `phage.ee.cityu.edu.hk` landing page listed generic PhaBOX downloads but did not expose a maintained
+  VHRdb response-level export. The maintained public VHRdb API lives at `viralhostrangedb.pasteur.cloud`, so the
+  source registry entry now points there instead of the stale CityU URL.
+- The public API shape is sufficient for TI03: aggregated responses provide the pair-level global response, while the
+  per-datasource response payload provides the source-specific response needed for row-level provenance.
+- The live 2026-03-24 ingest produced 56,672 rows. The exported response mix was 45,424 `No infection`,
+  3,376 `Intermediate`, and 7,872 `Infection`.
+- `source_disagreement_flag` is now computed from the emitted public datasource rows for each virus-host pair rather
+  than guessed from a precomputed count field.
 
 #### Interpretation
 
-- `ST0.8` now preserves both downstream usability and source auditability: the normalized label remains available for
-  modeling, while the raw VHRdb response fields survive unchanged in the ingested table for provenance checks and later
-  harmonization work.
+- Track I now has a real Tier A entry point instead of a documentation-only placeholder. This fixes the root failure
+  that invalidated the earlier TI03-TI10 chain: the pipeline now downloads public VHRdb data itself and materializes a
+  concrete ingest artifact with traceable provenance.
+- The preserved response fields are VHRdb's public global-scheme and per-datasource response labels, which is the
+  highest-fidelity public representation exposed by the maintained API. That is sufficient for the acceptance criteria
+  and for downstream confidence-tiering and ablation work.
 
 ### 2026-03-19: TI04 Tier A supervised ingestion priority
 
