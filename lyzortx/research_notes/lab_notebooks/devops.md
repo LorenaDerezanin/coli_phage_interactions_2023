@@ -370,10 +370,19 @@ dispatch step sees no formal review and takes no action — no auto-merge, no Co
 
 #### Root cause analysis
 
-The conflicting instructions are in `anthropics/claude-code-action` source file `src/create-prompt/index.ts`
-(the `generateDefaultPrompt()` function, "CAPABILITIES AND LIMITATIONS" section). They have been present since the
-action's initial commit on 2025-05-19 and have never been modified. The action provides the MCP review tools in its
-`allowedTools` list, but the prompt-level "CANNOT" instruction causes the model to sometimes refuse to use them.
+The conflicting instructions are in `anthropics/claude-code-action` source file
+[`src/create-prompt/index.ts`](https://github.com/anthropics/claude-code-action/blob/v1/src/create-prompt/index.ts)
+(the `generateDefaultPrompt()` function, "CAPABILITIES AND LIMITATIONS" section):
+
+> ```
+> What You CANNOT Do:
+> - Submit formal GitHub PR reviews
+> - Approve pull requests (for security reasons)
+> ```
+
+These lines were present in the [initial commit `f66f337f`](https://github.com/anthropics/claude-code-action/commit/f66f337f)
+on 2025-05-19 and have never been modified. The action provides the MCP review tools in its `allowedTools` list, but the
+prompt-level "CANNOT" instruction causes the model to sometimes refuse to use them.
 
 Evidence from PR #225 logs:
 - `permission_denials_count: 3` — the agent attempted to use the review tools and was denied.

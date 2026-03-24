@@ -214,23 +214,28 @@ instead of submitting a formal PR review. This happens because the action's buil
 tools. The result is nondeterministic — sometimes the agent submits a formal review, sometimes it writes a detailed
 review into the sticky comment instead.
 
-If you only check `pulls/{pr}/reviews` (formal reviews), you will miss feedback that was posted as an issue comment.
+If you only check one endpoint, you will miss feedback posted elsewhere.
 
-**How to read both:**
+**GitHub has three separate comment endpoints on a PR:**
 
 ```bash
-# Formal review threads (inline code comments with file paths and line numbers)
+# 1. Review-level state (APPROVED, COMMENTED, etc.) — no inline details
 gh api repos/OWNER/REPO/pulls/123/reviews --jq '.[] | {user: .user.login, state: .state}'
 
-# Issue comments (includes sticky comments from claude-code-action)
+# 2. Inline review comments (file path, line number, threaded) — where Codex connector posts
+gh api repos/OWNER/REPO/pulls/123/comments --jq '.[] | {user: .user.login, path, line, body: .body[:200]}'
+
+# 3. Issue comments (general PR thread) — where claude-code-action sticky comments land
 gh api repos/OWNER/REPO/issues/123/comments --jq '.[] | {user: .user.login, body: .body[:200]}'
 ```
 
 **When this matters most:**
-- `codex-pr-lifecycle.yml` currently only reads review threads via `review_threads.py`. If Claude posted feedback as an
-  issue comment, the lifecycle workflow sees zero unresolved threads and labels the PR `ready-for-human-review` — even
-  though actionable feedback exists in the comments.
-- Any script or workflow that checks "did Claude approve this PR?" must check both review state AND comment content.
+- `codex-pr-lifecycle.yml` currently only reads formal review threads via `review_threads.py`. If Claude posted feedback
+  as an issue comment, the lifecycle workflow sees zero unresolved threads and labels the PR `ready-for-human-review` —
+  even though actionable feedback exists in the comments.
+- The Codex connector (`chatgpt-codex-connector[bot]`) posts inline review comments at endpoint #2 — these are not
+  visible via endpoint #1 or #3.
+- Any script or workflow that checks "did Claude approve this PR?" must check all three endpoints.
 
 **Known limitation:** Issue comments lack structured metadata (file path, line number, resolution state) that review
 threads provide. Parsing actionable feedback from unstructured comment text is inherently less reliable. The long-term
