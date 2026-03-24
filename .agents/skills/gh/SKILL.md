@@ -237,6 +237,10 @@ gh api repos/OWNER/REPO/issues/123/comments --jq '.[] | {user: .user.login, body
   visible via endpoint #1 or #3.
 - Any script or workflow that checks "did Claude approve this PR?" must check all three endpoints.
 
+**Always check the `user` field.** Multiple actors post on the same PR — Codex connector, claude-code-action, and
+humans. Comments from different endpoints can be interleaved. Never assume all comments from one endpoint share the same
+author; always inspect `user.login` before attributing feedback.
+
 **Known limitation:** Issue comments lack structured metadata (file path, line number, resolution state) that review
 threads provide. Parsing actionable feedback from unstructured comment text is inherently less reliable. The long-term
 fix is to ensure the reviewing agent always submits formal reviews (see PR #48 for the LangGraph-based approach).
@@ -250,4 +254,5 @@ Before executing any `gh` command that sets `--body`:
 3. ✅ If this is an orchestrator task PR: title has `[ORCH][TASK_ID]`, label is set, `Closes` is present?
 4. ✅ If I'm an agent: have I identified myself in the body?
 5. ✅ If I just pushed commits: does the PR description still match the full branch content?
-6. ✅ When reading PR feedback: am I checking both review threads AND issue comments?
+6. ✅ When reading PR feedback: am I checking all three endpoints (reviews, inline comments, issue comments)?
+7. ✅ When interpreting PR comments: am I checking the `user` field to distinguish who posted each comment?
