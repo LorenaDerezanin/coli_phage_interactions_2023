@@ -78,10 +78,12 @@ gh run view "$RUN_ID" --log --job <JOB_ID> 2>&1
 
 ### Filter by step name
 
-The log format is `<job>\t<step>\t<timestamp> <message>`. Filter by step:
+The log format is `<job>\t<step>\t<timestamp> <message>`. Filter by step using `awk` (not `grep -P`,
+which is unavailable on macOS):
 
 ```bash
-gh run view "$RUN_ID" --log 2>&1 | grep -P '^\S+\t(Implement task with Codex|Fix with Codex)\t'
+gh run view "$RUN_ID" --log 2>&1 \
+  | awk -F'\t' '$2 == "Implement task with Codex" || $2 == "Fix with Codex"'
 ```
 
 ### Filter by text pattern
@@ -109,7 +111,7 @@ Chain them with pipes. Example — errors in the Codex step of a specific PR's l
 BRANCH=$(gh pr view 42 --json headRefName --jq '.headRefName')
 RUN_ID=$(gh run list --branch "$BRANCH" --workflow "codex-pr-lifecycle.yml" --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run view "$RUN_ID" --log 2>&1 \
-  | grep -P '^\S+\tFix with Codex\t' \
+  | awk -F'\t' '$2 == "Fix with Codex"' \
   | grep -i -E '(error|warning|failed)'
 ```
 
@@ -122,18 +124,17 @@ per-step timing.
 ```bash
 # Wall-clock duration of a specific step (first and last timestamp)
 gh run view "$RUN_ID" --log 2>&1 \
-  | grep -P '^\S+\t<step name>\t' \
+  | awk -F'\t' '$2 == "<step name>"' \
   | sed -n '1p; $p'
 
 # Step transitions with timestamps — shows when each step started (timeline view)
 gh run view "$RUN_ID" --log 2>&1 \
   | awk -F'\t' '{step=$2} step!=prev {print; prev=step}'
-
-# Find the longest gap between consecutive log lines (detect stuck/slow points)
-gh run view "$RUN_ID" --log 2>&1 \
-  | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' \
-  | awk 'NR>1 {cmd="date -d \""prev"\" +%s"; cmd | getline t1; close(cmd); cmd="date -d \""$0"\" +%s"; cmd | getline t2; close(cmd); if(t2-t1>30) print t2-t1"s gap before "$0} {prev=$0}'
 ```
+
+**Portability note:** Use `awk -F'\t'` for step filtering, not `grep -P`. macOS ships BSD grep
+which does not support `-P` (Perl regex). Similarly, `date -d` is GNU-only — on macOS use
+`date -jf` or Python for timestamp arithmetic.
 
 ### Common timing questions
 
@@ -144,9 +145,21 @@ gh run view "$RUN_ID" --log 2>&1 \
 | Which step took the longest? | Use step transitions to see the timeline |
 | What was happening at time X? | `grep '2026-03-24T14:32'` in the log output |
 
-## Notes
+## Gotchas
 
-- `gh run view --log` can be slow for large runs (Codex runs produce megabytes). Use `--job` to scope when possible.
-- `--log-failed` only shows steps that failed — skips successful steps entirely.
-- For `in_progress` runs, `--log` may not be available yet. Use `--verbose` for step status.
-- Logs are retained by GitHub for 90 days.
+- **No `grep -P` on macOS.** BSD grep does not support Perl regex (`-P` flag). Use `awk -F'\t'` for
+  tab-delimited field matching and `grep -E` for extended regex. All examples in this command use
+  portable syntax.
+- **No `date -d` on macOS.** GNU coreutils `date -d` is not available. For timestamp arithmetic,
+  use `date -jf '%Y-%m-%dT%H:%M:%S' "$ts" +%s` or a quick Python one-liner.
+- **BOM in first log line.** The very first line of `gh run view --log` output often has a UTF-8
+  BOM (`\xEF\xBB\xBF`) before the timestamp. This is invisible but can cause regex matches or
+  string comparisons to fail on that line. The step-transition `awk` command handles this fine
+  since it only compares the step field.
+- **`in_progress` runs have limited logs.** `--log` only returns output for completed steps. For
+  a run still in progress, use `--verbose` to see which step is currently executing and its status.
+- **Large log output.** Codex runs produce megabytes of logs. Always pipe through `head -N` or
+  filter by step/pattern to avoid flooding the terminal. Use `--job <JOB_ID>` to scope when possible.
+- **`--log-failed` is narrow.** It only shows steps that actually failed — not steps that were
+  cancelled or skipped. If a run was cancelled mid-step, check `--log` instead.
+- **Logs are retained for 90 days** by GitHub's default retention policy.
