@@ -274,6 +274,8 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - This applies especially to Bash commands and shell snippets in workflow steps. Run the equivalent commands (e.g.,
   `gh pr view`, `gh pr merge`, `printf`, variable substitutions) against a real PR or issue to verify output format and
   quoting behavior before committing.
+- When making non-trivial devops changes (CI workflows, git hooks, tooling, automation, developer experience), add a
+  dated lab notebook entry to `lyzortx/research_notes/lab_notebooks/devops.md` documenting the design decisions.
 
 # Path Style in Commands
 
