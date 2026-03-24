@@ -313,7 +313,7 @@ graph LR
   - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
   - All rows carry source_system provenance
   - Raise on download failure, do not silently produce empty output
-- [ ] **TI05** Harmonize Tier A datasets to internal schema. Model: `gpt-5.4`.
+- [x] **TI05** Harmonize Tier A datasets to internal schema. Model: `gpt-5.4`.
   - Map external bacteria and phage names to canonical IDs via Track A alias resolution
   - Report how many external pairs overlap with the internal 404x96 panel vs are novel
   - Output a harmonized pair table with >0 rows joinable on pair_id

@@ -495,7 +495,7 @@ tracks:
       - Raise on download failure, do not silently produce empty output
     - id: TI05
       title: Harmonize Tier A datasets to internal schema
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Map external bacteria and phage names to canonical IDs via Track A alias resolution
