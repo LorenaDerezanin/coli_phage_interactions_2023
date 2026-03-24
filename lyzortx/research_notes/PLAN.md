@@ -330,7 +330,7 @@ graph LR
   - Add BASEL rows to the best-so-far cohort (internal-only or internal+VHRdb, depending on TK01 result)
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether BASEL adds, hurts, or is neutral
-- [ ] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
   - Add KlebPhaCol rows to the best-so-far cohort
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether KlebPhaCol adds, hurts, or is neutral

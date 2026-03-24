@@ -542,7 +542,7 @@ tracks:
       - Document whether BASEL adds, hurts, or is neutral
     - id: TK03
       title: Add KlebPhaCol to training and measure cumulative lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Add KlebPhaCol rows to the best-so-far cohort
