@@ -402,8 +402,9 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - 'Pairwise soft leakage context: legacy family-by-defense features and the exact-variant flag are
-        training-label-derived via collaborative filtering. Do not include these in candidate features.'
+      - 'Pairwise soft leakage context: legacy family-by-defense features and the
+        exact-variant flag are training-label-derived via collaborative filtering.
+        Do not include these in candidate features.'
       - 'Clean pairwise candidates to evaluate individually: TE03 isolation_host distances
         (2 features) and TE01 curated lookup features (lookup_available, target_receptor_present,
         protein_target_present, surface_target_present, receptor_cluster_matches)'
@@ -415,13 +416,15 @@ tracks:
         v1 baseline
     - id: TG12
       title: Delete soft-leaky training-label-derived features from Track E code
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Delete the legacy soft-leaky pairwise block from Track E code
-      - Remove the exact-variant training-positive flag from the RBP-receptor compatibility block
+      - Remove the exact-variant training-positive flag from the RBP-receptor compatibility
+        block
       - Update downstream tests that assert on removed columns
-      - Grep lyzortx/ for the removed pairwise feature names — zero hits outside lab notebooks
+      - Grep lyzortx/ for the removed pairwise feature names — zero hits outside lab
+        notebooks
       - All existing tests pass after deletions
   H:
     name: In-Silico Cocktail Recommendation
@@ -515,7 +518,7 @@ tracks:
     - G
     tasks:
     - id: TK01
-      title: 'Add VHRdb to training and measure lift vs internal-only baseline'
+      title: Add VHRdb to training and measure lift vs internal-only baseline
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
@@ -525,7 +528,7 @@ tracks:
       - If lift is negative or negligible, document why and do not include VHRdb in
         subsequent arms
     - id: TK02
-      title: 'Add BASEL to training and measure cumulative lift'
+      title: Add BASEL to training and measure cumulative lift
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
@@ -534,7 +537,7 @@ tracks:
       - Retrain and report AUC, top-3, Brier delta vs previous best
       - Document whether BASEL adds, hurts, or is neutral
     - id: TK03
-      title: 'Add KlebPhaCol to training and measure cumulative lift'
+      title: Add KlebPhaCol to training and measure cumulative lift
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
@@ -542,7 +545,7 @@ tracks:
       - Retrain and report AUC, top-3, Brier delta vs previous best
       - Document whether KlebPhaCol adds, hurts, or is neutral
     - id: TK04
-      title: 'Add GPB to training and measure cumulative lift'
+      title: Add GPB to training and measure cumulative lift
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
@@ -550,15 +553,15 @@ tracks:
       - Retrain and report AUC, top-3, Brier delta vs previous best
       - Document whether GPB adds, hurts, or is neutral
     - id: TK05
-      title: 'Add Tier B weak labels and measure cumulative lift'
+      title: Add Tier B weak labels and measure cumulative lift
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
       - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
       - Retrain and report AUC, top-3, Brier delta vs previous best
       - Document whether Tier B adds, hurts, or is neutral
-      - If any source combination improved metrics, propose a new locked config;
-        otherwise keep internal-only as the v1 baseline
+      - If any source combination improved metrics, propose a new locked config; otherwise
+        keep internal-only as the v1 baseline
     - id: TK06
       title: Synthesize per-source lift results and lock the external data decision
       status: pending
@@ -568,10 +571,10 @@ tracks:
         delta top-3, delta Brier vs internal-only baseline)
       - Identify the best-performing source combination (may be internal-only if nothing
         helped)
-      - If external data earned inclusion, update v1_feature_configuration.json with the
-        new locked config and retrain the final model
-      - If no external source improved metrics, document the finding and confirm
-        internal-only remains the v1 baseline
+      - If external data earned inclusion, update v1_feature_configuration.json with
+        the new locked config and retrain the final model
+      - If no external source improved metrics, document the finding and confirm internal-only
+        remains the v1 baseline
       - Write a project notebook entry with the final decision and rationale
   J:
     name: Reproducibility and Release Quality

@@ -275,7 +275,7 @@ graph LR
   - Report whether any candidate recovers >50% of the AUC gap between the 2-block model (~0.837) and the old leaked
     model (~0.911) without degrading top-3
   - If no candidate closes the gap, accept the 2-block calibration as the honest v1 baseline
-- [ ] **TG12** Delete soft-leaky training-label-derived features from Track E code. Model: `gpt-5.4-mini`.
+- [x] **TG12** Delete soft-leaky training-label-derived features from Track E code. Model: `gpt-5.4-mini`.
   - Delete the legacy soft-leaky pairwise block from Track E code
   - Remove the exact-variant training-positive flag from the RBP-receptor compatibility block
   - Update downstream tests that assert on removed columns
