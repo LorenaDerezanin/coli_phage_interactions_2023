@@ -1,12 +1,12 @@
 ---
 name: gh
 description: >
-  Guardrails and checklist for gh CLI operations — creating PRs, editing PRs, creating issues, posting comments.
-  Use this skill whenever you are about to run gh pr create, gh pr edit, gh issue create, gh pr comment,
-  gh issue comment, or any gh command that sets a --body or --title. Also use it when updating a PR description
-  after pushing new commits. This skill exists because subtle shell-quoting and formatting mistakes in gh commands
-  silently break GitHub automation (e.g., literal \n instead of real newlines prevented a Closes keyword from
-  working in PR #162).
+  Guardrails and checklist for gh CLI operations — creating PRs, editing PRs, creating issues, posting comments,
+  and parsing workflow logs. Use this skill whenever you are about to run gh pr create, gh pr edit, gh issue create,
+  gh pr comment, gh issue comment, or any gh command that sets a --body or --title. Also use it when updating a PR
+  description after pushing new commits, or when fetching/parsing GitHub Actions workflow logs (gh run view --log).
+  This skill exists because subtle shell-quoting and formatting mistakes in gh commands silently break GitHub
+  automation (e.g., literal \n instead of real newlines prevented a Closes keyword from working in PR #162).
 ---
 
 # gh CLI Guardrails
