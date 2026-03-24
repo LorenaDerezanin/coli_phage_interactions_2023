@@ -189,34 +189,77 @@ when it does not. The live counts also show that Tier A integration is mostly a 
 rename problem, because only VHRdb currently overlaps the active internal panel while BASEL, KlebPhaCol, and GPB are
 entirely outside the present Track A alias space.
 
-### 2026-03-22: TI06 Tier B weak-label ingestion
+### 2026-03-24: TI06 Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata
 
 #### Executive summary
 
-TI06 now has a reproducible weak-label ingestion step under `lyzortx/pipeline/track_i/steps/` that normalizes
-Virus-Host DB TSV rows and NCBI Virus/BioSample metadata into a shared provenance-preserving table. The importer keeps
-raw source identifiers, expands multi-accession Virus-Host DB rows deterministically, and optionally resolves host and
-phage names through the Track A canonical maps when those files are present. The output is a combined weak-label table
-plus a manifest and source summary under `lyzortx/generated_outputs/track_i/tier_b_weak_label_ingest/`.
+TI06 now performs real network downloads instead of reading imaginary local snapshots. The new step in
+`lyzortx/pipeline/track_i/steps/build_tier_b_weak_label_ingest.py` downloads the live Virus-Host DB TSV export, runs a
+bounded Entrez `nuccore` search plus `nuccore`/`biosample` `efetch` XML retrievals, and materializes raw downloads plus
+normalized CSV outputs under `lyzortx/generated_outputs/track_i/tier_b_weak_label_ingest/`. A live run on 2026-03-24
+produced 57,337 Virus-Host DB rows and 268 NCBI Virus/BioSample rows, for 57,605 combined weak-label rows.
+
+#### What changed
+
+- Replaced the invalidated local-file-only TI06 path with actual download helpers for:
+  - `https://www.genome.jp/ftp/db/virushostdb/virushostdb.tsv`
+  - Entrez `esearch.fcgi` on `db=nuccore`
+  - Entrez `efetch.fcgi` on `db=nuccore` and `db=biosample`
+- Added raw download outputs under `lyzortx/generated_outputs/track_i/tier_b_weak_label_ingest/raw_ti06_downloads/`:
+  `virushostdb.tsv`, `ncbi_nuccore_esearch.json`, `ncbi_nuccore.xml`, `ncbi_virus_report.jsonl`, and
+  `ncbi_biosample.xml`.
+- Kept the provenance-preserving TI06 CSV contract while making both sources fail fast on empty downloads, empty Entrez
+  searches, empty XML responses, and zero-row normalization results.
+- Added unit coverage for the new `nuccore` XML parser, raw-download materialization, and the existing BioSample
+  attribute parsing path.
+- Refreshed `lyzortx/research_notes/external_data/source_registry.csv` so the Tier B rows point at the verified live
+  FTP and Entrez endpoints checked on 2026-03-24.
+
+#### Source notes
+
+- Virus-Host DB README:
+  `https://www.genome.jp/ftp/db/virushostdb/README`
+  Quote: "virushostdb.tsv: Tab separated file containing the following information:"
+- Same README:
+  `https://www.genome.jp/ftp/db/virushostdb/README`
+  Quote: "The host information is collected from RefSeq, GenBank (in free text format), UniProt, ViralZone, and
+  manually curated with additional information obtained by literature surveys."
+- NCBI Entrez Programming Utilities Help:
+  `https://www.ncbi.nlm.nih.gov/books/NBK25499/`
+  Quote: "Provides a list of UIDs matching a text query"
+- Same docs:
+  `https://www.ncbi.nlm.nih.gov/books/NBK25499/`
+  Quote: "Returns formatted data records for a list of input UIDs"
+- NCBI BioSample attributes:
+  `https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/`
+  Quote: "`host_disease`"
 
 #### Findings
 
-- Live Virus-Host DB access still exposes the expected TSV header with explicit virus and host tax IDs, names, lineage,
-  PMID, evidence, sample type, and source-organism fields, which makes the source straightforward to normalize into
-  one positive weak-label row per accession.
-- BioSample metadata is nested rather than flat; the host signal lives in XML attributes such as `host`,
-  `isolation_host`, and `isolation_source`, so the importer has to merge those attributes back onto the virus report
-  row instead of assuming a single tabular export.
-- BioSample `host_disease` metadata was available in the source XML but not previously surfaced in the exported
-  weak-label table; the ingest step now retains it as an additional provenance field for downstream QC and slicing.
-- Track A raw-name lists use pipe-delimited values, so the canonical-resolution helper needs to split `|` as well as
-  commas and semicolons to make alias cross-referencing work reliably.
+- The live Virus-Host DB FTP export is stable and machine-readable. Today’s run downloaded `virushostdb.tsv` directly
+  from the official GenomeNet FTP listing and normalized it into 57,337 rows with the expected tax ID, lineage, PMID,
+  evidence, sample-type, and source-organism provenance fields.
+- The old TI06 assumption about a pre-flattened NCBI virus report was wrong. The usable seam is Entrez:
+  `esearch` gives the nuccore UID cohort, `efetch` returns the actual `nuccore` XML records, and those records expose
+  BioSample cross-references that can be pulled through `efetch` on `db=biosample`.
+- The default NCBI query is intentionally bounded:
+  `viruses[filter] AND phage[TITL] AND srcdb_refseq[PROP] AND biosample[PROP]`.
+  That yielded 268 live rows today, which is enough to satisfy TI06 honestly without turning the step into an
+  unbounded Entrez crawl that is likely to be slow or rate-limited in CI.
+- Live NCBI QC breakdown on 2026-03-24:
+  - `118` rows with `source_qc_flag=ok`
+  - `78` rows with `source_qc_flag=host_conflict`
+  - `72` rows with `source_qc_flag=biosample_missing`
+- BioSample XML parsing is now real rather than hypothetical. The live run preserved non-empty `source_biosample_host_disease`
+  on 6 rows. The current query returned 0 non-empty `isolation_host` values, but the parser extracts that attribute
+  when present and unit coverage now proves the field is retained.
 
 #### Interpretation
 
-TI06 should be treated as source-shape normalization, not final confidence-tier assignment. The code now preserves the
-weak-label provenance required for downstream TI07 tiering while keeping the pipeline honest about disagreement and
-missing BioSample context instead of silently collapsing those cases.
+TI06 is now an honest ingestion boundary. Tier B weak labels come from real public downloads, not stale placeholders,
+and the code preserves the uncertainty that downstream TI07 needs instead of flattening conflicts or missing BioSample
+context away. The bounded Entrez query is the right tradeoff for now: it produces real rows reproducibly and leaves the
+door open to broader retrieval later without hard-coding a fragile full-database crawl into the default Track I path.
 
 ### 2026-03-22: TI07 External-label confidence tiers
 

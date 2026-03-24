@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TI06: Ingest Tier B weak labels from Virus-Host DB and NCBI Virus/BioSample metadata."""
+"""TI06: Download and ingest Tier B weak labels from Virus-Host DB and NCBI Virus/BioSample metadata."""
 
 from __future__ import annotations
 
@@ -7,19 +7,35 @@ import argparse
 import csv
 import hashlib
 import json
+import logging
+import shutil
+import time
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
+
+LOGGER = logging.getLogger(__name__)
 
 REQUIRED_SOURCE_REGISTRY_COLUMNS = ("source_id", "confidence_tier", "confidence_basis", "notes")
 
 VIRUS_HOST_DB_SOURCE_ID = "virus_host_db"
 NCBI_SOURCE_ID = "ncbi_virus_biosample"
+
+DEFAULT_VIRUS_HOST_DB_URL = "https://www.genome.jp/ftp/db/virushostdb/virushostdb.tsv"
+DEFAULT_NCBI_QUERY = "viruses[filter] AND phage[TITL] AND srcdb_refseq[PROP] AND biosample[PROP]"
+DEFAULT_NCBI_RETMAX = 500
+DEFAULT_ENTREZ_BATCH_SIZE = 100
+DEFAULT_ENTREZ_TOOL = "codex_ti06_ingest"
+DEFAULT_ENTREZ_EMAIL = "codex@example.com"
+ENTREZ_BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+ENTREZ_MIN_REQUEST_INTERVAL_SECONDS = 0.34
 
 VIRUS_HOST_DB_REQUIRED_COLUMNS = (
     "virus tax id",
@@ -34,6 +50,14 @@ VIRUS_HOST_DB_REQUIRED_COLUMNS = (
     "sample type",
     "source organism",
 )
+
+RAW_DOWNLOAD_FILENAMES = {
+    "virus_host_db": "virushostdb.tsv",
+    "ncbi_search": "ncbi_nuccore_esearch.json",
+    "ncbi_nuccore_xml": "ncbi_nuccore.xml",
+    "ncbi_virus_report": "ncbi_virus_report.jsonl",
+    "ncbi_biosample_xml": "ncbi_biosample.xml",
+}
 
 OUTPUT_FIELDNAMES = [
     "pair_id",
@@ -87,19 +111,34 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=Path("lyzortx/research_notes/external_data/source_registry.csv"),
     )
     parser.add_argument(
-        "--virus-host-db-path",
-        type=Path,
-        default=Path("lyzortx/research_notes/external_data/virushostdb.tsv"),
+        "--virus-host-db-url",
+        default=DEFAULT_VIRUS_HOST_DB_URL,
     )
     parser.add_argument(
-        "--ncbi-virus-report-path",
-        type=Path,
-        default=Path("lyzortx/research_notes/external_data/ncbi_virus_report.jsonl"),
+        "--ncbi-query",
+        default=DEFAULT_NCBI_QUERY,
+        help=(
+            "Entrez nuccore query used to build the NCBI Virus/BioSample weak-label cohort. "
+            "The default stays bounded and reproducible to avoid an unbounded crawl in CI."
+        ),
     )
     parser.add_argument(
-        "--ncbi-biosample-path",
-        type=Path,
-        default=Path("lyzortx/research_notes/external_data/ncbi_biosample.xml"),
+        "--ncbi-retmax",
+        type=int,
+        default=DEFAULT_NCBI_RETMAX,
+    )
+    parser.add_argument(
+        "--entrez-batch-size",
+        type=int,
+        default=DEFAULT_ENTREZ_BATCH_SIZE,
+    )
+    parser.add_argument(
+        "--entrez-tool",
+        default=DEFAULT_ENTREZ_TOOL,
+    )
+    parser.add_argument(
+        "--entrez-email",
+        default=DEFAULT_ENTREZ_EMAIL,
     )
     parser.add_argument(
         "--track-a-bacteria-id-map-path",
@@ -155,6 +194,42 @@ def _split_multi_value(value: str) -> List[str]:
 def _stable_record_id(prefix: str, *parts: str) -> str:
     digest = hashlib.sha256("||".join(parts).encode("utf-8")).hexdigest()[:16]
     return f"{prefix}:{digest}"
+
+
+def _hash_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _download_url_to_path(url: str, path: Path) -> None:
+    ensure_directory(path.parent)
+    request = urllib.request.Request(url, headers={"User-Agent": "Codex TI06 Tier B ingest/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response, path.open("wb") as handle:
+            shutil.copyfileobj(response, handle)
+    except Exception:
+        if path.exists():
+            path.unlink()
+        raise
+
+
+def _build_entrez_url(endpoint: str, params: Mapping[str, Any]) -> str:
+    encoded = urllib.parse.urlencode({key: value for key, value in params.items() if value is not None and value != ""})
+    return f"{ENTREZ_BASE_URL}/{endpoint}?{encoded}"
+
+
+def _sleep_for_entrez_rate_limit() -> None:
+    time.sleep(ENTREZ_MIN_REQUEST_INTERVAL_SECONDS)
+
+
+def _batched(values: Sequence[str], batch_size: int) -> Iterable[List[str]]:
+    if batch_size <= 0:
+        raise ValueError("Batch size must be positive")
+    for index in range(0, len(values), batch_size):
+        yield list(values[index : index + batch_size])
 
 
 def read_delimited_rows(path: Path, delimiter: str) -> List[Dict[str, str]]:
@@ -232,6 +307,281 @@ def read_biosample_xml(path: Path) -> List[Dict[str, str]]:
             }
         )
     return rows
+
+
+def _parse_entrez_esearch_ids(path: Path) -> List[str]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    result = payload.get("esearchresult", {})
+    error_message = str(result.get("ERROR", "")).strip()
+    if error_message:
+        raise ValueError(f"Entrez esearch failed for {path}: {error_message}")
+    error_list = result.get("ErrorList", {})
+    if isinstance(error_list, dict):
+        error_entries = [
+            str(value).strip()
+            for values in error_list.values()
+            for value in (values if isinstance(values, list) else [values])
+            if str(value).strip()
+        ]
+        if error_entries:
+            raise ValueError(f"Entrez esearch failed for {path}: {'; '.join(error_entries)}")
+    id_list = result.get("idlist", [])
+    if not isinstance(id_list, list):
+        raise ValueError(f"Unexpected Entrez esearch payload shape in {path}")
+    ids = [str(value).strip() for value in id_list if str(value).strip()]
+    if not ids:
+        raise ValueError(f"Entrez esearch returned zero IDs for {path}")
+    return ids
+
+
+def _source_feature_qualifier_values(gbseq: ET.Element) -> Dict[str, List[str]]:
+    qualifier_values: Dict[str, List[str]] = {}
+    for feature in gbseq.findall("./GBSeq_feature-table/GBFeature"):
+        feature_key = (feature.findtext("./GBFeature_key") or "").strip()
+        if feature_key != "source":
+            continue
+        for qualifier in feature.findall("./GBFeature_quals/GBQualifier"):
+            key = (qualifier.findtext("./GBQualifier_name") or "").strip()
+            value = (qualifier.findtext("./GBQualifier_value") or "").strip()
+            if key and value:
+                qualifier_values.setdefault(key, []).append(value)
+    return qualifier_values
+
+
+def _first_qualifier_value(values: Mapping[str, Sequence[str]], *keys: str) -> str:
+    for key in keys:
+        entries = values.get(key, [])
+        for entry in entries:
+            if entry:
+                return entry
+    return ""
+
+
+def _extract_taxid(gbseq: ET.Element, qualifier_values: Mapping[str, Sequence[str]]) -> str:
+    for value in qualifier_values.get("db_xref", []):
+        if value.startswith("taxon:"):
+            return value.split(":", maxsplit=1)[1]
+    for xref in gbseq.findall("./GBSeq_xrefs/GBXref"):
+        if (xref.findtext("./GBXref_dbname") or "").strip() == "taxon":
+            return (xref.findtext("./GBXref_id") or "").strip()
+    return ""
+
+
+def _extract_biosample_accession(gbseq: ET.Element) -> str:
+    for xref in gbseq.findall("./GBSeq_xrefs/GBXref"):
+        if (xref.findtext("./GBXref_dbname") or "").strip() == "BioSample":
+            return (xref.findtext("./GBXref_id") or "").strip()
+    return ""
+
+
+def read_nuccore_xml(path: Path) -> List[Dict[str, str]]:
+    tree = ET.parse(path)
+    root = tree.getroot()
+    rows: List[Dict[str, str]] = []
+    for gbseq in root.findall("./GBSeq"):
+        qualifier_values = _source_feature_qualifier_values(gbseq)
+        accession = (
+            gbseq.findtext("./GBSeq_accession-version") or gbseq.findtext("./GBSeq_primary-accession") or ""
+        ).strip()
+        virus_name = (gbseq.findtext("./GBSeq_organism") or "").strip()
+        if not accession or not virus_name:
+            continue
+        rows.append(
+            {
+                "accession": accession,
+                "virus_name": virus_name,
+                "title": (gbseq.findtext("./GBSeq_definition") or "").strip(),
+                "host": _first_qualifier_value(qualifier_values, "host", "lab_host"),
+                "biosample": _extract_biosample_accession(gbseq),
+                "taxid": _extract_taxid(gbseq, qualifier_values),
+                "virus_lineage": (gbseq.findtext("./GBSeq_taxonomy") or "").strip(),
+                "sample_type": _first_qualifier_value(qualifier_values, "isolation_source"),
+                "source_organism": "",
+                "host_lineage": "",
+            }
+        )
+    return rows
+
+
+def write_jsonl(path: Path, rows: Sequence[Mapping[str, str]]) -> None:
+    ensure_directory(path.parent)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True))
+            handle.write("\n")
+
+
+def _write_combined_xml(output_path: Path, root_tag: str, xml_fragments: Sequence[Path]) -> None:
+    combined_root = ET.Element(root_tag)
+    total_children = 0
+    for fragment_path in xml_fragments:
+        fragment_root = ET.parse(fragment_path).getroot()
+        children = list(fragment_root)
+        if not children:
+            raise ValueError(f"Entrez XML response was empty for {fragment_path}")
+        total_children += len(children)
+        for child in children:
+            combined_root.append(child)
+    if total_children == 0:
+        raise ValueError(f"Combined Entrez XML was empty for {output_path}")
+    ET.ElementTree(combined_root).write(output_path, encoding="utf-8", xml_declaration=True)
+
+
+def _download_entrez_xml_batches(
+    *,
+    db: str,
+    ids: Sequence[str],
+    output_path: Path,
+    batch_size: int,
+    tool: str,
+    email: str,
+    downloader: Any = _download_url_to_path,
+) -> None:
+    fragment_paths: List[Path] = []
+    root_tag = "GBSet" if db == "nuccore" else "BioSampleSet"
+    for batch_index, batch_ids in enumerate(_batched(list(ids), batch_size)):
+        fragment_path = output_path.parent / f"{output_path.stem}.batch{batch_index:04d}.xml"
+        params = {
+            "db": db,
+            "id": ",".join(batch_ids),
+            "retmode": "xml",
+            "tool": tool,
+            "email": email,
+        }
+        if db == "nuccore":
+            params["rettype"] = "gb"
+        url = _build_entrez_url("efetch.fcgi", params)
+        LOGGER.info("Starting Entrez %s efetch batch %s (%s records)", db, batch_index + 1, len(batch_ids))
+        downloader(url, fragment_path)
+        LOGGER.info("Finished Entrez %s efetch batch %s -> %s", db, batch_index + 1, fragment_path)
+        fragment_paths.append(fragment_path)
+        _sleep_for_entrez_rate_limit()
+    _write_combined_xml(output_path, root_tag, fragment_paths)
+    for fragment_path in fragment_paths:
+        fragment_path.unlink(missing_ok=True)
+
+
+def download_virus_host_db_artifact(
+    raw_download_dir: Path,
+    *,
+    url: str = DEFAULT_VIRUS_HOST_DB_URL,
+    downloader: Any = _download_url_to_path,
+) -> Path:
+    ensure_directory(raw_download_dir)
+    output_path = raw_download_dir / RAW_DOWNLOAD_FILENAMES["virus_host_db"]
+    LOGGER.info("Starting Virus-Host DB download: %s", url)
+    downloader(url, output_path)
+    LOGGER.info("Finished Virus-Host DB download: %s", output_path)
+    rows = read_delimited_rows(output_path, delimiter="\t")
+    require_columns(rows, output_path, VIRUS_HOST_DB_REQUIRED_COLUMNS)
+    return output_path
+
+
+def download_ncbi_artifacts(
+    raw_download_dir: Path,
+    *,
+    query: str = DEFAULT_NCBI_QUERY,
+    retmax: int = DEFAULT_NCBI_RETMAX,
+    batch_size: int = DEFAULT_ENTREZ_BATCH_SIZE,
+    tool: str = DEFAULT_ENTREZ_TOOL,
+    email: str = DEFAULT_ENTREZ_EMAIL,
+    downloader: Any = _download_url_to_path,
+) -> Dict[str, Path]:
+    if retmax <= 0:
+        raise ValueError("NCBI retmax must be positive")
+
+    ensure_directory(raw_download_dir)
+    search_path = raw_download_dir / RAW_DOWNLOAD_FILENAMES["ncbi_search"]
+    nuccore_xml_path = raw_download_dir / RAW_DOWNLOAD_FILENAMES["ncbi_nuccore_xml"]
+    virus_report_path = raw_download_dir / RAW_DOWNLOAD_FILENAMES["ncbi_virus_report"]
+    biosample_xml_path = raw_download_dir / RAW_DOWNLOAD_FILENAMES["ncbi_biosample_xml"]
+
+    search_url = _build_entrez_url(
+        "esearch.fcgi",
+        {
+            "db": "nuccore",
+            "term": query,
+            "retmax": retmax,
+            "retmode": "json",
+            "tool": tool,
+            "email": email,
+        },
+    )
+    LOGGER.info("Starting Entrez nuccore esearch: %s", query)
+    downloader(search_url, search_path)
+    LOGGER.info("Finished Entrez nuccore esearch: %s", search_path)
+
+    nuccore_ids = _parse_entrez_esearch_ids(search_path)
+    _download_entrez_xml_batches(
+        db="nuccore",
+        ids=nuccore_ids,
+        output_path=nuccore_xml_path,
+        batch_size=batch_size,
+        tool=tool,
+        email=email,
+        downloader=downloader,
+    )
+
+    virus_rows = read_nuccore_xml(nuccore_xml_path)
+    if not virus_rows:
+        raise ValueError("Entrez nuccore efetch produced zero virus metadata rows")
+    write_jsonl(virus_report_path, virus_rows)
+
+    biosample_accessions = sorted({row["biosample"] for row in virus_rows if row.get("biosample")})
+    if not biosample_accessions:
+        raise ValueError("Entrez nuccore metadata contained zero BioSample accessions")
+
+    _download_entrez_xml_batches(
+        db="biosample",
+        ids=biosample_accessions,
+        output_path=biosample_xml_path,
+        batch_size=batch_size,
+        tool=tool,
+        email=email,
+        downloader=downloader,
+    )
+
+    biosample_rows = read_biosample_xml(biosample_xml_path)
+    if not biosample_rows:
+        raise ValueError("Entrez BioSample efetch produced zero BioSample rows")
+
+    return {
+        "ncbi_search": search_path,
+        "ncbi_nuccore_xml": nuccore_xml_path,
+        "ncbi_virus_report": virus_report_path,
+        "ncbi_biosample_xml": biosample_xml_path,
+    }
+
+
+def download_ti06_artifacts(
+    raw_download_dir: Path,
+    *,
+    virus_host_db_url: str = DEFAULT_VIRUS_HOST_DB_URL,
+    ncbi_query: str = DEFAULT_NCBI_QUERY,
+    ncbi_retmax: int = DEFAULT_NCBI_RETMAX,
+    entrez_batch_size: int = DEFAULT_ENTREZ_BATCH_SIZE,
+    entrez_tool: str = DEFAULT_ENTREZ_TOOL,
+    entrez_email: str = DEFAULT_ENTREZ_EMAIL,
+    downloader: Any = _download_url_to_path,
+) -> Dict[str, Path]:
+    virus_host_db_path = download_virus_host_db_artifact(
+        raw_download_dir,
+        url=virus_host_db_url,
+        downloader=downloader,
+    )
+    ncbi_paths = download_ncbi_artifacts(
+        raw_download_dir,
+        query=ncbi_query,
+        retmax=ncbi_retmax,
+        batch_size=entrez_batch_size,
+        tool=entrez_tool,
+        email=entrez_email,
+        downloader=downloader,
+    )
+    return {
+        "virus_host_db": virus_host_db_path,
+        **ncbi_paths,
+    }
 
 
 def load_source_registry(path: Path) -> Dict[str, Dict[str, str]]:
@@ -506,19 +856,29 @@ def build_source_rows(
     if source_id == VIRUS_HOST_DB_SOURCE_ID:
         rows = read_delimited_rows(virus_host_db_path, delimiter="\t")
         require_columns(rows, virus_host_db_path, VIRUS_HOST_DB_REQUIRED_COLUMNS)
-        return normalize_virus_host_db_rows(
+        normalized = normalize_virus_host_db_rows(
             rows, registry_row=registry_row, bacteria_index=bacteria_index, phage_index=phage_index
         )
+        if not normalized:
+            raise ValueError("Virus-Host DB ingest produced zero rows")
+        return normalized
 
     virus_rows = read_source_rows(ncbi_virus_report_path)
+    if not virus_rows:
+        raise ValueError("NCBI virus metadata report was empty")
     biosample_lookup = _biosample_lookup_rows(ncbi_biosample_path)
-    return normalize_ncbi_virus_rows(
+    if not biosample_lookup:
+        raise ValueError("NCBI BioSample metadata was empty")
+    normalized = normalize_ncbi_virus_rows(
         virus_rows,
         registry_row=registry_row,
         bacteria_index=bacteria_index,
         phage_index=phage_index,
         biosample_lookup=biosample_lookup,
     )
+    if not normalized:
+        raise ValueError("NCBI Virus/BioSample ingest produced zero rows")
+    return normalized
 
 
 def compute_summary_rows(rows: Sequence[Mapping[str, str]]) -> List[Dict[str, object]]:
@@ -537,17 +897,10 @@ def compute_summary_rows(rows: Sequence[Mapping[str, str]]) -> List[Dict[str, ob
     return summary
 
 
-def _hash_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     ensure_directory(args.output_dir)
+    LOGGER.info("Starting TI06 Tier B weak-label ingest")
 
     registry_rows = load_source_registry(args.source_registry_path)
     missing_registry = [
@@ -571,60 +924,49 @@ def main(argv: Optional[List[str]] = None) -> None:
         raw_names_column="raw_names",
     )
 
-    active_sources: List[str] = []
+    raw_download_dir = args.output_dir / "raw_ti06_downloads"
+    downloaded_paths = download_ti06_artifacts(
+        raw_download_dir,
+        virus_host_db_url=args.virus_host_db_url,
+        ncbi_query=args.ncbi_query,
+        ncbi_retmax=args.ncbi_retmax,
+        entrez_batch_size=args.entrez_batch_size,
+        entrez_tool=args.entrez_tool,
+        entrez_email=args.entrez_email,
+    )
+
     merged_rows: List[Dict[str, str]] = []
-    output_paths: Dict[str, str] = {}
-    input_hashes: Dict[str, str] = {}
 
-    if args.virus_host_db_path.exists():
-        active_sources.append(VIRUS_HOST_DB_SOURCE_ID)
-        source_rows = build_source_rows(
-            source_id=VIRUS_HOST_DB_SOURCE_ID,
-            registry_rows=registry_rows,
-            bacteria_index=bacteria_index,
-            phage_index=phage_index,
-            virus_host_db_path=args.virus_host_db_path,
-            ncbi_virus_report_path=args.ncbi_virus_report_path,
-            ncbi_biosample_path=args.ncbi_biosample_path,
-        )
-        merged_rows.extend(source_rows)
-        output_paths[VIRUS_HOST_DB_SOURCE_ID] = str(args.output_dir / "virus_host_db_ingested_pairs.csv")
-        input_hashes[VIRUS_HOST_DB_SOURCE_ID] = _hash_path(args.virus_host_db_path)
-        write_csv(
-            args.output_dir / "virus_host_db_ingested_pairs.csv",
-            fieldnames=OUTPUT_FIELDNAMES,
-            rows=source_rows,
-        )
+    virus_host_db_rows = build_source_rows(
+        source_id=VIRUS_HOST_DB_SOURCE_ID,
+        registry_rows=registry_rows,
+        bacteria_index=bacteria_index,
+        phage_index=phage_index,
+        virus_host_db_path=downloaded_paths["virus_host_db"],
+        ncbi_virus_report_path=downloaded_paths["ncbi_virus_report"],
+        ncbi_biosample_path=downloaded_paths["ncbi_biosample_xml"],
+    )
+    merged_rows.extend(virus_host_db_rows)
 
-    if args.ncbi_virus_report_path.exists():
-        active_sources.append(NCBI_SOURCE_ID)
-        source_rows = build_source_rows(
-            source_id=NCBI_SOURCE_ID,
-            registry_rows=registry_rows,
-            bacteria_index=bacteria_index,
-            phage_index=phage_index,
-            virus_host_db_path=args.virus_host_db_path,
-            ncbi_virus_report_path=args.ncbi_virus_report_path,
-            ncbi_biosample_path=args.ncbi_biosample_path,
-        )
-        merged_rows.extend(source_rows)
-        output_paths[NCBI_SOURCE_ID] = str(args.output_dir / "ncbi_virus_biosample_ingested_pairs.csv")
-        input_hashes[NCBI_SOURCE_ID] = _hash_path(args.ncbi_virus_report_path)
-        if args.ncbi_biosample_path.exists():
-            input_hashes["ncbi_biosample"] = _hash_path(args.ncbi_biosample_path)
-        write_csv(
-            args.output_dir / "ncbi_virus_biosample_ingested_pairs.csv",
-            fieldnames=OUTPUT_FIELDNAMES,
-            rows=source_rows,
-        )
-
-    if not merged_rows:
-        raise ValueError("No Tier B input files were found.")
+    ncbi_rows = build_source_rows(
+        source_id=NCBI_SOURCE_ID,
+        registry_rows=registry_rows,
+        bacteria_index=bacteria_index,
+        phage_index=phage_index,
+        virus_host_db_path=downloaded_paths["virus_host_db"],
+        ncbi_virus_report_path=downloaded_paths["ncbi_virus_report"],
+        ncbi_biosample_path=downloaded_paths["ncbi_biosample_xml"],
+    )
+    merged_rows.extend(ncbi_rows)
 
     combined_path = args.output_dir / "ti06_weak_label_ingested_pairs.csv"
     summary_path = args.output_dir / "ti06_weak_label_summary.csv"
     manifest_path = args.output_dir / "ti06_weak_label_manifest.json"
+    virus_host_db_output_path = args.output_dir / "virus_host_db_ingested_pairs.csv"
+    ncbi_output_path = args.output_dir / "ncbi_virus_biosample_ingested_pairs.csv"
 
+    write_csv(virus_host_db_output_path, fieldnames=OUTPUT_FIELDNAMES, rows=virus_host_db_rows)
+    write_csv(ncbi_output_path, fieldnames=OUTPUT_FIELDNAMES, rows=ncbi_rows)
     write_csv(combined_path, fieldnames=OUTPUT_FIELDNAMES, rows=merged_rows)
     write_csv(
         summary_path, fieldnames=["slice_type", "slice_value", "row_count"], rows=compute_summary_rows(merged_rows)
@@ -634,27 +976,35 @@ def main(argv: Optional[List[str]] = None) -> None:
         {
             "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
             "step_name": "build_tier_b_weak_label_ingest",
-            "active_sources": active_sources,
+            "active_sources": [VIRUS_HOST_DB_SOURCE_ID, NCBI_SOURCE_ID],
             "input_paths": {
                 "source_registry": str(args.source_registry_path),
-                "virus_host_db": str(args.virus_host_db_path),
-                "ncbi_virus_report": str(args.ncbi_virus_report_path),
-                "ncbi_biosample": str(args.ncbi_biosample_path),
+                **{key: str(path) for key, path in downloaded_paths.items()},
             },
             "input_hashes_sha256": {
                 "source_registry": _hash_path(args.source_registry_path),
-                **input_hashes,
+                **{key: _hash_path(path) for key, path in downloaded_paths.items()},
             },
             "output_paths": {
                 "combined": str(combined_path),
                 "summary": str(summary_path),
-                **output_paths,
+                VIRUS_HOST_DB_SOURCE_ID: str(virus_host_db_output_path),
+                NCBI_SOURCE_ID: str(ncbi_output_path),
             },
             "registry_confidence_tiers": {
-                source_id: registry_rows[source_id].get("confidence_tier", "") for source_id in active_sources
+                source_id: registry_rows[source_id].get("confidence_tier", "")
+                for source_id in (VIRUS_HOST_DB_SOURCE_ID, NCBI_SOURCE_ID)
+            },
+            "ncbi_query": args.ncbi_query,
+            "ncbi_retmax": args.ncbi_retmax,
+            "row_counts": {
+                VIRUS_HOST_DB_SOURCE_ID: len(virus_host_db_rows),
+                NCBI_SOURCE_ID: len(ncbi_rows),
+                "combined": len(merged_rows),
             },
         },
     )
+    LOGGER.info("Finished TI06 Tier B weak-label ingest with %d combined rows", len(merged_rows))
 
 
 if __name__ == "__main__":
