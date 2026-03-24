@@ -81,6 +81,8 @@
   PRs, so main moves frequently — never assume your local main is current even if you pulled recently.
   For plain git: `git fetch origin main && git rebase origin/main`. For Graphite stacks: `gt sync` to pull trunk and
   restack, or `gt restack` to rebase the current stack on its trunk.
+- A `check-rebase-on-main` pre-push hook enforces this automatically. It blocks `git push` if the branch does not
+  include `origin/main`'s tip. Activate it once per clone with: `pre-commit install --hook-type pre-push`.
 
 # PR Description Maintenance
 
