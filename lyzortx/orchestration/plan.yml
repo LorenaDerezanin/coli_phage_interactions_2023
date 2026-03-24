@@ -515,7 +515,7 @@ tracks:
       - Raise on empty API responses or download failures
     - id: TI07
       title: Assign confidence tiers to all ingested external labels
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output

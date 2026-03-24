@@ -324,7 +324,7 @@ graph LR
   - Each source produces an ingested CSV with >0 rows
   - BioSample host_disease and isolation_host fields parsed from XML attributes
   - Raise on empty API responses or download failures
-- [ ] **TI07** Assign confidence tiers to all ingested external labels. Model: `gpt-5.4`.
+- [x] **TI07** Assign confidence tiers to all ingested external labels. Model: `gpt-5.4`.
   - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output rows
   - Output CSV contains >0 rows with confidence_tier and training_weight columns
   - Report tier distribution (count per tier per source) in lab notebook
