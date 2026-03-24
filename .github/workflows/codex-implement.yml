@@ -43,6 +43,28 @@ jobs:
           token: ${{ secrets.ORCHESTRATOR_PAT }}
           fetch-depth: 0
 
+      - name: Set up phage_env from runner Miniconda
+        shell: bash
+        run: |
+          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
+            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+            exit 1
+          fi
+
+          eval "$("${CONDA}/bin/conda" shell.bash hook)"
+          conda env create --file environment.yml --name phage_env
+          conda activate phage_env
+
+          ENV_PREFIX="${CONDA}/envs/phage_env"
+          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
+          {
+            echo "CONDA_DEFAULT_ENV=phage_env"
+            echo "CONDA_PREFIX=${ENV_PREFIX}"
+          } >> "$GITHUB_ENV"
+
+          python --version
+          pip --version
+
       - name: Extract model from issue
         id: model
         run: |
@@ -83,14 +105,6 @@ jobs:
             echo "where <model> is the model you are running as (e.g., gpt-5.4)."
             echo "This is required because you are posting via a shared PAT, not a bot account."
           } > /tmp/codex_prompt.txt
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12.12"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
 
       - name: Install pre-commit hooks
         run: |

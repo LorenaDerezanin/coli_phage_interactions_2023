@@ -18,10 +18,10 @@
 
 # Environment Policy
 
-- **Local development:** Use the `phage_env` micromamba environment. Activate it with `micromamba activate phage_env`.
-- **CI / Codex sandbox:** Use plain `python` and `pip` directly — micromamba is not installed in CI. Dependencies are
-  pre-installed via `pip install -r requirements.txt` before the agent runs.
-- **How to detect CI:** Check for the `CI` environment variable (`[ -n "$CI" ]`). If set, skip micromamba activation.
+- **Local development:** Use the `phage_env` conda environment. Activate it with `conda activate phage_env`.
+- **GitHub Actions workflows:** Bootstrap `phage_env` from the runner's preinstalled Miniconda (`$CONDA`) using
+  `environment.yml`, then use that env's executables for subsequent steps.
+- **How to detect GitHub Actions:** Check `GITHUB_ACTIONS=true`.
 - **Git identity in CI:** Git `user.name` and `user.email` are pre-configured before the agent runs. Do not attempt to
   set them yourself.
 - **Generated outputs do not exist in CI.** This repo runs in GitHub Actions (Codex). A fresh checkout contains only

@@ -28,7 +28,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request'
       && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check for existing Claude approval
@@ -54,6 +54,29 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         with:
           fetch-depth: 1
+
+      - name: Set up phage_env from runner Miniconda
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
+            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+            exit 1
+          fi
+
+          eval "$("${CONDA}/bin/conda" shell.bash hook)"
+          conda env create --file environment.yml --name phage_env
+          conda activate phage_env
+
+          ENV_PREFIX="${CONDA}/envs/phage_env"
+          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
+          {
+            echo "CONDA_DEFAULT_ENV=phage_env"
+            echo "CONDA_PREFIX=${ENV_PREFIX}"
+          } >> "$GITHUB_ENV"
+
+          python --version
+          pip --version
 
       - uses: anthropics/claude-code-action@v1
         if: steps.check.outputs.skip != 'true'
@@ -129,12 +152,34 @@ jobs:
     if: >-
       (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
       && contains(github.event.comment.body, '@claude')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
+
+      - name: Set up phage_env from runner Miniconda
+        shell: bash
+        run: |
+          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
+            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+            exit 1
+          fi
+
+          eval "$("${CONDA}/bin/conda" shell.bash hook)"
+          conda env create --file environment.yml --name phage_env
+          conda activate phage_env
+
+          ENV_PREFIX="${CONDA}/envs/phage_env"
+          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
+          {
+            echo "CONDA_DEFAULT_ENV=phage_env"
+            echo "CONDA_PREFIX=${ENV_PREFIX}"
+          } >> "$GITHUB_ENV"
+
+          python --version
+          pip --version
 
       - uses: anthropics/claude-code-action@v1
         with:

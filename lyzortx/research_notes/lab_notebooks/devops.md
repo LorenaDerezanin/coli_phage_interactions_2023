@@ -506,3 +506,37 @@ gh api repos/OWNER/REPO/check-runs -f name="Codex PR Lifecycle" \
   -f details_url="https://github.com/OWNER/REPO/actions/runs/${{ github.run_id }}"
 ```
 And updated to `completed` with the appropriate conclusion at the end.
+
+### 2026-03-24: GitHub Actions now bootstrap `phage_env` with conda
+
+#### Decision
+
+Updated `codex-implement.yml`, `codex-pr-lifecycle.yml`, and `claude-pr-review.yml` to create `phage_env` from
+`environment.yml` using the runner's preinstalled Miniconda, then prepend that env's `bin/` directory to `PATH` for
+subsequent steps and agent actions.
+
+Also pinned the Claude review jobs from `ubuntu-latest` to `ubuntu-24.04`. Relying on a preinstalled runner package is
+too brittle on the floating `ubuntu-latest` label.
+
+This supersedes the earlier sketch above that still assumed a separate `pip install -r requirements.txt` step after
+conda bootstrapping. `environment.yml` is now the canonical CI environment definition and already includes the pip
+requirements.
+
+#### Source evidence
+
+- Ubuntu 24.04 runner image README:
+  https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
+  Quote: `Miniconda 26.1.1` is listed under "Package Management" and `CONDA /usr/share/miniconda` is listed under
+  "Environment variables".
+- GitHub Actions changelog:
+  https://github.blog/changelog/2024-09-25-actions-new-images-and-ubuntu-latest-changes/
+  Quote: "`ubuntu-latest` label will migrate to Ubuntu 24 over the course of the next month".
+
+#### Rationale
+
+- Keeps GitHub Actions aligned with local development and `.envrc`, both of which now target `conda activate
+  phage_env`.
+- Ensures Codex and Claude runs see the same Python toolchain and pip-installed packages as the declared environment,
+  instead of a partially reconstructed `pip install -r requirements.txt` subset.
+- Fails fast if GitHub ever removes the bundled Miniconda or the `$CONDA` environment variable from the pinned runner
+  image.
