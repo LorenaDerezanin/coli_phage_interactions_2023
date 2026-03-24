@@ -326,7 +326,7 @@ graph LR
   - Retrain with internal + VHRdb on the locked ST03 holdout split
   - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline
   - If lift is negative or negligible, document why and do not include VHRdb in subsequent arms
-- [ ] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
   - Add BASEL rows to the best-so-far cohort (internal-only or internal+VHRdb, depending on TK01 result)
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether BASEL adds, hurts, or is neutral

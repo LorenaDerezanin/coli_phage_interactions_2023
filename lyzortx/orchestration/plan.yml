@@ -533,7 +533,7 @@ tracks:
         subsequent arms
     - id: TK02
       title: Add BASEL to training and measure cumulative lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Add BASEL rows to the best-so-far cohort (internal-only or internal+VHRdb,
