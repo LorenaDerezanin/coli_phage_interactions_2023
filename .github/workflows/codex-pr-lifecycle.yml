@@ -51,27 +51,17 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.ORCHESTRATOR_PAT }}
 
-      - name: Set up phage_env from runner Miniconda
+      - name: Create phage_env with conda
         shell: bash
         run: |
-          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
-            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "::error::conda not found on runner."
             exit 1
           fi
 
-          eval "$("${CONDA}/bin/conda" shell.bash hook)"
           conda env create --file environment.yml --name phage_env
-          conda activate phage_env
-
-          ENV_PREFIX="${CONDA}/envs/phage_env"
-          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
-          {
-            echo "CONDA_DEFAULT_ENV=phage_env"
-            echo "CONDA_PREFIX=${ENV_PREFIX}"
-          } >> "$GITHUB_ENV"
-
-          python --version
-          pip --version
+          conda run -n phage_env python --version
+          conda run -n phage_env pip --version
 
       - name: Check for unresolved review threads
         id: comments
@@ -79,7 +69,7 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-          UNRESOLVED_COUNT=$(python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" /dev/null --count-only)
+          UNRESOLVED_COUNT=$(conda run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" /dev/null --count-only)
           echo "has_feedback=$([[ $UNRESOLVED_COUNT -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "Unresolved threads: ${UNRESOLVED_COUNT}"
 
@@ -112,7 +102,13 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-          python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" /tmp/codex_feedback.txt
+          RAW_FEEDBACK=/tmp/codex_feedback_raw.txt
+          conda run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" "$RAW_FEEDBACK"
+          {
+            echo "In this GitHub Actions environment, use 'conda run -n phage_env ...' for Python, pytest, and pre-commit commands."
+            echo ""
+            cat "$RAW_FEEDBACK"
+          } > /tmp/codex_feedback.txt
 
       - name: Configure git identity for Codex agent
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
@@ -123,8 +119,8 @@ jobs:
       - name: Install pre-commit hooks
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: |
-          pre-commit install
-          pre-commit install --hook-type pre-push
+          conda run -n phage_env pre-commit install
+          conda run -n phage_env pre-commit install --hook-type pre-push
 
       # Workaround for https://github.com/openai/codex/issues/12572
       # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
@@ -145,8 +141,8 @@ jobs:
             echo "::error::No linked issue found in PR #${PR_NUM} body."
             exit 1
           fi
-          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body')
-          MODEL=$(echo "$ISSUE_BODY" | python -m lyzortx.orchestration.parse_model_directive)
+          gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body' > /tmp/issue_body.txt
+          MODEL=$(conda run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('/tmp/issue_body.txt').read_text()) or '')")
           if [ -z "$MODEL" ]; then
             echo "::error::No model directive in issue #${ISSUE_NUM}."
             exit 1

@@ -19,8 +19,8 @@
 # Environment Policy
 
 - **Local development:** Use the `phage_env` conda environment. Activate it with `conda activate phage_env`.
-- **GitHub Actions workflows:** Bootstrap `phage_env` from the runner's preinstalled Miniconda (`$CONDA`) using
-  `environment.yml`, then use that env's executables for subsequent steps.
+- **GitHub Actions workflows:** Bootstrap `phage_env` with `conda env create -f environment.yml -n phage_env`, then
+  run repo Python, pytest, and pre-commit commands via `conda run -n phage_env ...`.
 - **How to detect GitHub Actions:** Check `GITHUB_ACTIONS=true`.
 - **Git identity in CI:** Git `user.name` and `user.email` are pre-configured before the agent runs. Do not attempt to
   set them yourself.

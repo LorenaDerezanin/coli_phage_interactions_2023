@@ -55,28 +55,18 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up phage_env from runner Miniconda
+      - name: Create phage_env with conda
         if: steps.check.outputs.skip != 'true'
         shell: bash
         run: |
-          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
-            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "::error::conda not found on runner."
             exit 1
           fi
 
-          eval "$("${CONDA}/bin/conda" shell.bash hook)"
           conda env create --file environment.yml --name phage_env
-          conda activate phage_env
-
-          ENV_PREFIX="${CONDA}/envs/phage_env"
-          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
-          {
-            echo "CONDA_DEFAULT_ENV=phage_env"
-            echo "CONDA_PREFIX=${ENV_PREFIX}"
-          } >> "$GITHUB_ENV"
-
-          python --version
-          pip --version
+          conda run -n phage_env python --version
+          conda run -n phage_env pip --version
 
       - uses: anthropics/claude-code-action@v1
         if: steps.check.outputs.skip != 'true'
@@ -87,21 +77,22 @@ jobs:
           claude_args: >-
             --model ${{ steps.model.outputs.name }}
             --allowedTools
-            "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(gh pr view:*),Bash(gh api:*),Bash(python:*),Read,Glob,Grep"
+            "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(conda:*),Bash(gh pr view:*),Bash(gh api:*),Bash(python:*),Read,Glob,Grep"
           prompt: |
             Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
 
             1. Read AGENTS.md and lyzortx/AGENTS.md for review guidelines and project policies.
             2. Get the diff with mcp__github__get_pull_request_diff.
             3. Read relevant source files for context.
-            4. Manage review threads (you are the sole judge of thread resolution):
+            4. In this GitHub Actions environment, run Python helper commands via `conda run -n phage_env ...`.
+            5. Manage review threads (you are the sole judge of thread resolution):
                - List all threads with resolution state:
-                 python -m lyzortx.orchestration.review_threads ${{ github.repository_owner }} ${{ github.event.repository.name }} ${{ github.event.pull_request.number }} /dev/null --json
+                 conda run -n phage_env python -m lyzortx.orchestration.review_threads ${{ github.repository_owner }} ${{ github.event.repository.name }} ${{ github.event.pull_request.number }} /dev/null --json
                - Resolve adequately addressed threads:
                  gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
                - Unresolve inadequately resolved threads:
                  gh api graphql -f query='mutation($id:ID!){unresolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
-            5. Submit a formal review:
+            6. Submit a formal review:
                - mcp__github__create_pending_pull_request_review to start.
                - mcp__github__add_comment_to_pending_review for inline comments.
                - mcp__github__submit_pending_pull_request_review to submit:
@@ -159,27 +150,17 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up phage_env from runner Miniconda
+      - name: Create phage_env with conda
         shell: bash
         run: |
-          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
-            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "::error::conda not found on runner."
             exit 1
           fi
 
-          eval "$("${CONDA}/bin/conda" shell.bash hook)"
           conda env create --file environment.yml --name phage_env
-          conda activate phage_env
-
-          ENV_PREFIX="${CONDA}/envs/phage_env"
-          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
-          {
-            echo "CONDA_DEFAULT_ENV=phage_env"
-            echo "CONDA_PREFIX=${ENV_PREFIX}"
-          } >> "$GITHUB_ENV"
-
-          python --version
-          pip --version
+          conda run -n phage_env python --version
+          conda run -n phage_env pip --version
 
       - uses: anthropics/claude-code-action@v1
         with:

@@ -512,8 +512,8 @@ And updated to `completed` with the appropriate conclusion at the end.
 #### Decision
 
 Updated `codex-implement.yml`, `codex-pr-lifecycle.yml`, and `claude-pr-review.yml` to create `phage_env` from
-`environment.yml` using the runner's preinstalled Miniconda, then prepend that env's `bin/` directory to `PATH` for
-subsequent steps and agent actions.
+`environment.yml` using the runner's preinstalled Miniconda, then invoke repo Python and pre-commit commands via
+`conda run -n phage_env ...` instead of exporting env-specific paths.
 
 Also pinned the Claude review jobs from `ubuntu-latest` to `ubuntu-24.04`. Relying on a preinstalled runner package is
 too brittle on the floating `ubuntu-latest` label.
@@ -538,5 +538,5 @@ requirements.
   phage_env`.
 - Ensures Codex and Claude runs see the same Python toolchain and pip-installed packages as the declared environment,
   instead of a partially reconstructed `pip install -r requirements.txt` subset.
-- Fails fast if GitHub ever removes the bundled Miniconda or the `$CONDA` environment variable from the pinned runner
-  image.
+- Avoids depending on reconstructed env prefixes or manual `PATH` injection; the workflows only assume the `conda`
+  command is available on the pinned runner image.

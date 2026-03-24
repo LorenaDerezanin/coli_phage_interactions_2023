@@ -43,34 +43,24 @@ jobs:
           token: ${{ secrets.ORCHESTRATOR_PAT }}
           fetch-depth: 0
 
-      - name: Set up phage_env from runner Miniconda
+      - name: Create phage_env with conda
         shell: bash
         run: |
-          if [ -z "${CONDA:-}" ] || [ ! -x "${CONDA}/bin/conda" ]; then
-            echo "::error::Runner Miniconda not found. CONDA='${CONDA:-}'"
+          if ! command -v conda >/dev/null 2>&1; then
+            echo "::error::conda not found on runner."
             exit 1
           fi
 
-          eval "$("${CONDA}/bin/conda" shell.bash hook)"
           conda env create --file environment.yml --name phage_env
-          conda activate phage_env
-
-          ENV_PREFIX="${CONDA}/envs/phage_env"
-          echo "${ENV_PREFIX}/bin" >> "$GITHUB_PATH"
-          {
-            echo "CONDA_DEFAULT_ENV=phage_env"
-            echo "CONDA_PREFIX=${ENV_PREFIX}"
-          } >> "$GITHUB_ENV"
-
-          python --version
-          pip --version
+          conda run -n phage_env python --version
+          conda run -n phage_env pip --version
 
       - name: Extract model from issue
         id: model
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body')
-          MODEL=$(echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive)
+          gh issue view "$ISSUE_NUM" --json body --jq '.body' > /tmp/issue_body.txt
+          MODEL=$(conda run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('/tmp/issue_body.txt').read_text()) or '')")
           if [ -z "$MODEL" ]; then
             echo "::error::No model directive found in issue #${ISSUE_NUM} body. Add <!-- model: <id> --> to the issue."
             exit 1
@@ -90,10 +80,11 @@ jobs:
             echo ""
             echo "Implement the task described above. This is issue #${ISSUE_NUM}."
             echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
+            echo "In this GitHub Actions environment, use 'conda run -n phage_env ...' for Python, pytest, and pre-commit commands."
             echo ""
             echo "Steps:"
             echo "1. Implement the task as described."
-            echo "2. Run tests: pytest -q lyzortx/tests/"
+            echo "2. Run tests: conda run -n phage_env pytest -q lyzortx/tests/"
             echo "3. Commit your changes with detailed, descriptive commit messages."
             echo "4. Push your branch and create a PR with gh pr create."
             echo "   The PR title must follow the pattern: [ORCH][TASK_ID] Brief description"
@@ -108,8 +99,8 @@ jobs:
 
       - name: Install pre-commit hooks
         run: |
-          pre-commit install
-          pre-commit install --hook-type pre-push
+          conda run -n phage_env pre-commit install
+          conda run -n phage_env pre-commit install --hook-type pre-push
 
       - name: Configure git identity for Codex agent
         run: |
@@ -135,7 +126,7 @@ jobs:
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           # Use Python instead of gh pr list --search to avoid GitHub search index lag.
-          PR_JSON=$(python -m lyzortx.orchestration.find_pr_for_issue "$ISSUE_NUM")
+          PR_JSON=$(conda run -n phage_env python -m lyzortx.orchestration.find_pr_for_issue "$ISSUE_NUM")
           if [ $? -ne 0 ] || [ -z "$PR_JSON" ]; then
             echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
             exit 1
