@@ -14,6 +14,7 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import safe_round
 from lyzortx.pipeline.track_k.steps.build_source_lift_helpers import arm_name_for_source_systems
 from lyzortx.pipeline.track_k.steps.build_source_lift_helpers import canonical_source_systems
+from lyzortx.pipeline.track_k.steps.build_source_lift_helpers import classify_lift
 from lyzortx.pipeline.track_k.steps.build_source_lift_helpers import sha256
 
 logger = logging.getLogger(__name__)
@@ -44,13 +45,6 @@ SOURCE_DISPLAY_NAMES = {
     "virus_host_db": "Virus-Host DB",
     "ncbi_virus_biosample": "NCBI Virus/BioSample",
 }
-TRACK_K_MANIFEST_SPECS: Tuple[Tuple[str, str, Path], ...] = (
-    ("TK01", "vhrdb", DEFAULT_TK01_MANIFEST_PATH),
-    ("TK02", "basel", DEFAULT_TK02_MANIFEST_PATH),
-    ("TK03", "klebphacol", DEFAULT_TK03_MANIFEST_PATH),
-    ("TK04", "gpb", DEFAULT_TK04_MANIFEST_PATH),
-    ("TK05", "tier_b", DEFAULT_TK05_MANIFEST_PATH),
-)
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -104,18 +98,6 @@ def _delta(value: float, baseline: float) -> float:
     return float(safe_round(value - baseline))
 
 
-def _improves_without_harm(
-    *,
-    delta_roc_auc: float,
-    delta_top3: float,
-    delta_brier: float,
-    tolerance: float,
-) -> bool:
-    improved = delta_roc_auc > tolerance or delta_top3 > tolerance or delta_brier < -tolerance
-    worsened = delta_roc_auc < -tolerance or delta_top3 < -tolerance or delta_brier > tolerance
-    return improved and not worsened
-
-
 def _candidate_sort_key(candidate: Mapping[str, object]) -> Tuple[float, float, float, int]:
     delta_top3 = float(candidate["delta_top3_vs_internal_only"])
     delta_roc_auc = float(candidate["delta_roc_auc_vs_internal_only"])
@@ -162,11 +144,14 @@ def build_comparison_rows(
         delta_top3 = _delta(holdout_top3, internal_metrics["top3_hit_rate_all_strains"])
         delta_brier = _delta(holdout_brier, internal_metrics["brier_score"])
         step_decision = str(manifest.get("lift_assessment") or manifest.get("lift_decision") or "")
-        improves_without_harm = _improves_without_harm(
-            delta_roc_auc=delta_roc_auc,
-            delta_top3=delta_top3,
-            delta_brier=delta_brier,
-            tolerance=NEGLIGIBLE_DELTA_TOLERANCE,
+        improves_without_harm = (
+            classify_lift(
+                delta_roc_auc=delta_roc_auc,
+                delta_top3=delta_top3,
+                delta_brier=delta_brier,
+                tolerance=NEGLIGIBLE_DELTA_TOLERANCE,
+            )
+            == "adds"
         )
         comparison_rows.append(
             {
