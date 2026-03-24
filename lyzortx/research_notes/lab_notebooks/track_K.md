@@ -172,3 +172,54 @@ should stay internal-only for v1.
 - Tier B is wired correctly as a cumulative add-on, but on this fixture it does not improve the model.
 - Since no source combination improved metrics here, there is no basis to promote a new locked config yet; internal-only
   remains the safest v1 baseline until a real production rerun shows different behavior.
+
+### 2026-03-24: TK06 synthesize per-source lift results and lock the external-data decision
+
+#### Executive summary
+
+Added a dedicated TK06 synthesis step at `lyzortx/pipeline/track_k/steps/build_external_data_decision_report.py` so
+Track K can normalize TK01-TK05 manifest metrics back to the same internal-only baseline and make one explicit lock
+decision. In this checkout, that decision remains `internal_only`: TK01 found no joinable VHRdb training rows, and the
+fixture-based TK02-TK05 follow-up arms were all neutral. Because no external source combination earned inclusion, I
+updated `lyzortx/pipeline/track_g/v1_feature_configuration.json` to record that the v1 training-data lock stays
+internal-only and did not retrain the final model.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_k/steps/build_external_data_decision_report.py`, which reads the five Track K
+  manifests, recomputes every arm's deltas vs the TK01 internal-only baseline, emits a single comparison CSV, and
+  writes a lock manifest under `lyzortx/generated_outputs/track_k/tk06_external_data_decision/`.
+- Extended `lyzortx/pipeline/track_k/run_track_k.py` so `--step external-data-decision` runs TK06 and `--step all`
+  now executes TK01 through TK06 in order.
+- Added regression coverage for the TK06 normalization and decision policy plus the new runner dispatch path.
+- Recorded the locked external-data outcome in `lyzortx/pipeline/track_g/v1_feature_configuration.json` via
+  `external_data_lock_task_id`, `locked_training_data_arm`, and `locked_external_source_systems`.
+
+#### Findings
+
+The cumulative comparison vs the locked internal-only baseline is:
+
+| Source / evaluated arm | Delta AUC | Delta top-3 | Delta Brier |
+| --- | ---: | ---: | ---: |
+| `+VHRdb` | `0.000000` | `0.000000` | `0.000000` |
+| `+BASEL` | `0.000000` | `0.000000` | `0.000000` |
+| `+KlebPhaCol` | `0.000000` | `0.000000` | `0.000000` |
+| `+GPB` | `0.000000` | `0.000000` | `0.000000` |
+| `+Tier B (Virus-Host DB + NCBI Virus/BioSample)` | `0.000000` | `0.000000` | `0.000000` |
+
+- Best-performing source combination for this repo state: `internal_only`.
+- TK01 remains the only non-fixture measurement here, and it found `0` joinable VHRdb rows from the available TI08
+  artifact.
+- TK02-TK05 proved the cumulative Track K wiring on bounded fixtures, but none of those follow-up arms beat the
+  internal-only baseline on ROC-AUC, top-3 hit rate, or Brier score.
+- No external arm improved at least one tracked metric without harming another metric, so TK06 locked
+  `locked_external_source_systems: []`.
+
+#### Interpretation
+
+- The correct decision here is to lock the absence of evidence, not to fabricate a promotion path. The repo policy is
+  explicit that missing production artifacts do not justify empty or placeholder wins.
+- TK06 now gives Track K a reproducible decision boundary for future reruns: if real manifests later show a
+  strictly non-harmful gain, the synthesis step will surface that arm cleanly; until then, internal-only remains the
+  honest v1 baseline.
+- No final-model retrain was run for TK06 because the promotion condition was not met.

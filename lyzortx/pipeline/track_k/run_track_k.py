@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_k.steps import build_basel_lift_report
+from lyzortx.pipeline.track_k.steps import build_external_data_decision_report
 from lyzortx.pipeline.track_k.steps import build_gpb_lift_report
 from lyzortx.pipeline.track_k.steps import build_klebphacol_lift_report
 from lyzortx.pipeline.track_k.steps import build_tier_b_lift_report
@@ -22,7 +23,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["vhrdb-lift", "basel-lift", "klebphacol-lift", "gpb-lift", "tier-b-lift", "all"],
+        choices=[
+            "vhrdb-lift",
+            "basel-lift",
+            "klebphacol-lift",
+            "gpb-lift",
+            "tier-b-lift",
+            "external-data-decision",
+            "all",
+        ],
         default="all",
         help="Track K step to run. 'all' runs the implemented lift-measurement steps.",
     )
@@ -42,6 +51,8 @@ def main(argv: list[str] | None = None) -> None:
         build_gpb_lift_report.main([])
     if args.step in {"tier-b-lift", "all"}:
         build_tier_b_lift_report.main([])
+    if args.step in {"external-data-decision", "all"}:
+        build_external_data_decision_report.main([])
 
 
 if __name__ == "__main__":
