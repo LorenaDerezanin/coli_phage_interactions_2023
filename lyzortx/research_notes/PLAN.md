@@ -374,7 +374,7 @@ graph LR
   - Augmented training set must contain >0 GPB rows after join
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether GPB adds, hurts, or is neutral
-- [ ] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
   - TI08 cohort must contain >0 Tier B rows — fail if missing or empty
   - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
   - Augmented training set must contain >0 Tier B rows after join

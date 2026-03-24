@@ -606,7 +606,7 @@ tracks:
       - Document whether GPB adds, hurts, or is neutral
     - id: TK05
       title: Add Tier B weak labels and measure cumulative lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - TI08 cohort must contain >0 Tier B rows — fail if missing or empty
