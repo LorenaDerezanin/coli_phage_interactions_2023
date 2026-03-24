@@ -31,15 +31,23 @@ This repository includes a tracked `.envrc` that activates `phage_env` when you 
    direnv allow
    ```
 
-## Markdown linting
-This repository uses `pre-commit` with:
-- `pymarkdown` for Markdown linting and targeted auto-fixes.
+## Git hooks
 
-Commands:
+This repository uses `pre-commit` for automated checks. Install both hook types once per clone:
 
 ```bash
-micromamba activate phage_env
+pre-commit install
+pre-commit install --hook-type pre-push
 ```
+
+This activates:
+
+- **pre-commit stage:** ruff linting/formatting, gitignore enforcement, pymarkdown fixes.
+- **pre-push stage:** verifies your branch is rebased on `origin/main` before allowing `git push`.
+
+## Markdown linting
+
+Commands for manual runs:
 
 ```bash
 pymarkdown --config .pymarkdown.yaml fix -r .
