@@ -759,3 +759,27 @@ calibration remains the honest v1 baseline.
 3. This is enough evidence to stop searching for a rescue story inside the current clean TE01/TE03 single-feature
    space. The honest conclusion for v1 is that the stable 2-block `defense + phage-genomic` model remains the baseline,
    and the remaining calibration gap should be treated as unsolved rather than patched with soft leakage.
+
+### 2026-03-24: TG12 implemented (deleted soft-leaky Track E pairwise features)
+
+#### What was implemented
+
+- Deleted the TE02 defense-evasion proxy builder entirely from `lyzortx/pipeline/track_e/steps/`.
+- Removed `receptor_variant_seen_in_training_positives` from the TE01 RBP-receptor compatibility builder and its
+  output schema.
+- Removed the defense-evasion Track E input contract from Track G training, ablation, candidate-search, and SHAP
+  steps so the remaining pairwise block only uses clean TE01/TE03 features.
+- Updated the affected tests and plan notes to reflect the reduced pairwise feature surface.
+
+#### What was verified
+
+- `pytest -q lyzortx/tests/` passed.
+- Repo-wide grep for the removed pairwise feature names returned zero hits outside the lab notebooks.
+
+#### Interpretation
+
+1. The soft-leaky Track E features are gone from executable code, not just hidden from the current model lock.
+2. Track G still runs end to end with the remaining clean pairwise features, so the cleanup did not break the
+   downstream pipeline contract.
+3. The remaining pairwise features are now limited to the clean curated lookup and isolation-distance signals, which
+   is the correct boundary for future work.

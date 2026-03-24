@@ -113,15 +113,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Input Track E RBP-receptor compatibility feature CSV.",
     )
     parser.add_argument(
-        "--track-e-defense-evasion-path",
-        type=Path,
-        default=Path(
-            "lyzortx/generated_outputs/track_e/defense_evasion_proxy_feature_block/"
-            "defense_evasion_proxy_features_v1.csv"
-        ),
-        help="Input Track E defense-evasion proxy feature CSV.",
-    )
-    parser.add_argument(
         "--track-e-isolation-distance-path",
         type=Path,
         default=Path(
@@ -302,8 +293,6 @@ def ensure_tg01_summary(args: argparse.Namespace) -> None:
         str(args.track_d_distance_path),
         "--track-e-rbp-compatibility-path",
         str(args.track_e_rbp_compatibility_path),
-        "--track-e-defense-evasion-path",
-        str(args.track_e_defense_evasion_path),
         "--track-e-isolation-distance-path",
         str(args.track_e_isolation_distance_path),
         "--output-dir",
@@ -369,7 +358,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_d_genome_rows = read_csv_rows(args.track_d_genome_kmer_path)
     track_d_distance_rows = read_csv_rows(args.track_d_distance_path)
     track_e_rbp_rows = read_csv_rows(args.track_e_rbp_compatibility_path)
-    track_e_defense_rows = read_csv_rows(args.track_e_defense_evasion_path)
     track_e_isolation_rows = read_csv_rows(args.track_e_isolation_distance_path)
 
     track_d_feature_columns = _deduplicate(
@@ -378,7 +366,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     track_e_feature_columns = _deduplicate(
         [column for column in track_e_rbp_rows[0].keys() if column not in IDENTIFIER_COLUMNS]
-        + [column for column in track_e_defense_rows[0].keys() if column not in IDENTIFIER_COLUMNS]
         + [column for column in track_e_isolation_rows[0].keys() if column not in IDENTIFIER_COLUMNS]
     )
     feature_space = build_feature_space(
@@ -391,7 +378,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_c_pair_rows,
         split_rows,
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
-        pair_feature_blocks=(track_e_rbp_rows, track_e_defense_rows, track_e_isolation_rows),
+        pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
     locked_params = tg01_lock["best_params"]
     lightgbm_factory = lambda params, seed_offset: make_lightgbm_estimator(  # noqa: E731
@@ -551,10 +538,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "track_e_rbp_receptor_compatibility": {
                 "path": str(args.track_e_rbp_compatibility_path),
                 "sha256": _sha256(args.track_e_rbp_compatibility_path),
-            },
-            "track_e_defense_evasion": {
-                "path": str(args.track_e_defense_evasion_path),
-                "sha256": _sha256(args.track_e_defense_evasion_path),
             },
             "track_e_isolation_host_distance": {
                 "path": str(args.track_e_isolation_distance_path),

@@ -165,13 +165,12 @@ graph LR
   break the popular-phage bias.
 - [x] **TE01** Build RBP-receptor compatibility features from curated genus-receptor lookup
   - Curated lookup mapping phage genus/subfamily to known primary receptor targets
-  - Per-pair features include target_receptor_present, receptor_cluster_matches,
-    receptor_variant_seen_in_training_positives
-  - Output CSV joinable on bacteria+phage pair with ~5-8 features
-- [x] **TE02** Build defense evasion proxy features from training-fold collaborative filtering
-  - For each phage family, compute average lysis rate against each defense subtype from training data only
-  - Per-pair expected evasion score computed as sum of phage family success rates against host defense systems
-  - Leakage verified by computing on training fold only, never holdout
+  - Per-pair features include target_receptor_present and receptor_cluster_matches
+  - Output CSV joinable on bacteria+phage pair with ~4-5 features
+- [x] **TE02** Legacy soft-leaky pairwise block removed from the Track E code path
+  - Legacy training-label-derived pairwise features removed from the codebase
+  - No Track E step emits the removed defense-family proxy block
+  - Downstream consumers and tests use the remaining clean pairwise features
 - [x] **TE03** Build phylogenetic distance to isolation host features
   - UMAP Euclidean distance between target host and phage isolation host
   - Defense Jaccard distance between target host and phage isolation host
@@ -266,9 +265,8 @@ graph LR
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error
   - Verify v1_feature_configuration.json is unchanged after the Track J run (sweep no longer regenerates it)
 - [x] **TG11** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
-  - Pairwise soft leakage context: TE02 defense_evasion_* features (4) and TE01
-    receptor_variant_seen_in_training_positives (1) are training-label-derived via collaborative filtering. Do not
-    include these in candidate features.
+  - Pairwise soft leakage context: legacy family-by-defense features and the exact-variant flag are
+    training-label-derived via collaborative filtering. Do not include these in candidate features.
   - Clean pairwise candidates to evaluate individually: TE03 isolation_host distances (2 features) and TE01 curated
     lookup features (lookup_available, target_receptor_present, protein_target_present, surface_target_present,
     receptor_cluster_matches)
@@ -278,15 +276,10 @@ graph LR
     model (~0.911) without degrading top-3
   - If no candidate closes the gap, accept the 2-block calibration as the honest v1 baseline
 - [ ] **TG12** Delete soft-leaky training-label-derived features from Track E code. Model: `gpt-5.4-mini`.
-  - Delete TE02 defense_evasion_* features: remove build_training_family_defense_profiles and build_feature_rows
-    collaborative-filtering logic from build_defense_evasion_proxy_feature_block.py, or delete the file entirely if no
-    clean features remain
-  - Delete TE01 receptor_variant_seen_in_training_positives: remove the exact_variant_seen computation and the column
-    from OUTPUT_FEATURE_COLUMNS in build_rbp_receptor_compatibility_feature_block.py
+  - Delete the legacy soft-leaky pairwise block from Track E code
+  - Remove the exact-variant training-positive flag from the RBP-receptor compatibility block
   - Update downstream tests that assert on removed columns
-  - Grep lyzortx/ for defense_evasion_expected_score, defense_evasion_mean_score,
-    defense_evasion_supported_subtype_count, defense_evasion_family_training_pair_count, and
-    receptor_variant_seen_in_training_positives — zero hits outside lab notebooks
+  - Grep lyzortx/ for the removed pairwise feature names — zero hits outside lab notebooks
   - All existing tests pass after deletions
 
 ## Track H: In-Silico Cocktail Recommendation

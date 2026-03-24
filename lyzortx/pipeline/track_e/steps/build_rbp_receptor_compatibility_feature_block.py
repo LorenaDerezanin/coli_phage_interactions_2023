@@ -20,7 +20,6 @@ OUTPUT_FEATURE_COLUMNS: Tuple[str, ...] = (
     "protein_target_present",
     "surface_target_present",
     "receptor_cluster_matches",
-    "receptor_variant_seen_in_training_positives",
 )
 
 PROTEIN_TARGET_COLUMNS: Dict[str, str] = {
@@ -68,13 +67,6 @@ FEATURE_METADATA: Dict[str, Dict[str, str]] = {
         "transform": (
             "1 when a mapped protein-receptor cluster for this pair was already seen among leakage-safe training "
             "positives for the same curated taxon."
-        ),
-    },
-    "receptor_variant_seen_in_training_positives": {
-        "type": "binary",
-        "transform": (
-            "1 when any mapped receptor/surface variant for this pair was already seen among leakage-safe training "
-            "positives for the exact phage."
         ),
     },
 }
@@ -415,7 +407,6 @@ def build_feature_rows(
         scenario = _scenario_key(row)
         scenario_data = scenario_indices[scenario]
         taxon_counts = scenario_data["taxon_variant_counts"]
-        phage_counts = scenario_data["phage_variant_counts"]
 
         target_states = [host_states[target] for target in lookup_entry.target_receptors]
         protein_targets = [target for target in lookup_entry.target_receptors if target in PROTEIN_TARGET_COLUMNS]
@@ -425,7 +416,6 @@ def build_feature_rows(
         surface_target_present = int(any(host_states[target].present for target in surface_targets))
 
         protein_cluster_match_count = 0
-        exact_variant_seen = 0
         for target in lookup_entry.target_receptors:
             target_state = host_states[target]
             if not target_state.variant:
@@ -435,9 +425,6 @@ def build_feature_rows(
                 and target_state.variant in taxon_counts[(lookup_entry.match_level, lookup_entry.taxon, target)]
             ):
                 protein_cluster_match_count += 1
-            positive_support = phage_counts[(str(row["phage"]), target)][target_state.variant]
-            if positive_support > 0:
-                exact_variant_seen = 1
 
         output_row.update(
             {
@@ -446,7 +433,6 @@ def build_feature_rows(
                 "protein_target_present": protein_target_present,
                 "surface_target_present": surface_target_present,
                 "receptor_cluster_matches": int(protein_cluster_match_count > 0),
-                "receptor_variant_seen_in_training_positives": exact_variant_seen,
             }
         )
         feature_rows.append(output_row)

@@ -59,15 +59,20 @@ def test_merge_expanded_feature_rows_adds_split_phage_and_pair_features() -> Non
         ],
         pair_feature_blocks=[
             [{"pair_id": "B1__P1", "bacteria": "B1", "phage": "P1", "lookup_available": "1"}],
-            [{"pair_id": "B1__P1", "bacteria": "B1", "phage": "P1", "defense_evasion_score": "0.7"}],
-            [{"pair_id": "B1__P1", "bacteria": "B1", "phage": "P1", "isolation_host_distance": "0.3"}],
+            [
+                {
+                    "pair_id": "B1__P1",
+                    "bacteria": "B1",
+                    "phage": "P1",
+                    "isolation_host_distance": "0.3",
+                }
+            ],
         ],
     )
 
     assert merged[0]["cv_group"] == "G1"
     assert merged[0]["phage_gc_content"] == "0.5"
     assert merged[0]["lookup_available"] == "1"
-    assert merged[0]["defense_evasion_score"] == "0.7"
     assert merged[0]["isolation_host_distance"] == "0.3"
 
 
