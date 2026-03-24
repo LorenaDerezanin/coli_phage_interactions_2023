@@ -22,3 +22,9 @@ repos:
         language: python
         additional_dependencies: ["pymarkdownlnt==0.9.36"]
         types_or: [markdown]
+      - id: check-rebase-on-main
+        name: check-rebase-on-main
+        entry: "bash -c 'branch=$(git rev-parse --abbrev-ref HEAD); if [ \"$branch\" = \"main\" ]; then exit 0; fi; git fetch origin main --quiet 2>/dev/null; merge_base=$(git merge-base origin/main HEAD); main_tip=$(git rev-parse origin/main); if [ \"$merge_base\" != \"$main_tip\" ]; then echo \"ERROR: Branch $branch is not rebased on origin/main.\"; echo \"Run: git fetch origin main && git rebase origin/main\"; exit 1; fi'"
+        language: system
+        stages: [pre-push]
+        always_run: true
