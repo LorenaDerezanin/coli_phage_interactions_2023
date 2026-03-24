@@ -10,6 +10,14 @@
   skill. Keep vendored `SKILL.md` files nested deep enough (e.g., `vendor/<source>/SKILL.md`) so they are not at the
   `.agents/skills/*/SKILL.md` level.
 
+# Skill Maintenance
+
+- Skills are living documents. Update a skill's `SKILL.md` whenever there is substantial new learning about how it
+  should work — e.g., encountering errors when using it, discovering new edge cases, learning new information about the
+  domain, or finding new applications.
+- Don't wait for a dedicated "skill improvement" task. If you're using a skill and it's missing guidance that would have
+  prevented a mistake, add that guidance now as part of the current work.
+
 ## Directory Structure
 
 ```

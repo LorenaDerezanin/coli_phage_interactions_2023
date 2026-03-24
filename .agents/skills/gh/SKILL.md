@@ -136,6 +136,51 @@ gh issue close <NUMBER> --reason "not planned"
 **Why:** The orchestrator watches for issue closures and automatically marks plan tasks as `done`.
 A premature regular close advances the plan incorrectly.
 
+## 7. GitHub API endpoint patterns
+
+**The rule:** When using `gh api` to interact with PR review comments, use the correct endpoint.
+
+**Why:** GitHub has similar-looking endpoints for PR comments that return 404 if confused. The reply endpoint
+requires the PR number — unlike the single-comment GET endpoint which doesn't.
+
+**Common patterns:**
+
+```bash
+# List all inline review comments on a PR
+gh api repos/OWNER/REPO/pulls/123/comments
+
+# Get a single review comment by its ID (no PR number needed)
+gh api repos/OWNER/REPO/pulls/comments/456789
+
+# Reply to a review comment (PR number IS needed)
+gh api repos/OWNER/REPO/pulls/123/comments/456789/replies -f body="Fixed in abc123."
+
+# List review-level comments (not inline)
+gh api repos/OWNER/REPO/pulls/123/reviews
+```
+
+**The most common mistake:** Using `/pulls/comments/{id}/replies` (without the PR number) for replies. That 404s.
+Always use `/pulls/{pr}/comments/{id}/replies`.
+
+**Rule:** If a thread reply fails, do not fall back to `gh pr comment`. Top-level PR comments are not threaded and
+create noise. Stop and investigate the endpoint instead.
+
+## 8. `gh pr checks` exit codes
+
+**The rule:** `gh pr checks` returns exit code 8 when any check is still pending or has been skipped. This is not a
+failure — it means "not all checks have passed yet."
+
+**Why:** Agents treat non-zero exit codes as errors by default, which can cause unnecessary retries, false error
+reports, or abandoned review workflows when checks are simply still running.
+
+**Exit codes:**
+- `0` — all checks passed
+- `1` — at least one check failed
+- `8` — no checks failed, but some are pending or skipped
+
+**How to handle:** When exit code is 8, report the status honestly ("checks still running" or "some checks skipped")
+and move on. Do not retry or treat it as a blocker unless you specifically need all checks green.
+
 ## Quick self-check before running
 
 Before executing any `gh` command that sets `--body`:
