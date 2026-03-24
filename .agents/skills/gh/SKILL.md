@@ -181,6 +181,17 @@ reports, or abandoned review workflows when checks are simply still running.
 **How to handle:** When exit code is 8, report the status honestly ("checks still running" or "some checks skipped")
 and move on. Do not retry or treat it as a blocker unless you specifically need all checks green.
 
+## 9. `gh pr view --json` field names
+
+**The rule:** The `--json` flag on `gh pr view` only accepts specific field names. Common mistakes:
+
+- `diffStat` does not exist — use `additions` and `deletions` separately
+- `diff` does not exist — use `gh pr diff <number>` instead (separate command)
+- `files` returns the list of changed files with patch data
+
+**How to discover valid fields:** Run `gh pr view --json invalid` and read the error message — it lists all available
+fields.
+
 ## Quick self-check before running
 
 Before executing any `gh` command that sets `--body`:

@@ -23,3 +23,11 @@
   their corresponding GitHub issue is closed as completed (via PR merge with `Closes #N`).
 - Agents should only add new tasks or modify pending task fields (acceptance_criteria, model, title). Status transitions
   are the orchestrator's responsibility.
+
+# Done Task Immutability
+
+- Never modify the title, acceptance_criteria, or any other field on a done task. Done tasks are historical records —
+  they document what was originally required, not the current state of the code.
+- If a later task changes the codebase in ways that make a done task's criteria look stale (e.g., deleting features that
+  a done task created), that is expected. The done task records what was true when it was completed; the later task
+  records what changed. Git history tells the full story.
