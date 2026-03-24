@@ -74,10 +74,10 @@ were all `0.0`.
 
 #### Executive summary
 
-Added the TK03 Track K runner to measure KlebPhaCol lift on top of the current best-so-far cohort. The new step
-reads the TK02 manifest to recover the prior external source chain, then retrains the locked v1 model with
-`+KlebPhaCol` appended. On the validation fixture, KlebPhaCol was neutral: ROC-AUC, top-3, and Brier deltas vs the
-previous best were all `0.0`.
+Added the TK03 Track K runner to measure KlebPhaCol lift on top of the current best-so-far cohort. The step now
+fails closed when the TI08 cohort is missing, empty, or yields zero joinable KlebPhaCol rows, then retrains the
+locked v1 model with `+KlebPhaCol` appended. On the validation fixture, KlebPhaCol was neutral: ROC-AUC, top-3,
+and Brier deltas vs the previous best were all `0.0`.
 
 #### What was implemented
 
@@ -85,6 +85,7 @@ previous best were all `0.0`.
   `lyzortx/pipeline/track_k/run_track_k.py`.
 - Extended the shared Track K manifest loader so TK03 can recover the previous best external cohort from TK02
   manifests without duplicating `internal`.
+- Added explicit guards that raise on a missing or empty TI08 cohort, plus a zero-row join check for KlebPhaCol.
 - Added regression coverage for the TK03 runner and the TK02-to-TK03 cohort handoff.
 
 #### Findings
@@ -96,6 +97,8 @@ previous best were all `0.0`.
   - ROC-AUC `0.0`
   - top-3 `0.0`
   - Brier `0.0`
+- The runner now rejects a missing TI08 file or a TI08 cohort with no joinable KlebPhaCol rows instead of silently
+  continuing with an empty add-on.
 - The TK03 lift assessment was `neutral`.
 
 #### Interpretation
@@ -160,7 +163,8 @@ should stay internal-only for v1.
 - The scratch validation run emitted `lyzortx/generated_outputs/track_k/tk05_tier_b_lift_measurement/`-style outputs
   under `.scratch/tk05_demo/out/` for the local fixture.
 - The previous best cohort remained `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb`.
-- The augmented cohort was `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb_plus_virus_host_db_plus_ncbi_virus_biosample`.
+- The augmented cohort was
+  `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb_plus_virus_host_db_plus_ncbi_virus_biosample`.
 - The Tier B rows joined cleanly:
   - `virus_host_db`: `1` joined row
   - `ncbi_virus_biosample`: `1` joined row
