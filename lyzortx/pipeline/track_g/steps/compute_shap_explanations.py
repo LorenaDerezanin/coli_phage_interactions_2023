@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,8 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
 from lyzortx.pipeline.track_g.steps import calibrate_gbm_outputs
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
+
+logger = logging.getLogger(__name__)
 
 TG02_REQUIRED_COLUMNS: Tuple[str, ...] = (
     "pair_id",
@@ -394,6 +397,7 @@ def summarize_difficulty_counts(rows: Sequence[Mapping[str, object]]) -> Dict[st
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    logger.info("TG04 starting: compute SHAP explanations")
     ensure_directory(args.output_dir)
     ensure_prerequisite_outputs(args)
 
@@ -608,11 +612,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     write_json(args.output_dir / "tg04_shap_summary.json", summary)
 
-    print("TG04 completed.")
-    print(f"- Explained recommendation pairs: {len(recommendation_rows)}")
-    print(f"- Global features ranked: {len(global_rows)}")
-    print(f"- Per-strain difficulty rows: {len(strain_summary_rows)}")
-    print(f"- Output directory: {args.output_dir}")
+    logger.info("TG04 completed.")
+    logger.info("- Explained recommendation pairs: %d", len(recommendation_rows))
+    logger.info("- Global features ranked: %d", len(global_rows))
+    logger.info("- Per-strain difficulty rows: %d", len(strain_summary_rows))
+    logger.info("- Output directory: %s", args.output_dir)
     return 0
 
 

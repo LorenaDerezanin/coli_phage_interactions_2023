@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -35,6 +36,8 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
     st02_build_pair_table,
     st03_build_splits,
 )
+
+logger = logging.getLogger(__name__)
 
 IDENTIFIER_COLUMNS: Tuple[str, ...] = ("pair_id", "bacteria", "phage")
 TRACK_E_REQUIRED_BLOCKS: Tuple[Tuple[str, Path], ...] = (
@@ -672,6 +675,7 @@ def project_rows_to_fields(rows: Sequence[Mapping[str, object]], fieldnames: Seq
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    logger.info("TG01 starting: train v1 binary classifier")
     ensure_directory(args.output_dir)
     ensure_prerequisite_outputs(args)
 
@@ -918,12 +922,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         top3_ranking_rows,
     )
 
-    print("TG01 completed.")
-    print(f"- LightGBM best CV ROC-AUC: {best_lightgbm['summary']['mean_roc_auc']}")
-    print(f"- LightGBM holdout ROC-AUC: {lightgbm_holdout_metrics['roc_auc']}")
-    print(f"- LightGBM holdout top-3 hit rate: {lightgbm_holdout_top3['top3_hit_rate_all_strains']}")
-    print(f"- Logistic holdout ROC-AUC: {logreg_holdout_metrics['roc_auc']}")
-    print(f"- Output directory: {args.output_dir}")
+    logger.info("TG01 completed.")
+    logger.info("- LightGBM best CV ROC-AUC: %s", best_lightgbm["summary"]["mean_roc_auc"])
+    logger.info("- LightGBM holdout ROC-AUC: %s", lightgbm_holdout_metrics["roc_auc"])
+    logger.info("- LightGBM holdout top-3 hit rate: %s", lightgbm_holdout_top3["top3_hit_rate_all_strains"])
+    logger.info("- Logistic holdout ROC-AUC: %s", logreg_holdout_metrics["roc_auc"])
+    logger.info("- Output directory: %s", args.output_dir)
     return 0
 
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,8 @@ from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     score_rows_with_cv_predictions,
     select_best_candidate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -263,6 +266,7 @@ def summarize_arm_result(
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    logger.info("TG03 starting: feature-block ablation suite")
     ensure_directory(args.output_dir)
     ensure_prerequisite_outputs(args)
 
@@ -534,15 +538,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ranking_rows,
     )
 
-    print("TG03 completed.")
+    logger.info("TG03 completed.")
     for arm in ablation_arms:
         arm_summary = summary_arms[arm.arm_id]
-        print(
-            f"- {arm.display_name}: holdout ROC-AUC {arm_summary['holdout_binary_metrics']['roc_auc']}, "
-            f"top-3 {arm_summary['holdout_top3_metrics']['top3_hit_rate_all_strains']}, "
-            f"Brier {arm_summary['holdout_binary_metrics']['brier_score']}"
+        logger.info(
+            "- %s: holdout ROC-AUC %s, top-3 %s, Brier %s",
+            arm.display_name,
+            arm_summary["holdout_binary_metrics"]["roc_auc"],
+            arm_summary["holdout_top3_metrics"]["top3_hit_rate_all_strains"],
+            arm_summary["holdout_binary_metrics"]["brier_score"],
         )
-    print(f"- Output directory: {args.output_dir}")
+    logger.info("- Output directory: %s", args.output_dir)
     return 0
 
 

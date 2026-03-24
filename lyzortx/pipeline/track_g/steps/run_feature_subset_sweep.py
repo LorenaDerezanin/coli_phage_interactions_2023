@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from itertools import combinations
@@ -37,6 +38,8 @@ from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     score_rows_with_cv_predictions,
 )
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
+
+logger = logging.getLogger(__name__)
 
 BLOCK_ORDER: Tuple[str, ...] = ("defense", "omp", "phage_genomic", "pairwise")
 BLOCK_DISPLAY_NAMES: Mapping[str, str] = {
@@ -353,6 +356,7 @@ def summarize_arm(
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    logger.info("TG05 starting: feature-subset sweep")
     ensure_directory(args.output_dir)
     ensure_prerequisite_outputs(args)
     ensure_tg01_summary(args)
@@ -621,13 +625,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ),
     )
 
-    print("TG05 completed.")
-    print(f"- Locked TG01 LightGBM params: {json.dumps(locked_params, sort_keys=True)}")
-    print(
-        f"- Winning panel subset: {winner['arm_label']} | holdout ROC-AUC {winner['holdout_roc_auc']} | "
-        f"top-3 {winner['holdout_top3_hit_rate_all_strains']} | Brier {winner['holdout_brier_score']}"
+    logger.info("TG05 completed.")
+    logger.info("- Locked TG01 LightGBM params: %s", json.dumps(locked_params, sort_keys=True))
+    logger.info(
+        "- Winning panel subset: %s | holdout ROC-AUC %s | top-3 %s | Brier %s",
+        winner["arm_label"],
+        winner["holdout_roc_auc"],
+        winner["holdout_top3_hit_rate_all_strains"],
+        winner["holdout_brier_score"],
     )
-    print(f"- Output directory: {args.output_dir}")
+    logger.info("- Output directory: %s", args.output_dir)
     return 0
 
 

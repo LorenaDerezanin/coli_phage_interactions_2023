@@ -10,6 +10,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_g.steps import calibrate_gbm_outputs
 from lyzortx.pipeline.track_g.steps import compute_shap_explanations
 from lyzortx.pipeline.track_g.steps import run_feature_block_ablation_suite
@@ -36,6 +37,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    setup_logging()
     args = parse_args(argv)
     if args.step in {"train-v1-binary", "all"}:
         train_v1_binary_classifier.main([])

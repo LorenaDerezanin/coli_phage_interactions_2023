@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,8 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import load_json, read_csv_rows, safe_round
 from lyzortx.pipeline.steel_thread_v0.steps.st06_recommend_top3 import bootstrap_topk_ci, evaluate_holdout_slice
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
+
+logger = logging.getLogger(__name__)
 
 SLICE_FILTERS = {
     "full_label": lambda row: row["label_hard_any_lysis"] != "",
@@ -348,6 +351,7 @@ def merge_prediction_metadata(
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    logger.info("TG02 starting: calibrate GBM outputs")
     ensure_directory(args.output_dir)
     ensure_prerequisite_outputs(args)
 
@@ -593,12 +597,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     write_json(args.output_dir / "tg02_calibration_artifacts.json", calibration_artifacts)
     write_json(args.output_dir / "tg02_benchmark_summary.json", benchmark_summary)
 
-    print("TG02 completed.")
-    print(f"- Calibration rows: {len(calibration_rows)}")
-    print(f"- Holdout eval rows: {len(holdout_eval_rows)}")
-    print(f"- Output calibrated predictions: {args.output_dir / 'tg02_pair_predictions_calibrated.csv'}")
-    print(f"- Output ranking: {args.output_dir / 'tg02_ranked_predictions.csv'}")
-    print(f"- Output benchmark summary: {args.output_dir / 'tg02_benchmark_summary.json'}")
+    logger.info("TG02 completed.")
+    logger.info("- Calibration rows: %d", len(calibration_rows))
+    logger.info("- Holdout eval rows: %d", len(holdout_eval_rows))
+    logger.info("- Output calibrated predictions: %s", args.output_dir / "tg02_pair_predictions_calibrated.csv")
+    logger.info("- Output ranking: %s", args.output_dir / "tg02_ranked_predictions.csv")
+    logger.info("- Output benchmark summary: %s", args.output_dir / "tg02_benchmark_summary.json")
     return 0
 
 

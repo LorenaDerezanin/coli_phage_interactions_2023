@@ -51,7 +51,7 @@ def test_run_track_j_dispatches_release_sequence_in_dependency_order(monkeypatch
     ]
 
 
-def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, capsys) -> None:
+def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, caplog) -> None:
     foundation_calls: list[str] = []
     feature_calls: list[str] = []
     release_calls: list[str] = []
@@ -84,12 +84,14 @@ def test_run_track_j_uses_dynamic_runner_boundaries_and_logs_steps(monkeypatch, 
     assert [name for name, _ in modeling_runners] == ["track-d", "track-e", "track-g"]
     assert [name for name, _ in recommendation_runners] == ["track-h"]
 
-    run_track_j.main(["--step", "all"])
+    with caplog.at_level("INFO", logger="lyzortx.pipeline.track_j.run_track_j"):
+        run_track_j.main(["--step", "all"])
 
     assert foundation_calls == ["foundation-a", "foundation-b"]
     assert feature_calls == ["feature-a"]
     assert release_calls == ["track-d", "track-e", "track-g", "track-h"]
-    assert capsys.readouterr().out.splitlines() == [
+    step_messages = [r.message for r in caplog.records if r.message.startswith("[track-j]")]
+    assert step_messages == [
         "[track-j] foundation-a",
         "[track-j] foundation-b",
         "[track-j] feature-a",
