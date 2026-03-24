@@ -155,7 +155,12 @@ def test_run_track_i_dispatches_ti09_step(monkeypatch) -> None:
     monkeypatch.setattr(
         run_track_i.build_tier_a_vhrdb_ingest,
         "main",
-        lambda argv: calls.append("tier-a-ingest"),
+        lambda argv: calls.append("tier-a-vhrdb-ingest"),
+    )
+    monkeypatch.setattr(
+        run_track_i.build_tier_a_additional_source_ingests,
+        "main",
+        lambda argv: calls.append("tier-a-ti04-ingest"),
     )
     monkeypatch.setattr(
         run_track_i.build_tier_b_weak_label_ingest,
@@ -189,7 +194,8 @@ def test_run_track_i_dispatches_ti09_step(monkeypatch) -> None:
     calls.clear()
     run_track_i.main(["--step", "all"])
     assert calls == [
-        "tier-a-ingest",
+        "tier-a-vhrdb-ingest",
+        "tier-a-ti04-ingest",
         "weak-label-ingest",
         "external-confidence-tiers",
         "training-cohorts",
