@@ -334,7 +334,7 @@ graph LR
   - Add KlebPhaCol rows to the best-so-far cohort
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether KlebPhaCol adds, hurts, or is neutral
-- [ ] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
   - Add GPB rows to the best-so-far cohort
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether GPB adds, hurts, or is neutral

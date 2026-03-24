@@ -550,7 +550,7 @@ tracks:
       - Document whether KlebPhaCol adds, hurts, or is neutral
     - id: TK04
       title: Add GPB to training and measure cumulative lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Add GPB rows to the best-so-far cohort
