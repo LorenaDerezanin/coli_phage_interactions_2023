@@ -16,3 +16,10 @@
 - Every pending task in `plan.yml` must have both a `model` field and non-empty `acceptance_criteria`.
 - Done tasks may omit either — they are historical records, not dispatchable work.
 - The orchestrator validates both fields at load time and raises `ValueError` if either is missing on a pending task.
+
+# Task Status Management
+
+- Never manually set a task's `status` to `done` in `plan.yml`. The orchestrator automatically marks tasks as done when
+  their corresponding GitHub issue is closed as completed (via PR merge with `Closes #N`).
+- Agents should only add new tasks or modify pending task fields (acceptance_criteria, model, title). Status transitions
+  are the orchestrator's responsibility.

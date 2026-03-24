@@ -418,6 +418,23 @@ tracks:
         model (~0.837) and the old leaked model (~0.911) without degrading top-3
       - If no candidate closes the gap, accept the 2-block calibration as the honest
         v1 baseline
+    - id: TG12
+      title: Delete soft-leaky training-label-derived features from Track E code
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - 'Delete TE02 defense_evasion_* features: remove build_training_family_defense_profiles
+        and build_feature_rows collaborative-filtering logic from
+        build_defense_evasion_proxy_feature_block.py, or delete the file entirely if
+        no clean features remain'
+      - 'Delete TE01 receptor_variant_seen_in_training_positives: remove the
+        exact_variant_seen computation and the column from OUTPUT_FEATURE_COLUMNS in
+        build_rbp_receptor_compatibility_feature_block.py'
+      - Update downstream tests that assert on removed columns
+      - 'Grep lyzortx/ for defense_evasion_expected_score, defense_evasion_mean_score,
+        defense_evasion_supported_subtype_count, defense_evasion_family_training_pair_count,
+        and receptor_variant_seen_in_training_positives — zero hits outside lab notebooks'
+      - All existing tests pass after deletions
   H:
     name: In-Silico Cocktail Recommendation
     description: Top-k recommendations with SHAP-based explanations. TH01/TH02 are
@@ -443,8 +460,8 @@ tracks:
   I:
     name: External Data and Literature Integration
     description: Tier A supervised and Tier B weak-label ingestion with source-fidelity,
-      ablations, and lift tracking. Dead-end track for now — no downstream track depends
-      on I until external data is wired into model training.
+      ablations, and lift tracking. Track K consumes Track I outputs for per-source
+      lift measurement.
     stage: 1
     depends_on:
     - A
@@ -498,6 +515,76 @@ tracks:
         tier
       status: done
       model: gpt-5.4-mini
+  K:
+    name: External Data Lift Measurement
+    description: Incrementally add Track I external sources to the v1 model and measure
+      per-source lift. Each task adds exactly one source, retrains, and reports metrics
+      against the internal-only baseline. This isolates the contribution of each external
+      dataset.
+    stage: 2
+    depends_on:
+    - I
+    - G
+    tasks:
+    - id: TK01
+      title: 'Add VHRdb to training and measure lift vs internal-only baseline'
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Connect TI08 VHRdb cohort rows to Track G training pipeline
+      - Retrain with internal + VHRdb on the locked ST03 holdout split
+      - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline
+      - If lift is negative or negligible, document why and do not include VHRdb in
+        subsequent arms
+    - id: TK02
+      title: 'Add BASEL to training and measure cumulative lift'
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Add BASEL rows to the best-so-far cohort (internal-only or internal+VHRdb,
+        depending on TK01 result)
+      - Retrain and report AUC, top-3, Brier delta vs previous best
+      - Document whether BASEL adds, hurts, or is neutral
+    - id: TK03
+      title: 'Add KlebPhaCol to training and measure cumulative lift'
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Add KlebPhaCol rows to the best-so-far cohort
+      - Retrain and report AUC, top-3, Brier delta vs previous best
+      - Document whether KlebPhaCol adds, hurts, or is neutral
+    - id: TK04
+      title: 'Add GPB to training and measure cumulative lift'
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Add GPB rows to the best-so-far cohort
+      - Retrain and report AUC, top-3, Brier delta vs previous best
+      - Document whether GPB adds, hurts, or is neutral
+    - id: TK05
+      title: 'Add Tier B weak labels and measure cumulative lift'
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
+      - Retrain and report AUC, top-3, Brier delta vs previous best
+      - Document whether Tier B adds, hurts, or is neutral
+      - If any source combination improved metrics, propose a new locked config;
+        otherwise keep internal-only as the v1 baseline
+    - id: TK06
+      title: Synthesize per-source lift results and lock the external data decision
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - Summarize TK01-TK05 results in a single comparison table (source, delta AUC,
+        delta top-3, delta Brier vs internal-only baseline)
+      - Identify the best-performing source combination (may be internal-only if nothing
+        helped)
+      - If external data earned inclusion, update v1_feature_configuration.json with the
+        new locked config and retrain the final model
+      - If no external source improved metrics, document the finding and confirm
+        internal-only remains the v1 baseline
+      - Write a project notebook entry with the final decision and rationale
   J:
     name: Reproducibility and Release Quality
     description: One-command regeneration and environment freezing for v1 pipeline.
