@@ -582,3 +582,58 @@ model artifacts. The command completed without error, regenerated the downstream
    generated output tree.
 3. The clean metrics are weaker than the pre-cleanup numbers, which is expected and preferable to carrying forward a
    label leak. The pipeline now reflects the honest baseline that TG09 can improve upon without reintroducing leakage.
+
+### 2026-03-24: Post-merge review of TG06-TG08 — nondeterminism and soft leakage discovered
+
+#### Executive summary
+
+Review of TG07 and TG08 revealed two problems. First, the feature-subset sweep is nondeterministic: TG07 locked
+`defense + phage_genomic + pairwise` (AUC 0.836) but TG08's Track J end-to-end re-run picked `defense + phage_genomic`
+(AUC 0.837). Second, the pairwise block contains 6 out of 13 features derived from training labels — a softer form of
+the same leakage we just cleaned up. The decision is to lock `defense + phage_genomic` as the v1 winner, fix LightGBM
+determinism, and defer pairwise investigation to a later task.
+
+#### Nondeterminism root cause
+
+The sweep winner flipped because `make_lightgbm_estimator` in `train_v1_binary_classifier.py` sets `n_jobs=1` but not
+`deterministic=True`. LightGBM 4.6.0 docs confirm that `deterministic=True` + `force_col_wise=True` (already set)
+ensures stable results across runs with any thread count on the same machine.
+
+Local testing confirmed:
+- Two consecutive sweep runs with `n_jobs=1` (current config): identical outputs
+- Two consecutive sweep runs with `deterministic=True`, no `n_jobs` (10 threads): identical outputs
+- Both configs produce the same winner locally
+- Local winner differs from CI winner — expected per LightGBM docs: "in different systems, the results are expected
+  to be different"
+
+The fix is: add `deterministic=True` to the estimator factory and remove `n_jobs=1` for parallelism speedup. The lock
+file should be treated as a human-approved decision rather than a regenerated output — Track J should train from the
+locked config without re-running the sweep.
+
+#### Pairwise block soft leakage
+
+Audit of the 13 pairwise features (Track E) found that 6 are derived from training labels:
+
+- TE02 (all 4 features): `defense_evasion_mean_score`, `defense_evasion_expected_score`,
+  `defense_evasion_supported_subtype_count`, `defense_evasion_family_training_pair_count` — collaborative filtering of
+  phage-family × defense-subtype lysis rates from fold-excluded training labels
+- TE01: `receptor_variant_seen_in_training_positives` — binary flag from training positives
+
+The remaining 7 features are clean:
+- TE01: `lookup_available`, `target_receptor_present`, `protein_target_present`, `surface_target_present`,
+  `receptor_cluster_matches` — curated genus-receptor lookup, no label dependency
+- TE03: `isolation_host_umap_euclidean_distance`, `isolation_host_defense_jaccard_distance`,
+  `isolation_host_feature_available` — genomic distances, no label dependency
+
+The fold-awareness in TE02 prevents direct target leakage but still encodes the global label distribution by phage
+family × defense subtype. This is the same class of problem as `host_n_infections` (softer, but same mechanism).
+
+#### Winner decision
+
+Lock `defense + phage_genomic` (without pairwise). Reasons:
+1. The 2-block arm won the TG08 Track J end-to-end regeneration — the more stable result
+2. The 1.5pp top-3 difference between 2-block (90.8%) and 3-block (92.3%) is within bootstrap CI on 65 holdout strains
+   (1 strain flip = 1.5pp)
+3. Half the pairwise block is label-derived — adding it is inconsistent with the leakage cleanup
+4. The clean pairwise features (TE03 distances, TE01 curated lookups) should be evaluated individually in a future task,
+   not bundled with the label-derived ones

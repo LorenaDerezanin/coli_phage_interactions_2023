@@ -689,3 +689,47 @@ The deployment-realistic numbers from TG05 (top-3 92.3%, AUC 0.835, Brier 0.158)
 clean model, but the actual TG07 retrain may produce different numbers since the feature pipeline itself changes (not
 just column exclusion at prediction time). TG09 will investigate whether the AUC gap can be partially closed with
 non-leaky features.
+
+### 2026-03-24: Clean v1 model locked — `defense + phage_genomic` is the honest baseline
+
+#### Executive summary
+
+Post-merge review of TG06-TG08 found two additional problems: LightGBM nondeterminism causing the sweep winner to flip
+across runs, and 6 out of 13 pairwise features being derived from training labels (soft leakage). The v1 winner is now
+locked to `defense + phage_genomic` — the 2-block arm that excludes all label-derived pairwise features. LightGBM
+determinism will be fixed and the lock file will be treated as a human decision rather than a regenerated output.
+
+#### Current honest v1 numbers
+
+These are from the TG08 Track J end-to-end regeneration (the most realistic run):
+- Winner: `defense + phage_genomic`
+- Holdout ROC-AUC: ~0.837
+- Holdout top-3 hit rate: 90.8%
+- Holdout Brier: ~0.160
+
+The 90.8% top-3 meets the 90%+ target. The AUC is lower than the old leaked model (0.911) but honest.
+
+#### Remaining leakage in the codebase
+
+The pairwise block (Track E) still contains label-derived features that are not yet deleted:
+- TE02: all 4 `defense_evasion_*` features (collaborative filtering on training lysis rates)
+- TE01: `receptor_variant_seen_in_training_positives` (binary flag from training positives)
+
+These are excluded from the v1 model by locking to `defense + phage_genomic`, but the code still exists. A future task
+should evaluate whether the clean pairwise features (TE03 distances, TE01 curated lookups) add value individually
+without the label-derived ones.
+
+#### Plan updates
+
+- TG09: Fix LightGBM determinism, lock `defense + phage_genomic`, separate sweep from Track J regeneration
+- TG10: Re-run downstream verification on the stable 2-block lock
+- TG11 (was TG09): Investigate calibration gap — now aware of pairwise soft leakage, should evaluate clean pairwise
+  features individually
+
+#### Future: clean up upstream soft leakage in Track E
+
+After TG09-TG11 are done and the v1 baseline is stable, consider a follow-up pass to delete or gate the training-label-
+derived features in Track E itself: TE02's `defense_evasion_*` collaborative filtering features and TE01's
+`receptor_variant_seen_in_training_positives`. These are currently excluded from v1 by the 2-block lock, but the code
+still produces them. Deleting them would make the feature pipeline honest by construction rather than by configuration,
+and would prevent future sweep runs from accidentally including them in a winning arm.
