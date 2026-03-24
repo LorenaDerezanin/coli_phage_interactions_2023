@@ -86,6 +86,8 @@
 
 - After every push to a PR branch, update the PR title and description to reflect the current state of all commits in
   the branch. The title and body should accurately summarize what the PR does — not just the initial commit.
+- Do not add "CI passes" as a test-plan item in PR descriptions. CI is already a branch protection requirement and
+  listing it is redundant noise.
 
 # PR and Issue Linkage Policy
 
@@ -233,7 +235,12 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   wondering whether the process is working.
 - **Timestamped logging** — Prefer logging with timestamps (e.g., via Python's `logging` module with a time-stamped
   format) over bare `print()` calls. Timestamps make it possible to diagnose performance issues and correlate events
-  across pipeline stages.
+  across pipeline stages. Use the shared `lyzortx.log_config.setup_logging()` in track runners.
+- **Timezone-aware timestamps** — All timestamps must include timezone information. Use `datetime.now(timezone.utc)` or
+  explicit timezone-aware constructors — never bare `datetime.now()` or `datetime.utcnow()`. This applies to logging
+  formats, serialized timestamps in output files, and any datetime objects created in code.
+- **Top-level imports** — Always place imports at the top of the module. Do not use lazy/deferred imports inside
+  functions unless there is a concrete circular-import or heavy-dependency reason that is documented in a comment.
 
 # External Service Integration Development
 

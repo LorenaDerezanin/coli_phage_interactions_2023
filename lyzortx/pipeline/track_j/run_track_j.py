@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from typing import Callable, Iterable, Tuple
@@ -11,6 +12,7 @@ from typing import Callable, Iterable, Tuple
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_c.steps import build_extended_host_surface_feature_block
 from lyzortx.pipeline.track_c.steps import build_omp_receptor_variant_feature_block
 from lyzortx.pipeline.track_c.steps import build_receptor_surface_feature_block
@@ -23,6 +25,8 @@ from lyzortx.pipeline.steel_thread_v0.steps import st01_label_policy
 from lyzortx.pipeline.steel_thread_v0.steps import st01b_confidence_tiers
 from lyzortx.pipeline.steel_thread_v0.steps import st02_build_pair_table
 from lyzortx.pipeline.steel_thread_v0.steps import st03_build_splits
+
+logger = logging.getLogger(__name__)
 
 StepRunner = Tuple[str, Callable[[], None]]
 
@@ -79,9 +83,10 @@ def _runners_for_step(step: str) -> Iterable[StepRunner]:
 
 
 def main(argv: list[str] | None = None) -> None:
+    setup_logging()
     args = parse_args(argv)
     for name, runner in _runners_for_step(args.step):
-        print(f"[track-j] {name}")
+        logger.info("[track-j] %s", name)
         runner()
 
 

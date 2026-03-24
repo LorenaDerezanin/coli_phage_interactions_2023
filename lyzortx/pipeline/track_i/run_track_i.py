@@ -10,6 +10,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_i.steps import (
     build_external_label_confidence_tiers,
     build_external_training_cohorts,
@@ -41,6 +42,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    setup_logging()
     args = parse_args(argv)
     if args.step in {"weak-label-ingest", "all"}:
         build_tier_b_weak_label_ingest.main([])

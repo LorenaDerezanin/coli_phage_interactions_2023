@@ -10,6 +10,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_h.steps import build_explained_recommendations
 
 
@@ -25,6 +26,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    setup_logging()
     args = parse_args(argv)
     if args.step in {"explained-recommendations", "all"}:
         build_explained_recommendations.main([])

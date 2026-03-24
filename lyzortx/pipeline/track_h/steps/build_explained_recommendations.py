@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,8 @@ from sklearn.isotonic import IsotonicRegression
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
+
+logger = logging.getLogger(__name__)
 
 TG02_REQUIRED_COLUMNS: Tuple[str, ...] = (
     "pair_id",
@@ -394,6 +397,7 @@ def _required_columns(rows: Sequence[Mapping[str, str]], required: Iterable[str]
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    logger.info("TH02 starting: build explained recommendations")
     ensure_directory(args.output_dir)
 
     tg02_rows = read_csv_rows(args.tg02_predictions_path, required_columns=TG02_REQUIRED_COLUMNS)
@@ -464,10 +468,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     }
     write_json(output_manifest, summary)
 
-    print("TH02 completed.")
-    print(f"- Holdout strains covered: {len(summary_rows)}")
-    print(f"- Recommendation rows: {len(explained_rows)}")
-    print(f"- Output report: {output_report}")
+    logger.info("TH02 completed.")
+    logger.info("- Holdout strains covered: %d", len(summary_rows))
+    logger.info("- Recommendation rows: %d", len(explained_rows))
+    logger.info("- Output report: %s", output_report)
     return 0
 
 
