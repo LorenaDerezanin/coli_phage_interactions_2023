@@ -1,3 +1,26 @@
+### 2026-03-24: gh skill parse-logs command for CI log analysis
+
+#### Executive summary
+
+Added a `parse-logs` command to the `/gh` skill that documents how to fetch, filter, and extract timing from GitHub
+Actions workflow logs via `gh run view --log`. This exists because the GitHub Actions web UI strips timestamps from
+individual log lines — only showing sequential line numbers — making it impossible to diagnose timing of long-running
+Codex implement and feedback runs from the browser. The raw logs accessed via CLI include full ISO 8601 timestamps.
+
+#### Design decisions
+
+**1. Skill command, not a script.** The `gh` CLI already provides all the primitives (`gh run view --log`, `--log-failed`,
+`--job`). What was missing was documented recipes for combining them — filtering by PR + workflow + step, extracting
+wall-clock duration, and finding stuck points. A skill command (agent documentation) is the right level of abstraction;
+a wrapper script would add maintenance burden for no additional capability.
+
+**2. All filters are combinable.** The command accepts any combination of: run ID, PR number, workflow name, job name,
+step name, text pattern, status, and failed-only. Previous draft used "one of" which was too restrictive — real
+debugging involves layering filters (e.g., "errors in the Codex step of PR #42's latest lifecycle run").
+
+**3. Timing section with step-transition timeline.** Beyond simple first/last timestamp extraction, includes an awk
+command that shows step transitions with timestamps — useful for seeing where time is spent across a run.
+
 ### 2026-03-24: Pre-push hook to enforce rebase on origin/main
 
 #### Executive summary
