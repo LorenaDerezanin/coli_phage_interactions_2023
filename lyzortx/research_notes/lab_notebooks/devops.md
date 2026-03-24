@@ -1,3 +1,46 @@
+### 2026-03-24: Pre-push hook to enforce rebase on origin/main
+
+#### Executive summary
+
+Added a `check-rebase-on-main` pre-push hook via pre-commit that blocks `git push` when the branch does not include
+`origin/main`'s tip commit. This automates the existing AGENTS.md policy that all branches must be rebased before
+pushing. Contributors activate it once per clone with `pre-commit install --hook-type pre-push`.
+
+#### Design decisions
+
+**1. Pre-commit framework rather than a standalone `.githooks/` directory.**
+
+The repo already uses pre-commit for pre-commit stage hooks (ruff, pymarkdown, gitignore enforcement). Adding a
+pre-push stage hook to the same `.pre-commit-config.yaml` keeps everything in one system. The alternative — checking
+in a `.githooks/` directory and setting `core.hooksPath` — would create a parallel hook management system and conflict
+with pre-commit's own `core.hooksPath` usage.
+
+**2. Requires a separate install command: `pre-commit install --hook-type pre-push`.**
+
+`pre-commit install` (without flags) only installs the `pre-commit` hook type. There is no single-command way to
+install all hook types — each needs a separate `-t` invocation, and multiple `-t` flags in one call are not supported.
+This is a pre-commit framework limitation. The install command is documented in `INSTALL.md` and `AGENTS.md`.
+
+**3. Avoids YAML `!` character by comparing merge-base output directly.**
+
+The original implementation used `! git merge-base --is-ancestor origin/main HEAD`, but `!` is a YAML tag character
+that breaks `yaml.safe_load()`. The fix compares `git merge-base origin/main HEAD` against `git rev-parse origin/main`
+for equality — semantically identical, YAML-safe.
+
+**4. Skips check on main branch.**
+
+Pushing main itself (e.g., after a merge) should not be blocked. The hook exits 0 immediately when
+`git rev-parse --abbrev-ref HEAD` is `main`.
+
+**5. Fetches origin/main before checking.**
+
+The hook runs `git fetch origin main --quiet` to ensure it checks against the latest remote state, not a stale local
+ref. This adds a small network call but prevents false passes when origin/main has advanced since the last fetch.
+
+#### PRs
+
+- PR #193: hook implementation, AGENTS.md/INSTALL.md docs, CI workflow updates.
+
 ### 2026-03-22: CI token usage baseline — 100-run snapshot
 
 #### Summary
