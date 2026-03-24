@@ -262,6 +262,11 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("feature-subset-sweep"),
     )
+    monkeypatch.setattr(
+        run_track_g.investigate_non_leaky_candidate_features,
+        "main",
+        lambda argv: calls.append("non-leaky-candidate-search"),
+    )
 
     run_track_g.main(["--step", "train-v1-binary"])
     assert calls == ["train-v1-binary"]
@@ -274,6 +279,7 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "feature-block-ablation",
         "compute-shap",
         "feature-subset-sweep",
+        "non-leaky-candidate-search",
     ]
 
 
@@ -304,6 +310,11 @@ def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
         run_track_g.run_feature_subset_sweep,
         "main",
         lambda argv: calls.append("feature-subset-sweep"),
+    )
+    monkeypatch.setattr(
+        run_track_g.investigate_non_leaky_candidate_features,
+        "main",
+        lambda argv: calls.append("non-leaky-candidate-search"),
     )
 
     run_track_g.main(["--step", "calibrate-gbm"])
@@ -338,6 +349,11 @@ def test_run_track_g_dispatches_tg03_ablation_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("feature-subset-sweep"),
     )
+    monkeypatch.setattr(
+        run_track_g.investigate_non_leaky_candidate_features,
+        "main",
+        lambda argv: calls.append("non-leaky-candidate-search"),
+    )
 
     run_track_g.main(["--step", "feature-block-ablation"])
     assert calls == ["feature-block-ablation"]
@@ -370,6 +386,11 @@ def test_run_track_g_dispatches_tg04_shap_step(monkeypatch) -> None:
         run_track_g.run_feature_subset_sweep,
         "main",
         lambda argv: calls.append("feature-subset-sweep"),
+    )
+    monkeypatch.setattr(
+        run_track_g.investigate_non_leaky_candidate_features,
+        "main",
+        lambda argv: calls.append("non-leaky-candidate-search"),
     )
 
     run_track_g.main(["--step", "compute-shap"])
@@ -465,9 +486,52 @@ def test_run_track_g_dispatches_tg05_feature_subset_sweep(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("feature-subset-sweep"),
     )
+    monkeypatch.setattr(
+        run_track_g.investigate_non_leaky_candidate_features,
+        "main",
+        lambda argv: calls.append("non-leaky-candidate-search"),
+    )
 
     run_track_g.main(["--step", "feature-subset-sweep"])
     assert calls == ["feature-subset-sweep"]
+
+
+def test_run_track_g_dispatches_tg11_non_leaky_candidate_search(monkeypatch) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        run_track_g.train_v1_binary_classifier,
+        "main",
+        lambda argv: calls.append("train-v1-binary"),
+    )
+    monkeypatch.setattr(
+        run_track_g.calibrate_gbm_outputs,
+        "main",
+        lambda argv: calls.append("calibrate-gbm"),
+    )
+    monkeypatch.setattr(
+        run_track_g.run_feature_block_ablation_suite,
+        "main",
+        lambda argv: calls.append("feature-block-ablation"),
+    )
+    monkeypatch.setattr(
+        run_track_g.compute_shap_explanations,
+        "main",
+        lambda argv: calls.append("compute-shap"),
+    )
+    monkeypatch.setattr(
+        run_track_g.run_feature_subset_sweep,
+        "main",
+        lambda argv: calls.append("feature-subset-sweep"),
+    )
+    monkeypatch.setattr(
+        run_track_g.investigate_non_leaky_candidate_features,
+        "main",
+        lambda argv: calls.append("non-leaky-candidate-search"),
+    )
+
+    run_track_g.main(["--step", "non-leaky-candidate-search"])
+    assert calls == ["non-leaky-candidate-search"]
 
 
 def test_select_recommendation_rows_keeps_top_k_per_bacteria() -> None:

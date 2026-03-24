@@ -15,6 +15,9 @@ This command runs the implemented Track G modeling step:
    `lyzortx/generated_outputs/track_g/tg04_shap_explanations/`
 5. `feature-subset-sweep`: run TG05 2-block and 3-block subset sweeps with TG01-locked LightGBM hyperparameters and
    write outputs under `lyzortx/generated_outputs/track_g/tg05_feature_subset_sweep/`
+6. `non-leaky-candidate-search`: run TG11 non-leaky candidate evaluation for the clean TE01/TE03 pairwise features on
+   top of the locked v1 baseline and write outputs under
+   `lyzortx/generated_outputs/track_g/tg11_non_leaky_candidate_features/`
 
 The TG01 trainer reuses the canonical ST0.2 / ST0.3 leakage-safe contract:
 
@@ -73,3 +76,11 @@ The TG05 feature-subset sweep directory includes:
 4. `tg05_feature_subset_holdout_top3_rankings.csv`: holdout top-3 rankings for every evaluated arm
 5. `tg05_locked_v1_feature_config.json`: flat locked v1 feature-block decision for downstream Track F/H/P work
 6. `tg05_locked_v1_feature_columns.csv`: concrete categorical/numeric columns for the locked subset
+
+The TG11 non-leaky candidate directory includes:
+
+1. `tg11_non_leaky_candidate_summary.json`: locked-baseline reference, half-gap threshold, best candidate, and
+   acceptance outcome
+2. `tg11_non_leaky_candidate_metrics.csv`: per-candidate holdout ROC-AUC, top-3, Brier, and gap-recovery summary
+3. `tg11_non_leaky_candidate_holdout_top3_rankings.csv`: holdout top-3 rankings for the locked baseline and each
+   candidate feature arm

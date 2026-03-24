@@ -700,3 +700,62 @@ Lock `defense + phage_genomic` (without pairwise). Reasons:
    explained recommendations still land on the same ST0.3-based release snapshot.
 3. The remaining model gap is unchanged by the rerun itself, which is expected. This task was about making sure the
    downstream tracks can be replayed safely on the stable 2-block lock, not about changing the locked winner again.
+
+### 2026-03-24: TG11 implemented (non-leaky feature search for the remaining calibration gap)
+
+#### Executive summary
+
+TG11 tested the clean pairwise candidates individually on top of the locked `defense + phage-genomic` v1 baseline
+using a new Track G step at `lyzortx/pipeline/track_g/steps/investigate_non_leaky_candidate_features.py`. The
+evaluation explicitly excluded the soft-leaky TE02 defense-evasion features and TE01
+`receptor_variant_seen_in_training_positives`, and scored the seven clean TE01/TE03 candidates one at a time against
+the locked baseline contract from `lyzortx/pipeline/track_g/v1_feature_configuration.json`. No candidate recovered
+more than 50% of the AUC gap to the old leaked model (`0.910766`) without degrading all-strain top-3, so the 2-block
+calibration remains the honest v1 baseline.
+
+#### What was implemented
+
+- Added TG11 step `lyzortx/pipeline/track_g/steps/investigate_non_leaky_candidate_features.py` and exposed it through
+  `python -m lyzortx.pipeline.track_g.run_track_g --step non-leaky-candidate-search`.
+- The step reuses the locked TG01 LightGBM hyperparameters and the human-locked v1 baseline from
+  `lyzortx/pipeline/track_g/v1_feature_configuration.json`, then evaluates these non-leaky candidates individually:
+  - TE01 curated lookup: `lookup_available`, `target_receptor_present`, `protein_target_present`,
+    `surface_target_present`, `receptor_cluster_matches`
+  - TE03 distances: `isolation_host_umap_euclidean_distance`, `isolation_host_defense_jaccard_distance`
+- The step writes traceable outputs under `lyzortx/generated_outputs/track_g/tg11_non_leaky_candidate_features/`,
+  including:
+  - `tg11_non_leaky_candidate_summary.json`
+  - `tg11_non_leaky_candidate_metrics.csv`
+  - `tg11_non_leaky_candidate_holdout_top3_rankings.csv`
+
+#### What was verified
+
+- `python -m lyzortx.pipeline.track_g.run_track_g --step non-leaky-candidate-search` completed successfully after
+  regenerating any missing ST0.1-ST0.3 / Track C / Track D / Track E prerequisites and the TG01 summary.
+- The locked baseline reproduced the expected all-strain top-3 contract from TG09/TG10:
+  - ROC-AUC `0.837200`
+  - top-3 hit rate `0.907692`
+  - Brier `0.159559`
+- With the old leaked reference fixed at ROC-AUC `0.910766`, recovering more than half the gap requires
+  ROC-AUC `>0.873983` while keeping top-3 `>=0.907692`.
+- TG11 candidate results:
+  - `lookup_available`: ROC-AUC `0.835678`, top-3 `0.892308`, Brier `0.160243`
+  - `target_receptor_present`: ROC-AUC `0.837271`, top-3 `0.876923`, Brier `0.160194`
+  - `protein_target_present`: ROC-AUC `0.838830`, top-3 `0.876923`, Brier `0.159757`
+  - `surface_target_present`: ROC-AUC `0.837271`, top-3 `0.876923`, Brier `0.160194`
+  - `receptor_cluster_matches`: ROC-AUC `0.834973`, top-3 `0.892308`, Brier `0.161138`
+  - `isolation_host_umap_euclidean_distance`: ROC-AUC `0.837651`, top-3 `0.876923`, Brier `0.158903`
+  - `isolation_host_defense_jaccard_distance`: ROC-AUC `0.836183`, top-3 `0.907692`, Brier `0.160929`
+- No row in `tg11_non_leaky_candidate_metrics.csv` satisfied
+  `recovers_gt_50pct_auc_gap_without_top3_degradation = true`.
+
+#### Interpretation
+
+1. The clean pairwise singles are not the missing calibration fix. The best raw AUC among the candidates was
+   `protein_target_present` at `0.838830`, which recovers only about `2.2%` of the leaked-model AUC gap and drops
+   top-3 from `0.907692` to `0.876923`.
+2. The only candidate that preserved the locked baseline top-3 exactly was
+   `isolation_host_defense_jaccard_distance`, and it moved AUC in the wrong direction (`0.836183`).
+3. This is enough evidence to stop searching for a rescue story inside the current clean TE01/TE03 single-feature
+   space. The honest conclusion for v1 is that the stable 2-block `defense + phage-genomic` model remains the baseline,
+   and the remaining calibration gap should be treated as unsolved rather than patched with soft leakage.
