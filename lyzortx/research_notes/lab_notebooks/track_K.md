@@ -133,3 +133,42 @@ TK02/TK03. On that fixture, GPB was neutral: ROC-AUC, top-3, and Brier deltas vs
 - GPB now fits cleanly after KlebPhaCol in the cumulative Track K sequence.
 - On the available fixture, GPB neither adds nor hurts the current best-so-far cohort, so there is no basis yet for
   changing the locked external-data chain.
+
+### 2026-03-24: TK05 Tier B cumulative lift measurement
+
+#### Executive summary
+
+Added the TK05 Track K runner to measure the confidence-weighted Tier B add-on on top of the current best-so-far
+cohort. A scratch rerun confirmed that both TI07-derived Tier B sources join cleanly and remain auditable through the
+TI08 training cohort path, but the lift was neutral on the validation fixture: ROC-AUC, top-3, and Brier deltas vs
+the previous best were all `0.0`. Because the measured source combination did not improve any metric, the baseline
+should stay internal-only for v1.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_k/steps/build_tier_b_lift_report.py` and wired it into
+  `lyzortx/pipeline/track_k/run_track_k.py`.
+- Extended the shared Track K lift helper so multi-source additions can carry both Tier B source systems forward with
+  per-source row counts.
+- Added regression coverage for the TK05 runner, the combined Tier B cohort path, and the Track K dispatch sequence.
+
+#### Findings
+
+- The scratch validation run emitted `lyzortx/generated_outputs/track_k/tk05_tier_b_lift_measurement/`-style outputs
+  under `.scratch/tk05_demo/out/` for the local fixture.
+- The previous best cohort remained `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb`.
+- The augmented cohort was `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb_plus_virus_host_db_plus_ncbi_virus_biosample`.
+- The Tier B rows joined cleanly:
+  - `virus_host_db`: `1` joined row
+  - `ncbi_virus_biosample`: `1` joined row
+- Metric deltas vs the previous best were all `0.0`:
+  - ROC-AUC `0.0`
+  - top-3 `0.0`
+  - Brier `0.0`
+- The TK05 lift assessment was `neutral`.
+
+#### Interpretation
+
+- Tier B is wired correctly as a cumulative add-on, but on this fixture it does not improve the model.
+- Since no source combination improved metrics here, there is no basis to promote a new locked config yet; internal-only
+  remains the safest v1 baseline until a real production rerun shows different behavior.

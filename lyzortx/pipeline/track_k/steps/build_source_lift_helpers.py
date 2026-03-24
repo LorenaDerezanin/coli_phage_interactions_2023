@@ -133,6 +133,20 @@ def load_source_training_rows(
     return augmented_rows, dict(counts)
 
 
+def load_source_training_rows_for_systems(
+    feature_rows: Sequence[Mapping[str, object]],
+    cohort_rows: Sequence[Mapping[str, str]],
+    source_systems: Sequence[str],
+) -> Tuple[List[Dict[str, object]], Dict[str, Dict[str, int]]]:
+    combined_rows: List[Dict[str, object]] = []
+    combined_counts: Dict[str, Dict[str, int]] = {}
+    for source_system in canonical_source_systems(source_systems):
+        rows, counts = load_source_training_rows(feature_rows, cohort_rows, source_system)
+        combined_rows.extend(rows)
+        combined_counts[source_system] = counts
+    return combined_rows, combined_counts
+
+
 def canonical_source_systems(source_systems: Sequence[str]) -> Tuple[str, ...]:
     ordered: List[str] = []
     for source_system in source_systems:
