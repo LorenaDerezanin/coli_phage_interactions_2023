@@ -331,6 +331,15 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - Stage files by explicit path (`git add <file> ...`). Do not use `git add .` or `git add -A` in CI, as these can
   accidentally stage untracked artifacts, build outputs, or temporary files present in the working tree.
 
+# Concurrent Sessions and Git State
+
+- The user may have multiple Claude Code sessions open on the same branch. Another session can commit and push changes
+  at any time — including changes to files you just edited.
+- The Edit tool succeeds silently when `old_string` already equals `new_string` (i.e., the file already contains the
+  intended content). This means your edit appearing to succeed does **not** prove the change was uncommitted.
+- Never claim changes are uncommitted without running `git status` first. If the working tree is clean, your edits were
+  either already committed by another session or were no-ops.
+
 # Commit Granularity
 
 - One kind of change per commit. Do not mix unrelated changes (e.g., feature + policy update + dead code cleanup).

@@ -357,9 +357,129 @@ The root issue is that the orchestrator uses issue state changes as its trigger.
 from a new dispatch signal. A more robust design would trigger on merged PRs rather than closed issues — PR merges are
 unambiguous completion signals and cannot be accidentally triggered by state changes on issues.
 
+### 2026-03-24: Claude PR review approvals are nondeterministic — formal reviews silently skipped
+
+#### Executive summary
+
+`claude-code-action@v1`'s built-in system prompt tells the agent "You CANNOT submit formal GitHub PR reviews" and "You
+CANNOT approve pull requests (for security reasons)." This directly contradicts our custom prompt that instructs Claude
+to use `mcp__github__submit_pending_pull_request_review`. The result is nondeterministic: sometimes the agent follows
+our instructions and submits a formal review (PRs #217, #220, #223), sometimes it follows the built-in restriction and
+writes its entire review into the sticky issue comment instead (PR #225). When this happens, the `claude-pr-review.yml`
+dispatch step sees no formal review and takes no action — no auto-merge, no Codex lifecycle dispatch.
+
+#### Root cause analysis
+
+The conflicting instructions are in `anthropics/claude-code-action` source file
+[`src/create-prompt/index.ts`](https://github.com/anthropics/claude-code-action/blob/v1/src/create-prompt/index.ts)
+(the `generateDefaultPrompt()` function, "CAPABILITIES AND LIMITATIONS" section):
+
+> ```
+> What You CANNOT Do:
+> - Submit formal GitHub PR reviews
+> - Approve pull requests (for security reasons)
+> ```
+
+These lines were present in the [initial commit `f66f337f`](https://github.com/anthropics/claude-code-action/commit/f66f337f)
+on 2025-05-19 and have never been modified. The action provides the MCP review tools in its `allowedTools` list, but the
+prompt-level "CANNOT" instruction causes the model to sometimes refuse to use them.
+
+Evidence from PR #225 logs:
+- `permission_denials_count: 3` — the agent attempted to use the review tools and was denied.
+- `No buffered inline comments` — the `classify_inline_comments` feature captured nothing.
+- `Unexpected review state: . No action taken.` — the dispatch step found zero formal reviews.
+
+The contradiction is a prompt-level issue, not a tool-permission issue. The MCP tools are available and allowed; the
+model simply refuses to call them when it prioritizes the "CANNOT" instruction over the custom prompt.
+
+#### Impact on downstream workflows
+
+When Claude fails to submit a formal review:
+1. `claude-pr-review.yml` dispatch step sees empty `LATEST_REVIEW` → takes the `else` branch → no auto-merge, no Codex
+   dispatch.
+2. `codex-pr-lifecycle.yml` (if manually triggered) queries `review_threads.py` which only reads formal review threads
+   → finds zero unresolved threads → labels PR `ready-for-human-review` and posts "Review passed with no issues" even
+   though actionable feedback exists in the issue comment.
+
+#### Workarounds investigated
+
+- `USE_SIMPLE_PROMPT=true` env var: switches to a simplified prompt that omits the CANNOT section. Stays in tag mode.
+  Risk: the simplified prompt may lose other useful scaffolding.
+- Stronger override language in custom prompt: fragile — sometimes works, sometimes doesn't, as PR #225 demonstrated.
+- Post-condition guard in the workflow: check whether a formal review was submitted after the action completes; if not,
+  fail loudly or submit a synthetic review via `gh api`. This is a band-aid.
+
+#### Long-term fix: LangGraph review orchestrator (PR #48)
+
+The correct fix is to wrap the review agent in a LangGraph orchestrator that can verify tool calls were actually made
+and loop the agent back with feedback if the formal review submission is missing. This moves the reliability guarantee
+from prompt-level persuasion (unreliable) to programmatic verification (deterministic). PR #48 contains the
+implementation plan.
+
+#### Immediate actions taken
+
+- Updated `/gh` skill (section 10) to document that PR feedback can appear in either review threads or issue comments,
+  and that both must be checked.
+- PR #225 was merged manually after human review confirmed Claude's comment-based review was accurate.
+
 #### Future: migrate orchestrator trigger from issues to PRs
 
 Revisit when: the current trigger model causes more incidents, or the orchestrator is being refactored for other
 reasons. The change would involve updating `codex-implement.yml` to trigger on `pull_request.closed` (with
 `merged == true`) instead of `issues.reopened`/`issues.opened`, and updating `sync_status_from_issues` to read from PR
 merge state instead of issue close state.
+
+#### Future: ticket dependency support in plan.yml with GitHub issue relationships
+
+Revisit when: the orchestrator is being refactored or task scheduling becomes more complex.
+
+Currently `plan.yml` tasks have a flat `status` field (pending, blocked, done) with no structured dependency information.
+Task ordering is implicit — humans and agents infer dependencies from track structure and naming conventions (e.g., TI05
+depends on TI04 because it follows in the track). This is fragile and prevents the orchestrator from automatically
+determining which tasks are unblocked when a predecessor completes.
+
+The improvement would add a `depends_on` field to each task in `plan.yml` listing predecessor task IDs. The orchestrator
+would use this to:
+1. Automatically set tasks to `blocked` when predecessors are not yet `done`.
+2. Unblock tasks when all predecessors complete.
+3. Reflect dependencies as GitHub issue relationships (sub-issues or "blocked by" links) so the dependency graph is
+   visible in the GitHub UI, not just in the YAML file.
+
+This would eliminate manual `blocked`/`pending` status management and make the dispatch order deterministic based on the
+dependency graph rather than YAML ordering.
+
+#### Future: implementation workflow should comment on the issue with a link to the action run
+
+Revisit when: improving observability of the orchestrator pipeline.
+
+Currently when `codex-implement.yml` picks up an issue and starts an implementation run, there is no trace on the issue
+itself. A human watching the issue has no way to know that work is in progress or where to find the logs — they have to
+go to the Actions tab and hunt for the right run.
+
+The workflow should post a comment on the dispatching issue at the start of the run, e.g.:
+"Implementation started — [View action run](https://github.com/OWNER/REPO/actions/runs/RUN_ID)."
+
+This is a single `gh issue comment` step early in the job, using `${{ github.run_id }}` to construct the URL. It gives
+immediate visibility into which issues are being worked on and provides a direct link to the logs for debugging when a
+run fails.
+
+#### Future: codex-pr-lifecycle should register as a check on the PR
+
+Revisit when: improving PR observability or refactoring the lifecycle workflow.
+
+`codex-pr-lifecycle.yml` is triggered via `workflow_dispatch`, which means it does not automatically appear in the PR's
+checks tab. A human looking at the PR sees only the CI checks from `push`/`pull_request`-triggered workflows — there is
+no indication that a Codex fix cycle is running, succeeded, or failed.
+
+The workflow should use the GitHub Checks API (`gh api repos/OWNER/REPO/check-runs`) to create a check run linked to
+the PR's head SHA at the start of the job, update it with progress, and mark it completed (success/failure) at the end.
+This makes the lifecycle run visible alongside CI checks in the PR's "Checks" tab, so reviewers can see at a glance
+whether the Codex fix cycle has completed.
+
+The check run should be created early in the job using:
+```bash
+gh api repos/OWNER/REPO/check-runs -f name="Codex PR Lifecycle" \
+  -f head_sha="$(git rev-parse HEAD)" -f status="in_progress" \
+  -f details_url="https://github.com/OWNER/REPO/actions/runs/${{ github.run_id }}"
+```
+And updated to `completed` with the appropriate conclusion at the end.

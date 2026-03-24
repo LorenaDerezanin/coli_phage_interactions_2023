@@ -204,6 +204,47 @@ and move on. Do not retry or treat it as a blocker unless you specifically need 
 **How to discover valid fields:** Run `gh pr view --json invalid` and read the error message — it lists all available
 fields.
 
+## 10. Reading PR feedback — review threads AND issue comments
+
+**The rule:** When collecting feedback on a PR, always read **both** formal review threads and issue comments.
+
+**Why:** `claude-code-action` sometimes posts review feedback as an issue comment (via its sticky comment mechanism)
+instead of submitting a formal PR review. This happens because the action's built-in system prompt tells the agent it
+"cannot submit formal GitHub PR reviews," which conflicts with custom prompts that instruct it to use the MCP review
+tools. The result is nondeterministic — sometimes the agent submits a formal review, sometimes it writes a detailed
+review into the sticky comment instead.
+
+If you only check one endpoint, you will miss feedback posted elsewhere.
+
+**GitHub has three separate comment endpoints on a PR:**
+
+```bash
+# 1. Review-level state (APPROVED, COMMENTED, etc.) — no inline details
+gh api repos/OWNER/REPO/pulls/123/reviews --jq '.[] | {user: .user.login, state: .state}'
+
+# 2. Inline review comments (file path, line number, threaded) — where Codex connector posts
+gh api repos/OWNER/REPO/pulls/123/comments --jq '.[] | {user: .user.login, path, line, body: .body[:200]}'
+
+# 3. Issue comments (general PR thread) — where claude-code-action sticky comments land
+gh api repos/OWNER/REPO/issues/123/comments --jq '.[] | {user: .user.login, body: .body[:200]}'
+```
+
+**When this matters most:**
+- `codex-pr-lifecycle.yml` currently only reads formal review threads via `review_threads.py`. If Claude posted feedback
+  as an issue comment, the lifecycle workflow sees zero unresolved threads and labels the PR `ready-for-human-review` —
+  even though actionable feedback exists in the comments.
+- The Codex connector (`chatgpt-codex-connector[bot]`) posts inline review comments at endpoint #2 — these are not
+  visible via endpoint #1 or #3.
+- Any script or workflow that checks "did Claude approve this PR?" must check all three endpoints.
+
+**Always check the `user` field.** Multiple actors post on the same PR — Codex connector, claude-code-action, and
+humans. Comments from different endpoints can be interleaved. Never assume all comments from one endpoint share the same
+author; always inspect `user.login` before attributing feedback.
+
+**Known limitation:** Issue comments lack structured metadata (file path, line number, resolution state) that review
+threads provide. Parsing actionable feedback from unstructured comment text is inherently less reliable. The long-term
+fix is to ensure the reviewing agent always submits formal reviews (see PR #48 for the LangGraph-based approach).
+
 ## Quick self-check before running
 
 Before executing any `gh` command that sets `--body`:
@@ -213,3 +254,5 @@ Before executing any `gh` command that sets `--body`:
 3. ✅ If this is an orchestrator task PR: title has `[ORCH][TASK_ID]`, label is set, `Closes` is present?
 4. ✅ If I'm an agent: have I identified myself in the body?
 5. ✅ If I just pushed commits: does the PR description still match the full branch content?
+6. ✅ When reading PR feedback: am I checking all three endpoints (reviews, inline comments, issue comments)?
+7. ✅ When interpreting PR comments: am I checking the `user` field to distinguish who posted each comment?
