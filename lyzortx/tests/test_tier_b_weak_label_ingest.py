@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 
 from lyzortx.pipeline.track_i.steps.build_tier_b_weak_label_ingest import (
+    _parse_entrez_esearch_ids,
     build_canonical_resolution_index,
     download_ti06_artifacts,
     normalize_ncbi_virus_rows,
@@ -119,6 +121,21 @@ def test_read_nuccore_xml_extracts_biosample_and_host_metadata(tmp_path) -> None
             "host_lineage": "",
         }
     ]
+
+
+def test_parse_entrez_esearch_ids_surfaces_error_message(tmp_path) -> None:
+    esearch_path = tmp_path / "esearch.json"
+    esearch_path.write_text(
+        json.dumps({"esearchresult": {"ERROR": "Quoted phrase not found", "idlist": []}}),
+        encoding="utf-8",
+    )
+
+    try:
+        _parse_entrez_esearch_ids(esearch_path)
+    except ValueError as error:
+        assert str(error) == f"Entrez esearch failed for {esearch_path}: Quoted phrase not found"
+    else:
+        raise AssertionError("Expected ValueError for Entrez esearch ERROR payload")
 
 
 def test_normalize_virus_host_db_rows_expands_refseq_accessions_and_preserves_provenance(tmp_path) -> None:
@@ -394,7 +411,7 @@ def test_download_ti06_artifacts_materializes_raw_inputs(tmp_path) -> None:
     assert report_rows[0]["host"] == "Escherichia coli"
 
 
-def test_main_emits_combined_weak_label_outputs(tmp_path, monkeypatch) -> None:
+def test_main_emits_combined_weak_label_outputs(tmp_path, monkeypatch, caplog) -> None:
     source_registry = tmp_path / "source_registry.csv"
     source_registry.write_text(
         "\n".join(
@@ -541,6 +558,7 @@ def test_main_emits_combined_weak_label_outputs(tmp_path, monkeypatch) -> None:
     )
 
     output_dir = tmp_path / "out"
+    caplog.set_level(logging.INFO)
     main(
         [
             "--source-registry-path",
@@ -573,3 +591,5 @@ def test_main_emits_combined_weak_label_outputs(tmp_path, monkeypatch) -> None:
 
     manifest = json.loads((output_dir / "ti06_weak_label_manifest.json").read_text(encoding="utf-8"))
     assert manifest["active_sources"] == ["virus_host_db", "ncbi_virus_biosample"]
+    assert "Starting TI06 Tier B weak-label ingest" in caplog.text
+    assert "Finished TI06 Tier B weak-label ingest with 4 combined rows" in caplog.text

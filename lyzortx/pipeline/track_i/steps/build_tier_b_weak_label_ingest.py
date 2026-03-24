@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import logging
+import shutil
 import time
 import urllib.parse
 import urllib.request
@@ -207,8 +208,8 @@ def _download_url_to_path(url: str, path: Path) -> None:
     ensure_directory(path.parent)
     request = urllib.request.Request(url, headers={"User-Agent": "Codex TI06 Tier B ingest/1.0"})
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            path.write_bytes(response.read())
+        with urllib.request.urlopen(request, timeout=120) as response, path.open("wb") as handle:
+            shutil.copyfileobj(response, handle)
     except Exception:
         if path.exists():
             path.unlink()
@@ -216,7 +217,7 @@ def _download_url_to_path(url: str, path: Path) -> None:
 
 
 def _build_entrez_url(endpoint: str, params: Mapping[str, Any]) -> str:
-    encoded = urllib.parse.urlencode({key: value for key, value in params.items() if value not in {"", None}})
+    encoded = urllib.parse.urlencode({key: value for key, value in params.items() if value is not None and value != ""})
     return f"{ENTREZ_BASE_URL}/{endpoint}?{encoded}"
 
 
@@ -311,6 +312,19 @@ def read_biosample_xml(path: Path) -> List[Dict[str, str]]:
 def _parse_entrez_esearch_ids(path: Path) -> List[str]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     result = payload.get("esearchresult", {})
+    error_message = str(result.get("ERROR", "")).strip()
+    if error_message:
+        raise ValueError(f"Entrez esearch failed for {path}: {error_message}")
+    error_list = result.get("ErrorList", {})
+    if isinstance(error_list, dict):
+        error_entries = [
+            str(value).strip()
+            for values in error_list.values()
+            for value in (values if isinstance(values, list) else [values])
+            if str(value).strip()
+        ]
+        if error_entries:
+            raise ValueError(f"Entrez esearch failed for {path}: {'; '.join(error_entries)}")
     id_list = result.get("idlist", [])
     if not isinstance(id_list, list):
         raise ValueError(f"Unexpected Entrez esearch payload shape in {path}")
@@ -382,7 +396,7 @@ def read_nuccore_xml(path: Path) -> List[Dict[str, str]]:
                 "taxid": _extract_taxid(gbseq, qualifier_values),
                 "virus_lineage": (gbseq.findtext("./GBSeq_taxonomy") or "").strip(),
                 "sample_type": _first_qualifier_value(qualifier_values, "isolation_source"),
-                "source_organism": _first_qualifier_value(qualifier_values, "lab_host"),
+                "source_organism": "",
                 "host_lineage": "",
             }
         )
@@ -886,6 +900,7 @@ def compute_summary_rows(rows: Sequence[Mapping[str, str]]) -> List[Dict[str, ob
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     ensure_directory(args.output_dir)
+    LOGGER.info("Starting TI06 Tier B weak-label ingest")
 
     registry_rows = load_source_registry(args.source_registry_path)
     missing_registry = [
@@ -989,6 +1004,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             },
         },
     )
+    LOGGER.info("Finished TI06 Tier B weak-label ingest with %d combined rows", len(merged_rows))
 
 
 if __name__ == "__main__":
