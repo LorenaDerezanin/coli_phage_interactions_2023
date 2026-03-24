@@ -368,7 +368,11 @@ def build_klebphacol_rows(records: Sequence[Mapping[str, Any]]) -> List[Dict[str
                         "global_response": response_name,
                         "datasource_response": response_name,
                         "source_datasource_id": media,
-                        "source_native_record_id": f"{phage_name}:{host_name}:{media}:{response_name}",
+                        "source_native_record_id": (
+                            f"{accession}:{phage_name}:{host_name}:{media}:{response_name}"
+                            if accession
+                            else f"{phage_name}:{host_name}:{media}:{response_name}"
+                        ),
                         "source_disagreement_flag": "0",
                         "source_uncertainty": uncertainty,
                         "source_strength_label": response_name,
@@ -380,10 +384,6 @@ def build_klebphacol_rows(records: Sequence[Mapping[str, Any]]) -> List[Dict[str
                         "source_response_code": response_name,
                     }
                 )
-                if accession:
-                    rows[-1]["source_native_record_id"] = (
-                        f"{accession}:{phage_name}:{host_name}:{media}:{response_name}"
-                    )
 
     if not rows:
         raise ValueError("KlebPhaCol ingest produced zero rows")
