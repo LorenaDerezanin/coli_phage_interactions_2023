@@ -144,6 +144,15 @@ def _measure_metrics(
     return scored_rows, holdout_metrics, top3
 
 
+def load_ti08_training_cohort_rows(path: Path) -> List[Dict[str, str]]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing TI08 training cohort artifact: {path}")
+    rows = read_csv_rows(path)
+    if not rows:
+        raise ValueError(f"TI08 training cohort is empty: {path}")
+    return rows
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
     logger.info("TK05 starting: measure Tier B lift against the best-so-far Track K cohort")
@@ -191,13 +200,19 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
         pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
-    cohort_rows = read_csv_rows(args.ti08_training_cohort_path) if args.ti08_training_cohort_path.exists() else []
+    cohort_rows = load_ti08_training_cohort_rows(args.ti08_training_cohort_path)
 
     current_source_rows, current_source_counts = load_source_training_rows_for_systems(
         merged_rows,
         cohort_rows,
         CURRENT_SOURCE_SYSTEMS,
     )
+    current_tier_b_rows = sum(int(counts.get("joined_rows", 0)) for counts in current_source_counts.values())
+    if current_tier_b_rows == 0:
+        raise ValueError(
+            "TI08 cohort contains no Tier B rows that join into the locked ST03 train split: "
+            f"{args.ti08_training_cohort_path}"
+        )
     source_rows_by_system: Dict[str, List[Dict[str, object]]] = {}
 
     previous_best_source_systems = load_previous_best_source_systems(args.tk04_manifest_path)
@@ -263,7 +278,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "arm": arm_name_for_source_systems(augmented_source_systems),
             "source_systems": source_systems_label(augmented_source_systems),
             "training_row_count": len(_trainable_rows(augmented_training_rows)),
-            "tier_b_row_count": len(current_source_rows),
+            "tier_b_row_count": current_tier_b_rows,
             "holdout_roc_auc": augmented_holdout_metrics["roc_auc"],
             "holdout_top3_hit_rate_all_strains": augmented_top3["top3_hit_rate_all_strains"],
             "holdout_brier_score": augmented_holdout_metrics["brier_score"],
@@ -389,7 +404,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     logger.info("- Delta ROC-AUC: %s", metric_deltas["delta_roc_auc"])
     logger.info("- Delta top-3: %s", metric_deltas["delta_top3_hit_rate_all_strains"])
     logger.info("- Delta Brier: %s", metric_deltas["delta_brier_score"])
-    logger.info("- Tier B rows joined: %s", len(current_source_rows))
+    logger.info("- Tier B rows joined: %s", current_tier_b_rows)
     logger.info("- Lift assessment: %s", lift_assessment)
 
 
