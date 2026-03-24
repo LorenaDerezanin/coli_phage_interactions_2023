@@ -100,3 +100,36 @@ previous best were all `0.0`.
 - KlebPhaCol now slots cleanly into the cumulative Track K sequence after BASEL.
 - On the available fixture, KlebPhaCol neither helps nor hurts the current best-so-far cohort, so it should be
   treated as neutral until a production rerun with the real Track I artifacts is available.
+
+### 2026-03-24: TK04 GPB cumulative lift measurement
+
+#### Executive summary
+
+Added the TK04 Track K runner to measure GPB lift on top of the current best-so-far cohort. The local Track I cohort
+artifact is still absent in this checkout, so the new path was validated on the same minimal fixture pattern used for
+TK02/TK03. On that fixture, GPB was neutral: ROC-AUC, top-3, and Brier deltas vs the previous best were all `0.0`.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_k/steps/build_gpb_lift_report.py` and wired it into
+  `lyzortx/pipeline/track_k/run_track_k.py`.
+- Extended the Track K runner so `--step all` now runs TK01 through TK04 in order.
+- Added regression coverage for the TK04 runner and the TK03-to-TK04 cohort handoff.
+
+#### Findings
+
+- On the validation fixture, TK04 carried forward `internal_plus_vhrdb_plus_basel_plus_klebphacol` as the
+  best-so-far cohort.
+- TK04 evaluated `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb`.
+- On the fixture, both arms scored ROC-AUC `0.5`, top-3 hit rate `1.0`, and Brier score `0.25`.
+- The measured deltas vs the previous best were all `0.0`:
+  - ROC-AUC `0.0`
+  - top-3 `0.0`
+  - Brier `0.0`
+- The TK04 lift assessment was `neutral`.
+
+#### Interpretation
+
+- GPB now fits cleanly after KlebPhaCol in the cumulative Track K sequence.
+- On the available fixture, GPB neither adds nor hurts the current best-so-far cohort, so there is no basis yet for
+  changing the locked external-data chain.
