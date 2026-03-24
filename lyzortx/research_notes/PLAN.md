@@ -248,7 +248,7 @@ graph LR
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error on the clean
     pipeline
   - The old label-leaked metrics must not appear in any output
-- [ ] **TG09** Fix LightGBM determinism and lock defense + phage_genomic as v1 winner. Model: `gpt-5.4-mini`.
+- [x] **TG09** Fix LightGBM determinism and lock defense + phage_genomic as v1 winner. Model: `gpt-5.4-mini`.
   - Add deterministic=True to make_lightgbm_estimator in train_v1_binary_classifier.py
   - Remove n_jobs=1 from make_lightgbm_estimator (deterministic=True handles thread safety, force_col_wise=True is
     already set)
