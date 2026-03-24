@@ -83,6 +83,51 @@ artifacts, writes the raw JSON payloads plus a normalized CSV under
 - This is the right level of implementation for TI04: it encodes source order, cumulative ablation accounting, and
   provenance hooks without pretending harmonization policy is already solved before TI05.
 
+### 2026-03-24: TI04 Download and ingest Tier A sources BASEL, KlebPhaCol, and GPB
+
+#### Executive summary
+
+TI04 now has a concrete download-and-ingest step under
+`lyzortx/pipeline/track_i/steps/build_tier_a_additional_source_ingests.py` that materializes three new Tier A CSVs
+under `lyzortx/generated_outputs/track_i/tier_a_ingest/`. A live run on 2026-03-24 produced 468 BASEL rows, 7,697
+KlebPhaCol rows, and 3,960 GPB rows, all with populated `source_system` provenance and failure-on-missing-data
+behavior. Two nominal source endpoints were broken in practice, so the implementation uses the live official artifacts
+that actually expose host-range data and records that fallback in the source registry.
+
+#### What changed
+
+- Added a dedicated TI04 step that downloads three raw artifacts into
+  `lyzortx/generated_outputs/track_i/tier_a_ingest/raw_ti04_downloads/`: the BASEL PLOS S1 workbook, the KlebPhaCol
+  `site-data.json` export, and the GPB Nature source-data workbook.
+- Normalization writes one pair table, summary CSV, and manifest JSON per source:
+  `ti04_basel_*`, `ti04_klebphacol_*`, and `ti04_gpb_*`.
+- Updated `lyzortx/pipeline/track_i/run_track_i.py` so `--step tier-a-ingest` now runs both TI03 and TI04 instead of
+  only the VHRdb ingest.
+- Refreshed `lyzortx/research_notes/external_data/source_registry.csv` to point at the live, machine-readable
+  artifacts that were verified on 2026-03-24.
+
+#### Findings
+
+- The PMC mirror for BASEL exposed a "Preparing to download" HTML gate instead of the workbook, but the canonical PLOS
+  supplementary download URL for S1 Data returned the real XLSX payload. The TI04 parser reads the qualitative host
+  range columns for the six enterobacterial strains directly from that workbook.
+- `https://klebphacol.com/` did not resolve on 2026-03-24. The live public host-range frontend at
+  `https://phage.klebphacol.soton.ac.uk/` loads `site-data.json`, which contains explicit per-phage lists of hosts
+  with lysis, no lysis, and undetermined lysis in LB and TSB media.
+- `https://phagebank.org/` returned a service-provider error on 2026-03-24. The corresponding Nature paper source-data
+  workbook still exposed the GPB host-range matrix on sheet `figure3abfh`, with response codes `0/1/2/3` representing
+  no infection, anoxic-only infection, oxic-only infection, and infection in both conditions.
+- The live run produced the following row counts and unique pair counts:
+  BASEL `468/468`, KlebPhaCol `7,697/3,848`, GPB `3,960/3,960` (rows/pairs). KlebPhaCol has more rows than unique
+  pairs because the same phage-host pair can appear in multiple media and with disagreement across media.
+
+#### Interpretation
+
+TI04 now satisfies the previously missing substance requirement for these Tier A sources: Track I downloads real public
+artifacts and emits non-empty ingest tables instead of relying on stale placeholders. The preserved assay-context fields
+also keep TI05/TI07 honest about source-specific disagreement and condition-specific host-range behavior instead of
+flattening those distinctions away during ingest.
+
 ### 2026-03-22: TI06 Tier B weak-label ingestion
 
 #### Executive summary

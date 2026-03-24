@@ -16,6 +16,7 @@ from lyzortx.pipeline.track_i.steps import (
     build_external_training_cohorts,
     build_incremental_lift_failure_analysis,
     build_strict_ablation_sequence,
+    build_tier_a_additional_source_ingests,
     build_tier_a_vhrdb_ingest,
     build_tier_b_weak_label_ingest,
 )
@@ -36,8 +37,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ],
         default="all",
         help=(
-            "Track I step to run. 'all' runs the implemented Tier A VHRdb ingest, weak-label ingest, confidence-tier, "
-            "cohort, strict-ablation, and lift-analysis steps."
+            "Track I step to run. 'all' runs the implemented Tier A VHRdb + TI04 ingest steps, weak-label ingest, "
+            "confidence-tier, cohort, strict-ablation, and lift-analysis steps."
         ),
     )
     return parser.parse_args(argv)
@@ -48,6 +49,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     if args.step in {"tier-a-ingest", "all"}:
         build_tier_a_vhrdb_ingest.main([])
+        build_tier_a_additional_source_ingests.main([])
     if args.step in {"weak-label-ingest", "all"}:
         build_tier_b_weak_label_ingest.main([])
     if args.step in {"external-confidence-tiers", "all"}:
