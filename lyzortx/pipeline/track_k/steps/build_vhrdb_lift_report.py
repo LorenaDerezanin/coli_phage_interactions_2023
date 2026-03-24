@@ -154,6 +154,15 @@ def _normalize_row(row: Mapping[str, str]) -> Dict[str, str]:
     return {key: (value.strip() if isinstance(value, str) else "") for key, value in row.items()}
 
 
+def load_ti08_training_cohort_rows(path: Path) -> List[Dict[str, str]]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing TI08 training cohort artifact: {path}")
+    rows = read_csv_rows(path)
+    if not rows:
+        raise ValueError(f"TI08 training cohort is empty: {path}")
+    return rows
+
+
 def load_vhrdb_training_rows(
     feature_rows: Sequence[Mapping[str, object]],
     cohort_rows: Sequence[Mapping[str, str]],
@@ -255,8 +264,15 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
         pair_feature_blocks=(track_e_rbp_rows, track_e_isolation_rows),
     )
-    cohort_rows = read_csv_rows(args.ti08_training_cohort_path) if args.ti08_training_cohort_path.exists() else []
+    cohort_rows = load_ti08_training_cohort_rows(args.ti08_training_cohort_path)
     vhrdb_rows, vhrdb_counts = load_vhrdb_training_rows(merged_rows, cohort_rows)
+    if int(vhrdb_counts.get("cohort_rows", 0)) == 0:
+        raise ValueError(f"TI08 cohort contains no VHRdb rows: {args.ti08_training_cohort_path}")
+    if int(vhrdb_counts.get("joined_rows", 0)) == 0:
+        raise ValueError(
+            "TI08 cohort contains no VHRdb rows that join into the locked ST03 train split: "
+            f"{args.ti08_training_cohort_path}"
+        )
 
     internal_training_rows = list(merged_rows)
     augmented_training_rows = list(merged_rows) + vhrdb_rows
@@ -332,14 +348,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         and metric_deltas["delta_brier_score"] >= -NEGLIGIBLE_DELTA_TOLERANCE
     )
 
-    if not cohort_rows:
-        lift_decision = "pending_external_artifact"
-    elif joined_vhrdb_rows == 0:
-        lift_decision = "no_joinable_vhrdb_rows"
-    elif lift_is_negative_or_negligible:
+    if lift_is_negative_or_negligible:
         lift_decision = "do_not_include_vhrdb"
     else:
         lift_decision = "keep_vhrdb_for_followup_arms"
+
+    lift_reason = (
+        "delta metrics were within the negligible tolerance"
+        if lift_decision == "do_not_include_vhrdb"
+        else "VHRdb improved at least one tracked metric without harming the others"
+    )
 
     summary_rows = [
         {
@@ -449,6 +467,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             },
             "vhrdb_counts": vhrdb_counts,
             "joined_vhrdb_rows": joined_vhrdb_rows,
+            "lift_reason": lift_reason,
             "baseline_metrics": {
                 "roc_auc": baseline_holdout_metrics["roc_auc"],
                 "top3_hit_rate_all_strains": baseline_top3["top3_hit_rate_all_strains"],
