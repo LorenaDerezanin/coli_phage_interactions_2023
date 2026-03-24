@@ -57,7 +57,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--tier-a-ingest-path",
         type=Path,
-        default=Path("lyzortx/generated_outputs/steel_thread_v0/intermediate/st08_tier_a_ingested_pairs.csv"),
+        default=Path("lyzortx/generated_outputs/track_i/tier_a_ingest/ti03_vhrdb_ingested_pairs.csv"),
     )
     parser.add_argument(
         "--tier-b-ingest-path",
