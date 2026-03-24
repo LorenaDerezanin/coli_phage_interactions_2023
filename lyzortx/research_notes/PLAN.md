@@ -344,7 +344,7 @@ graph LR
   - Document whether Tier B adds, hurts, or is neutral
   - If any source combination improved metrics, propose a new locked config; otherwise keep internal-only as the v1
     baseline
-- [ ] **TK06** Synthesize per-source lift results and lock the external data decision. Model: `gpt-5.4`.
+- [x] **TK06** Synthesize per-source lift results and lock the external data decision. Model: `gpt-5.4`.
   - Summarize TK01-TK05 results in a single comparison table (source, delta AUC, delta top-3, delta Brier vs
     internal-only baseline)
   - Identify the best-performing source combination (may be internal-only if nothing helped)
