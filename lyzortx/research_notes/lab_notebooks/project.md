@@ -742,3 +742,19 @@ are scientific (leakage, nondeterminism) not operational, and the pipeline is sm
 single machine) that the linear `run_track_g.py` / `run_track_j.py` runners are sufficient. Revisit when: (a) external
 data (Track I) is wired in and multiple data variants need training, (b) the pipeline grows beyond ~10 steps with
 nontrivial branching, or (c) cluster execution or robust checkpointing becomes necessary.
+
+### 2026-03-24: External-data decision locked for v1
+
+#### Summary
+
+Track K is now closed at the strategy level: the v1 model remains trained on internal data only. TK01 found no
+joinable VHRdb rows in the available TI08 artifact, and the fixture-based TK02-TK05 follow-up arms were all neutral on
+ROC-AUC, top-3 hit rate, and Brier score relative to the locked internal-only baseline.
+
+#### Decision
+
+- `lyzortx/pipeline/track_g/v1_feature_configuration.json` now records `external_data_lock_task_id: TK06`,
+  `locked_training_data_arm: internal_only`, and `locked_external_source_systems: []`.
+- No final-model retrain was performed for this task because the promotion condition was not met.
+- Future production reruns can still revisit the decision through TK06 once real Track I / Track K manifests exist, but
+  the current repo state does not justify changing the v1 release contract.

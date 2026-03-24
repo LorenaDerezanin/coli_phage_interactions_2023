@@ -2,6 +2,10 @@
   "task_id": "TG09",
   "source_lock_task_id": "TG05",
   "selection_policy": "Human-locked decision after reviewing TG07-TG08 instability: keep the 2-block defense + phage-genomic arm and exclude the pairwise block because 5 of 13 pairwise features are training-label-derived.",
+  "external_data_lock_task_id": "TK06",
+  "external_data_selection_policy": "Keep internal-only as the v1 training baseline unless a production Track K rerun shows a strictly non-harmful gain on the locked holdout. In the current repo state TK01 had no joinable VHRdb rows and TK02-TK05 were neutral fixture validations, so no external source earned promotion.",
+  "locked_training_data_arm": "internal_only",
+  "locked_external_source_systems": [],
   "winner_arm_id": "subset_defense__phage_genomic",
   "winner_label": "defense + phage-genomic",
   "winner_subset_blocks": [
