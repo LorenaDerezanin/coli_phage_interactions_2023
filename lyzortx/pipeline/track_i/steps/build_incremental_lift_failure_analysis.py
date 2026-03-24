@@ -37,6 +37,9 @@ REQUIRED_ABLATION_COLUMNS = (
     "new_pairs_vs_previous_arm",
     "cumulative_training_weight",
 )
+HELPED = "helped"
+HURT = "hurt"
+NEUTRAL = "neutral"
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -75,6 +78,14 @@ def _source_tier_key(row: Mapping[str, str]) -> Tuple[str, str]:
 
 def _source_tier_label(source_system: str, confidence_tier: str) -> str:
     return f"{source_system}:{confidence_tier or 'unknown'}"
+
+
+def _lift_direction(row_lift_vs_internal: int, pair_lift_vs_internal: int) -> str:
+    if row_lift_vs_internal > 0 or pair_lift_vs_internal > 0:
+        return HELPED
+    if row_lift_vs_internal < 0 or pair_lift_vs_internal < 0:
+        return HURT
+    return NEUTRAL
 
 
 def _failure_modes_for_row(row: Mapping[str, str]) -> List[str]:
@@ -164,6 +175,12 @@ def compute_source_tier_lift_rows(
     ablation_rows: Sequence[Mapping[str, str]],
 ) -> List[Dict[str, object]]:
     arm_rows = {row["arm"]: _normalize_row(row) for row in ablation_rows}
+    baseline_arm_row = arm_rows.get("internal_only")
+    if baseline_arm_row is None:
+        raise ValueError("Strict ablation summary is missing the internal_only baseline arm.")
+    baseline_row_count = int(baseline_arm_row["cumulative_row_count"])
+    baseline_pair_count = int(baseline_arm_row["cumulative_pair_count"])
+    baseline_training_weight = float(baseline_arm_row["cumulative_training_weight"] or 0.0)
     grouped_rows = _group_rows(
         [row for row in cohort_rows if row.get("source_system", "") != "internal"],
         _source_tier_key,
@@ -194,6 +211,17 @@ def compute_source_tier_lift_rows(
                 "included_row_count": included_row_count,
                 "excluded_row_count": excluded_row_count,
                 "row_exclusion_rate": safe_round(excluded_row_count / row_count if row_count else 0.0),
+                "row_lift_vs_internal": (
+                    int(arm_summary["cumulative_row_count"]) - baseline_row_count if arm_summary else None
+                ),
+                "pair_lift_vs_internal": (
+                    int(arm_summary["cumulative_pair_count"]) - baseline_pair_count if arm_summary else None
+                ),
+                "training_weight_lift_vs_internal": (
+                    safe_round(float(arm_summary["cumulative_training_weight"]) - baseline_training_weight)
+                    if arm_summary
+                    else None
+                ),
                 "arm_cumulative_row_count": int(arm_summary["cumulative_row_count"]) if arm_summary else None,
                 "arm_cumulative_pair_count": int(arm_summary["cumulative_pair_count"]) if arm_summary else None,
                 "arm_new_rows_vs_previous_arm": int(arm_summary["new_rows_vs_previous_arm"]) if arm_summary else None,
@@ -207,6 +235,14 @@ def compute_source_tier_lift_rows(
                     len(pair_ids) / int(arm_summary["cumulative_pair_count"])
                     if arm_summary and int(arm_summary["cumulative_pair_count"])
                     else 0.0
+                ),
+                "lift_direction": (
+                    _lift_direction(
+                        int(arm_summary["cumulative_row_count"]) - baseline_row_count,
+                        int(arm_summary["cumulative_pair_count"]) - baseline_pair_count,
+                    )
+                    if arm_summary
+                    else NEUTRAL
                 ),
             }
         )
@@ -247,7 +283,12 @@ def compute_summary_manifest(
     external_rows = [row for row in cohort_rows if row.get("source_system", "") != "internal"]
     failure_mode_totals = Counter()
     for row in failure_rows:
-        failure_mode_totals[str(row["failure_mode"])] += int(row["row_count"])
+        failure_mode = str(row["failure_mode"])
+        if failure_mode != "clean":
+            failure_mode_totals[failure_mode] += int(row["row_count"])
+    source_verdict_totals = Counter()
+    for row in source_tier_rows:
+        source_verdict_totals[str(row.get("lift_direction", NEUTRAL))] += int(row["row_count"])
     return {
         "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
         "step_name": "build_incremental_lift_failure_analysis",
@@ -273,8 +314,13 @@ def compute_summary_manifest(
         "source_tier_summary": {
             "slice_count": len(source_tier_rows),
             "max_row_count": max((int(row["row_count"]) for row in source_tier_rows), default=0),
+            "lift_direction_counts": dict(sorted(source_verdict_totals.items())),
         },
         "failure_modes": dict(sorted(failure_mode_totals.items())),
+        "clean_row_count": next(
+            (int(row["row_count"]) for row in failure_rows if str(row["failure_mode"]) == "clean"),
+            0,
+        ),
     }
 
 
