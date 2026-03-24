@@ -83,7 +83,7 @@ similar past runs:
 ```bash
 gh run list --workflow=codex-implement.yml --limit=10 \
   --json displayTitle,startedAt,updatedAt \
-  --jq '.[] | "\(.displayTitle) \(.updatedAt)"'
+  --jq '.[] | "\(.displayTitle) started=\(.startedAt) ended=\(.updatedAt)"'
 ```
 
 ### Match model tier to task complexity
