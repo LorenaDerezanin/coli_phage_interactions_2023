@@ -472,15 +472,17 @@ tracks:
       implemented_in: lyzortx/research_notes/external_data/source_registry.csv
     - id: TI03
       title: Download and ingest VHRdb pairs with source-fidelity fields
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into
-        lyzortx/generated_outputs/track_i/tier_a_ingest/
+      - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
       - Output CSV contains >0 real bacteria-phage pairs
-      - Each row preserves raw global_response and datasource_response without case folding
-      - source_datasource_id, source_disagreement_flag, and source_native_record_id populated
-      - Raise FileNotFoundError or request error on download failure, never silently skip
+      - Each row preserves raw global_response and datasource_response without case
+        folding
+      - source_datasource_id, source_disagreement_flag, and source_native_record_id
+        populated
+      - Raise FileNotFoundError or request error on download failure, never silently
+        skip
     - id: TI04
       title: 'Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB'
       status: pending
@@ -488,8 +490,7 @@ tracks:
       acceptance_criteria:
       - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/,
         GPB from https://phagebank.org/
-      - Each source produces an ingested CSV with >0 rows under
-        lyzortx/generated_outputs/track_i/tier_a_ingest/
+      - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
       - All rows carry source_system provenance
       - Raise on download failure, do not silently produce empty output
     - id: TI05
@@ -498,7 +499,8 @@ tracks:
       model: gpt-5.4
       acceptance_criteria:
       - Map external bacteria and phage names to canonical IDs via Track A alias resolution
-      - Report how many external pairs overlap with the internal 404x96 panel vs are novel
+      - Report how many external pairs overlap with the internal 404x96 panel vs are
+        novel
       - Output a harmonized pair table with >0 rows joinable on pair_id
       - Raise ValueError if harmonization produces zero joinable rows
     - id: TI06
@@ -516,7 +518,8 @@ tracks:
       status: pending
       model: gpt-5.4
       acceptance_criteria:
-      - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output rows
+      - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output
+        rows
       - Output CSV contains >0 rows with confidence_tier and training_weight columns
       - Report tier distribution (count per tier per source) in lab notebook
       - Raise ValueError if any source produces zero tiered rows
@@ -525,13 +528,14 @@ tracks:
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external rows
+      - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external
+        rows
       - Output must contain >0 external rows — fail if all external data was excluded
       - External rows carry source_system, confidence_tier, and training_weight
       - Internal-only baseline arm must remain extractable from the same file
     - id: TI09
-      title: 'Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB
-        -> +Tier B'
+      title: 'Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol ->
+        +GPB -> +Tier B'
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
@@ -540,7 +544,8 @@ tracks:
       - Report AUC, top-3, Brier for each arm on the ST03 holdout
       - Raise ValueError if any arm trains on zero external rows
     - id: TI10
-      title: Track incremental lift and failure modes by datasource and confidence tier
+      title: Track incremental lift and failure modes by datasource and confidence
+        tier
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:

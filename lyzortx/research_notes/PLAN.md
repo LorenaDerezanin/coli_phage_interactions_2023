@@ -302,7 +302,7 @@ graph LR
       `lyzortx/research_notes/LITERATURE.md`.
 - [x] **TI02** Build source_registry.csv for all external sources. Implemented in
       `lyzortx/research_notes/external_data/source_registry.csv`.
-- [ ] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `gpt-5.4`.
+- [x] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `gpt-5.4`.
   - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
   - Output CSV contains >0 real bacteria-phage pairs
   - Each row preserves raw global_response and datasource_response without case folding
