@@ -128,6 +128,67 @@ artifacts and emits non-empty ingest tables instead of relying on stale placehol
 also keep TI05/TI07 honest about source-specific disagreement and condition-specific host-range behavior instead of
 flattening those distinctions away during ingest.
 
+### 2026-03-24: TI05 Harmonize Tier A datasets to the internal canonical schema
+
+#### Executive summary
+
+TI05 now adds a real harmonization boundary under
+`lyzortx/pipeline/track_i/steps/build_tier_a_harmonized_pairs.py` instead of letting later Track I steps consume raw
+external names directly. The step resolves Tier A bacteria and phage names through the Track A canonical ID maps plus
+alias tables, preserves the raw source names for provenance, and marks each external row as either
+`overlap_internal_panel` or `novel_to_internal_panel`. A live run on 2026-03-24 produced 68,797 harmonized rows, with
+26,029 rows / pairs joinable on canonical internal `pair_id` values and 42,768 rows (38,919 unique pairs) novel to
+the current Track A panel.
+
+#### What changed
+
+- Added a dedicated TI05 step that reads all four TI03/TI04 Tier A outputs, requires the Track A ID-map and alias-map
+  artifacts, and fails loudly if any prerequisite file is missing.
+- Harmonization now rewrites `pair_id`, `bacteria`, and `phage` onto canonical internal names when Track A can resolve
+  them, while preserving the original source fields as `source_pair_id_raw`, `source_bacteria_raw`, and
+  `source_phage_raw`.
+- The step emits `bacteria_id`, `phage_id`, detailed resolution-status fields, and explicit panel-membership flags so
+  downstream confidence-tier and cohort steps can distinguish joinable rows from novel or unresolved rows without
+  guessing.
+- Updated `lyzortx/pipeline/track_i/run_track_i.py` so Track I can run TI05 directly via
+  `--step tier-a-harmonization` and so `--step all` executes TI05 between Tier A ingest and later external-label
+  processing.
+- Updated TI07's default Tier A input path to
+  `lyzortx/generated_outputs/track_i/tier_a_harmonization/ti05_tier_a_harmonized_pairs.csv` so later Track I stages
+  consume the harmonized canonical schema instead of bypassing TI05 and reading only raw VHRdb output.
+
+#### Findings
+
+- The live TI05 run completed successfully after regenerating Track A and Tier A prerequisites locally. It wrote
+  `lyzortx/generated_outputs/track_i/tier_a_harmonization/ti05_tier_a_harmonized_pairs.csv`,
+  `ti05_tier_a_harmonization_summary.csv`, and `ti05_tier_a_harmonization_manifest.json`.
+- Current overlap vs novelty on the active Track A panel:
+  - total harmonized rows: `68,797`
+  - total unique external `pair_id` values after harmonization: `64,948`
+  - joinable rows / pairs on canonical internal `pair_id`: `26,029 / 26,029`
+  - novel rows / pairs outside the internal panel: `42,768 / 38,919`
+- Source-by-source overlap is currently highly asymmetric:
+  - VHRdb: `26,029` overlap rows / pairs and `30,643` novel rows / pairs
+  - BASEL: `468` novel rows / pairs, `0` overlap
+  - KlebPhaCol: `7,697` novel rows across `3,848` unique pairs, `0` overlap
+  - GPB: `3,960` novel rows / pairs, `0` overlap
+- Resolution-status breakdown:
+  - `26,029` rows fully resolved on both entities
+  - `12,410` rows resolved only on bacteria
+  - `219` rows resolved only on phage
+  - `30,139` rows unresolved on both entities
+- The current Track A build in this checkout produced `405` canonical bacteria and `96` canonical phages. TI05
+  therefore computes panel overlap from the actual Track A artifacts rather than hard-coding the older `404x96`
+  denominator text from the plan.
+
+#### Interpretation
+
+TI05 makes the external-data seam honest. Later Track I steps no longer have to pretend that raw external strings are
+already part of the internal schema: they now receive canonical IDs when resolution exists and explicit novelty flags
+when it does not. The live counts also show that Tier A integration is mostly a novelty problem rather than a simple
+rename problem, because only VHRdb currently overlaps the active internal panel while BASEL, KlebPhaCol, and GPB are
+entirely outside the present Track A alias space.
+
 ### 2026-03-22: TI06 Tier B weak-label ingestion
 
 #### Executive summary
