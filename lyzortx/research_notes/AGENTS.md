@@ -31,6 +31,10 @@ or restructured, and why). Include source citations (URLs + quotes) for any clai
 - Subsequent sections typically include: problem statement, design decisions, interpretation, and next steps.
 - Entries should reference generated output paths and script paths so findings are traceable.
 - Do not list files changed — that is what git is for.
+- **"Future:" notes** — When an agent discovers something worth revisiting later (a deferred cleanup, a tool adoption
+  trigger, a feature idea), add a section to `project.md` with a heading starting with `#### Future:`. Include the
+  trigger condition ("revisit when...") so the `/replan` skill can evaluate whether the condition is now met. These notes
+  are seeds for future plan tasks — they should be concrete enough to act on, not vague aspirations.
 
 ## Other contents
 

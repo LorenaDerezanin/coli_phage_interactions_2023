@@ -146,6 +146,31 @@ After restructuring the plan, make sure everything is consistent:
        print(f"{t.task_id}: model={t.model}, criteria={len(t.acceptance_criteria)} items")
    ```
 
+## Phase 6: Suggest next steps
+
+If the plan has no pending tasks, or the remaining tasks don't address the most important open questions, propose next
+steps. Don't just report "the plan is done" — the user invoked `/replan` because they want direction.
+
+### Harvest future notes
+
+Scan `lyzortx/research_notes/lab_notebooks/project.md` for entries marked "Future:" or containing phrases like
+"consider", "revisit when", "follow-up", "defer". These are seeds planted by previous sessions that may now be
+actionable. Evaluate each:
+- Is the trigger condition met? (e.g., "revisit when external data is wired in")
+- Is it still relevant given what's changed since it was written?
+- Should it become a new plan task, or be deleted as obsolete?
+
+### Propose new tasks
+
+When proposing next steps:
+1. Frame each as a concrete task with a clear acceptance criterion, not a vague direction
+2. Justify why it's the highest-value next step given the current state
+3. Size it (mini vs full model, estimated CI time)
+4. Identify dependencies — can it start now, or does something need to happen first?
+
+Do not suggest presentation or visualization tasks (dashboards, demos, HTML reports). Agents produce bad visual
+artifacts. Presentation work is human-driven.
+
 ## Checklist
 
 Use this as a quick reference when starting a replan:
@@ -164,3 +189,4 @@ Use this as a quick reference when starting a replan:
 - [ ] Re-render PLAN.md and run tests
 - [ ] Write lab notebook + project notebook entries with citations
 - [ ] Verify `load_pending_tasks` succeeds on the updated plan
+- [ ] If no pending tasks remain: harvest "Future:" notes from project.md and propose next steps
