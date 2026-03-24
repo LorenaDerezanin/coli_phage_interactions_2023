@@ -111,9 +111,10 @@ and Brier deltas vs the previous best were all `0.0`.
 
 #### Executive summary
 
-Added the TK04 Track K runner to measure GPB lift on top of the current best-so-far cohort. The local Track I cohort
-artifact is still absent in this checkout, so the new path was validated on the same minimal fixture pattern used for
-TK02/TK03. On that fixture, GPB was neutral: ROC-AUC, top-3, and Brier deltas vs the previous best were all `0.0`.
+Added the TK04 Track K runner to measure GPB lift on top of the current best-so-far cohort. TK04 now fails closed if
+the TI08 cohort is missing or empty, and it also fails if no GPB rows survive the ST03 join. The new path was
+validated on the same minimal fixture pattern used for TK02/TK03. On that fixture, GPB was neutral: ROC-AUC, top-3,
+and Brier deltas vs the previous best were all `0.0`.
 
 #### What was implemented
 
@@ -127,6 +128,8 @@ TK02/TK03. On that fixture, GPB was neutral: ROC-AUC, top-3, and Brier deltas vs
 - On the validation fixture, TK04 carried forward `internal_plus_vhrdb_plus_basel_plus_klebphacol` as the
   best-so-far cohort.
 - TK04 evaluated `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb`.
+- The GPB cohort checks now fail on missing or empty TI08 input, and they fail if the GPB rows do not join into the
+  locked ST03 train split.
 - On the fixture, both arms scored ROC-AUC `0.5`, top-3 hit rate `1.0`, and Brier score `0.25`.
 - The measured deltas vs the previous best were all `0.0`:
   - ROC-AUC `0.0`
