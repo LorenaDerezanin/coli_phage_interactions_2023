@@ -125,21 +125,12 @@ def load_locked_v1_feature_config(path: Path) -> Dict[str, object]:
         return json.load(handle)
 
 
-def load_tg01_best_params(path: Path) -> Optional[Dict[str, object]]:
+def load_tg01_best_params(path: Path) -> Dict[str, object]:
     if not path.exists():
-        return None
+        raise FileNotFoundError(f"Missing locked TG01 summary artifact: {path}")
     with path.open("r", encoding="utf-8") as handle:
         summary = json.load(handle)
     return dict(summary["lightgbm"]["best_params"])
-
-
-def default_tg01_best_params() -> Dict[str, object]:
-    return {
-        "n_estimators": 150,
-        "learning_rate": 0.03,
-        "num_leaves": 31,
-        "min_child_samples": 10,
-    }
 
 
 def build_locked_feature_space(feature_space: FeatureSpace, locked_subset_blocks: Sequence[str]) -> FeatureSpace:
@@ -243,6 +234,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     locked_config = load_locked_v1_feature_config(args.v1_feature_config_path)
     locked_subset_blocks = tuple(str(block) for block in locked_config["winner_subset_blocks"])
     tg01_best_params = load_tg01_best_params(args.tg01_summary_path)
+    baseline_params_source = "tg01_summary_lock"
 
     track_d_feature_columns = _deduplicate(
         [column for column in track_d_genome_rows[0].keys() if column != "phage"]
@@ -272,12 +264,6 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         row for row in merged_rows if row["split_holdout"] == TRAIN_SPLIT and str(row["is_hard_trainable"]) == "1"
     ]
     augmented_trainable_rows = internal_trainable_rows + vhrdb_rows
-
-    if tg01_best_params is None:
-        baseline_params_source = "computed_from_internal_only"
-        tg01_best_params = default_tg01_best_params()
-    else:
-        baseline_params_source = "tg01_summary_lock"
 
     estimator_factory = lambda params, seed_offset: make_lightgbm_estimator(  # noqa: E731
         params,

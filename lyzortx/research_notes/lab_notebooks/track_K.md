@@ -1,5 +1,13 @@
 ### 2026-03-24: TK01 VHRdb lift measurement
 
+#### Executive summary
+
+Added the TK01 Track K runner to measure VHRdb lift against the locked v1 baseline and record the result in a
+manifest plus summary tables under `lyzortx/generated_outputs/track_k/tk01_vhrdb_lift_measurement/`. The first local
+run found no joinable TI08 VHRdb rows, so the lift deltas were all `0.0` and the decision remained
+`pending_external_artifact`. The step now requires the locked TG01 summary artifact rather than silently substituting
+defaults, so the baseline comparison stays comparable to the Track G lock.
+
 #### What was implemented
 
 - Added a new Track K runner at `lyzortx/pipeline/track_k/run_track_k.py` and a TK01 lift-measurement step at
