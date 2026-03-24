@@ -319,7 +319,7 @@ graph LR
 - **Guiding Principle:** Incrementally add Track I external sources to the v1 model and measure per-source lift. Each
   task adds exactly one source, retrains, and reports metrics against the internal-only baseline. This isolates the
   contribution of each external dataset.
-- [ ] **TK01** Add VHRdb to training and measure lift vs internal-only baseline. Model: `gpt-5.4-mini`.
+- [x] **TK01** Add VHRdb to training and measure lift vs internal-only baseline. Model: `gpt-5.4-mini`.
   - Connect TI08 VHRdb cohort rows to Track G training pipeline
   - Retrain with internal + VHRdb on the locked ST03 holdout split
   - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline

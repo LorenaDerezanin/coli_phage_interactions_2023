@@ -519,7 +519,7 @@ tracks:
     tasks:
     - id: TK01
       title: Add VHRdb to training and measure lift vs internal-only baseline
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Connect TI08 VHRdb cohort rows to Track G training pipeline
