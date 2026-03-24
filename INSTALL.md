@@ -1,13 +1,13 @@
 # Getting Started
 
-This repository uses `micromamba` to manage environments. You can install it using the official docs
-[here](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html).
+This repository uses `conda` (via [Miniconda](https://docs.anaconda.com/miniconda/)) to manage environments.
 
-Then create and activate the `micromamba` environment using the following commands:
+Install Miniconda using the official instructions for your platform. If `conda activate` is not available yet,
+run `conda init <your-shell>` once and restart your shell. Then create and activate the environment:
 
 ```bash
-micromamba create -f environment.yml
-micromamba activate phage_env
+conda env create -f environment.yml
+conda activate phage_env
 ```
 
 To enable running Jupyter notebooks using this environment, create a dedicated Jupyter kernel for it:
@@ -19,7 +19,8 @@ python -m ipykernel install --user --name phage_env --display-name phage_env
 Now when you run notebooks in `jupyter lab`, make sure to select the `phage_env` kernel.
 
 ## Optional: automatic env activation with direnv
-This repository includes a tracked `.envrc` that activates `phage_env` when you enter the repository directory.
+This repository includes a tracked `.envrc` that runs `conda activate phage_env` when you enter the repository
+directory.
 
 1. Install `direnv` and enable its shell integration.
 2. For `zsh`, add the hook to `~/.zshrc` if needed:
