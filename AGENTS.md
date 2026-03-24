@@ -61,7 +61,7 @@
 
 # Agent Scratch Space
 
-- Write to `.scratch/` any files you would normally write to `/tmp/` so sandbox permissions are not hmm needed.
+- Write to `.scratch/` any files you would normally write to `/tmp/` so sandbox permissions are not needed.
 - NEVER use /tmp, unless .scratch won't work for some reason.
 - Treat `.scratch/` as non-source workspace; it is ignored by git and should not contain canonical project content.
 
