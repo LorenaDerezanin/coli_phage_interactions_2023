@@ -262,7 +262,7 @@ graph LR
   - Re-run Track F v0-vs-v1 evaluation against the 2-block model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error
   - Verify v1_feature_configuration.json is unchanged after the Track J run (sweep no longer regenerates it)
-- [ ] **TG11** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
+- [x] **TG11** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
   - Pairwise soft leakage context: TE02 defense_evasion_* features (4) and TE01
     receptor_variant_seen_in_training_positives (1) are training-label-derived via collaborative filtering. Do not
     include these in candidate features.

@@ -403,7 +403,7 @@ tracks:
         no longer regenerates it)
     - id: TG11
       title: Investigate non-leaky features that close the calibration gap
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - 'Pairwise soft leakage context: TE02 defense_evasion_* features (4) and TE01
