@@ -195,3 +195,25 @@ summary, and a failure-mode summary.
 TI10 is a reporting layer, not a new modeling policy. It makes the progression from TI08 to TI09 auditable at the arm
 level and gives the notebook a concrete place to document where lift comes from and which datasource/tier combinations
 still fail for reasons that are mechanistic rather than model-specific.
+
+### 2026-03-24: TI03-TI10 invalidated — no external data was ever downloaded
+
+#### Executive summary
+
+Post-merge review found that no Track I step downloads external data. The entire TI03-TI10 chain reads from local paths
+that were never populated. All tasks ran on zero rows and reported zero results. TI03-TI10 have been set back to pending
+with acceptance criteria requiring actual data downloads and >0 output rows.
+
+#### Evidence
+
+- `grep` for `download|fetch|request|urllib|http` across `lyzortx/pipeline/track_i/steps/` returned zero hits
+- `lyzortx/generated_outputs/track_i/` does not exist on disk
+- Running `python -m lyzortx.pipeline.track_i.run_track_i --step all` fails with
+  `ValueError: No Tier B input files were found.` — the only step that fails fast correctly
+- TI08 cohort artifact (consumed by Track K) was never produced
+
+#### What changed
+
+- TI03-TI06: now require downloading real data from source URLs
+- TI07-TI10: now require >0 real external rows at each stage
+- TI03-TI07 upgraded to gpt-5.4 for external service integration

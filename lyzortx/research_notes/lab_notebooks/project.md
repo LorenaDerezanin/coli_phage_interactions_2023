@@ -758,3 +758,42 @@ ROC-AUC, top-3 hit rate, and Brier score relative to the locked internal-only ba
 - No final-model retrain was performed for this task because the promotion condition was not met.
 - Future production reruns can still revisit the decision through TK06 once real Track I / Track K manifests exist, but
   the current repo state does not justify changing the v1 release contract.
+
+### 2026-03-24: Track I and Track K completed on empty data — all reopened
+
+#### Executive summary
+
+Post-merge review of TK01-TK05 revealed that all Track K tasks reported zero deltas because Track I never downloaded
+any external data. The entire TI03-TI10 chain built plumbing that reads from nonexistent files. Track K inherited the
+emptiness and reported "neutral" lift based on zero external rows. TK06 (PR #217) was rejected because it would have
+locked an "internal-only" decision based on zero evidence. All 14 tasks (TI03-TI10, TK01-TK06) have been set back to
+pending with acceptance criteria that require >0 real rows at every stage.
+
+#### Root cause
+
+1. **No Track I step downloads external data.** The code reads from local paths that were never populated. No HTTP
+   requests, no API calls, no `urllib` — the download step was never implemented.
+2. **Track K silently tolerated missing TI08 output.** `build_vhrdb_lift_report.py` line 258:
+   `cohort_rows = read_csv_rows(...) if path.exists() else []` — silent fallback to empty list.
+3. **Agents marked tasks done despite zero results.** Lab notebooks openly acknowledged "0 joinable rows" and
+   "validated on a minimal fixture" but tasks were closed as completed anyway.
+4. **CI starts with no generated outputs.** The agents ran in GitHub Actions where `lyzortx/generated_outputs/` does not
+   exist. Without fail-fast on missing data, every step that depends on generated outputs silently produces nothing.
+
+#### What changed
+
+- New AGENTS.md rules: fail-fast on missing data, substance over plumbing, CI environment note
+- TI03-TI06 now require downloading real data from source URLs and producing >0 rows
+- TI07-TI10 now require >0 real external rows at each processing stage
+- TK01-TK05 now require >0 external rows in the augmented training set
+- TI03-TI07 upgraded to gpt-5.4 (external service integration needs research judgment)
+- TK06 (PR #217) rejected — cannot synthesize results that don't exist
+
+#### Lessons
+
+- **Zero results is not a finding, it's a failure.** A task that runs to completion on empty inputs and reports zero
+  deltas has failed its acceptance criteria, even if the code ran without error.
+- **Silent fallback is not graceful degradation.** Code that returns empty results when inputs are missing is hiding a
+  bug, not handling an edge case. Raise on missing data.
+- **Acceptance criteria must include data volume assertions.** ">0 rows" is the minimum bar. Without it, an agent can
+  build correct plumbing that processes nothing and call it done.

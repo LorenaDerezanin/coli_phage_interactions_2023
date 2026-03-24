@@ -61,7 +61,7 @@
 
 # Agent Scratch Space
 
-- Write to `.scratch/` any files you would normally write to `/tmp/` so sandbox permissions are not needed.
+- Write to `.scratch/` any files you would normally write to `/tmp/` so sandbox permissions are not hmm needed.
 - NEVER use /tmp, unless .scratch won't work for some reason.
 - Treat `.scratch/` as non-source workspace; it is ignored by git and should not contain canonical project content.
 
@@ -102,6 +102,9 @@
   restack, or `gt restack` to rebase the current stack on its trunk.
 - A `check-rebase-on-main` pre-push hook enforces this automatically. It blocks `git push` if the branch does not
   include `origin/main`'s tip. Activate it once per clone with: `pre-commit install --hook-type pre-push`.
+- **"stale info" on push:** If `git push --force-with-lease` fails with "stale info", the most likely cause is that the
+  PR merged while you were working and the remote branch was deleted. Run `git fetch --all --prune` — if the branch is
+  gone and the commit appears on main, start a new branch from main and reapply your changes.
 
 # PR Description Maintenance
 
@@ -123,6 +126,9 @@
   close it as **"not planned"** (`gh issue close --reason "not planned"`). The orchestrator ignores not-planned closures.
 - Never close an orchestrator-task issue with a regular close unless the task is genuinely finished and its acceptance
   criteria are met.
+- **Never reopen a closed orchestrator issue.** Reopening triggers the implementation workflow immediately. To invalidate
+  a completed task, change its close reason to "not planned" via the API without reopening:
+  `gh api repos/OWNER/REPO/issues/NUMBER -X PATCH -f state=closed -f state_reason=not_planned`.
 
 # Codex Review Connector
 
