@@ -505,7 +505,7 @@ tracks:
       - Raise ValueError if harmonization produces zero joinable rows
     - id: TI06
       title: 'Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata'
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Download Virus-Host DB associations from https://www.genome.jp/virushostdb/

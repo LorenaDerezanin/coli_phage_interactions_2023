@@ -318,7 +318,7 @@ graph LR
   - Report how many external pairs overlap with the internal 404x96 panel vs are novel
   - Output a harmonized pair table with >0 rows joinable on pair_id
   - Raise ValueError if harmonization produces zero joinable rows
-- [ ] **TI06** Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata. Model: `gpt-5.4`.
+- [x] **TI06** Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata. Model: `gpt-5.4`.
   - Download Virus-Host DB associations from https://www.genome.jp/virushostdb/
   - Download NCBI Virus/BioSample metadata via Entrez API
   - Each source produces an ingested CSV with >0 rows
