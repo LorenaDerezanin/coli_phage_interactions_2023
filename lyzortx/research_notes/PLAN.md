@@ -329,7 +329,7 @@ graph LR
   - Output CSV contains >0 rows with confidence_tier and training_weight columns
   - Report tier distribution (count per tier per source) in lab notebook
   - Raise ValueError if any source produces zero tiered rows
-- [ ] **TI08** Build training cohorts from internal + external rows. Model: `gpt-5.4-mini`.
+- [x] **TI08** Build training cohorts from internal + external rows. Model: `gpt-5.4-mini`.
   - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external rows
   - Output must contain >0 external rows — fail if all external data was excluded
   - External rows carry source_system, confidence_tier, and training_weight

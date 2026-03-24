@@ -525,7 +525,7 @@ tracks:
       - Raise ValueError if any source produces zero tiered rows
     - id: TI08
       title: Build training cohorts from internal + external rows
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external
