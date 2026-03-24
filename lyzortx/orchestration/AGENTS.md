@@ -31,3 +31,11 @@
 - If a later task changes the codebase in ways that make a done task's criteria look stale (e.g., deleting features that
   a done task created), that is expected. The done task records what was true when it was completed; the later task
   records what changed. Git history tells the full story.
+
+# Orchestration Robustness vs Fail-Fast
+
+- The root AGENTS.md fail-fast rule applies to pipeline code. Orchestration code is different: the orchestrator should
+  be robust against transient failures (GitHub API errors, network timeouts, race conditions) via retries.
+- But robustness means retrying on transient errors, not tolerating missing data or silently skipping work. If the
+  orchestrator cannot dispatch a task because its inputs are missing, that is an error to surface, not a condition to
+  swallow.

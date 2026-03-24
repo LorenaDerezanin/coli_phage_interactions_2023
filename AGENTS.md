@@ -24,6 +24,22 @@
 - **How to detect CI:** Check for the `CI` environment variable (`[ -n "$CI" ]`). If set, skip micromamba activation.
 - **Git identity in CI:** Git `user.name` and `user.email` are pre-configured before the agent runs. Do not attempt to
   set them yourself.
+- **Generated outputs do not exist in CI.** This repo runs in GitHub Actions (Codex). A fresh checkout contains only
+  source code and committed data — no `lyzortx/generated_outputs/` artifacts. If a task depends on generated outputs
+  from a previous track, it must either regenerate them (by running the prerequisite steps) or fail loudly. It must
+  **never** silently produce empty results, zero-row outputs, or "pending" placeholders and call itself done.
+
+# Fail-Fast on Missing Data
+
+- Pipeline and analysis code must raise an exception when required input data is missing. Never silently fall back to
+  empty DataFrames, zero rows, or default values when the real data is absent — that is not graceful, it is a bug that
+  hides failure.
+- If a pipeline step's input file does not exist, raise `FileNotFoundError`. If a join produces zero rows when rows are
+  expected, raise `ValueError`. If an external API returns no data, raise an error.
+- A task that runs to completion on empty inputs and reports zero deltas has **failed**, not succeeded. The acceptance
+  criteria were not met. Do not mark it done.
+- This applies equally to tests: a test that passes because it operates on empty fixtures instead of real data is not
+  testing anything.
 
 # Dependency Selection Policy
 
@@ -126,6 +142,18 @@
   overcomplicated, or low-value rather than blindly implementing every suggestion.
 - Before raising an issue, check existing review threads and replies on the PR. Do not re-raise concerns that have
   already been addressed with a code fix or explicitly pushed back on with a reasoned explanation.
+
+## Substance over plumbing
+
+Before approving a PR or marking a task done, ask: **did this task produce real results, or just scaffolding?**
+
+- Code that builds a pipeline step but produces zero rows, zero deltas, or "pending" placeholders has not met its
+  acceptance criteria. It built plumbing, not substance.
+- A notebook entry that says "0 joinable rows" or "validated on a minimal fixture" is documenting a failure, not a
+  finding. The task is not done.
+- If the implementing agent cannot produce real results (e.g., required data doesn't exist in CI), the agent should
+  fail — no PR, no commit. Leave the issue open so the orchestrator knows the task is still pending. Do not produce
+  a PR with empty results and call it done.
 
 ## Review focus areas
 
