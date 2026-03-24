@@ -64,6 +64,8 @@ def test_build_integrated_training_rows_assigns_planned_training_arms() -> None:
     assert by_source["internal"]["effective_training_weight"] == 1.0
     assert by_source["vhrdb"]["first_training_arm"] == "plus_vhrdb"
     assert by_source["vhrdb"]["integration_status"] == "external_enhancer"
+    assert by_source["vhrdb"]["confidence_tier"] == "high"
+    assert by_source["vhrdb"]["training_weight"] == "1.0"
     assert by_source["virus_host_db"]["first_training_arm"] == "excluded"
     assert by_source["virus_host_db"]["first_training_arm_index"] == -1
     assert by_source["virus_host_db"]["integration_status"] == "excluded_by_confidence"
@@ -99,8 +101,9 @@ def test_compute_training_arm_summary_keeps_internal_only_runnable() -> None:
     assert all(row["cumulative_pair_count"] == 2 for row in summary)
 
 
-def test_main_emits_internal_only_outputs_when_external_confidence_is_missing(tmp_path) -> None:
+def test_main_emits_internal_and_external_outputs(tmp_path) -> None:
     internal_pair_table = tmp_path / "st02_pair_table.csv"
+    external_confidence = tmp_path / "ti07_external_label_confidence_pairs.csv"
     _write_csv(
         internal_pair_table,
         ["pair_id", "bacteria", "phage", "label_hard_any_lysis", "label_strict_confidence_tier"],
@@ -114,6 +117,39 @@ def test_main_emits_internal_only_outputs_when_external_confidence_is_missing(tm
             }
         ],
     )
+    _write_csv(
+        external_confidence,
+        [
+            "pair_id",
+            "bacteria",
+            "phage",
+            "label_hard_any_lysis",
+            "label_strict_confidence_tier",
+            "source_system",
+            "confidence_tier",
+            "training_weight",
+            "external_label_confidence_tier",
+            "external_label_confidence_score",
+            "external_label_training_weight",
+            "external_label_include_in_training",
+        ],
+        [
+            {
+                "pair_id": "b2__p2",
+                "bacteria": "b2",
+                "phage": "p2",
+                "label_hard_any_lysis": "1",
+                "label_strict_confidence_tier": "A",
+                "source_system": "vhrdb",
+                "confidence_tier": "high",
+                "training_weight": "1.0",
+                "external_label_confidence_tier": "high",
+                "external_label_confidence_score": "3",
+                "external_label_training_weight": "1.0",
+                "external_label_include_in_training": "1",
+            }
+        ],
+    )
     output_dir = tmp_path / "out"
 
     main(
@@ -121,7 +157,7 @@ def test_main_emits_internal_only_outputs_when_external_confidence_is_missing(tm
             "--internal-pair-table-path",
             str(internal_pair_table),
             "--external-confidence-path",
-            str(tmp_path / "missing.csv"),
+            str(external_confidence),
             "--output-dir",
             str(output_dir),
         ]
@@ -129,13 +165,87 @@ def test_main_emits_internal_only_outputs_when_external_confidence_is_missing(tm
 
     with (output_dir / "ti08_training_cohort_rows.csv").open("r", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    assert len(rows) == 1
-    assert rows[0]["source_system"] == "internal"
-    assert rows[0]["first_training_arm"] == "internal_only"
+    assert len(rows) == 2
+    internal_row = next(row for row in rows if row["source_system"] == "internal")
+    external_row = next(row for row in rows if row["source_system"] == "vhrdb")
+    assert internal_row["first_training_arm"] == "internal_only"
+    assert external_row["first_training_arm"] == "plus_vhrdb"
+    assert external_row["confidence_tier"] == "high"
+    assert external_row["training_weight"] == "1.0"
+    assert external_row["external_label_confidence_tier"] == "high"
+    assert external_row["external_label_training_weight"] == "1.0"
 
     manifest = json.loads((output_dir / "ti08_training_cohort_manifest.json").read_text(encoding="utf-8"))
     assert manifest["step_name"] == "build_external_training_cohorts"
-    assert manifest["external_confidence_input_present"] is False
+    assert manifest["external_confidence_input_present"] is True
+
+
+def test_main_raises_when_all_external_rows_are_excluded(tmp_path) -> None:
+    internal_pair_table = tmp_path / "st02_pair_table.csv"
+    external_confidence = tmp_path / "ti07_external_label_confidence_pairs.csv"
+    _write_csv(
+        internal_pair_table,
+        ["pair_id", "bacteria", "phage", "label_hard_any_lysis", "label_strict_confidence_tier"],
+        [
+            {
+                "pair_id": "b1__p1",
+                "bacteria": "b1",
+                "phage": "p1",
+                "label_hard_any_lysis": "1",
+                "label_strict_confidence_tier": "A",
+            }
+        ],
+    )
+    _write_csv(
+        external_confidence,
+        [
+            "pair_id",
+            "bacteria",
+            "phage",
+            "label_hard_any_lysis",
+            "label_strict_confidence_tier",
+            "source_system",
+            "confidence_tier",
+            "training_weight",
+            "external_label_confidence_tier",
+            "external_label_confidence_score",
+            "external_label_training_weight",
+            "external_label_include_in_training",
+        ],
+        [
+            {
+                "pair_id": "b2__p2",
+                "bacteria": "b2",
+                "phage": "p2",
+                "label_hard_any_lysis": "1",
+                "label_strict_confidence_tier": "A",
+                "source_system": "vhrdb",
+                "confidence_tier": "high",
+                "training_weight": "1.0",
+                "external_label_confidence_tier": "high",
+                "external_label_confidence_score": "3",
+                "external_label_training_weight": "1.0",
+                "external_label_include_in_training": "0",
+            }
+        ],
+    )
+    output_dir = tmp_path / "out"
+
+    try:
+        main(
+            [
+                "--internal-pair-table-path",
+                str(internal_pair_table),
+                "--external-confidence-path",
+                str(external_confidence),
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+    except ValueError as exc:
+        assert "requires >0 external rows" in str(exc)
+    else:
+        raise AssertionError("TI08 should fail when every external row is excluded")
 
 
 def test_run_track_i_dispatches_ti08_step(monkeypatch) -> None:
