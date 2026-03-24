@@ -172,3 +172,51 @@ should stay internal-only for v1.
 - Tier B is wired correctly as a cumulative add-on, but on this fixture it does not improve the model.
 - Since no source combination improved metrics here, there is no basis to promote a new locked config yet; internal-only
   remains the safest v1 baseline until a real production rerun shows different behavior.
+
+### 2026-03-24: TK06 External-data decision lock
+
+#### Executive summary
+
+Added a TK06 synthesis step that reads the completed TK01-TK05 manifests, verifies they were produced from the same
+locked feature contract and core inputs, and emits one comparison table against the internal-only baseline. On the
+fresh local rerun in this checkout, every evaluated external arm was exactly neutral: ROC-AUC, top-3 hit rate, and
+Brier score all stayed unchanged vs internal-only, so the decision remained to keep v1 internal-only and leave
+`lyzortx/pipeline/track_g/v1_feature_configuration.json` unchanged.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_k/steps/build_external_data_decision.py`.
+- Updated `lyzortx/pipeline/track_k/run_track_k.py` so `--step all` now runs TK01 through TK06 in order.
+- Added TK06 regression coverage for the neutral-decision path, the external-lock path, manifest comparability checks,
+  and runner dispatch.
+
+#### Findings
+
+- The live Track K rerun emitted `lyzortx/generated_outputs/track_k/tk06_external_data_decision/` outputs for this
+  checkout.
+- Internal-only baseline holdout metrics were:
+  - ROC-AUC `0.837324`
+  - top-3 hit rate `0.923077`
+  - Brier score `0.158121`
+- Comparison vs the internal-only baseline:
+
+| Source | Evaluated arm | Delta AUC | Delta top-3 | Delta Brier |
+| --- | --- | ---: | ---: | ---: |
+| VHRdb | `internal_plus_vhrdb` | `0.0` | `0.0` | `0.0` |
+| BASEL | `internal_plus_basel` | `0.0` | `0.0` | `0.0` |
+| KlebPhaCol | `internal_plus_klebphacol` | `0.0` | `0.0` | `0.0` |
+| GPB | `internal_plus_gpb` | `0.0` | `0.0` | `0.0` |
+| Tier B (`virus_host_db` + `ncbi_virus_biosample`) | `internal_plus_virus_host_db_plus_ncbi_virus_biosample` | `0.0` | `0.0` | `0.0` |
+
+- Best-performing source combination: `internal_only`.
+- No external arm earned inclusion, so `lyzortx/pipeline/track_g/v1_feature_configuration.json` was not changed and no
+  external-data final-model retrain was triggered.
+
+#### Interpretation
+
+- The external-data decision is now locked for this repository state: internal-only remains the v1 baseline.
+- The limiting factor is not hidden negative lift; it is the absence of any measurable positive lift in the available
+  Track K rerun. With no improvement on any primary metric, changing the locked v1 training contract would add
+  complexity without evidence.
+- If a future rerun materializes joinable external cohort rows and produces an additive TK06 comparison row, the new
+  synthesis step can promote that source combination and write the updated lock deterministically.
