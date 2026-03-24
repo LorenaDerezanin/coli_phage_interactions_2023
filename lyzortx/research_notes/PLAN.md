@@ -338,7 +338,7 @@ graph LR
   - Add GPB rows to the best-so-far cohort
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether GPB adds, hurts, or is neutral
-- [ ] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
+- [x] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
   - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
   - Retrain and report AUC, top-3, Brier delta vs previous best
   - Document whether Tier B adds, hurts, or is neutral
