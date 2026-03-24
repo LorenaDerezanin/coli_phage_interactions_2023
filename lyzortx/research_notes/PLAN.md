@@ -308,7 +308,7 @@ graph LR
   - Each row preserves raw global_response and datasource_response without case folding
   - source_datasource_id, source_disagreement_flag, and source_native_record_id populated
   - Raise FileNotFoundError or request error on download failure, never silently skip
-- [ ] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `gpt-5.4`.
+- [x] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `gpt-5.4`.
   - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/, GPB from https://phagebank.org/
   - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
   - All rows carry source_system provenance

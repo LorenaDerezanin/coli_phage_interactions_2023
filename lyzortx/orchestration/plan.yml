@@ -485,7 +485,7 @@ tracks:
         skip
     - id: TI04
       title: 'Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB'
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/,
