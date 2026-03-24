@@ -797,3 +797,46 @@ pending with acceptance criteria that require >0 real rows at every stage.
   bug, not handling an edge case. Raise on missing data.
 - **Acceptance criteria must include data volume assertions.** ">0 rows" is the minimum bar. Without it, an agent can
   build correct plumbing that processes nothing and call it done.
+
+### 2026-03-24: V2 plan restructure — external data dead end, mechanistic features forward
+
+#### Executive summary
+
+Deep analysis of Track I and Track K revealed that external data integration is a dead end with the current pipeline:
+only VHRdb overlaps with the internal 404×96 panel (23,885 pairs), and that's the paper's own data uploaded to VHRdb by
+the original authors (datasource 257). BASEL, KlebPhaCol, GPB, Virus-Host DB, and NCBI all have zero strain overlap.
+Track K was deleted. Track I was trimmed to download-only (TI01-TI06). A new Track L (Mechanistic Phage Features)
+replaces the deleted label-derived pairwise features with annotation-based features from Pharokka. A label policy fix
+(TA11) captures the +3.1pp top-3 improvement from downweighting borderline `matrix_score=0` noise positives.
+
+#### Key findings from VHRdb analysis
+
+1. **VHRdb overlap is circular.** The 23,885 overlapping pairs are the paper's own experiment (datasource 257: "Host
+   range of the 96 coliphages from the Antonina Guelin collection on the 403 natural isolates of Escherichia from the
+   Bertrand"). VHRdb compressed the paper's 0-4 score to 0-2 for upload.
+2. **Perfect agreement on matrix scores 1-4.** Zero off-diagonal entries in the cross-tabulation. VHRdb's 3-level
+   scale is a lossless compression of the 0-4 scale for non-zero scores.
+3. **1,737 disagreements are all `matrix_score=0, label=1`.** These are pairs where 1-3 replicates out of 8-9 showed
+   lysis (noise), the matrix aggregated to 0, but the "any lysis" label policy called them positive. VHRdb correctly
+   reports "No infection" for all of them.
+4. **No other VHRdb datasource shares our phages.** Only datasource 153 (3 LF82 phages on ECOR) has any panel phage
+   overlap — 3 out of 96 phages, across 73 ECOR strains with no panel overlap.
+
+#### What changed in the plan
+
+- **Deleted Track K** — all code, tests, plan entries. Archived notebook to `archive_v1/track_K.md`.
+- **Trimmed Track I** to TI01-TI06 (download infrastructure). Deleted TI07-TI10 code (confidence tiers, training
+  cohorts, ablations, lift analysis) — these depended on external data being trainable.
+- **Added Track L** (Mechanistic Phage Features) — TL01-TL06: set up bioinformatics env, annotate phages with
+  Pharokka, build mechanistic RBP-receptor and defense-evasion features, retrain, validate on external strains.
+- **Added TA11** (label policy fix) — downweight `matrix_score=0` noise positives based on the VHRdb finding.
+- **Track E kept as-is** — Track G depends on it; Track L will eventually supersede it.
+
+#### Pharokka POC results (local, 2026-03-24)
+
+- Pharokka 1.9.1 on LF82_P8: 276 CDS annotated in 2m 43s
+- 29 tail genes (including long tail fiber proximal/distal subunits, baseplate components)
+- 7 lysis genes (holin, spanins, lysis inhibitors)
+- 1 anti-restriction nuclease
+- 140 hypothetical proteins (51% unannotated — typical for phage genomes)
+- Extrapolation: ~1 hour for all 97 phages at 4 threads

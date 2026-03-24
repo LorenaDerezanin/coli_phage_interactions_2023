@@ -540,3 +540,51 @@ requirements.
   instead of a partially reconstructed `pip install -r requirements.txt` subset.
 - Avoids depending on reconstructed env prefixes or manual `PATH` injection; the workflows only assume the `conda`
   command is available on the pinned runner image.
+
+### 2026-03-24: V2 plan restructure — CI environment change for bioinformatics tools
+
+#### Executive summary
+
+The v2 plan adds Track L (Mechanistic Phage Features) which requires bioinformatics tools not installable via pip:
+Pharokka (phage annotation), MMseqs2, tRNAscan-SE, MinCED, ARAGORN, mash, and potentially PADLOC (anti-defense
+annotation). These tools are available via conda/bioconda. The ubuntu-24.04 GitHub Actions runner image has Miniconda
+26.1.1 preinstalled at `/usr/share/miniconda` (accessible via `$CONDA`), which the current CI workflows don't use.
+
+Source: [Ubuntu 24.04 Runner Image README](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md)
+
+#### What needs to change (manual, not orchestrated)
+
+1. **Add `environment.yml`** for bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn, mash, dnaapler).
+   Keep `requirements.txt` for pip dependencies. The two are complementary — conda for C/bioinformatics tools, pip for
+   Python packages.
+
+2. **Update `codex-implement.yml`** to activate miniconda and install from `environment.yml` before running pip. The
+   Codex sandbox needs the bio tools available for Track L tasks. Pattern:
+   ```yaml
+   - name: Set up Miniconda
+     run: |
+       eval "$($CONDA/bin/conda shell.bash hook)"
+       conda install -y -c conda-forge -c bioconda -n base --file environment.yml
+       conda activate base
+   ```
+
+3. **Update `AGENTS.md` Environment Policy** to document the conda + pip dual setup and when each is used.
+
+4. **Update local dev setup** in `INSTALL.md` — the micromamba environment needs the same bioconda packages added.
+
+5. **Pharokka databases (~656MB)** need to be either downloaded in CI per run or cached. GitHub Actions cache would
+   avoid re-downloading on every run. Alternatively, pre-download into a shared artifact.
+
+#### Why manual, not orchestrated
+
+This is a CI infrastructure change that affects all workflows. A broken environment.yml or conda activation step would
+block every subsequent orchestrator task. It should be tested locally and in a dedicated test PR before any Track L
+tasks are dispatched.
+
+#### POC results (local, 2026-03-24)
+
+- Pharokka 1.9.1 installed via pip, bioconda deps via micromamba
+- Pharokka databases: 656MB, downloaded in ~66s
+- Single phage annotation (LF82_P8): 2m 43s, 276 CDS annotated
+- Produced: 29 tail genes, 7 lysis genes, 1 anti-restriction nuclease, 140 hypothetical proteins
+- Extrapolation for 97 phages: ~4-5 hours sequential, ~1 hour at 4 threads

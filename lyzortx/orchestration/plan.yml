@@ -115,6 +115,20 @@ tracks:
       title: Add scripts that regenerate all derived labels from raw data in one command
       status: done
       implemented_in: lyzortx/pipeline/track_a/run_track_a.py
+    - id: TA11
+      title: Fix label policy for borderline matrix_score=0 pairs
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Identify the 2557 pairs where aux_matrix_score_0_to_4=0 but label_hard_any_lysis=1
+        (single-replicate noise positives)
+      - Add a label_v3 policy that sets label_hard_any_lysis=0 for these pairs, or add
+        a training weight that downweights them
+      - Retrain the locked v1 model with the corrected labels and report AUC, top-3,
+        Brier delta
+      - VHRdb analysis showed +3.1pp top-3 from downweighting these pairs, so expect
+        a similar improvement
+      - Document the label policy change in the Track A lab notebook
   B:
     name: Exploratory Analysis and Signal Discovery
     description: Profile interactions, identify hard-to-lyse strains, rescuer phages,
@@ -453,10 +467,11 @@ tracks:
       - Output format suitable for clinician or CDMO operator review
       - Report covers all holdout strains
   I:
-    name: External Data and Literature Integration
-    description: Tier A supervised and Tier B weak-label ingestion with source-fidelity,
-      ablations, and lift tracking. Track K consumes Track I outputs for per-source
-      lift measurement.
+    name: External Data Download and Ingestion
+    description: Download and ingest external phage-host interaction data from public
+      sources. TI07-TI10 (confidence tiers, training cohorts, ablations, lift analysis)
+      were deleted — external data has zero overlap with the internal panel for training.
+      See v1 archive for historical Track K lift measurement results.
     stage: 1
     depends_on:
     - A
@@ -475,7 +490,8 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
+      - Download VHRdb data from https://viralhostrangedb.pasteur.cloud/api/ into
+        lyzortx/generated_outputs/track_i/tier_a_ingest/
       - Output CSV contains >0 real bacteria-phage pairs
       - Each row preserves raw global_response and datasource_response without case
         folding
@@ -488,9 +504,10 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/,
-        GPB from https://phagebank.org/
-      - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
+      - Download BASEL from publication supplement, KlebPhaCol from
+        https://phage.klebphacol.soton.ac.uk/, GPB from Nature source data
+      - Each source produces an ingested CSV with >0 rows under
+        lyzortx/generated_outputs/track_i/tier_a_ingest/
       - All rows carry source_system provenance
       - Raise on download failure, do not silently produce empty output
     - id: TI05
@@ -498,7 +515,8 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Map external bacteria and phage names to canonical IDs via Track A alias resolution
+      - Map external bacteria and phage names to canonical IDs via Track A alias
+        resolution
       - Report how many external pairs overlap with the internal 404x96 panel vs are
         novel
       - Output a harmonized pair table with >0 rows joinable on pair_id
@@ -513,123 +531,85 @@ tracks:
       - Each source produces an ingested CSV with >0 rows
       - BioSample host_disease and isolation_host fields parsed from XML attributes
       - Raise on empty API responses or download failures
-    - id: TI07
-      title: Assign confidence tiers to all ingested external labels
-      status: done
-      model: gpt-5.4
-      acceptance_criteria:
-      - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output
-        rows
-      - Output CSV contains >0 rows with confidence_tier and training_weight columns
-      - Report tier distribution (count per tier per source) in lab notebook
-      - Raise ValueError if any source produces zero tiered rows
-    - id: TI08
-      title: Build training cohorts from internal + external rows
-      status: done
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external
-        rows
-      - Output must contain >0 external rows — fail if all external data was excluded
-      - External rows carry source_system, confidence_tier, and training_weight
-      - Internal-only baseline arm must remain extractable from the same file
-    - id: TI09
-      title: 'Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol ->
-        +GPB -> +Tier B'
-      status: done
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - Retrain the locked v1 model for each cumulative source addition
-      - Each arm must train on >0 external rows from the added source
-      - Report AUC, top-3, Brier for each arm on the ST03 holdout
-      - Raise ValueError if any arm trains on zero external rows
-    - id: TI10
-      title: Track incremental lift and failure modes by datasource and confidence
-        tier
-      status: done
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - Produce a summary table showing per-source lift deltas from TI09
-      - Identify failure modes with real row counts >0
-      - Report which sources helped, hurt, or were neutral based on actual metrics
-  K:
-    name: External Data Lift Measurement
-    description: Incrementally add Track I external sources to the v1 model and measure
-      per-source lift. Each task adds exactly one source, retrains, and reports metrics
-      against the internal-only baseline. This isolates the contribution of each external
-      dataset.
-    stage: 2
+  L:
+    name: Mechanistic Phage Features
+    description: Replace deleted label-derived pairwise features (Track E) with
+      annotation-based mechanistic features from phage genomes. Use Pharokka for
+      functional annotation, then build RBP-receptor and defense-evasion compatibility
+      features from genome annotations rather than training label statistics.
+    stage: 1
     depends_on:
-    - I
-    - G
+    - C
+    - D
     tasks:
-    - id: TK01
-      title: Add VHRdb to training and measure lift vs internal-only baseline
-      status: done
+    - id: TL01
+      title: Set up bioinformatics environment with conda and verify Pharokka runs
+      status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - TI08 cohort must contain >0 VHRdb rows — fail if missing or empty
-      - Retrain with internal + VHRdb on the locked ST03 holdout split
-      - Augmented training set must contain >0 VHRdb rows after join
-      - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline
-      - If lift is negative or negligible, document why and do not include VHRdb in
-        subsequent arms
-    - id: TK02
-      title: Add BASEL to training and measure cumulative lift
-      status: done
+      - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn,
+        mash, dnaapler) to environment.yml
+      - Update codex-implement.yml to activate miniconda from $CONDA and install from
+        environment.yml before pip install
+      - Verify pharokka --version succeeds in CI
+      - Verify pharokka.py runs on one test phage FNA in CI (download databases +
+        annotate data/genomics/phages/FNA/LF82_P8.fna)
+      - Update AGENTS.md Environment Policy to document the conda + pip dual setup
+      - Update INSTALL.md to use canonical conda commands (conda create, conda activate)
+        that work with both miniconda and micromamba
+    - id: TL02
+      title: Annotate all 97 phage genomes with Pharokka
+      status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - TI08 cohort must contain >0 BASEL rows — fail if missing or empty
-      - Add BASEL rows to the best-so-far cohort
-      - Augmented training set must contain >0 BASEL rows after join
-      - Retrain and report AUC, top-3, Brier delta vs previous best
-      - Document whether BASEL adds, hurts, or is neutral
-    - id: TK03
-      title: Add KlebPhaCol to training and measure cumulative lift
-      status: done
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - TI08 cohort must contain >0 KlebPhaCol rows — fail if missing or empty
-      - Add KlebPhaCol rows to the best-so-far cohort
-      - Augmented training set must contain >0 KlebPhaCol rows after join
-      - Retrain and report AUC, top-3, Brier delta vs previous best
-      - Document whether KlebPhaCol adds, hurts, or is neutral
-    - id: TK04
-      title: Add GPB to training and measure cumulative lift
-      status: done
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - TI08 cohort must contain >0 GPB rows — fail if missing or empty
-      - Add GPB rows to the best-so-far cohort
-      - Augmented training set must contain >0 GPB rows after join
-      - Retrain and report AUC, top-3, Brier delta vs previous best
-      - Document whether GPB adds, hurts, or is neutral
-    - id: TK05
-      title: Add Tier B weak labels and measure cumulative lift
-      status: done
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - TI08 cohort must contain >0 Tier B rows — fail if missing or empty
-      - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
-      - Augmented training set must contain >0 Tier B rows after join
-      - Retrain and report AUC, top-3, Brier delta vs previous best
-      - Document whether Tier B adds, hurts, or is neutral
-      - If any source combination improved metrics, propose a new locked config; otherwise
-        keep internal-only as the v1 baseline
-    - id: TK06
-      title: Synthesize per-source lift results and lock the external data decision
-      status: done
+      - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
+      - Store annotations under lyzortx/generated_outputs/track_l/pharokka_annotations/
+      - Parse the CDS functional annotations into a per-phage summary table with
+        counts by PHROGs category (tail, lysis, defense, etc.)
+      - Extract per-phage RBP gene list with functional family annotations
+      - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
+      - All 97 phages must produce >0 annotated CDS
+    - id: TL03
+      title: Build mechanistic RBP-receptor compatibility features from annotations
+      status: pending
       model: gpt-5.4
       acceptance_criteria:
-      - Summarize TK01-TK05 results in a single comparison table (source, delta AUC,
-        delta top-3, delta Brier vs internal-only baseline)
-      - Identify the best-performing source combination (may be internal-only if nothing
-        helped)
-      - If external data earned inclusion, update v1_feature_configuration.json with
-        the new locked config and retrain the final model
-      - If no external source improved metrics, document the finding and confirm internal-only
-        remains the v1 baseline
-      - Write a project notebook entry with the final decision and rationale
+      - For each phage-host pair, compute whether the phage has annotated RBPs that
+        target receptor classes present on the host (using Track C OMP receptor data)
+      - Features must be derived from genome annotations only, not from training labels
+      - Output CSV joinable on bacteria+phage pair
+      - Compare against the existing RBP_list.csv curated annotations as a sanity check
+    - id: TL04
+      title: Build mechanistic defense-evasion features from annotations
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - For each phage-host pair, compute whether the phage encodes anti-defense genes
+        that counter the host defense systems (using Track C defense data)
+      - Features must be derived from Pharokka anti-defense annotations, not from
+        training label collaborative filtering
+      - Output CSV joinable on bacteria+phage pair
+    - id: TL05
+      title: Retrain v1 model with mechanistic pairwise features and measure lift
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Add TL03+TL04 features to the locked defense + phage_genomic baseline
+      - Retrain with TG01 hyperparameters on the ST03 holdout split
+      - Report AUC, top-3, Brier delta vs the current locked baseline
+      - If mechanistic features improve metrics, propose a new locked v1 config
+      - Run SHAP on the new model to verify mechanistic features contribute signal
+    - id: TL06
+      title: Validate model on external strains using mechanistic features
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - Compute host features (Defense Finder + OMP BLAST) for ECOR collection strains
+        from public genomes
+      - Compute mechanistic pairwise features for ECOR strains x panel phages
+      - Predict with the TL05 model on the ECOR pairs
+      - Compare predictions against VHRdb ground truth for any overlapping phages
+      - Report out-of-distribution AUC and top-3 as the honest deployment validation
   J:
     name: Reproducibility and Release Quality
     description: One-command regeneration and environment freezing for v1 pipeline.

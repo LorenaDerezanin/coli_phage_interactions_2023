@@ -16,14 +16,14 @@ graph LR
     tc["Track C: Feature Engineering (Host)"]
     td["Track D: Feature Engineering (Phage)"]
     te["Track E: Pairwise Compatibility Features"]
-    ti["Track I: External Data and Literature Integration"]
+    ti["Track I: External Data Download and Ingestion"]
+    tl["Track L: Mechanistic Phage Features"]
   end
 
   subgraph s2["Stage 2 (Parallelizable Integration)"]
     tf["Track F: Evaluation Protocol"]
     tg["Track G: Modeling Pipeline"]
     th["Track H: In-Silico Cocktail Recommendation"]
-    tk["Track K: External Data Lift Measurement"]
   end
 
   subgraph s3["Stage 3 (Release and Audit)"]
@@ -41,8 +41,8 @@ graph LR
   te --> tg
   tg --> th
   ta --> ti
-  ti --> tk
-  tg --> tk
+  tc --> tl
+  td --> tl
   tg --> tj
 ```
 
@@ -105,6 +105,14 @@ graph LR
       `lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}`.
 - [x] **TA10** Add scripts that regenerate all derived labels from raw data in one command. Implemented in
       `lyzortx/pipeline/track_a/run_track_a.py`.
+- [ ] **TA11** Fix label policy for borderline matrix_score=0 pairs. Model: `gpt-5.4-mini`.
+  - Identify the 2557 pairs where aux_matrix_score_0_to_4=0 but label_hard_any_lysis=1 (single-replicate noise
+    positives)
+  - Add a label_v3 policy that sets label_hard_any_lysis=0 for these pairs, or add a training weight that downweights
+    them
+  - Retrain the locked v1 model with the corrected labels and report AUC, top-3, Brier delta
+  - VHRdb analysis showed +3.1pp top-3 from downweighting these pairs, so expect a similar improvement
+  - Document the label policy change in the Track A lab notebook
 
 ## Track B: Exploratory Analysis and Signal Discovery
 
@@ -294,22 +302,25 @@ graph LR
   - Output format suitable for clinician or CDMO operator review
   - Report covers all holdout strains
 
-## Track I: External Data and Literature Integration
+## Track I: External Data Download and Ingestion
 
-- **Guiding Principle:** Tier A supervised and Tier B weak-label ingestion with source-fidelity, ablations, and lift
-  tracking. Track K consumes Track I outputs for per-source lift measurement.
+- **Guiding Principle:** Download and ingest external phage-host interaction data from public sources. TI07-TI10
+  (confidence tiers, training cohorts, ablations, lift analysis) were deleted — external data has zero overlap with the
+  internal panel for training. See v1 archive for historical Track K lift measurement results.
 - [x] **TI01** Create a curated reading list of closely related phage-host prediction papers. Implemented in
       `lyzortx/research_notes/LITERATURE.md`.
 - [x] **TI02** Build source_registry.csv for all external sources. Implemented in
       `lyzortx/research_notes/external_data/source_registry.csv`.
 - [x] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `gpt-5.4`.
-  - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
+  - Download VHRdb data from https://viralhostrangedb.pasteur.cloud/api/ into
+    lyzortx/generated_outputs/track_i/tier_a_ingest/
   - Output CSV contains >0 real bacteria-phage pairs
   - Each row preserves raw global_response and datasource_response without case folding
   - source_datasource_id, source_disagreement_flag, and source_native_record_id populated
   - Raise FileNotFoundError or request error on download failure, never silently skip
 - [x] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `gpt-5.4`.
-  - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/, GPB from https://phagebank.org/
+  - Download BASEL from publication supplement, KlebPhaCol from https://phage.klebphacol.soton.ac.uk/, GPB from Nature
+    source data
   - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
   - All rows carry source_system provenance
   - Raise on download failure, do not silently produce empty output
@@ -324,72 +335,52 @@ graph LR
   - Each source produces an ingested CSV with >0 rows
   - BioSample host_disease and isolation_host fields parsed from XML attributes
   - Raise on empty API responses or download failures
-- [x] **TI07** Assign confidence tiers to all ingested external labels. Model: `gpt-5.4`.
-  - Apply the 4-bin confidence policy (high/medium/low/exclude) to TI03-TI06 output rows
-  - Output CSV contains >0 rows with confidence_tier and training_weight columns
-  - Report tier distribution (count per tier per source) in lab notebook
-  - Raise ValueError if any source produces zero tiered rows
-- [x] **TI08** Build training cohorts from internal + external rows. Model: `gpt-5.4-mini`.
-  - Produce ti08_training_cohort_rows.csv with internal rows plus TI07 external rows
-  - Output must contain >0 external rows — fail if all external data was excluded
-  - External rows carry source_system, confidence_tier, and training_weight
-  - Internal-only baseline arm must remain extractable from the same file
-- [x] **TI09** Run strict ablations: internal -> +VHRdb -> +BASEL -> +KlebPhaCol -> +GPB -> +Tier B. Model:
-      `gpt-5.4-mini`.
-  - Retrain the locked v1 model for each cumulative source addition
-  - Each arm must train on >0 external rows from the added source
-  - Report AUC, top-3, Brier for each arm on the ST03 holdout
-  - Raise ValueError if any arm trains on zero external rows
-- [x] **TI10** Track incremental lift and failure modes by datasource and confidence tier. Model: `gpt-5.4-mini`.
-  - Produce a summary table showing per-source lift deltas from TI09
-  - Identify failure modes with real row counts >0
-  - Report which sources helped, hurt, or were neutral based on actual metrics
 
-## Track K: External Data Lift Measurement
+## Track L: Mechanistic Phage Features
 
-- **Guiding Principle:** Incrementally add Track I external sources to the v1 model and measure per-source lift. Each
-  task adds exactly one source, retrains, and reports metrics against the internal-only baseline. This isolates the
-  contribution of each external dataset.
-- [x] **TK01** Add VHRdb to training and measure lift vs internal-only baseline. Model: `gpt-5.4-mini`.
-  - TI08 cohort must contain >0 VHRdb rows — fail if missing or empty
-  - Retrain with internal + VHRdb on the locked ST03 holdout split
-  - Augmented training set must contain >0 VHRdb rows after join
-  - Report AUC, top-3, Brier delta vs the locked 2-block internal-only baseline
-  - If lift is negative or negligible, document why and do not include VHRdb in subsequent arms
-- [x] **TK02** Add BASEL to training and measure cumulative lift. Model: `gpt-5.4-mini`.
-  - TI08 cohort must contain >0 BASEL rows — fail if missing or empty
-  - Add BASEL rows to the best-so-far cohort
-  - Augmented training set must contain >0 BASEL rows after join
-  - Retrain and report AUC, top-3, Brier delta vs previous best
-  - Document whether BASEL adds, hurts, or is neutral
-- [x] **TK03** Add KlebPhaCol to training and measure cumulative lift. Model: `gpt-5.4-mini`.
-  - TI08 cohort must contain >0 KlebPhaCol rows — fail if missing or empty
-  - Add KlebPhaCol rows to the best-so-far cohort
-  - Augmented training set must contain >0 KlebPhaCol rows after join
-  - Retrain and report AUC, top-3, Brier delta vs previous best
-  - Document whether KlebPhaCol adds, hurts, or is neutral
-- [x] **TK04** Add GPB to training and measure cumulative lift. Model: `gpt-5.4-mini`.
-  - TI08 cohort must contain >0 GPB rows — fail if missing or empty
-  - Add GPB rows to the best-so-far cohort
-  - Augmented training set must contain >0 GPB rows after join
-  - Retrain and report AUC, top-3, Brier delta vs previous best
-  - Document whether GPB adds, hurts, or is neutral
-- [x] **TK05** Add Tier B weak labels and measure cumulative lift. Model: `gpt-5.4-mini`.
-  - TI08 cohort must contain >0 Tier B rows — fail if missing or empty
-  - Add TI07 confidence-weighted Tier B rows to the best-so-far cohort
-  - Augmented training set must contain >0 Tier B rows after join
-  - Retrain and report AUC, top-3, Brier delta vs previous best
-  - Document whether Tier B adds, hurts, or is neutral
-  - If any source combination improved metrics, propose a new locked config; otherwise keep internal-only as the v1
-    baseline
-- [x] **TK06** Synthesize per-source lift results and lock the external data decision. Model: `gpt-5.4`.
-  - Summarize TK01-TK05 results in a single comparison table (source, delta AUC, delta top-3, delta Brier vs
-    internal-only baseline)
-  - Identify the best-performing source combination (may be internal-only if nothing helped)
-  - If external data earned inclusion, update v1_feature_configuration.json with the new locked config and retrain the
-    final model
-  - If no external source improved metrics, document the finding and confirm internal-only remains the v1 baseline
-  - Write a project notebook entry with the final decision and rationale
+- **Guiding Principle:** Replace deleted label-derived pairwise features (Track E) with annotation-based mechanistic
+  features from phage genomes. Use Pharokka for functional annotation, then build RBP-receptor and defense-evasion
+  compatibility features from genome annotations rather than training label statistics.
+- [ ] **TL01** Set up bioinformatics environment with conda and verify Pharokka runs. Model: `gpt-5.4-mini`.
+  - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn, mash, dnaapler) to environment.yml
+  - Update codex-implement.yml to activate miniconda from $CONDA and install from environment.yml before pip install
+  - Verify pharokka --version succeeds in CI
+  - Verify pharokka.py runs on one test phage FNA in CI (download databases + annotate
+    data/genomics/phages/FNA/LF82_P8.fna)
+  - Update AGENTS.md Environment Policy to document the conda + pip dual setup
+  - Update INSTALL.md to use canonical conda commands (conda create, conda activate) that work with both miniconda and
+    micromamba
+- [ ] **TL02** Annotate all 97 phage genomes with Pharokka. Model: `gpt-5.4-mini`.
+  - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
+  - Store annotations under lyzortx/generated_outputs/track_l/pharokka_annotations/
+  - Parse the CDS functional annotations into a per-phage summary table with counts by PHROGs category (tail, lysis,
+    defense, etc.)
+  - Extract per-phage RBP gene list with functional family annotations
+  - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
+  - All 97 phages must produce >0 annotated CDS
+- [ ] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
+  - For each phage-host pair, compute whether the phage has annotated RBPs that target receptor classes present on the
+    host (using Track C OMP receptor data)
+  - Features must be derived from genome annotations only, not from training labels
+  - Output CSV joinable on bacteria+phage pair
+  - Compare against the existing RBP_list.csv curated annotations as a sanity check
+- [ ] **TL04** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
+  - For each phage-host pair, compute whether the phage encodes anti-defense genes that counter the host defense systems
+    (using Track C defense data)
+  - Features must be derived from Pharokka anti-defense annotations, not from training label collaborative filtering
+  - Output CSV joinable on bacteria+phage pair
+- [ ] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
+  - Add TL03+TL04 features to the locked defense + phage_genomic baseline
+  - Retrain with TG01 hyperparameters on the ST03 holdout split
+  - Report AUC, top-3, Brier delta vs the current locked baseline
+  - If mechanistic features improve metrics, propose a new locked v1 config
+  - Run SHAP on the new model to verify mechanistic features contribute signal
+- [ ] **TL06** Validate model on external strains using mechanistic features. Model: `gpt-5.4`.
+  - Compute host features (Defense Finder + OMP BLAST) for ECOR collection strains from public genomes
+  - Compute mechanistic pairwise features for ECOR strains x panel phages
+  - Predict with the TL05 model on the ECOR pairs
+  - Compare predictions against VHRdb ground truth for any overlapping phages
+  - Report out-of-distribution AUC and top-3 as the honest deployment validation
 
 ## Track J: Reproducibility and Release Quality
 
