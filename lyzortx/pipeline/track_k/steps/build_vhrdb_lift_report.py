@@ -43,7 +43,6 @@ TI08_TRAINING_COHORT_PATH = Path(
 DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_k/tk01_vhrdb_lift_measurement")
 VHRDB_SOURCE_SYSTEM = "vhrdb"
 TRAIN_SPLIT = "train_non_holdout"
-HOLDOUT_SPLIT = "holdout_test"
 TRAIN_FOLD = -1
 NEGLIGIBLE_DELTA_TOLERANCE = 0.001
 
@@ -229,6 +228,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     ensure_directory(args.output_dir)
 
     if not args.skip_prerequisites:
+        # Deferred: avoid importing the prerequisite runner unless we need to materialize missing inputs.
         from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import ensure_prerequisite_outputs
 
         ensure_prerequisite_outputs(args)
@@ -298,13 +298,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         params=tg01_best_params,
     )
 
+    _, _, _, baseline_eval_rows, baseline_holdout_probabilities = baseline_eval
+    _, _, _, augmented_eval_rows, augmented_holdout_probabilities = augmented_eval
+
     baseline_holdout_rows = []
-    for row, probability in zip(baseline_eval[3], baseline_eval[4]):
+    for row, probability in zip(baseline_eval_rows, baseline_holdout_probabilities):
         scored = dict(row)
         scored["baseline_probability"] = probability
         baseline_holdout_rows.append(scored)
     augmented_holdout_rows = []
-    for row, probability in zip(augmented_eval[3], augmented_eval[4]):
+    for row, probability in zip(augmented_eval_rows, augmented_holdout_probabilities):
         scored = dict(row)
         scored["vhrdb_probability"] = probability
         augmented_holdout_rows.append(scored)
