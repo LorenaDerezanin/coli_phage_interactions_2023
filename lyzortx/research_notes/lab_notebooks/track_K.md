@@ -168,6 +168,8 @@ should stay internal-only for v1.
 - The previous best cohort remained `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb`.
 - The augmented cohort was
   `internal_plus_vhrdb_plus_basel_plus_klebphacol_plus_gpb_plus_virus_host_db_plus_ncbi_virus_biosample`.
+- TK05 now fails closed if the TI08 Tier B cohort is missing, empty, or produces zero joinable Tier B rows in the
+  locked ST03 train split.
 - The Tier B rows joined cleanly:
   - `virus_host_db`: `1` joined row
   - `ncbi_virus_biosample`: `1` joined row

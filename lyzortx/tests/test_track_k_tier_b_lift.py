@@ -5,9 +5,11 @@ from __future__ import annotations
 import csv
 import json
 
+import pytest
+
 from lyzortx.pipeline.track_k import run_track_k
 from lyzortx.pipeline.track_k.steps.build_source_lift_helpers import load_source_training_rows_for_systems
-from lyzortx.pipeline.track_k.steps.build_tier_b_lift_report import main
+from lyzortx.pipeline.track_k.steps.build_tier_b_lift_report import load_ti08_training_cohort_rows, main
 
 
 def _write_csv(path, fieldnames, rows) -> None:
@@ -80,6 +82,179 @@ def test_load_source_training_rows_for_systems_combines_tier_b_sources() -> None
     assert len(augmented_rows) == 2
     assert counts["virus_host_db"]["joined_rows"] == 1
     assert counts["ncbi_virus_biosample"]["joined_rows"] == 1
+
+
+def test_load_ti08_training_cohort_rows_raises_for_missing_file(tmp_path) -> None:
+    with pytest.raises(FileNotFoundError, match="Missing TI08 training cohort artifact"):
+        load_ti08_training_cohort_rows(tmp_path / "missing_ti08_training_cohort_rows.csv")
+
+
+def test_load_ti08_training_cohort_rows_raises_for_empty_file(tmp_path) -> None:
+    cohort = tmp_path / "ti08_training_cohort_rows.csv"
+    cohort.write_text("pair_id,bacteria,phage\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="TI08 training cohort is empty"):
+        load_ti08_training_cohort_rows(cohort)
+
+
+def test_main_raises_when_tier_b_rows_do_not_join(tmp_path) -> None:
+    st02 = tmp_path / "st02_pair_table.csv"
+    st03 = tmp_path / "st03_split_assignments.csv"
+    track_c = tmp_path / "pair_table_v1.csv"
+    track_d_genome = tmp_path / "phage_genome_kmer_features.csv"
+    track_d_distance = tmp_path / "phage_distance_embedding_features.csv"
+    track_e_rbp = tmp_path / "rbp_receptor_compatibility_features_v1.csv"
+    track_e_isolation = tmp_path / "isolation_host_distance_features_v1.csv"
+    v1_config = tmp_path / "v1_feature_configuration.json"
+    tg01_summary = tmp_path / "tg01_model_summary.json"
+    tk04_manifest = tmp_path / "tk04_gpb_lift_manifest.json"
+    ti08_cohort = tmp_path / "ti08_training_cohort_rows.csv"
+
+    _write_csv(
+        st02,
+        ["pair_id", "bacteria", "phage", "label_hard_any_lysis", "label_strict_confidence_tier", "host_pathotype"],
+        [
+            {
+                "pair_id": "b1__p1",
+                "bacteria": "b1",
+                "phage": "p1",
+                "label_hard_any_lysis": "1",
+                "label_strict_confidence_tier": "A",
+                "host_pathotype": "pt",
+            }
+        ],
+    )
+    _write_csv(
+        st03,
+        ["pair_id", "bacteria", "phage", "cv_group", "split_holdout", "split_cv5_fold", "is_hard_trainable"],
+        [
+            {
+                "pair_id": "b1__p1",
+                "bacteria": "b1",
+                "phage": "p1",
+                "cv_group": "g1",
+                "split_holdout": "train_non_holdout",
+                "split_cv5_fold": "0",
+                "is_hard_trainable": "1",
+            }
+        ],
+    )
+    _write_csv(
+        track_c,
+        ["pair_id", "bacteria", "phage", "label_hard_any_lysis", "label_strict_confidence_tier", "host_pathotype"],
+        [
+            {
+                "pair_id": "b1__p1",
+                "bacteria": "b1",
+                "phage": "p1",
+                "label_hard_any_lysis": "1",
+                "label_strict_confidence_tier": "A",
+                "host_pathotype": "pt",
+            }
+        ],
+    )
+    _write_csv(track_d_genome, ["phage", "phage_gc_content"], [{"phage": "p1", "phage_gc_content": "0.4"}])
+    _write_csv(
+        track_d_distance,
+        ["phage", "phage_distance_umap_00"],
+        [{"phage": "p1", "phage_distance_umap_00": "0.05"}],
+    )
+    _write_csv(
+        track_e_rbp,
+        ["pair_id", "bacteria", "phage", "lookup_available"],
+        [{"pair_id": "b1__p1", "bacteria": "b1", "phage": "p1", "lookup_available": "1"}],
+    )
+    _write_csv(
+        track_e_isolation,
+        ["pair_id", "bacteria", "phage", "isolation_host_distance"],
+        [{"pair_id": "b1__p1", "bacteria": "b1", "phage": "p1", "isolation_host_distance": "0.25"}],
+    )
+    v1_config.write_text(json.dumps({"winner_subset_blocks": ["defense", "phage_genomic"]}), encoding="utf-8")
+    _write_json(
+        tg01_summary,
+        {
+            "lightgbm": {
+                "best_params": {
+                    "n_estimators": 150,
+                    "learning_rate": 0.03,
+                    "num_leaves": 31,
+                    "min_child_samples": 10,
+                }
+            }
+        },
+    )
+    _write_json(
+        tk04_manifest,
+        {
+            "lift_assessment": "neutral",
+            "base_source_systems": ["internal", "vhrdb", "basel", "klebphacol"],
+            "augmented_source_systems": ["internal", "vhrdb", "basel", "klebphacol", "gpb"],
+            "best_source_systems": ["vhrdb", "basel", "klebphacol", "gpb"],
+        },
+    )
+    _write_csv(
+        ti08_cohort,
+        [
+            "pair_id",
+            "bacteria",
+            "phage",
+            "label_hard_any_lysis",
+            "label_strict_confidence_tier",
+            "source_system",
+            "external_label_include_in_training",
+            "external_label_confidence_tier",
+            "external_label_confidence_score",
+            "external_label_training_weight",
+        ],
+        [
+            {
+                "pair_id": "b1__p999",
+                "bacteria": "b1",
+                "phage": "p999",
+                "label_hard_any_lysis": "1",
+                "label_strict_confidence_tier": "B",
+                "source_system": "virus_host_db",
+                "external_label_include_in_training": "1",
+                "external_label_confidence_tier": "medium",
+                "external_label_confidence_score": "2",
+                "external_label_training_weight": "0.5",
+            }
+        ],
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="TI08 cohort contains no Tier B rows that join into the locked ST03 train split",
+    ):
+        main(
+            [
+                "--st02-pair-table-path",
+                str(st02),
+                "--st03-split-assignments-path",
+                str(st03),
+                "--track-c-pair-table-path",
+                str(track_c),
+                "--track-d-genome-kmer-path",
+                str(track_d_genome),
+                "--track-d-distance-path",
+                str(track_d_distance),
+                "--track-e-rbp-compatibility-path",
+                str(track_e_rbp),
+                "--track-e-isolation-distance-path",
+                str(track_e_isolation),
+                "--v1-feature-config-path",
+                str(v1_config),
+                "--tg01-summary-path",
+                str(tg01_summary),
+                "--tk04-manifest-path",
+                str(tk04_manifest),
+                "--ti08-training-cohort-path",
+                str(ti08_cohort),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--skip-prerequisites",
+            ]
+        )
 
 
 def test_main_carries_forward_tier_b_sources_when_tk04_kept_them(tmp_path) -> None:
