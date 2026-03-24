@@ -18,8 +18,8 @@ a wrapper script would add maintenance burden for no additional capability.
 step name, text pattern, status, and failed-only. Previous draft used "one of" which was too restrictive — real
 debugging involves layering filters (e.g., "errors in the Codex step of PR #42's latest lifecycle run").
 
-**3. Timing section with gap detection.** Beyond simple first/last timestamp extraction, includes an awk command that
-finds >30s gaps between consecutive log lines — useful for identifying where Codex gets stuck waiting.
+**3. Timing section with step-transition timeline.** Beyond simple first/last timestamp extraction, includes an awk
+command that shows step transitions with timestamps — useful for seeing where time is spent across a run.
 
 ### 2026-03-24: Pre-push hook to enforce rebase on origin/main
 

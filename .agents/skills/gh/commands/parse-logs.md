@@ -143,7 +143,7 @@ which does not support `-P` (Perl regex). Similarly, `date -d` is GNU-only — o
 | How long did the Codex step take? | Filter by step name, compare first/last timestamp |
 | Is this run stuck or just slow? | Check step transitions — if the latest timestamp is recent, it's working |
 | Which step took the longest? | Use step transitions to see the timeline |
-| What was happening at time X? | `grep '2026-03-24T14:32'` in the log output |
+| What was happening at time X? | `grep '<YYYY-MM-DD>T<HH:MM>'` in the log output |
 
 ## Gotchas
 
