@@ -72,6 +72,9 @@
   `lyzortx/research_notes/PLAN.md`.
 - Follow that plan for task sequencing; the orchestrator updates checklist states automatically.
 - When scope decisions are ambiguous, prefer alignment with the plan unless the user overrides it.
+- When the user questions whether completed work is valid, asks to review or restructure the plan, or a discovery
+  invalidates prior assumptions (e.g., feature leakage, broken reproducibility), use the `/replan` skill. It encodes
+  principles for auditing completed work, tracing feature lineage, killing invalid work, and decomposing re-runs.
 
 # Branch Protection
 
