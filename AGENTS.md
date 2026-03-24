@@ -81,6 +81,8 @@
   PRs, so main moves frequently — never assume your local main is current even if you pulled recently.
   For plain git: `git fetch origin main && git rebase origin/main`. For Graphite stacks: `gt sync` to pull trunk and
   restack, or `gt restack` to rebase the current stack on its trunk.
+- A `check-rebase-on-main` pre-push hook enforces this automatically. It blocks `git push` if the branch does not
+  include `origin/main`'s tip. Activate it once per clone with: `pre-commit install --hook-type pre-push`.
 
 # PR Description Maintenance
 
@@ -272,6 +274,8 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 - This applies especially to Bash commands and shell snippets in workflow steps. Run the equivalent commands (e.g.,
   `gh pr view`, `gh pr merge`, `printf`, variable substitutions) against a real PR or issue to verify output format and
   quoting behavior before committing.
+- When making non-trivial devops changes (CI workflows, git hooks, tooling, automation, developer experience), add a
+  dated lab notebook entry to `lyzortx/research_notes/lab_notebooks/devops.md` documenting the design decisions.
 
 # Path Style in Commands
 

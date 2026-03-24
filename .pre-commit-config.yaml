@@ -22,3 +22,9 @@ repos:
         language: python
         additional_dependencies: ["pymarkdownlnt==0.9.36"]
         types_or: [markdown]
+      - id: check-rebase-on-main
+        name: check-rebase-on-main
+        entry: scripts/check-rebase-on-main.sh
+        language: script
+        stages: [pre-push]
+        always_run: true

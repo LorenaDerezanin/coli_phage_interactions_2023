@@ -93,7 +93,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Install pre-commit hooks
-        run: pre-commit install
+        run: |
+          pre-commit install
+          pre-commit install --hook-type pre-push
 
       - name: Configure git identity for Codex agent
         run: |

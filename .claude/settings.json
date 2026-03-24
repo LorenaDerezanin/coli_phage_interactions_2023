@@ -13,6 +13,7 @@
       "Bash(grep *)",
       "Bash(pytest *)",
       "Bash(python -m pytest *)",
+      "Bash(scripts/check-rebase-on-main.sh *)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:developers.openai.com)",
       "WebFetch(domain:raw.githubusercontent.com)",

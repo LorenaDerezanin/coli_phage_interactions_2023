@@ -108,7 +108,9 @@ jobs:
 
       - name: Install pre-commit hooks
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        run: pre-commit install
+        run: |
+          pre-commit install
+          pre-commit install --hook-type pre-push
 
       # Workaround for https://github.com/openai/codex/issues/12572
       # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04

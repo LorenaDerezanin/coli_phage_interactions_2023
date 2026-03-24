@@ -1,3 +1,53 @@
+### 2026-03-24: Pre-push hook to enforce rebase on origin/main
+
+#### Executive summary
+
+Added a `check-rebase-on-main` pre-push hook via pre-commit that blocks `git push` when the branch is not rebased on
+`origin/main`. The hook enforces two things: (1) `origin/main`'s tip is an ancestor of HEAD, and (2) no merge commits
+exist between `origin/main` and HEAD (enforcing linear history). Contributors activate it once per clone with
+`pre-commit install --hook-type pre-push`.
+
+#### Design decisions
+
+**1. Pre-commit framework rather than a standalone `.githooks/` directory.**
+
+The repo already uses pre-commit for pre-commit stage hooks (ruff, pymarkdown, gitignore enforcement). Adding a
+pre-push stage hook to the same `.pre-commit-config.yaml` keeps everything in one system. The alternative — checking
+in a `.githooks/` directory and setting `core.hooksPath` — would create a parallel hook management system and conflict
+with pre-commit's own `core.hooksPath` usage.
+
+**2. Requires a separate install command: `pre-commit install --hook-type pre-push`.**
+
+`pre-commit install` (without flags) only installs the `pre-commit` hook type. There is no single-command way to
+install all hook types — each needs a separate `-t` invocation, and multiple `-t` flags in one call are not supported.
+This is a pre-commit framework limitation. The install command is documented in `INSTALL.md` and `AGENTS.md`.
+
+**3. Hook logic extracted to `scripts/check-rebase-on-main.sh`.**
+
+The initial implementation inlined all logic as a bash one-liner in `.pre-commit-config.yaml`. This was hard to read,
+test, and edit. Extracting to a standalone script referenced via `language: script` in pre-commit makes it maintainable
+and directly testable (`bash scripts/check-rebase-on-main.sh`).
+
+**4. Rejects merge commits — enforces linear history.**
+
+The merge-base check alone passes for both `git rebase origin/main` and `git merge origin/main`. Since the policy
+requires rebase (linear history), the hook additionally checks `git log --merges origin/main..HEAD` and rejects any
+merge commits between origin/main and HEAD.
+
+**5. Skips check on main branch.**
+
+Pushing main itself (e.g., after a merge) should not be blocked. The hook exits 0 immediately when
+`git rev-parse --abbrev-ref HEAD` is `main`.
+
+**6. Fetches origin/main before checking.**
+
+The hook runs `git fetch origin main --quiet` to ensure it checks against the latest remote state, not a stale local
+ref. This adds a small network call but prevents false passes when origin/main has advanced since the last fetch.
+
+#### PRs
+
+- PR #193: hook implementation, AGENTS.md/INSTALL.md docs, CI workflow updates.
+
 ### 2026-03-22: CI token usage baseline — 100-run snapshot
 
 #### Summary
