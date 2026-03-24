@@ -256,6 +256,15 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   (1) write the response to a file, (2) check the file size before reading, (3) if large, inspect only the first few
   lines or use a targeted query (e.g., `head`, field extraction, or pagination) instead of loading the full response.
 
+# Claims About External Libraries and Systems
+
+- Any claim about how an external library or system behaves (e.g., LightGBM determinism, GitHub API semantics, pandas
+  merge behavior) must be backed by a link to the official documentation and a direct quote from the source.
+- Do not assert library behavior from memory alone. Look it up, quote it, and link it — especially when the claim
+  influences a design decision or acceptance criterion.
+- When writing findings to lab notebooks, include the URL and the relevant quote inline so future readers can verify
+  without re-searching.
+
 # CI and Workflow Changes
 
 - Before committing changes to GitHub Actions workflows or shell logic that runs in CI, manually test the affected

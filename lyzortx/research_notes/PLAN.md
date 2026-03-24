@@ -248,11 +248,32 @@ graph LR
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error on the clean
     pipeline
   - The old label-leaked metrics must not appear in any output
-- [ ] **TG09** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
-  - Identify why AUC drops ~7.6pp when legacy_label_breadth_count is removed
-  - Propose and test at least two candidate replacement features that do not leak training labels
-  - Report whether any candidate recovers >50% of the AUC gap without degrading top-3 hit rate
-  - If no candidate closes the gap, accept the clean calibration as the honest v1 baseline
+- [ ] **TG09** Fix LightGBM determinism and lock defense + phage_genomic as v1 winner. Model: `gpt-5.4-mini`.
+  - Add deterministic=True to make_lightgbm_estimator in train_v1_binary_classifier.py
+  - Remove n_jobs=1 from make_lightgbm_estimator (deterministic=True handles thread safety, force_col_wise=True is
+    already set)
+  - Update v1_feature_configuration.json to lock defense + phage_genomic as the winner (exclude pairwise block — 5 of 13
+    features are training-label-derived)
+  - Remove the feature-subset-sweep step from Track J's run_track_j.py so the lock file is treated as a human decision,
+    not a regenerated output
+  - Verify two consecutive runs of run_track_g.py --step train-v1-binary produce identical outputs
+- [ ] **TG10** Re-run downstream tracks on the stable 2-block lock. Model: `gpt-5.4-mini`.
+  - Re-run Track H explained recommendations against the 2-block model outputs
+  - Re-run Track F v0-vs-v1 evaluation against the 2-block model metrics
+  - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error
+  - Verify v1_feature_configuration.json is unchanged after the Track J run (sweep no longer regenerates it)
+- [ ] **TG11** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
+  - Pairwise soft leakage context: TE02 defense_evasion_* features (4) and TE01
+    receptor_variant_seen_in_training_positives (1) are training-label-derived via collaborative filtering. Do not
+    include these in candidate features.
+  - Clean pairwise candidates to evaluate individually: TE03 isolation_host distances (2 features) and TE01 curated
+    lookup features (lookup_available, target_receptor_present, protein_target_present, surface_target_present,
+    receptor_cluster_matches)
+  - Propose and test at least two candidate features (from clean pairwise or other sources) that do not leak training
+    labels
+  - Report whether any candidate recovers >50% of the AUC gap between the 2-block model (~0.837) and the old leaked
+    model (~0.911) without degrading top-3
+  - If no candidate closes the gap, accept the 2-block calibration as the honest v1 baseline
 
 ## Track H: In-Silico Cocktail Recommendation
 
