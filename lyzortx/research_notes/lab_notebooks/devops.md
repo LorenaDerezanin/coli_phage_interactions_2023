@@ -2,9 +2,10 @@
 
 #### Executive summary
 
-Added a `check-rebase-on-main` pre-push hook via pre-commit that blocks `git push` when the branch does not include
-`origin/main`'s tip commit. This automates the existing AGENTS.md policy that all branches must be rebased before
-pushing. Contributors activate it once per clone with `pre-commit install --hook-type pre-push`.
+Added a `check-rebase-on-main` pre-push hook via pre-commit that blocks `git push` when the branch is not rebased on
+`origin/main`. The hook enforces two things: (1) `origin/main`'s tip is an ancestor of HEAD, and (2) no merge commits
+exist between `origin/main` and HEAD (enforcing linear history). Contributors activate it once per clone with
+`pre-commit install --hook-type pre-push`.
 
 #### Design decisions
 
@@ -21,18 +22,24 @@ with pre-commit's own `core.hooksPath` usage.
 install all hook types — each needs a separate `-t` invocation, and multiple `-t` flags in one call are not supported.
 This is a pre-commit framework limitation. The install command is documented in `INSTALL.md` and `AGENTS.md`.
 
-**3. Avoids YAML `!` character by comparing merge-base output directly.**
+**3. Hook logic extracted to `scripts/check-rebase-on-main.sh`.**
 
-The original implementation used `! git merge-base --is-ancestor origin/main HEAD`, but `!` is a YAML tag character
-that breaks `yaml.safe_load()`. The fix compares `git merge-base origin/main HEAD` against `git rev-parse origin/main`
-for equality — semantically identical, YAML-safe.
+The initial implementation inlined all logic as a bash one-liner in `.pre-commit-config.yaml`. This was hard to read,
+test, and edit. Extracting to a standalone script referenced via `language: script` in pre-commit makes it maintainable
+and directly testable (`bash scripts/check-rebase-on-main.sh`).
 
-**4. Skips check on main branch.**
+**4. Rejects merge commits — enforces linear history.**
+
+The merge-base check alone passes for both `git rebase origin/main` and `git merge origin/main`. Since the policy
+requires rebase (linear history), the hook additionally checks `git log --merges origin/main..HEAD` and rejects any
+merge commits between origin/main and HEAD.
+
+**5. Skips check on main branch.**
 
 Pushing main itself (e.g., after a merge) should not be blocked. The hook exits 0 immediately when
 `git rev-parse --abbrev-ref HEAD` is `main`.
 
-**5. Fetches origin/main before checking.**
+**6. Fetches origin/main before checking.**
 
 The hook runs `git fetch origin main --quiet` to ensure it checks against the latest remote state, not a stale local
 ref. This adds a small network call but prevents false passes when origin/main has advanced since the last fetch.
