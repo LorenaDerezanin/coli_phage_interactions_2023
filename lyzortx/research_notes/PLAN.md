@@ -312,15 +312,13 @@ graph LR
 - [x] **TI02** Build source_registry.csv for all external sources. Implemented in
       `lyzortx/research_notes/external_data/source_registry.csv`.
 - [x] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `gpt-5.4`.
-  - Download VHRdb data from https://viralhostrangedb.pasteur.cloud/api/ into
-    lyzortx/generated_outputs/track_i/tier_a_ingest/
+  - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
   - Output CSV contains >0 real bacteria-phage pairs
   - Each row preserves raw global_response and datasource_response without case folding
   - source_datasource_id, source_disagreement_flag, and source_native_record_id populated
   - Raise FileNotFoundError or request error on download failure, never silently skip
 - [x] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `gpt-5.4`.
-  - Download BASEL from publication supplement, KlebPhaCol from https://phage.klebphacol.soton.ac.uk/, GPB from Nature
-    source data
+  - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/, GPB from https://phagebank.org/
   - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
   - All rows carry source_system provenance
   - Raise on download failure, do not silently produce empty output
@@ -348,8 +346,7 @@ graph LR
   - Verify pharokka.py runs on one test phage FNA in CI (download databases + annotate
     data/genomics/phages/FNA/LF82_P8.fna)
   - Update AGENTS.md Environment Policy to document the conda + pip dual setup
-  - Update INSTALL.md to use canonical conda commands (conda create, conda activate) that work with both miniconda and
-    micromamba
+  - Update INSTALL.md to use canonical conda commands (conda create, conda activate) that work with miniconda
 - [ ] **TL02** Annotate all 97 phage genomes with Pharokka. Model: `gpt-5.4-mini`.
   - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
   - Store annotations under lyzortx/generated_outputs/track_l/pharokka_annotations/

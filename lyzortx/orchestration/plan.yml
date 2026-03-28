@@ -490,8 +490,7 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Download VHRdb data from https://viralhostrangedb.pasteur.cloud/api/ into
-        lyzortx/generated_outputs/track_i/tier_a_ingest/
+      - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
       - Output CSV contains >0 real bacteria-phage pairs
       - Each row preserves raw global_response and datasource_response without case
         folding
@@ -504,8 +503,8 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Download BASEL from publication supplement, KlebPhaCol from
-        https://phage.klebphacol.soton.ac.uk/, GPB from Nature source data
+      - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/,
+        GPB from https://phagebank.org/
       - Each source produces an ingested CSV with >0 rows under
         lyzortx/generated_outputs/track_i/tier_a_ingest/
       - All rows carry source_system provenance
