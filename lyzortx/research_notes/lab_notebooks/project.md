@@ -797,3 +797,138 @@ pending with acceptance criteria that require >0 real rows at every stage.
   bug, not handling an edge case. Raise on missing data.
 - **Acceptance criteria must include data volume assertions.** ">0 rows" is the minimum bar. Without it, an agent can
   build correct plumbing that processes nothing and call it done.
+
+### 2026-03-24: V2 plan restructure — external data dead end, mechanistic features forward
+
+#### Executive summary
+
+Deep analysis of Track I and Track K revealed that external data integration is a dead end with the current pipeline:
+only VHRdb overlaps with the internal 404×96 panel (23,885 pairs), and that's the paper's own data uploaded to VHRdb by
+the original authors (datasource 257). BASEL, KlebPhaCol, GPB, Virus-Host DB, and NCBI all have zero strain overlap.
+Track K was deleted. Track I was trimmed to download-only (TI01-TI06). A new Track L (Mechanistic Phage Features)
+replaces the deleted label-derived pairwise features with annotation-based features from Pharokka. A label policy fix
+(TA11) captures the +3.1pp top-3 improvement from downweighting borderline `matrix_score=0` noise positives.
+
+#### Key findings from VHRdb analysis
+
+1. **VHRdb overlap is circular.** The 23,885 overlapping pairs are the paper's own experiment (datasource 257: "Host
+   range of the 96 coliphages from the Antonina Guelin collection on the 403 natural isolates of Escherichia from the
+   Bertrand"). VHRdb compressed the paper's 0-4 score to 0-2 for upload.
+2. **Perfect agreement on matrix scores 1-4.** Zero off-diagonal entries in the cross-tabulation. VHRdb's 3-level
+   scale is a lossless compression of the 0-4 scale for non-zero scores.
+3. **1,737 disagreements are all `matrix_score=0, label=1`.** These are pairs where 1-3 replicates out of 8-9 showed
+   lysis (noise), the matrix aggregated to 0, but the "any lysis" label policy called them positive. VHRdb correctly
+   reports "No infection" for all of them.
+4. **No other VHRdb datasource shares our phages.** Only datasource 153 (3 LF82 phages on ECOR) has any panel phage
+   overlap — 3 out of 96 phages, across 73 ECOR strains with no panel overlap.
+
+#### What changed in the plan
+
+- **Deleted Track K** — all code, tests, plan entries. Archived notebook to `archive_v1/track_K.md`.
+- **Trimmed Track I** to TI01-TI06 (download infrastructure). Deleted TI07-TI10 code (confidence tiers, training
+  cohorts, ablations, lift analysis) — these depended on external data being trainable.
+- **Added Track L** (Mechanistic Phage Features) — TL01-TL06: set up bioinformatics env, annotate phages with
+  Pharokka, build mechanistic RBP-receptor and defense-evasion features, retrain, validate on external strains.
+- **Added TA11** (label policy fix) — downweight `matrix_score=0` noise positives based on the VHRdb finding.
+- **Track E kept as-is** — Track G depends on it; Track L will eventually supersede it.
+
+#### Pharokka POC results (local, 2026-03-24)
+
+- Pharokka 1.9.1 on LF82_P8: 276 CDS annotated in 2m 43s
+- 29 tail genes (including long tail fiber proximal/distal subunits, baseplate components)
+- 7 lysis genes (holin, spanins, lysis inhibitors)
+- 1 anti-restriction nuclease
+- 140 hypothetical proteins (51% unannotated — typical for phage genomes)
+- Extrapolation: ~1 hour for all 97 phages at 4 threads
+
+#### Future: External validation dataset for generalized inference pipeline
+
+**Trigger condition:** Revisit when a full interaction matrix (with both positives and negatives) for novel E. coli
+strains becomes available. TL09 covers positive-only validation via VHdb; this note is about the stronger full-matrix
+validation that would allow AUC and top-3 computation.
+
+**Context:** The v2 plan adds a generalized inference pipeline (TL06-TL08) that accepts arbitrary E. coli genomes and
+arbitrary phage FNAs, computes features from sequence, and predicts lysis. The locked v1 model uses only defense subtypes
+(79 features from Defense Finder) and phage k-mer SVD (26 features from tetranucleotide frequencies) — both
+sequence-derivable, so the pipeline is architecturally sound. TL09 validates on VHdb positive-only pairs, but
+full-matrix out-of-distribution validation (with negatives) requires a dataset that doesn't yet exist in public.
+
+**Why existing sources don't provide a full matrix for novel strains:**
+
+- **ECOR strains** are already in the 404-strain training panel (71 of 404). Not novel.
+- **VHRdb pair-table overlap** (26,029 rows) is the paper's own data (datasource 257). Novel VHRdb pairs (30,643) failed
+  entity resolution. VHRdb strain-level pairs (~500 positives across ~70 hosts) are usable for positive-only validation
+  (TL09) but contain no negatives.
+- **BASEL** has labeled E. coli interactions but only 4 E. coli host strains. Phages are novel (78 genomes on NCBI,
+  MZ501046-MZ501113) but the host count is too small for meaningful metrics.
+- **KlebPhaCol** is Klebsiella, not E. coli. Wrong species.
+- **GPB** (Gut Phage Biobank) has only 1 E. coli strain (RTGS0219) out of 40 hosts. Phage genomes on CNGB, not NCBI.
+- **SNIPR001** (Nature Biotech 2023) has 429 E. coli strains x 162 phages with interaction matrix on GitHub, but strain
+  genomes are commercially restricted.
+
+**What a full-matrix validation dataset requires:**
+
+1. **E. coli strains not in our 404-strain panel** — at least 20-30 strains for meaningful ranking metrics.
+2. **Full interaction matrix** (lysis AND no-lysis from spot assay or equivalent) — not just positive pairs.
+3. **Genome assemblies for the host strains** — so TL07 can run Defense Finder.
+4. **Phage genomes (FNA)** — so TL06 can project k-mer features.
+5. **Sufficient phage panel size** — at least 10-20 phages per host for top-3 ranking to be meaningful.
+
+**Partial solution found (2026-03-28): Virus-Host DB positive-only validation.**
+
+Virus-Host DB contains ~70 E. coli strains at strain-level resolution (excluding lab strains) with ~900 unique phage
+genome accessions and ~500 positive pairs (phage confirmed to lyse host, from literature). Most hosts have NCBI genome
+assemblies. This gives a positive-only validation path: download host assemblies + phage FNAs, run generalized inference,
+check that known-positive pairs get high predicted P(lysis). Limitations: no negatives, so AUC and top-3 hit rate cannot
+be computed. Metrics are limited to recall-on-positives, calibration-on-positives, and rank-of-positives-vs-random. This
+is implemented as TL09 in the plan.
+
+**Full interaction matrix validation still requires:**
+
+- Published phage therapy studies with E. coli host-range matrices and deposited genomes (both host and phage).
+- Phage biobanks that publish interaction data alongside NCBI accessions (e.g., future GPB or DSMZ releases).
+- Direct collaboration with labs running E. coli phage screening panels.
+- The SNIPR001 dataset (Nature Biotech 2023) has 429 E. coli strains x 162 phages with interaction matrix on GitHub,
+  but strain genomes are commercially restricted.
+
+**What to do when a full-matrix candidate is found:**
+
+- Verify E. coli strain count, phage count, and label quality before committing to ingestion.
+- Download host genome assemblies from NCBI, run TL07/TL08, compare predictions against labels.
+- Report AUC, top-3 hit rate, and calibration metrics as the honest out-of-distribution benchmark.
+- Compare against in-panel holdout metrics to quantify the generalization gap.
+
+#### Future: Structural RBP-receptor prediction via protein folding
+
+**Trigger condition:** Revisit if TL02 (RBP-receptor compatibility from Pharokka annotations) hits the escape hatch —
+i.e., PHROG functional annotations are too coarse to map RBPs to specific host receptor targets (FhuA, BtuB, OmpC,
+LPS core, etc.).
+
+**The problem:** Pharokka labels phage genes by PHROG family ("tail fiber protein," "tail spike protein") but doesn't
+tell you which receptor the RBP binds. That mapping is determined by the 3D structure of the RBP tip domain and its
+binding interface, not by sequence homology alone.
+
+**Potential approach — structure-based RBP clustering:**
+
+1. Predict 3D structures for all phage RBPs using AlphaFold2 or ESMFold.
+2. Extract receptor-binding tip domains (C-terminal regions of tail fibers / tail spikes).
+3. Cluster RBPs by structural similarity of the tip domain. RBPs with similar tip folds likely target the same receptor
+   class.
+4. Map each structural cluster to a receptor class using known reference structures from the literature (e.g., T4 long
+   tail fiber tip → OmpC, T5 pb5 → FhuA).
+5. For each phage-host pair, compute a compatibility feature: does this phage's RBP cluster match a receptor present on
+   the host (from Track C OMP data)?
+
+**Precedent:** The BASEL phage collection papers (Dunne et al. 2021, Maffei et al. 2025) used structural analysis to
+validate receptor assignments for their phage panels. Structure-based receptor grouping is scientifically established.
+
+**Why not now:**
+
+- Heavy computational dependency (AlphaFold or ESMFold, ~200-300 structure predictions).
+- Requires curated reference structures to anchor the cluster→receptor mapping.
+- Would be a separate track-level effort, not a subtask.
+- TL02's escape hatch already handles the annotation-only failure case gracefully.
+
+**What to do if triggered:** Scope a new track (e.g., Track M: Structural RBP-Receptor Prediction) with explicit
+acceptance criteria for structure prediction, tip domain extraction, clustering, and receptor assignment. Evaluate
+whether the expected lift justifies the computational cost before committing.

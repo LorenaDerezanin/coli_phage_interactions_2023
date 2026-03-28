@@ -540,3 +540,24 @@ requirements.
   instead of a partially reconstructed `pip install -r requirements.txt` subset.
 - Avoids depending on reconstructed env prefixes or manual `PATH` injection; the workflows only assume the `conda`
   command is available on the pinned runner image.
+
+### 2026-03-24: Pharokka POC and TL01 prereqs
+
+#### Executive summary
+
+Track L (TL01) will add bioconda tools (Pharokka, MMseqs2, tRNAscan-SE, MinCED, ARAGORN, mash, dnaapler) to
+`environment.yml`. The conda CI bootstrap above already handles `conda env create --file environment.yml`, so TL01
+only needs to add the bioconda dependencies to the YAML — no workflow changes required.
+
+#### Open item: Pharokka database caching
+
+Pharokka databases are ~656MB. They need to be either downloaded in CI per run or cached via GitHub Actions cache.
+TL01 should address this.
+
+#### POC results (local, 2026-03-24)
+
+- Pharokka 1.9.1 installed via pip, bioconda deps via micromamba
+- Pharokka databases: 656MB, downloaded in ~66s
+- Single phage annotation (LF82_P8): 2m 43s, 276 CDS annotated
+- Produced: 29 tail genes, 7 lysis genes, 1 anti-restriction nuclease, 140 hypothetical proteins
+- Extrapolation for 97 phages: ~4-5 hours sequential, ~1 hour at 4 threads
