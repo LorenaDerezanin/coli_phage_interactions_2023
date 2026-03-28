@@ -897,3 +897,38 @@ is implemented as TL09 in the plan.
 - Download host genome assemblies from NCBI, run TL07/TL08, compare predictions against labels.
 - Report AUC, top-3 hit rate, and calibration metrics as the honest out-of-distribution benchmark.
 - Compare against in-panel holdout metrics to quantify the generalization gap.
+
+#### Future: Structural RBP-receptor prediction via protein folding
+
+**Trigger condition:** Revisit if TL02 (RBP-receptor compatibility from Pharokka annotations) hits the escape hatch —
+i.e., PHROG functional annotations are too coarse to map RBPs to specific host receptor targets (FhuA, BtuB, OmpC,
+LPS core, etc.).
+
+**The problem:** Pharokka labels phage genes by PHROG family ("tail fiber protein," "tail spike protein") but doesn't
+tell you which receptor the RBP binds. That mapping is determined by the 3D structure of the RBP tip domain and its
+binding interface, not by sequence homology alone.
+
+**Potential approach — structure-based RBP clustering:**
+
+1. Predict 3D structures for all phage RBPs using AlphaFold2 or ESMFold.
+2. Extract receptor-binding tip domains (C-terminal regions of tail fibers / tail spikes).
+3. Cluster RBPs by structural similarity of the tip domain. RBPs with similar tip folds likely target the same receptor
+   class.
+4. Map each structural cluster to a receptor class using known reference structures from the literature (e.g., T4 long
+   tail fiber tip → OmpC, T5 pb5 → FhuA).
+5. For each phage-host pair, compute a compatibility feature: does this phage's RBP cluster match a receptor present on
+   the host (from Track C OMP data)?
+
+**Precedent:** The BASEL phage collection papers (Dunne et al. 2021, Maffei et al. 2025) used structural analysis to
+validate receptor assignments for their phage panels. Structure-based receptor grouping is scientifically established.
+
+**Why not now:**
+
+- Heavy computational dependency (AlphaFold or ESMFold, ~200-300 structure predictions).
+- Requires curated reference structures to anchor the cluster→receptor mapping.
+- Would be a separate track-level effort, not a subtask.
+- TL02's escape hatch already handles the annotation-only failure case gracefully.
+
+**What to do if triggered:** Scope a new track (e.g., Track M: Structural RBP-Receptor Prediction) with explicit
+acceptance criteria for structure prediction, tip domain extraction, clustering, and receptor assignment. Evaluate
+whether the expected lift justifies the computational cost before committing.
