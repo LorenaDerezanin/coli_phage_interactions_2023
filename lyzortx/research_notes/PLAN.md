@@ -17,7 +17,7 @@ graph LR
     td["Track D: Feature Engineering (Phage)"]
     te["Track E: Pairwise Compatibility Features"]
     ti["Track I: External Data Download and Ingestion"]
-    tl["Track L: Mechanistic Phage Features"]
+    tl["Track L: Mechanistic Features and Generalized Inference"]
   end
 
   subgraph s2["Stage 2 (Parallelizable Integration)"]
@@ -334,11 +334,12 @@ graph LR
   - BioSample host_disease and isolation_host fields parsed from XML attributes
   - Raise on empty API responses or download failures
 
-## Track L: Mechanistic Phage Features
+## Track L: Mechanistic Features and Generalized Inference
 
-- **Guiding Principle:** Replace deleted label-derived pairwise features (Track E) with annotation-based mechanistic
-  features from phage genomes. Use Pharokka for functional annotation, then build RBP-receptor and defense-evasion
-  compatibility features from genome annotations rather than training label statistics.
+- **Guiding Principle:** Two goals: (1) Replace deleted label-derived pairwise features (Track E) with annotation-based
+  mechanistic features from Pharokka. (2) Build a generalized inference pipeline that accepts arbitrary E. coli genomes
+  and phage FNA files, computes features from sequence, and predicts lysis — removing the hard dependency on the fixed
+  404-strain panel.
 - [ ] **TL01** Set up bioinformatics environment with conda and verify Pharokka runs. Model: `gpt-5.4-mini`.
   - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn, mash, dnaapler) to environment.yml
   - Update codex-implement.yml to activate miniconda from $CONDA and install from environment.yml before pip install
@@ -378,6 +379,43 @@ graph LR
   - Predict with the TL05 model on the ECOR pairs
   - Compare predictions against VHRdb ground truth for any overlapping phages
   - Report out-of-distribution AUC and top-3 as the honest deployment validation
+- [ ] **TL07** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
+  - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature CSV so novel phage FNAs can be
+    projected into the existing 24-dim embedding
+  - Save the TC01 defense subtype column mask (variance filter thresholds and ordered column list) so novel Defense
+    Finder outputs map to the same 79 feature columns
+  - Add project_novel_phage(fna_path, svd_path) function that computes tetranucleotide frequencies + GC + genome length
+    and returns the model-ready phage feature vector
+  - Add project_novel_host(defense_finder_output_path, column_mask_path) function that parses Defense Finder output into
+    the model-ready host feature vector
+  - Round-trip test on one panel phage and one panel host confirms output matches the pre-computed feature table within
+    floating-point tolerance
+- [ ] **TL08** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
+  - Input is a genome assembly FASTA file for a novel E. coli strain
+  - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense system annotation
+  - Output is parsed into the same 79-column defense subtype vector the locked model expects, using the column mask from
+    TL07
+  - Add defense-finder to environment.yml (pip-installable via PyPI)
+  - Test by running on one publicly available E. coli genome (e.g., K-12 MG1655) and verifying >0 defense systems
+    detected
+  - End-to-end test confirms the output vector has the correct shape and column names matching the training feature set
+- [ ] **TL09** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
+  - Function signature: infer(host_genome_path, phage_fna_paths, model_path) returning DataFrame with columns phage,
+    p_lysis, rank
+  - Computes host defense features via TL08 runner
+  - Computes phage k-mer features via TL07 saved SVD transform
+  - Creates cross-product of (1 host x N phages), scores with trained LightGBM, applies isotonic calibration, ranks by
+    calibrated probability
+  - No dependency on the static pair table or the 404-strain panel metadata
+  - Integration test using one panel strain genome reproduces the locked model predictions for that strain within
+    calibration tolerance
+- [ ] **TL10** Validate generalized inference on ECOR collection strains. Model: `gpt-5.4`.
+  - Download ECOR genome assemblies from NCBI RefSeq (at least 10 strains with available assemblies)
+  - Run the TL09 inference function on ECOR strains x 96 panel phages
+  - Compare predictions against VHRdb ground truth for any overlapping strain-phage pairs
+  - Report out-of-distribution AUC and top-3 hit rate as the honest deployment generalization metric
+  - Document expected performance drop vs in-panel holdout and analyze which feature signals degrade most for novel
+    strains via SHAP
 
 ## Track J: Reproducibility and Release Quality
 
