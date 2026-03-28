@@ -1,6 +1,6 @@
 {
   "artifacts": {
-    "pair_table_csv_sha256": "2139186fe36654440a9a1c84abff3649e6643f917a5da7c35cabf0a8896cad6a"
+    "pair_table_csv_sha256": "40a16b5627ab4490d155243d513e00456a98544da7de3232d36f89545adad323"
   },
   "join_and_label_summary": {
     "cv_group_unique_count": 283,
@@ -35,13 +35,13 @@
       "auxiliary_outcome_reference": 4,
       "host_features": 16,
       "ids": 6,
-      "labels": 7,
+      "labels": 8,
       "metadata": 1,
       "observation_summary": 17,
       "pair_features": 1,
       "phage_features": 11
     },
-    "output_column_count": 63,
+    "output_column_count": 64,
     "step_name": "st02_build_pair_table"
   }
 }
