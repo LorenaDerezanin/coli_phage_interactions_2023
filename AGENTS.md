@@ -92,19 +92,16 @@
   invalidates prior assumptions (e.g., feature leakage, broken reproducibility), use the `/replan` skill. It encodes
   principles for auditing completed work, tracing feature lineage, killing invalid work, and decomposing re-runs.
 
-# Branch Protection
+# Branch and Commit Policy
 
-- Never push directly to main. All changes go through pull requests.
-- Create a feature branch, push it, and open a PR.
+- Committing directly to main is allowed. Use feature branches and PRs when the change benefits from review or when
+  working on orchestrator-dispatched tasks.
 - Always rebase on main before starting work and again before every push. The orchestrator continuously lands automated
   PRs, so main moves frequently — never assume your local main is current even if you pulled recently.
   For plain git: `git fetch origin main && git rebase origin/main`. For Graphite stacks: `gt sync` to pull trunk and
   restack, or `gt restack` to rebase the current stack on its trunk.
 - A `check-rebase-on-main` pre-push hook enforces this automatically. It blocks `git push` if the branch does not
   include `origin/main`'s tip. Activate it once per clone with: `pre-commit install --hook-type pre-push`.
-- **"stale info" on push:** If `git push --force-with-lease` fails with "stale info", the most likely cause is that the
-  PR merged while you were working and the remote branch was deleted. Run `git fetch --all --prune` — if the branch is
-  gone and the commit appears on main, start a new branch from main and reapply your changes.
 
 # PR Description Maintenance
 
