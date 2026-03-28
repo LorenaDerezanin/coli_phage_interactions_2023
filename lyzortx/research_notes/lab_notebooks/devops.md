@@ -573,15 +573,27 @@ leaving the PR review UI.
 #### Design decisions
 
 **1. Codecov over alternatives.** Evaluated Codecov, Coveralls, and manual coverage-comment actions. Codecov was chosen
-because it provides line-level annotations directly in PR diffs (not just a summary comment), is free for open-source,
-and requires minimal configuration — no `codecov.yml` needed for default behavior.
+because it provides line-level annotations directly in PR diffs — per Codecov docs: "Codecov will [...] display results
+in all future pull requests" ([source](https://docs.codecov.com/docs/pull-request-comments)). Free for open-source
+repos ([pricing](https://about.codecov.io/pricing/): "Free — Open Source — $0/month").
 
 **2. `fail_ci_if_error: false`.** The Codecov upload step is non-blocking. Coverage reporting is informational; a
-transient Codecov outage should not fail an otherwise-green CI run.
+transient Codecov outage should not fail an otherwise-green CI run. Per `codecov-action` README: "Specify if the CI
+pipeline should fail when Codecov runs into errors during upload" ([source](https://github.com/codecov/codecov-action)).
 
 **3. Coverage scope.** `.coveragerc` measures `lyzortx/` source, omitting `lyzortx/tests/` and
 `lyzortx/research_notes/` from coverage metrics. This focuses the signal on production code.
 
+**4. SHA-pinned action + explicit token.** The `codecov-action` is pinned to a full commit SHA (`75cd116...` = v5.5.4)
+for reproducibility. An explicit `CODECOV_TOKEN` secret is used for authentication — tokenless uploads can silently
+fail in some configurations per the action docs: "Required for [...] uploading coverage to Codecov"
+([source](https://github.com/codecov/codecov-action#arguments)).
+
+**5. PR comment reporting.** Added `codecov.yml` with `comment.layout: "reach,diff,flags,components"` to enable
+coverage delta summaries on every PR, per Codecov's common recipes
+([source](https://docs.codecov.com/docs/common-recipe-list#show-project-coverage-changes-on-the-pull-request-comment)).
+
 #### Prerequisites
 
-The Codecov GitHub App must be installed on the repo for annotations to appear on PRs.
+The Codecov GitHub App must be installed on the repo for annotations to appear on PRs. A `CODECOV_TOKEN` repository
+secret must be configured (available from the Codecov dashboard after app installation).
