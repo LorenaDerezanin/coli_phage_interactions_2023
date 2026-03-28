@@ -1,0 +1,8 @@
+[run]
+source = lyzortx
+omit =
+    lyzortx/tests/*
+    lyzortx/research_notes/*
+
+[report]
+show_missing = true

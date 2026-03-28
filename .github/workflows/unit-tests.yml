@@ -27,9 +27,15 @@ jobs:
         with:
           extra_args: --all-files
 
-      - name: Run pytest
+      - name: Run pytest with coverage
         run: |
-          pytest -q lyzortx/tests
+          pytest -q --cov=lyzortx --cov-report=xml:coverage.xml lyzortx/tests
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
 
       - name: Verify PLAN.md is up to date with plan.yml
         run: |

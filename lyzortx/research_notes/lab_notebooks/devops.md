@@ -561,3 +561,27 @@ TL01 should address this.
 - Single phage annotation (LF82_P8): 2m 43s, 276 CDS annotated
 - Produced: 29 tail genes, 7 lysis genes, 1 anti-restriction nuclease, 140 hypothetical proteins
 - Extrapolation for 97 phages: ~4-5 hours sequential, ~1 hour at 4 threads
+
+### 2026-03-28: Add code coverage reporting to CI via Codecov
+
+#### Executive summary
+
+Added `pytest-cov` and Codecov integration to the unit-tests workflow so that PR diffs show line-level coverage
+annotations. This gives contributors immediate feedback on which new or changed lines lack test coverage, without
+leaving the PR review UI.
+
+#### Design decisions
+
+**1. Codecov over alternatives.** Evaluated Codecov, Coveralls, and manual coverage-comment actions. Codecov was chosen
+because it provides line-level annotations directly in PR diffs (not just a summary comment), is free for open-source,
+and requires minimal configuration — no `codecov.yml` needed for default behavior.
+
+**2. `fail_ci_if_error: false`.** The Codecov upload step is non-blocking. Coverage reporting is informational; a
+transient Codecov outage should not fail an otherwise-green CI run.
+
+**3. Coverage scope.** `.coveragerc` measures `lyzortx/` source, omitting `lyzortx/tests/` and
+`lyzortx/research_notes/` from coverage metrics. This focuses the signal on production code.
+
+#### Prerequisites
+
+The Codecov GitHub App must be installed on the repo for annotations to appear on PRs.
