@@ -86,6 +86,7 @@ class FoldDataset:
     y_valid: Tuple[int, ...]
     X_train: Any
     X_valid: Any
+    sample_weights: Tuple[float, ...]
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -298,6 +299,7 @@ def prepare_fold_datasets(
             raise ValueError(f"Fold {fold_id} is missing train or validation rows.")
         y_train = tuple(int(str(row["label_hard_any_lysis"])) for row in train_rows)
         y_valid = tuple(int(str(row["label_hard_any_lysis"])) for row in valid_rows)
+        w_train = tuple(float(row.get("training_weight_v3", 1.0) or 1.0) for row in train_rows)
         vectorizer = DictVectorizer(sparse=True, sort=True)
         X_train = vectorizer.fit_transform(
             [
@@ -328,6 +330,7 @@ def prepare_fold_datasets(
                 y_valid=y_valid,
                 X_train=X_train,
                 X_valid=X_valid,
+                sample_weights=w_train,
             )
         )
     return datasets
@@ -345,7 +348,7 @@ def evaluate_candidate_grid(
         fold_metrics: List[Dict[str, object]] = []
         for dataset in fold_datasets:
             estimator = estimator_factory(params, dataset.fold_id)
-            estimator.fit(dataset.X_train, dataset.y_train)
+            estimator.fit(dataset.X_train, dataset.y_train, sample_weight=dataset.sample_weights)
             probabilities = _predict_probabilities(estimator, dataset.X_valid)
             scored_rows = []
             for row, probability in zip(dataset.valid_rows, probabilities):
@@ -414,7 +417,7 @@ def score_rows_with_cv_predictions(
     scored_rows: List[Dict[str, object]] = []
     for dataset in fold_datasets:
         estimator = estimator_factory(best_params, dataset.fold_id)
-        estimator.fit(dataset.X_train, dataset.y_train)
+        estimator.fit(dataset.X_train, dataset.y_train, sample_weight=dataset.sample_weights)
         probabilities = _predict_probabilities(estimator, dataset.X_valid)
         for row, probability in zip(dataset.valid_rows, probabilities):
             scored = dict(row)
@@ -745,12 +748,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         feature_space,
         estimator_factory=lightgbm_factory,
         params=best_lightgbm["params"],
+        sample_weight_key="training_weight_v3",
     )
     _, _, _, holdout_rows_logreg, holdout_logreg_prob = fit_final_estimator(
         merged_rows,
         feature_space,
         estimator_factory=logreg_factory,
         params=best_logreg["params"],
+        sample_weight_key="training_weight_v3",
     )
     holdout_prediction_rows: List[Dict[str, object]] = []
     for lightgbm_row, logreg_row, lightgbm_prob, logreg_prob in zip(

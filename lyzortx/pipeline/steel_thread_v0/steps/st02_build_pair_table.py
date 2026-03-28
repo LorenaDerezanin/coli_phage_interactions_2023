@@ -12,6 +12,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 
+BORDERLINE_NOISE_WEIGHT = 0.1
+
 HOST_FEATURE_MAP: Sequence[Tuple[str, str]] = (
     ("Pathotype", "host_pathotype"),
     ("Clermont_Phylo", "host_clermont_phylo"),
@@ -326,6 +328,11 @@ def main(argv: Optional[List[str]] = None) -> None:
             "aux_matrix_nonzero": matrix_binary(matrix_score_raw, threshold=0.000001),
             "aux_matrix_ge2": matrix_binary(matrix_score_raw, threshold=2.0),
             "aux_matrix_ge3": matrix_binary(matrix_score_raw, threshold=3.0),
+            "training_weight_v3": (
+                BORDERLINE_NOISE_WEIGHT
+                if (hard_label == "1" and matrix_binary(matrix_score_raw, threshold=0.000001) == "0")
+                else 1.0
+            ),
         }
         pair_row.update(host_features)
         pair_row["host_feature_missing_count"] = host_missing
@@ -382,6 +389,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "label_strict",
                 "label_strict_include_in_training",
                 "label_strict_reason",
+                "training_weight_v3",
             ],
             "observation_summary": [
                 "obs_total",
