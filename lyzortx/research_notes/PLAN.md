@@ -373,13 +373,7 @@ graph LR
   - Report AUC, top-3, Brier delta vs the current locked baseline
   - If mechanistic features improve metrics, propose a new locked v1 config
   - Run SHAP on the new model to verify mechanistic features contribute signal
-- [ ] **TL06** Validate model on external strains using mechanistic features. Model: `gpt-5.4`.
-  - Compute host features (Defense Finder + OMP BLAST) for ECOR collection strains from public genomes
-  - Compute mechanistic pairwise features for ECOR strains x panel phages
-  - Predict with the TL05 model on the ECOR pairs
-  - Compare predictions against VHRdb ground truth for any overlapping phages
-  - Report out-of-distribution AUC and top-3 as the honest deployment validation
-- [ ] **TL07** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
+- [ ] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
   - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature CSV so novel phage FNAs can be
     projected into the existing 24-dim embedding
   - Save the TC01 defense subtype column mask (variance filter thresholds and ordered column list) so novel Defense
@@ -390,32 +384,40 @@ graph LR
     the model-ready host feature vector
   - Round-trip test on one panel phage and one panel host confirms output matches the pre-computed feature table within
     floating-point tolerance
-- [ ] **TL08** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
+- [ ] **TL07** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
   - Input is a genome assembly FASTA file for a novel E. coli strain
   - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense system annotation
   - Output is parsed into the same 79-column defense subtype vector the locked model expects, using the column mask from
-    TL07
+    TL06
   - Add defense-finder to environment.yml (pip-installable via PyPI)
   - Test by running on one publicly available E. coli genome (e.g., K-12 MG1655) and verifying >0 defense systems
     detected
   - End-to-end test confirms the output vector has the correct shape and column names matching the training feature set
-- [ ] **TL09** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
+- [ ] **TL08** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
   - Function signature: infer(host_genome_path, phage_fna_paths, model_path) returning DataFrame with columns phage,
     p_lysis, rank
-  - Computes host defense features via TL08 runner
-  - Computes phage k-mer features via TL07 saved SVD transform
+  - Computes host defense features via TL07 runner
+  - Computes phage k-mer features via TL06 saved SVD transform
   - Creates cross-product of (1 host x N phages), scores with trained LightGBM, applies isotonic calibration, ranks by
     calibrated probability
   - No dependency on the static pair table or the 404-strain panel metadata
   - Integration test using one panel strain genome reproduces the locked model predictions for that strain within
     calibration tolerance
-- [ ] **TL10** Validate generalized inference on ECOR collection strains. Model: `gpt-5.4`.
-  - Download ECOR genome assemblies from NCBI RefSeq (at least 10 strains with available assemblies)
-  - Run the TL09 inference function on ECOR strains x 96 panel phages
-  - Compare predictions against VHRdb ground truth for any overlapping strain-phage pairs
-  - Report out-of-distribution AUC and top-3 hit rate as the honest deployment generalization metric
-  - Document expected performance drop vs in-panel holdout and analyze which feature signals degrade most for novel
-    strains via SHAP
+- [ ] **TL09** Validate generalized inference on Virus-Host DB positive pairs. Model: `gpt-5.4`.
+  - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage genome accessions on NCBI — expect ~70
+    strains, ~900 phage genomes, ~500 positive pairs
+  - Download genome assemblies from NCBI for at least 10 novel hosts (strains not in the 404 training panel) that each
+    have >=5 associated phage genomes
+  - Download the associated phage genome FNA files from NCBI
+  - Run the TL08 generalized inference function on each novel host x its associated phages
+  - Positive-only validation metrics: (a) median predicted P(lysis) for known positive pairs — expect significantly
+    above the population base rate of ~30%, (b) for each host, rank of known-positive phages among all candidate phages
+    — expect above-median rank, (c) calibration check — predicted P(lysis) for known positives should be higher than for
+    random host-phage pairs
+  - Also run on panel hosts that appear in VHdb (e.g., LF82, EDL933, 55989) as a round-trip sanity check — predictions
+    from genome-derived features should match the pair-table path
+  - Document limitations in lab notebook — these are positive-only pairs (no negatives), so AUC and top-3 hit rate
+    cannot be computed
 
 ## Track J: Reproducibility and Release Quality
 

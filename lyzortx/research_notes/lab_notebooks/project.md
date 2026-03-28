@@ -840,3 +840,60 @@ replaces the deleted label-derived pairwise features with annotation-based featu
 - 1 anti-restriction nuclease
 - 140 hypothetical proteins (51% unannotated — typical for phage genomes)
 - Extrapolation: ~1 hour for all 97 phages at 4 threads
+
+#### Future: External validation dataset for generalized inference pipeline
+
+**Trigger condition:** Revisit when a full interaction matrix (with both positives and negatives) for novel E. coli
+strains becomes available. TL09 covers positive-only validation via VHdb; this note is about the stronger full-matrix
+validation that would allow AUC and top-3 computation.
+
+**Context:** The v2 plan adds a generalized inference pipeline (TL06-TL08) that accepts arbitrary E. coli genomes and
+arbitrary phage FNAs, computes features from sequence, and predicts lysis. The locked v1 model uses only defense subtypes
+(79 features from Defense Finder) and phage k-mer SVD (26 features from tetranucleotide frequencies) — both
+sequence-derivable, so the pipeline is architecturally sound. TL09 validates on VHdb positive-only pairs, but
+full-matrix out-of-distribution validation (with negatives) requires a dataset that doesn't yet exist in public.
+
+**Why existing sources don't provide a full matrix for novel strains:**
+
+- **ECOR strains** are already in the 404-strain training panel (71 of 404). Not novel.
+- **VHRdb pair-table overlap** (26,029 rows) is the paper's own data (datasource 257). Novel VHRdb pairs (30,643) failed
+  entity resolution. VHRdb strain-level pairs (~500 positives across ~70 hosts) are usable for positive-only validation
+  (TL09) but contain no negatives.
+- **BASEL** has labeled E. coli interactions but only 4 E. coli host strains. Phages are novel (78 genomes on NCBI,
+  MZ501046-MZ501113) but the host count is too small for meaningful metrics.
+- **KlebPhaCol** is Klebsiella, not E. coli. Wrong species.
+- **GPB** (Gut Phage Biobank) has only 1 E. coli strain (RTGS0219) out of 40 hosts. Phage genomes on CNGB, not NCBI.
+- **SNIPR001** (Nature Biotech 2023) has 429 E. coli strains x 162 phages with interaction matrix on GitHub, but strain
+  genomes are commercially restricted.
+
+**What a full-matrix validation dataset requires:**
+
+1. **E. coli strains not in our 404-strain panel** — at least 20-30 strains for meaningful ranking metrics.
+2. **Full interaction matrix** (lysis AND no-lysis from spot assay or equivalent) — not just positive pairs.
+3. **Genome assemblies for the host strains** — so TL07 can run Defense Finder.
+4. **Phage genomes (FNA)** — so TL06 can project k-mer features.
+5. **Sufficient phage panel size** — at least 10-20 phages per host for top-3 ranking to be meaningful.
+
+**Partial solution found (2026-03-28): Virus-Host DB positive-only validation.**
+
+Virus-Host DB contains ~70 E. coli strains at strain-level resolution (excluding lab strains) with ~900 unique phage
+genome accessions and ~500 positive pairs (phage confirmed to lyse host, from literature). Most hosts have NCBI genome
+assemblies. This gives a positive-only validation path: download host assemblies + phage FNAs, run generalized inference,
+check that known-positive pairs get high predicted P(lysis). Limitations: no negatives, so AUC and top-3 hit rate cannot
+be computed. Metrics are limited to recall-on-positives, calibration-on-positives, and rank-of-positives-vs-random. This
+is implemented as TL09 in the plan.
+
+**Full interaction matrix validation still requires:**
+
+- Published phage therapy studies with E. coli host-range matrices and deposited genomes (both host and phage).
+- Phage biobanks that publish interaction data alongside NCBI accessions (e.g., future GPB or DSMZ releases).
+- Direct collaboration with labs running E. coli phage screening panels.
+- The SNIPR001 dataset (Nature Biotech 2023) has 429 E. coli strains x 162 phages with interaction matrix on GitHub,
+  but strain genomes are commercially restricted.
+
+**What to do when a full-matrix candidate is found:**
+
+- Verify E. coli strain count, phage count, and label quality before committing to ingestion.
+- Download host genome assemblies from NCBI, run TL07/TL08, compare predictions against labels.
+- Report AUC, top-3 hit rate, and calibration metrics as the honest out-of-distribution benchmark.
+- Compare against in-panel holdout metrics to quantify the generalization gap.
