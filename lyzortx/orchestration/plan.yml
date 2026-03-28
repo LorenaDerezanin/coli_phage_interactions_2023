@@ -117,13 +117,13 @@ tracks:
       implemented_in: lyzortx/pipeline/track_a/run_track_a.py
     - id: TA11
       title: Fix label policy for borderline matrix_score=0 pairs
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Identify the 2557 pairs where aux_matrix_score_0_to_4=0 but label_hard_any_lysis=1
         (single-replicate noise positives)
-      - Add a label_v3 policy that sets label_hard_any_lysis=0 for these pairs, or add
-        a training weight that downweights them
+      - Add a label_v3 policy that sets label_hard_any_lysis=0 for these pairs, or
+        add a training weight that downweights them
       - Retrain the locked v1 model with the corrected labels and report AUC, top-3,
         Brier delta
       - VHRdb analysis showed +3.1pp top-3 from downweighting these pairs, so expect
@@ -505,8 +505,7 @@ tracks:
       acceptance_criteria:
       - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/,
         GPB from https://phagebank.org/
-      - Each source produces an ingested CSV with >0 rows under
-        lyzortx/generated_outputs/track_i/tier_a_ingest/
+      - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
       - All rows carry source_system provenance
       - Raise on download failure, do not silently produce empty output
     - id: TI05
@@ -514,8 +513,7 @@ tracks:
       status: done
       model: gpt-5.4
       acceptance_criteria:
-      - Map external bacteria and phage names to canonical IDs via Track A alias
-        resolution
+      - Map external bacteria and phage names to canonical IDs via Track A alias resolution
       - Report how many external pairs overlap with the internal 404x96 panel vs are
         novel
       - Output a harmonized pair table with >0 rows joinable on pair_id
@@ -532,11 +530,11 @@ tracks:
       - Raise on empty API responses or download failures
   L:
     name: Mechanistic Features and Generalized Inference
-    description: 'Two goals: (1) Replace deleted label-derived pairwise features
-      (Track E) with annotation-based mechanistic features from Pharokka. (2) Build
-      a generalized inference pipeline that accepts arbitrary E. coli genomes and
-      phage FNA files, computes features from sequence, and predicts lysis — removing
-      the hard dependency on the fixed 404-strain panel.'
+    description: 'Two goals: (1) Replace deleted label-derived pairwise features (Track
+      E) with annotation-based mechanistic features from Pharokka. (2) Build a generalized
+      inference pipeline that accepts arbitrary E. coli genomes and phage FNA files,
+      computes features from sequence, and predicts lysis — removing the hard dependency
+      on the fixed 404-strain panel.'
     stage: 1
     depends_on:
     - C
@@ -551,8 +549,8 @@ tracks:
         mash, dnaapler) to environment.yml and verify pharokka runs in CI
       - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
       - Store annotations under lyzortx/generated_outputs/track_l/pharokka_annotations/
-      - Parse the CDS functional annotations into a per-phage summary table with
-        counts by PHROGs category (tail, lysis, defense, etc.)
+      - Parse the CDS functional annotations into a per-phage summary table with counts
+        by PHROGs category (tail, lysis, defense, etc.)
       - Extract per-phage RBP gene list with functional family annotations
       - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
       - All 97 phages must produce >0 annotated CDS
@@ -565,11 +563,12 @@ tracks:
         target receptor classes present on the host (using Track C OMP receptor data)
       - Features must be derived from genome annotations only, not from training labels
       - Output CSV joinable on bacteria+phage pair
-      - Compare against the existing RBP_list.csv curated annotations as a sanity check
+      - Compare against the existing RBP_list.csv curated annotations as a sanity
+        check
       - 'Escape hatch: if no reliable RBP-to-receptor mapping can be constructed from
-        Pharokka PHROG annotations alone (i.e., annotations are too coarse to
-        distinguish receptor targets), document the gap in the lab notebook and
-        proceed to TL04 with TL03 features only'
+        Pharokka PHROG annotations alone (i.e., annotations are too coarse to distinguish
+        receptor targets), document the gap in the lab notebook and proceed to TL04
+        with TL03 features only'
     - id: TL03
       title: Build mechanistic defense-evasion features from annotations
       status: pending
@@ -585,8 +584,8 @@ tracks:
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - Add whichever of TL02+TL03 produced usable features to the locked defense +
-        phage_genomic baseline
+      - Add whichever of TL02+TL03 produced usable features to the locked defense
+        + phage_genomic baseline
       - Retrain with TG01 hyperparameters on the ST03 holdout split
       - Report AUC, top-3, Brier delta vs the current locked baseline
       - If mechanistic features improve metrics, propose a new locked v1 config
@@ -596,15 +595,14 @@ tracks:
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer
-        feature CSV so novel phage FNAs can be projected into the existing 24-dim
-        embedding
+      - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature
+        CSV so novel phage FNAs can be projected into the existing 24-dim embedding
       - Save the TC01 defense subtype column mask (variance filter thresholds and
-        ordered column list) so novel Defense Finder outputs map to the same 79
-        feature columns
-      - Add project_novel_phage(fna_path, svd_path) function that computes
-        tetranucleotide frequencies + GC + genome length and returns the model-ready
-        phage feature vector
+        ordered column list) so novel Defense Finder outputs map to the same 79 feature
+        columns
+      - Add project_novel_phage(fna_path, svd_path) function that computes tetranucleotide
+        frequencies + GC + genome length and returns the model-ready phage feature
+        vector
       - Add project_novel_host(defense_finder_output_path, column_mask_path) function
         that parses Defense Finder output into the model-ready host feature vector
       - Round-trip test on one panel phage and one panel host confirms output matches
@@ -643,26 +641,26 @@ tracks:
       status: pending
       model: gpt-5.4
       acceptance_criteria:
-      - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with
-        phage genome accessions on NCBI — expect ~70 strains, ~900 phage genomes,
-        ~500 positive pairs
+      - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage
+        genome accessions on NCBI — expect ~70 strains, ~900 phage genomes, ~500 positive
+        pairs
       - Download genome assemblies from NCBI for at least 10 novel hosts (strains
         not in the 404 training panel) that each have >=5 associated phage genomes
       - Download the associated phage genome FNA files from NCBI
-      - Run the TL07 generalized inference function on each novel host x its
-        associated phages plus the 96 panel phages (rank known-positive phages
-        against the full union of panel + VHdb phages for that host)
+      - Run the TL07 generalized inference function on each novel host x its associated
+        phages plus the 96 panel phages (rank known-positive phages against the full
+        union of panel + VHdb phages for that host)
       - 'Positive-only validation metrics: (a) median predicted P(lysis) for known
         positive pairs — expect significantly above the population base rate of ~30%,
         (b) for each host, rank of known-positive phages among all candidate phages
-        in the union set — expect above-median rank, (c) calibration check —
-        predicted P(lysis) for known positives should be higher than for random
-        host-phage pairs from the same union set'
+        in the union set — expect above-median rank, (c) calibration check — predicted
+        P(lysis) for known positives should be higher than for random host-phage pairs
+        from the same union set'
       - Also run on panel hosts that appear in VHdb (e.g., LF82, EDL933, 55989) as
         a round-trip sanity check — predictions from genome-derived features should
         match the pair-table path
-      - Document limitations in lab notebook — these are positive-only pairs (no
-        negatives), so AUC and top-3 hit rate cannot be computed
+      - Document limitations in lab notebook — these are positive-only pairs (no negatives),
+        so AUC and top-3 hit rate cannot be computed
   J:
     name: Reproducibility and Release Quality
     description: One-command regeneration and environment freezing for v1 pipeline.

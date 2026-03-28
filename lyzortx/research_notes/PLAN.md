@@ -105,7 +105,7 @@ graph LR
       `lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}`.
 - [x] **TA10** Add scripts that regenerate all derived labels from raw data in one command. Implemented in
       `lyzortx/pipeline/track_a/run_track_a.py`.
-- [ ] **TA11** Fix label policy for borderline matrix_score=0 pairs. Model: `gpt-5.4-mini`.
+- [x] **TA11** Fix label policy for borderline matrix_score=0 pairs. Model: `gpt-5.4-mini`.
   - Identify the 2557 pairs where aux_matrix_score_0_to_4=0 but label_hard_any_lysis=1 (single-replicate noise
     positives)
   - Add a label_v3 policy that sets label_hard_any_lysis=0 for these pairs, or add a training weight that downweights
