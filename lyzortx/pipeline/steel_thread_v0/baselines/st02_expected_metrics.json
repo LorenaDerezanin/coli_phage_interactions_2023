@@ -1,6 +1,6 @@
 {
   "artifacts": {
-    "pair_table_csv_sha256": "1132d676670077ff668eac3f1142e7b13c03d864e09ba77f35bf7c1487637bac"
+    "pair_table_csv_sha256": "2139186fe36654440a9a1c84abff3649e6643f917a5da7c35cabf0a8896cad6a"
   },
   "join_and_label_summary": {
     "cv_group_unique_count": 283,
@@ -33,7 +33,7 @@
   "schema_summary": {
     "column_group_sizes": {
       "auxiliary_outcome_reference": 4,
-      "host_features": 17,
+      "host_features": 16,
       "ids": 6,
       "labels": 7,
       "metadata": 1,
@@ -41,7 +41,7 @@
       "pair_features": 1,
       "phage_features": 11
     },
-    "output_column_count": 64,
+    "output_column_count": 63,
     "step_name": "st02_build_pair_table"
   }
 }
