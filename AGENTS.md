@@ -19,6 +19,8 @@
 # Environment Policy
 
 - **Local development:** Use the `phage_env` conda environment. Activate it with `conda activate phage_env`.
+- **Always use `conda run -n phage_env ...`**, never `conda run -p <path> ...`. The `-n` flag resolves the environment
+  by name regardless of where it is installed; `-p` hard-codes an absolute path that differs across machines.
 - **GitHub Actions workflows:** Bootstrap `phage_env` with `conda env create -f environment.yml -n phage_env`, then
   run repo Python, pytest, and pre-commit commands via `conda run -n phage_env ...`.
 - **How to detect GitHub Actions:** Check `GITHUB_ACTIONS=true`.
@@ -102,6 +104,13 @@
   restack, or `gt restack` to rebase the current stack on its trunk.
 - A `check-rebase-on-main` pre-push hook enforces this automatically. It blocks `git push` if the branch does not
   include `origin/main`'s tip. Activate it once per clone with: `pre-commit install --hook-type pre-push`.
+
+# Worktree Lifecycle
+
+- Do not remove a worktree until its PR is merged (or explicitly abandoned by the user). The worktree is the working
+  copy for addressing further review feedback, CI fixes, and follow-up pushes.
+- After creating a worktree and pushing a PR, leave the worktree in place and tell the user where it is.
+- Only clean up worktrees when the user asks or after confirming the PR has been merged.
 
 # PR Description Maintenance
 
