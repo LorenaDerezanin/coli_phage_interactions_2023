@@ -543,25 +543,12 @@ tracks:
     - D
     tasks:
     - id: TL01
-      title: Set up bioinformatics environment with conda and verify Pharokka runs
-      status: pending
-      model: gpt-5.4-mini
-      acceptance_criteria:
-      - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn,
-        mash, dnaapler) to environment.yml
-      - Update codex-implement.yml to activate miniconda from $CONDA and install from
-        environment.yml before pip install
-      - Verify pharokka --version succeeds in CI
-      - Verify pharokka.py runs on one test phage FNA in CI (download databases +
-        annotate data/genomics/phages/FNA/LF82_P8.fna)
-      - Update AGENTS.md Environment Policy to document the conda + pip dual setup
-      - Update INSTALL.md to use canonical conda commands (conda create, conda activate)
-        that work with miniconda
-    - id: TL02
       title: Annotate all 97 phage genomes with Pharokka
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
+      - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn,
+        mash, dnaapler) to environment.yml and verify pharokka runs in CI
       - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
       - Store annotations under lyzortx/generated_outputs/track_l/pharokka_annotations/
       - Parse the CDS functional annotations into a per-phage summary table with
@@ -569,7 +556,7 @@ tracks:
       - Extract per-phage RBP gene list with functional family annotations
       - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
       - All 97 phages must produce >0 annotated CDS
-    - id: TL03
+    - id: TL02
       title: Build mechanistic RBP-receptor compatibility features from annotations
       status: pending
       model: gpt-5.4
@@ -579,7 +566,11 @@ tracks:
       - Features must be derived from genome annotations only, not from training labels
       - Output CSV joinable on bacteria+phage pair
       - Compare against the existing RBP_list.csv curated annotations as a sanity check
-    - id: TL04
+      - 'Escape hatch: if no reliable RBP-to-receptor mapping can be constructed from
+        Pharokka PHROG annotations alone (i.e., annotations are too coarse to
+        distinguish receptor targets), document the gap in the lab notebook and
+        proceed to TL04 with TL03 features only'
+    - id: TL03
       title: Build mechanistic defense-evasion features from annotations
       status: pending
       model: gpt-5.4
@@ -589,17 +580,18 @@ tracks:
       - Features must be derived from Pharokka anti-defense annotations, not from
         training label collaborative filtering
       - Output CSV joinable on bacteria+phage pair
-    - id: TL05
+    - id: TL04
       title: Retrain v1 model with mechanistic pairwise features and measure lift
       status: pending
       model: gpt-5.4-mini
       acceptance_criteria:
-      - Add TL03+TL04 features to the locked defense + phage_genomic baseline
+      - Add whichever of TL02+TL03 produced usable features to the locked defense +
+        phage_genomic baseline
       - Retrain with TG01 hyperparameters on the ST03 holdout split
       - Report AUC, top-3, Brier delta vs the current locked baseline
       - If mechanistic features improve metrics, propose a new locked v1 config
       - Run SHAP on the new model to verify mechanistic features contribute signal
-    - id: TL06
+    - id: TL05
       title: Persist fitted transforms for novel-organism feature projection
       status: pending
       model: gpt-5.4-mini
@@ -617,7 +609,7 @@ tracks:
         that parses Defense Finder output into the model-ready host feature vector
       - Round-trip test on one panel phage and one panel host confirms output matches
         the pre-computed feature table within floating-point tolerance
-    - id: TL07
+    - id: TL06
       title: Build Defense Finder runner for novel E. coli genomes
       status: pending
       model: gpt-5.4
@@ -626,27 +618,27 @@ tracks:
       - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense
         system annotation
       - Output is parsed into the same 79-column defense subtype vector the locked
-        model expects, using the column mask from TL06
+        model expects, using the column mask from TL05
       - Add defense-finder to environment.yml (pip-installable via PyPI)
       - Test by running on one publicly available E. coli genome (e.g., K-12 MG1655)
         and verifying >0 defense systems detected
       - End-to-end test confirms the output vector has the correct shape and column
         names matching the training feature set
-    - id: TL08
+    - id: TL07
       title: Build generalized inference function for arbitrary genomes
       status: pending
       model: gpt-5.4
       acceptance_criteria:
       - 'Function signature: infer(host_genome_path, phage_fna_paths, model_path)
         returning DataFrame with columns phage, p_lysis, rank'
-      - Computes host defense features via TL07 runner
-      - Computes phage k-mer features via TL06 saved SVD transform
+      - Computes host defense features via TL06 runner
+      - Computes phage k-mer features via TL05 saved SVD transform
       - Creates cross-product of (1 host x N phages), scores with trained LightGBM,
         applies isotonic calibration, ranks by calibrated probability
       - No dependency on the static pair table or the 404-strain panel metadata
       - Integration test using one panel strain genome reproduces the locked model
         predictions for that strain within calibration tolerance
-    - id: TL09
+    - id: TL08
       title: Validate generalized inference on Virus-Host DB positive pairs
       status: pending
       model: gpt-5.4
@@ -657,13 +649,15 @@ tracks:
       - Download genome assemblies from NCBI for at least 10 novel hosts (strains
         not in the 404 training panel) that each have >=5 associated phage genomes
       - Download the associated phage genome FNA files from NCBI
-      - Run the TL08 generalized inference function on each novel host x its
-        associated phages
+      - Run the TL07 generalized inference function on each novel host x its
+        associated phages plus the 96 panel phages (rank known-positive phages
+        against the full union of panel + VHdb phages for that host)
       - 'Positive-only validation metrics: (a) median predicted P(lysis) for known
         positive pairs — expect significantly above the population base rate of ~30%,
         (b) for each host, rank of known-positive phages among all candidate phages
-        — expect above-median rank, (c) calibration check — predicted P(lysis) for
-        known positives should be higher than for random host-phage pairs'
+        in the union set — expect above-median rank, (c) calibration check —
+        predicted P(lysis) for known positives should be higher than for random
+        host-phage pairs from the same union set'
       - Also run on panel hosts that appear in VHdb (e.g., LF82, EDL933, 55989) as
         a round-trip sanity check — predictions from genome-derived features should
         match the pair-table path
