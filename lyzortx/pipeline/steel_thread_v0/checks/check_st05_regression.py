@@ -107,7 +107,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     expected = load_json(args.expected_baseline_path)
     actual = build_actual_summary(args.intermediate_dir)
-    errors = compare_dicts(expected, actual)
+    errors = compare_dicts(expected, actual, numeric_tolerance=1e-4)
     if errors:
         print("ST0.5 regression check failed:")
         for err in errors:

@@ -1,6 +1,6 @@
 {
   "artifacts": {
-    "pair_table_csv_sha256": "1132d676670077ff668eac3f1142e7b13c03d864e09ba77f35bf7c1487637bac"
+    "pair_table_csv_sha256": "40a16b5627ab4490d155243d513e00456a98544da7de3232d36f89545adad323"
   },
   "join_and_label_summary": {
     "cv_group_unique_count": 283,
@@ -33,9 +33,9 @@
   "schema_summary": {
     "column_group_sizes": {
       "auxiliary_outcome_reference": 4,
-      "host_features": 17,
+      "host_features": 16,
       "ids": 6,
-      "labels": 7,
+      "labels": 8,
       "metadata": 1,
       "observation_summary": 17,
       "pair_features": 1,
