@@ -1,6 +1,9 @@
 {
   "permissions": {
     "allow": [
+      "Bash(conda run -n phage_env pharokka.py *)",
+      "Bash(conda run -n phage_env pre-commit *)",
+      "Bash(conda run -n phage_env pytest *)",
       "Bash(gh issue list *)",
       "Bash(gh issue view *)",
       "Bash(gh repo view *)",

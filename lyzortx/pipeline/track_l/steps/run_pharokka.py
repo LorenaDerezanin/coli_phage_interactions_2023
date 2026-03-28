@@ -143,7 +143,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--threads",
         type=int,
-        default=4,
+        default=8,
         help="Threads per pharokka invocation",
     )
     parser.add_argument(
