@@ -252,3 +252,67 @@ imperfect reference rather than ground truth.
 - **Curated-vs-Pharokka mismatch is tolerable for this use case**: the goal is not to recreate `RBP_list.csv` exactly,
   but to derive a reproducible genome-only feature block. The 74/96 agreement rate is good enough for a sanity check,
   but the disagreement counts should be acknowledged if TL05 shows surprising behavior.
+
+### 2026-03-29: TL04 Mechanistic defense-evasion features from annotations
+
+#### Executive summary
+
+Built `build_mechanistic_defense_evasion_features.py`, a Track L step that turns TL02 anti-defense enrichment hits plus
+Pharokka anti-defense PHROG annotations into a pairwise feature matrix for the full 369×96 panel. The builder
+collapses the 12 panel anti-defense PHROGs to 11 unique carrier profiles, then emits a 36-column experimental block:
+11 direct phage-level anti-defense profile indicators plus 25 weighted pairwise defense-evasion features. This output
+is joinable on `pair_id` / `bacteria` / `phage` and is explicitly marked as an experimental candidate block for TL05,
+not a confirmed mechanistic signal.
+
+#### What was implemented
+
+- `lyzortx/pipeline/track_l/steps/build_mechanistic_defense_evasion_features.py`: TL04 builder. It:
+  - bootstraps Track A labels and the TL02 anti-defense enrichment CSV when they are missing from a fresh checkout,
+  - rebuilds the panel anti-defense PHROG matrix from cached Pharokka TSVs,
+  - collapses duplicate PHROG carrier profiles before feature construction,
+  - writes the feature CSV, column metadata, profile metadata, and manifest.
+- `lyzortx/pipeline/track_l/run_track_l.py`: added `--step defense-features` to run TL04 directly.
+- `lyzortx/tests/test_track_l_mechanistic_defense_evasion_features.py`: 4 unit tests covering duplicate-profile
+  collapsing, duplicate-association merging, pairwise feature emission, and a minimal end-to-end `main()` run with a
+  realistic defense-subtype support threshold.
+
+#### Data dimensions and outputs
+
+- **Panel pairs**: 35,424 bacteria-phage pairs (369 bacteria × 96 phages).
+- **Collapsed direct phage block**: 11 columns from the 12 panel anti-defense PHROGs.
+- **Collapsed pairwise block**: 25 weighted columns total.
+- **Full TL04 block**: 36 feature columns plus `pair_id` / `bacteria` / `phage`.
+- **Phage coverage**: 66/96 phages carry at least one collapsed anti-defense profile; the maximum is 4 profiles on a
+  single phage, and 52 phages carry exactly 1.
+- **Most common collapsed profiles**:
+  - `ANTIDEF_PHROG_2568` (`ocr-like anti-restriction`) on 31 phages.
+  - `ANTIDEF_PHROG_757` (`DNA methyltransferase`) on 13 phages.
+  - `ANTIDEF_PHROG_111` (`DNA methyltransferase`) on 12 phages.
+
+#### Design decisions
+
+- **Collapse before feature construction**: TL04 applies the same duplicate-profile logic as TL03 so exact co-carried
+  anti-defense PHROGs do not inflate either the direct phage block or the pairwise block.
+- **Use `lysis_rate_diff`, not odds ratio**: TL04 uses TL02's bounded conditional effect size as the feature weight for
+  the same reasons as TL03: sparse anti-defense tables would otherwise produce unstable `inf`/0 odds ratios.
+- **Carry the caveat into the metadata, not just the notebook**: the feature metadata, profile metadata, and manifest
+  all mark this block as `experimental_candidate` so TL05 can include it as a separate optional block without confusing
+  it with the stronger TL03 RBP-receptor features.
+- **Bootstrap missing prerequisites, but fail loudly on real gaps**: on a fresh checkout the builder regenerates Track A
+  labels and TL02 enrichment outputs if the default generated files are absent; custom paths must already exist.
+
+#### Interpretation
+
+- **The defense-evasion block is viable but materially weaker than TL03**: TL02's 27 significant anti-defense × defense
+  hits collapse only slightly, to 25 unique weighted pairwise features after duplicate-profile merging. That is enough
+  to evaluate in TL05, but it is an order of magnitude smaller than the 302-column TL03 pairwise block.
+- **The signal is concentrated in a few defense families**: 8/25 pairwise columns target `Thoeris_II`, 4 target
+  `CAS_Class1-Subtype-I-F`, and only 9 distinct defense subtypes appear at all. The largest single weights are
+  `ANTIDEF_PHROG_363 × Thoeris_II` (`0.3392`) and `ANTIDEF_PHROG_4452 × Thoeris_II` (`0.3138`).
+- **Generic methyltransferase annotations still dominate the phage side**: among the most common profiles, PHROGs 111,
+  116/67, 1530, 2226, 56, and 757 map to `DNA methyltransferase` or `SAM-dependent methyltransferase` annotations.
+  This is exactly the caveat from TL02: some apparent defense-evasion signal may reflect broad anti-restriction or
+  lineage correlation rather than subtype-specific evasion.
+- **The block is sparse enough to stay optional**: at most 6 weighted TL04 columns are non-zero on any single pair row,
+  and at most 4 direct anti-defense profiles are present on any phage. That sparsity is compatible with evaluating TL04
+  as a separate optional block in TL05 rather than folding it into the main feature surface by default.
