@@ -316,3 +316,52 @@ not a confirmed mechanistic signal.
 - **The block is sparse enough to stay optional**: at most 6 weighted TL04 columns are non-zero on any single pair row,
   and at most 4 direct anti-defense profiles are present on any phage. That sparsity is compatible with evaluating TL04
   as a separate optional block in TL05 rather than folding it into the main feature surface by default.
+
+### 2026-03-29: TL05 Retrain v1 model with mechanistic pairwise features and measure lift
+
+#### Executive summary
+
+Retrained the locked v1 LightGBM on the ST03 holdout split with TG01 hyperparameters and evaluated four arms
+separately: the current locked defense + phage-genomic baseline, +TL03 only, +TL04 only, and +TL03+TL04. TL04 was the
+best mechanistic add-on. It improved all three holdout metrics relative to the retrained baseline arm, so TL05 writes a
+proposed lock config for `defense + phage_genomic + TL04`.
+
+#### What was implemented
+
+- `lyzortx/pipeline/track_l/steps/retrain_mechanistic_v1_model.py`: new TL05 retrain/eval step. It bootstraps TG01,
+  TL03, and TL04 when the committed generated outputs are absent, retrains each arm with the fixed TG01 LightGBM
+  hyperparameters, reports holdout metrics and deltas, and runs SHAP on the best mechanistic arm.
+- `lyzortx/pipeline/track_l/run_track_l.py`: added `--step retrain-mechanistic-v1`.
+- `lyzortx/tests/test_track_l_retrain_mechanistic_v1_model.py`: tests for arm construction, feature-block
+  classification, proposal selection, and an end-to-end mocked TL05 run.
+- `lyzortx/tests/test_track_l_run_track_l.py`: confirms the Track L runner dispatches the new TL05 step.
+
+#### Holdout results
+
+- Locked baseline `defense + phage_genomic`: AUC `0.835466`, top-3 `0.892308`, Brier `0.146153`.
+- `+TL03` only: AUC `+0.000310`, top-3 `+0.046154`, Brier `-0.001684`.
+- `+TL04` only: AUC `+0.003114`, top-3 `+0.015384`, Brier improvement `+0.002134`.
+- `+TL03+TL04`: AUC `-0.000240`, top-3 `+0.015384`, Brier improvement `-0.001087`.
+
+#### Interpretation
+
+- TL03 is useful for ranking, but it does not improve calibration.
+- TL04 is the best mechanistic block overall and is the only arm that clearly beats the locked baseline on AUC and
+  Brier.
+- The combined TL03+TL04 arm does not beat TL04 alone, so TL03 should stay optional rather than forced into the lock.
+- TL05 therefore proposes a new v1 config that keeps `defense + phage_genomic` and adds TL04, while leaving TL03
+  uncoupled.
+
+#### SHAP check
+
+- SHAP on the TL04 arm surfaced TL04 pairwise features in the global importance table and in per-pair explanations.
+- The first TL04 feature appears at rank 114 overall (`tl04_pair_profile_005_x_defense_sanata_weight`), and several top
+  pair explanations include `tl04_pair_profile_011_x_defense_rloc_weight` or
+  `tl04_pair_profile_011_x_defense_cas_class1_subtype_i_f_weight`.
+- The mechanistic block contributes signal, but phage-genomic features still dominate the ranking surface.
+
+#### Caveat
+
+- The committed `lyzortx/pipeline/track_g/v1_feature_configuration.json` still records the earlier TG09 lock metrics.
+  TL05 retrained the same baseline arm on the current code path and used that live retrain as the comparison point for
+  all deltas.
