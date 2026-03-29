@@ -61,7 +61,7 @@ jobs:
           python-version: "3.12.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install pyyaml==6.0.3 pymarkdownlnt==0.9.36
 
       - name: Resolve command payload
         id: payload
