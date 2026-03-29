@@ -23,6 +23,12 @@ plugins:
   # MD033: inline HTML
   md033:
     enabled: false
+  # MD034: bare URLs — research notes, PLAN.md, and lab notebooks use bare URLs
+  md034:
+    enabled: false
+  # MD036: emphasis as heading — lab notebooks use bold text as sub-section markers
+  md036:
+    enabled: false
   # MD041: first line in file should be a top-level heading
   md041:
     enabled: false
