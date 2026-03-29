@@ -155,6 +155,8 @@
   quality.
 - Review must verify: code quality, test coverage, alignment with acceptance criteria, and adherence to AGENTS.md
   policies.
+- Every time an agent creates a PR or pushes an update to an existing PR, the agent must perform a self-review against
+  the review guidelines in this section before considering the PR ready.
 - When addressing review feedback, apply the Requirement Challenge Policy: push back on comments that are wrong,
   overcomplicated, or low-value rather than blindly implementing every suggestion.
 - Before raising an issue, check existing review threads and replies on the PR. Do not re-raise concerns that have
@@ -172,6 +174,65 @@ Before approving a PR or marking a task done, ask: **did this task produce real 
   fail — no PR, no commit. Leave the issue open so the orchestrator knows the task is still pending. Do not produce
   a PR with empty results and call it done.
 
+## Substance review for scientific PRs
+
+When reviewing analysis, modeling, or feature-engineering PRs, do not stop at code correctness. Review the scientific
+substance.
+
+### Biology and domain sense
+
+- Ask whether the main claimed findings make biological sense given the underlying system.
+- Distinguish **plausible screening signals** from **confirmed mechanisms**. Do not allow language that turns
+  correlations, enrichment hits, or feature importances into mechanistic claims without direct supporting evidence.
+- For phage-host interaction work, treat receptor-binding, host-surface, and defense-evasion claims with different
+  confidence. RBP ↔ receptor/LPS associations may be plausible screening candidates; anti-defense ↔ defense subtype
+  associations are especially vulnerable to lineage confounding and should be described cautiously unless independently
+  validated.
+
+### Statistical review
+
+- Check that the chosen statistical test matches the data-generating structure, not just the table shape.
+- Reject tests that assume independent observations when rows/columns are correlated unless the PR explicitly justifies
+  that assumption.
+- Verify the comparison group matches the stated biological question. If the test is conditioned on a subset (for
+  example, phages carrying a PHROG), reported rates and effect sizes must use that same conditional denominator.
+- Check multiple-testing correction scope explicitly. If correction is applied per analysis rather than globally, the PR
+  must state and justify that choice.
+- Check whether p-value resolution, permutation count, bootstrap count, or sample size is too coarse for the claimed
+  conclusion. If many results are pinned at a numeric floor or near a decision boundary, require that caveat in the
+  write-up.
+- Separate screening-valid statistics from publication-grade inference. Screening analyses may be acceptable for
+  downstream feature generation even if they are not strong enough for causal or mechanistic claims.
+
+### Reality checks
+
+- Verify headline counts against the underlying local data, especially `data/interactions/raw/raw_interactions.csv` and
+  derived label tables.
+- For claimed positive/negative counts, spot-check that the raw assay support actually agrees with the summarized labels.
+- When generated outputs are used in review, confirm they were regenerated from the current code if the directory is
+  gitignored. A stale local artifact is not evidence that the PR is correct.
+- Prefer a few concrete reality checks over many abstract concerns: reproduce top-line counts, inspect a few top hits
+  against raw data, and check whether effect direction holds in raw observations.
+
+### Substance over artifact counts
+
+- Do not treat the number of "significant associations" as the number of independent discoveries.
+- Collapse or account for duplicate feature profiles, correlated feature blocks, and repeated evidence before
+  describing result counts as biological breadth.
+- If a downstream task is the real validator (for example, using screened associations as candidate features in the
+  model), say so explicitly. Do not over-invest in polishing an exploratory intermediate step beyond what is needed to
+  support the next decision.
+
+### Write-up standards for scientific PRs
+
+- Require notebook/PR text to state:
+  - what the test controls for
+  - what it does **not** control for
+  - what data were excluded or unresolved
+  - whether results are exploratory candidates or stronger validated findings
+- If the implementation changes the effective analysis population, denominators, or comparison group, require the
+  notebook/report text to be updated in the same PR.
+
 ## Review focus areas
 
 1. **Correctness** — bugs, logic errors, off-by-one, wrong variable usage.
@@ -182,6 +243,8 @@ Before approving a PR or marking a task done, ask: **did this task produce real 
 5. **Clarity** — naming, structure, readability.
 6. **Coding principles** — no magic numbers/strings, constants are defined and reused, long-running steps have
    start/end log messages with timestamps.
+7. **Scientific substance** — biological plausibility, statistical appropriateness, honest interpretation, and
+   agreement with raw data/reality checks.
 
 Do NOT nitpick style — ruff handles formatting. Focus on substantive issues only. Do not invent problems.
 
@@ -298,6 +361,11 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   formats, serialized timestamps in output files, and any datetime objects created in code.
 - **Top-level imports** — Always place imports at the top of the module. Do not use lazy/deferred imports inside
   functions unless there is a concrete circular-import or heavy-dependency reason that is documented in a comment.
+- **Performance from the start** — Speed of iteration and short feedback loops are paramount. Apply reasonable
+  performance optimizations from the first implementation, not as an afterthought. Use vectorized numpy/pandas
+  operations instead of Python loops over arrays. Parallelize over available cores when work is embarrassingly parallel
+  (e.g., `concurrent.futures`, multiprocessing). Prefer batch operations over per-element calls. A 3-minute job that
+  could run in 3 seconds wastes developer time on every iteration.
 
 # External Service Integration Development
 

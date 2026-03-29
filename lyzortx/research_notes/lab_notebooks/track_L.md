@@ -67,8 +67,8 @@ PHROG-receptor weights to predict lysis without any interaction data for the new
 Built a permutation-based enrichment module (`annotation_interaction_enrichment.py`) and ran three analyses on the full
 369×96 interaction matrix (9,720 lytic pairs, 27.4% base rate). The test conditions on the phage carrying the PHROG,
 then permutes host labels to get calibrated p-values that respect the correlation structure of the interaction matrix.
-Results: 385/3,424 significant RBP PHROG × OMP receptor associations, 25/160 RBP PHROG × LPS core associations, and
-39/924 anti-defense PHROG × defense subtype associations (BH-corrected p < 0.05). These results support building
+Results: 380/3,424 significant RBP PHROG × OMP receptor associations, 24/160 RBP PHROG × LPS core associations, and
+27/924 anti-defense PHROG × defense subtype associations (BH-corrected p < 0.05). These results support building
 pairwise mechanistic features in TL03/TL04.
 
 #### What was implemented
@@ -107,22 +107,22 @@ pairwise mechanistic features in TL03/TL04.
 
 #### Analysis 1: RBP PHROG × OMP receptor variant clusters
 
-- **3,424 tests** (32 PHROGs × 107 receptor clusters), **385 significant** (11.2%).
+- **3,424 tests** (32 PHROGs × 107 receptor clusters), **380 significant** (11.1%).
 
 #### Analysis 2: RBP PHROG × LPS core type
 
-- **160 tests** (32 PHROGs × 5 LPS types), **25 significant** (15.6%).
+- **160 tests** (32 PHROGs × 5 LPS types), **24 significant** (15.0%).
 
 #### Analysis 3: Anti-defense PHROG × defense system subtypes
 
-- **924 tests** (12 PHROGs × 77 defense subtypes), **39 significant** (4.2%).
+- **924 tests** (12 PHROGs × 77 defense subtypes), **27 significant** (2.9%).
 
 #### Caveats
 
 - **Duplicate PHROG profiles**: The 32 RBP PHROGs reduce to ~25 unique phage-carrier patterns (e.g., 136/15437/4465/9017
-  always co-occur, as do 1002/1154/967/972 and 2097/4277). The 385 significant associations are not 385 independent
+  always co-occur, as do 1002/1154/967/972 and 2097/4277). The 380 significant associations are not 380 independent
   biological discoveries — TL03 should collapse identical PHROG profiles before building features.
-- **P-value resolution**: With 1000 permutations, ~320/385 significant OMP hits are at the p-value floor (0.001). The
+- **P-value resolution**: With 1000 permutations, ~315/380 significant OMP hits are at the p-value floor (0.001). The
   BH boundary is partly quantized: 95 hits fall in the BH 0.03–0.07 zone, and ~65 borderline significant hits could
   flip with more permutations. The 314 floor hits (where ≤1 permutation exceeded the observed statistic) are robust.
   For the screening purpose of this step (feeding candidate pairs to TL03), this resolution is sufficient. TL03 should
@@ -135,12 +135,12 @@ pairwise mechanistic features in TL03/TL04.
 
 #### Implications for TL03/TL04
 
-- **TL03 (RBP-receptor features)**: 385 significant PHROG-receptor candidate associations (after controlling for phage
+- **TL03 (RBP-receptor features)**: 380 significant PHROG-receptor candidate associations (after controlling for phage
   main effects and matrix correlation via host-label permutation). TL03 should collapse duplicate PHROG profiles and
   use enrichment odds ratios as candidate feature weights — not treat these as confirmed molecular mechanisms.
-- **TL04 (defense evasion features)**: 39 significant anti-defense × defense associations. The lower rate and caveats
+- **TL04 (defense evasion features)**: 27 significant anti-defense × defense associations. The lower rate and caveats
   about annotation specificity suggest these should be treated as weaker candidates than the RBP-receptor features.
-- **No escape hatch needed**: With 385 significant associations (~290 unique after collapsing duplicate PHROG carrier
+- **No escape hatch needed**: With 380 significant associations (~285 unique after collapsing duplicate PHROG carrier
   profiles), enrichment-based features are viable for TL03.
 
 #### Non-protein host factors considered

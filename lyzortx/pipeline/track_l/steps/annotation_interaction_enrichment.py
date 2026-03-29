@@ -81,30 +81,6 @@ def benjamini_hochberg(p_values: NDArray[np.floating]) -> NDArray[np.floating]:
     return result
 
 
-def _lysis_rate_diff(
-    interaction_matrix: NDArray[np.int8],
-    host_has: NDArray[np.int8],
-    phage_has: NDArray[np.int8],
-    resolved_mask: NDArray[np.int8] | None = None,
-) -> float:
-    """Compute lysis rate difference: host_has - host_lacks, conditioned on phage_has.
-
-    If resolved_mask is provided, only count pairs where resolved_mask[i,j] == 1.
-    """
-    mask_both = np.outer(host_has, phage_has)
-    mask_phage_only = np.outer(1 - host_has, phage_has)
-    if resolved_mask is not None:
-        mask_both = mask_both * resolved_mask
-        mask_phage_only = mask_phage_only * resolved_mask
-    n_both = mask_both.sum()
-    n_phage_only = mask_phage_only.sum()
-    if n_both == 0 or n_phage_only == 0:
-        return 0.0
-    a = (interaction_matrix * mask_both).sum()
-    b = (interaction_matrix * mask_phage_only).sum()
-    return float(a / n_both - b / n_phage_only)
-
-
 def _odds_ratio(a: int, b: int, n_both: int, n_phage_only: int) -> float:
     """Compute odds ratio for the conditional 2x2 table."""
     # Table: [[a, n_both - a], [b, n_phage_only - b]]
@@ -189,45 +165,61 @@ def compute_enrichment(
     results: list[EnrichmentResult] = []
     p_values: list[float] = []
 
+    # Pre-generate permutation indices (shared across all feature pairs)
+    perm_indices = np.array([rng.permutation(n_hosts) for _ in range(n_permutations)])
+
+    effective_mask = resolved_mask if resolved_mask is not None else np.ones_like(interaction_matrix)
+
     for pf_idx in range(n_phage_features):
         phage_has = phage_matrix[:, pf_idx]
+        phage_lacks = 1 - phage_has
+
+        # Precompute per-host aggregates for this phage feature (vectorized over phage columns).
+        # lysis_per_host_has[i] = number of lytic resolved pairs for host i among phages with the feature
+        # resolved_per_host_has[i] = number of resolved pairs for host i among phages with the feature
+        lysis_per_host_has = (
+            (interaction_matrix * (phage_has[np.newaxis, :] * effective_mask)).sum(axis=1).astype(np.float64)
+        )
+        resolved_per_host_has = (phage_has[np.newaxis, :] * effective_mask).sum(axis=1).astype(np.float64)
+        lysis_per_host_lacks = (
+            (interaction_matrix * (phage_lacks[np.newaxis, :] * effective_mask)).sum(axis=1).astype(np.float64)
+        )
+        resolved_per_host_lacks = (phage_lacks[np.newaxis, :] * effective_mask).sum(axis=1).astype(np.float64)
 
         for hf_idx in range(n_host_features):
-            host_has = host_matrix[:, hf_idx]
-            host_lacks = 1 - host_has
+            host_has_f = host_matrix[:, hf_idx].astype(np.float64)
+            host_lacks_f = 1.0 - host_has_f
 
-            # Observed statistics (applying resolved_mask if provided)
-            mask_both = np.outer(host_has, phage_has)
-            mask_phage_only = np.outer(host_lacks, phage_has)
-            mask_host_only = np.outer(host_has, 1 - phage_has)
-            mask_neither = np.outer(host_lacks, 1 - phage_has)
+            # Observed contingency counts via dot products
+            n_both = int(host_has_f @ resolved_per_host_has)
+            n_phage_only = int(host_lacks_f @ resolved_per_host_has)
+            n_host_only = int(host_has_f @ resolved_per_host_lacks)
+            n_neither = int(host_lacks_f @ resolved_per_host_lacks)
 
-            if resolved_mask is not None:
-                mask_both = mask_both * resolved_mask
-                mask_phage_only = mask_phage_only * resolved_mask
-                mask_host_only = mask_host_only * resolved_mask
-                mask_neither = mask_neither * resolved_mask
+            a = int(host_has_f @ lysis_per_host_has)
+            b = int(host_lacks_f @ lysis_per_host_has)
+            c = int(host_has_f @ lysis_per_host_lacks)
+            d = int(host_lacks_f @ lysis_per_host_lacks)
 
-            n_both = int(mask_both.sum())
-            n_phage_only = int(mask_phage_only.sum())
-            n_host_only = int(mask_host_only.sum())
-            n_neither = int(mask_neither.sum())
+            # Observed test statistic
+            rate_both = a / n_both if n_both > 0 else 0.0
+            rate_phage_only = b / n_phage_only if n_phage_only > 0 else 0.0
+            obs_stat = rate_both - rate_phage_only
 
-            a = int((interaction_matrix * mask_both).sum())
-            b = int((interaction_matrix * mask_phage_only).sum())
-            c = int((interaction_matrix * mask_host_only).sum())
-            d = int((interaction_matrix * mask_neither).sum())
+            # Vectorized permutation p-value: permute host labels in batch
+            host_perms = host_has_f[perm_indices]  # (n_permutations, n_hosts)
+            host_lacks_perms = 1.0 - host_perms
 
-            obs_stat = _lysis_rate_diff(interaction_matrix, host_has, phage_has, resolved_mask)
+            perm_n_both = host_perms @ resolved_per_host_has  # (n_permutations,)
+            perm_n_po = host_lacks_perms @ resolved_per_host_has
+            perm_a = host_perms @ lysis_per_host_has
+            perm_b = host_lacks_perms @ lysis_per_host_has
 
-            # Permutation p-value: shuffle host labels
-            count_ge = 0
-            for _ in range(n_permutations):
-                host_perm = host_has[rng.permutation(n_hosts)]
-                perm_stat = _lysis_rate_diff(interaction_matrix, host_perm, phage_has, resolved_mask)
-                if perm_stat >= obs_stat:
-                    count_ge += 1
+            perm_rate_both = np.where(perm_n_both > 0, perm_a / perm_n_both, 0.0)
+            perm_rate_po = np.where(perm_n_po > 0, perm_b / perm_n_po, 0.0)
+            perm_stats = perm_rate_both - perm_rate_po
 
+            count_ge = int((perm_stats >= obs_stat).sum())
             p_value = (count_ge + 1) / (n_permutations + 1)
             or_val = _odds_ratio(a, b, n_both, n_phage_only)
 
