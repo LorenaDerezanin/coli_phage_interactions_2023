@@ -374,7 +374,7 @@ graph LR
   - Features must be derived from genome annotations only, not from training labels
   - Output CSV joinable on bacteria+phage pair
   - Compare against the existing RBP_list.csv curated annotations as a sanity check
-- [ ] **TL04** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
+- [x] **TL04** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
   - Use TL02 enrichment results to build pairwise features for each phage-host pair — does the phage encode anti-defense
     genes whose PHROG families are significantly associated with lysis of hosts carrying specific defense systems?
   - Features must be derived from Pharokka anti-defense annotations, not from training label collaborative filtering

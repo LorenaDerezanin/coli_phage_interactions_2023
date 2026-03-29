@@ -593,7 +593,7 @@ tracks:
         check
     - id: TL04
       title: Build mechanistic defense-evasion features from annotations
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Use TL02 enrichment results to build pairwise features for each phage-host
