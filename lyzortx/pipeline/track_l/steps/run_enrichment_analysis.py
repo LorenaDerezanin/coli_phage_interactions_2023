@@ -1,0 +1,492 @@
+#!/usr/bin/env python3
+"""Run PHROG x host-feature enrichment analyses for TL02.
+
+Loads pharokka RBP and anti-defense annotations, host OMP receptor clusters,
+LPS core types, and defense system subtypes, then runs three enrichment
+analyses using the full interaction matrix:
+
+1. RBP PHROG IDs x OMP receptor variant clusters
+2. RBP PHROG IDs x LPS core type
+3. Anti-defense gene PHROG IDs x defense system subtypes
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import logging
+import sys
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Sequence
+
+import numpy as np
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+
+from lyzortx.log_config import setup_logging
+from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.track_l.steps.annotation_interaction_enrichment import (
+    ENRICHMENT_CSV_FIELDNAMES,
+    compute_enrichment,
+    results_to_rows,
+)
+
+logger = logging.getLogger(__name__)
+
+# Data paths
+CACHED_ANNOTATIONS_DIR = Path("data/annotations/pharokka")
+LABEL_SET_V1_PATH = Path("lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv")
+OMP_CLUSTERS_PATH = Path("data/genomics/bacteria/outer_membrane_proteins/blast_results_cured_clusters=99_wide.tsv")
+LPS_PRIMARY_PATH = Path("data/genomics/bacteria/outer_core_lps/LPS_type_waaL_370.txt")
+LPS_SUPPLEMENTAL_PATH = Path("data/genomics/bacteria/outer_core_lps/LPS_type_waaL_host.txt")
+DEFENSE_SUBTYPES_PATH = Path("data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv")
+OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/enrichment")
+
+# Receptor columns in OMP data
+RECEPTOR_COLUMNS = (
+    "BTUB",
+    "FADL",
+    "FHUA",
+    "LAMB",
+    "LPTD",
+    "NFRA",
+    "OMPA",
+    "OMPC",
+    "OMPF",
+    "TOLC",
+    "TSX",
+    "YNCD",
+)
+
+# Minimum phage count for a PHROG to be included in enrichment
+MIN_PHROG_PHAGE_COUNT = 2
+
+
+def load_pharokka_phrog_matrices(
+    cached_dir: Path,
+    phages: list[str],
+) -> tuple[np.ndarray, list[str], np.ndarray, list[str]]:
+    """Load pharokka annotations and build binary PHROG matrices.
+
+    Returns (rbp_matrix, rbp_phrog_names, anti_def_matrix, anti_def_phrog_names).
+    Matrices have shape (n_phages, n_phrog_features).
+    """
+    from lyzortx.pipeline.track_l.steps.parse_annotations import (
+        ANTI_DEFENSE_PATTERNS,
+        RBP_PATTERNS,
+        matches_any_pattern,
+    )
+
+    phage_set = set(phages)
+    phage_to_idx = {p: i for i, p in enumerate(phages)}
+
+    # Collect PHROG IDs per phage
+    rbp_phrogs_per_phage: dict[str, set[str]] = defaultdict(set)
+    anti_def_phrogs_per_phage: dict[str, set[str]] = defaultdict(set)
+
+    tsvs = sorted(cached_dir.glob("*_cds_final_merged_output.tsv"))
+    if not tsvs:
+        msg = f"No cached merged TSVs found in {cached_dir}"
+        raise FileNotFoundError(msg)
+
+    for tsv in tsvs:
+        phage_name = tsv.name.removesuffix("_cds_final_merged_output.tsv")
+        if phage_name not in phage_set:
+            continue
+        with tsv.open(encoding="utf-8") as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                phrog = row["phrog"]
+                annot = row["annot"]
+                if phrog == "No_PHROG":
+                    continue
+                if matches_any_pattern(annot, RBP_PATTERNS):
+                    rbp_phrogs_per_phage[phage_name].add(phrog)
+                if matches_any_pattern(annot, ANTI_DEFENSE_PATTERNS):
+                    anti_def_phrogs_per_phage[phage_name].add(phrog)
+
+    # Collect all PHROGs and filter by minimum phage count
+    rbp_phrog_counts: dict[str, int] = defaultdict(int)
+    for phrogs in rbp_phrogs_per_phage.values():
+        for p in phrogs:
+            rbp_phrog_counts[p] += 1
+    rbp_phrog_names = sorted(p for p, c in rbp_phrog_counts.items() if c >= MIN_PHROG_PHAGE_COUNT)
+
+    anti_def_phrog_counts: dict[str, int] = defaultdict(int)
+    for phrogs in anti_def_phrogs_per_phage.values():
+        for p in phrogs:
+            anti_def_phrog_counts[p] += 1
+    anti_def_phrog_names = sorted(p for p, c in anti_def_phrog_counts.items() if c >= MIN_PHROG_PHAGE_COUNT)
+
+    logger.info(
+        "RBP PHROGs: %d total unique, %d with >= %d phages",
+        len(rbp_phrog_counts),
+        len(rbp_phrog_names),
+        MIN_PHROG_PHAGE_COUNT,
+    )
+    logger.info(
+        "Anti-defense PHROGs: %d total unique, %d with >= %d phages",
+        len(anti_def_phrog_counts),
+        len(anti_def_phrog_names),
+        MIN_PHROG_PHAGE_COUNT,
+    )
+
+    # Build binary matrices
+    n_phages = len(phages)
+    rbp_matrix = np.zeros((n_phages, len(rbp_phrog_names)), dtype=np.int8)
+    anti_def_matrix = np.zeros((n_phages, len(anti_def_phrog_names)), dtype=np.int8)
+
+    rbp_phrog_to_idx = {p: i for i, p in enumerate(rbp_phrog_names)}
+    anti_def_phrog_to_idx = {p: i for i, p in enumerate(anti_def_phrog_names)}
+
+    for phage_name, phrogs in rbp_phrogs_per_phage.items():
+        if phage_name not in phage_to_idx:
+            continue
+        pidx = phage_to_idx[phage_name]
+        for p in phrogs:
+            if p in rbp_phrog_to_idx:
+                rbp_matrix[pidx, rbp_phrog_to_idx[p]] = 1
+
+    for phage_name, phrogs in anti_def_phrogs_per_phage.items():
+        if phage_name not in phage_to_idx:
+            continue
+        pidx = phage_to_idx[phage_name]
+        for p in phrogs:
+            if p in anti_def_phrog_to_idx:
+                anti_def_matrix[pidx, anti_def_phrog_to_idx[p]] = 1
+
+    return rbp_matrix, rbp_phrog_names, anti_def_matrix, anti_def_phrog_names
+
+
+def load_interaction_matrix(
+    label_path: Path,
+    bacteria: list[str],
+    phages: list[str],
+) -> np.ndarray:
+    """Load the binary interaction matrix from label set v1.
+
+    Returns matrix of shape (n_bacteria, n_phages) with 1=lysis, 0=no lysis.
+    """
+    bact_to_idx = {b: i for i, b in enumerate(bacteria)}
+    phage_to_idx = {p: i for i, p in enumerate(phages)}
+
+    matrix = np.zeros((len(bacteria), len(phages)), dtype=np.int8)
+    with label_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            b = row["bacteria"]
+            p = row["phage"]
+            label = row["any_lysis"].strip()
+            if b in bact_to_idx and p in phage_to_idx and label in ("1", "1.0"):
+                matrix[bact_to_idx[b], phage_to_idx[p]] = 1
+
+    total_lysis = int(matrix.sum())
+    total_pairs = matrix.size
+    logger.info(
+        "Interaction matrix: %d bacteria x %d phages, %d lytic (%.1f%%)",
+        len(bacteria),
+        len(phages),
+        total_lysis,
+        100.0 * total_lysis / total_pairs,
+    )
+    return matrix
+
+
+def load_omp_receptor_host_matrix(
+    omp_path: Path,
+    bacteria: list[str],
+) -> tuple[np.ndarray, list[str]]:
+    """Build binary host matrix for OMP receptor variant clusters.
+
+    Each column is a (receptor, cluster_id) pair. A host has 1 if it belongs
+    to that cluster for that receptor, 0 otherwise.
+    """
+    bact_to_idx = {b: i for i, b in enumerate(bacteria)}
+
+    # Read raw cluster assignments
+    rows_by_bact: dict[str, dict[str, str]] = {}
+    with omp_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        for row in reader:
+            b = row["bacteria"]
+            if b in bact_to_idx:
+                rows_by_bact[b] = dict(row)
+
+    # Discover (receptor, cluster) pairs with sufficient support
+    cluster_counts: dict[tuple[str, str], int] = defaultdict(int)
+    for b, row in rows_by_bact.items():
+        for receptor in RECEPTOR_COLUMNS:
+            cluster = row.get(receptor, "").strip()
+            if cluster:
+                cluster_counts[(receptor, cluster)] += 1
+
+    # Keep clusters with >= 5 bacteria (same threshold as TC02)
+    kept = sorted(k for k, v in cluster_counts.items() if v >= 5)
+    feature_names = [f"{receptor}_{cluster}" for receptor, cluster in kept]
+    feature_to_idx = {k: i for i, k in enumerate(kept)}
+
+    logger.info("OMP receptor features: %d (receptor, cluster) pairs with >= 5 bacteria", len(kept))
+
+    matrix = np.zeros((len(bacteria), len(kept)), dtype=np.int8)
+    for b, row in rows_by_bact.items():
+        bidx = bact_to_idx[b]
+        for receptor in RECEPTOR_COLUMNS:
+            cluster = row.get(receptor, "").strip()
+            key = (receptor, cluster)
+            if key in feature_to_idx:
+                matrix[bidx, feature_to_idx[key]] = 1
+
+    return matrix, feature_names
+
+
+def load_lps_host_matrix(
+    lps_primary_path: Path,
+    lps_supplemental_path: Path,
+    bacteria: list[str],
+) -> tuple[np.ndarray, list[str]]:
+    """Build binary host matrix for LPS core types.
+
+    Each column is an LPS core type (R1, R2, R3, R4, K12). No_waaL is excluded
+    since it represents absence of the gene, not a specific receptor target.
+    """
+    bact_to_idx = {b: i for i, b in enumerate(bacteria)}
+
+    # Load both LPS files
+    lps_by_bact: dict[str, str] = {}
+    with lps_primary_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        for row in reader:
+            b = row["bacteria"]
+            if b in bact_to_idx:
+                lps_by_bact[b] = row["LPS_type"]
+
+    with lps_supplemental_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        for row in reader:
+            b = row.get("Strain", row.get("bacteria", ""))
+            if b in bact_to_idx and b not in lps_by_bact:
+                lps_by_bact[b] = row["LPS_type"]
+
+    # Determine LPS types (exclude No_waaL)
+    lps_types = sorted(set(v for v in lps_by_bact.values() if v != "No_waaL"))
+    feature_names = [f"LPS_{t}" for t in lps_types]
+    type_to_idx = {t: i for i, t in enumerate(lps_types)}
+
+    logger.info("LPS core types: %s", lps_types)
+
+    matrix = np.zeros((len(bacteria), len(lps_types)), dtype=np.int8)
+    for b, lps_type in lps_by_bact.items():
+        if b in bact_to_idx and lps_type in type_to_idx:
+            matrix[bact_to_idx[b], type_to_idx[lps_type]] = 1
+
+    return matrix, feature_names
+
+
+def load_defense_host_matrix(
+    defense_path: Path,
+    bacteria: list[str],
+    min_bacteria_count: int = 5,
+) -> tuple[np.ndarray, list[str]]:
+    """Build binary host matrix for defense system subtypes.
+
+    Each column is a defense system subtype. Subtypes present in fewer than
+    min_bacteria_count bacteria are excluded (same variance filter as TC01).
+    """
+    bact_to_idx = {b: i for i, b in enumerate(bacteria)}
+
+    with defense_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh, delimiter=";")
+        fieldnames = reader.fieldnames
+        if not fieldnames:
+            msg = f"No header in {defense_path}"
+            raise ValueError(msg)
+        subtype_cols = [c for c in fieldnames if c != "bacteria"]
+
+        rows_by_bact: dict[str, dict[str, str]] = {}
+        for row in reader:
+            b = row["bacteria"]
+            if b in bact_to_idx:
+                rows_by_bact[b] = dict(row)
+
+    # Filter subtypes by minimum bacteria count
+    subtype_counts: dict[str, int] = defaultdict(int)
+    for row in rows_by_bact.values():
+        for col in subtype_cols:
+            if int(row.get(col, "0")) > 0:
+                subtype_counts[col] += 1
+
+    kept_subtypes = sorted(c for c in subtype_cols if subtype_counts.get(c, 0) >= min_bacteria_count)
+    feature_names = [f"defense_{s}" for s in kept_subtypes]
+
+    logger.info(
+        "Defense subtypes: %d total, %d with >= %d bacteria",
+        len(subtype_cols),
+        len(kept_subtypes),
+        min_bacteria_count,
+    )
+
+    matrix = np.zeros((len(bacteria), len(kept_subtypes)), dtype=np.int8)
+    for b, row in rows_by_bact.items():
+        if b not in bact_to_idx:
+            continue
+        bidx = bact_to_idx[b]
+        for i, col in enumerate(kept_subtypes):
+            if int(row.get(col, "0")) > 0:
+                matrix[bidx, i] = 1
+
+    return matrix, feature_names
+
+
+def run_single_enrichment(
+    name: str,
+    phage_matrix: np.ndarray,
+    host_matrix: np.ndarray,
+    interaction_matrix: np.ndarray,
+    phage_feature_names: list[str],
+    host_feature_names: list[str],
+    output_dir: Path,
+) -> list[dict[str, object]]:
+    """Run one enrichment analysis and write CSV output."""
+    logger.info("Starting enrichment analysis: %s", name)
+    results = compute_enrichment(
+        phage_matrix=phage_matrix,
+        host_matrix=host_matrix,
+        interaction_matrix=interaction_matrix,
+        phage_feature_names=phage_feature_names,
+        host_feature_names=host_feature_names,
+    )
+    rows = results_to_rows(results)
+
+    # Sort by p-value
+    rows.sort(key=lambda r: (r["p_value"], r["phage_feature"], r["host_feature"]))
+
+    out_path = output_dir / f"enrichment_{name}.csv"
+    write_csv(out_path, ENRICHMENT_CSV_FIELDNAMES, rows)
+    logger.info("Wrote %s: %d rows, %d significant", out_path, len(rows), sum(1 for r in rows if r["significant"]))
+
+    return rows
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--cached-annotations-dir", type=Path, default=CACHED_ANNOTATIONS_DIR)
+    parser.add_argument("--label-path", type=Path, default=LABEL_SET_V1_PATH)
+    parser.add_argument("--omp-path", type=Path, default=OMP_CLUSTERS_PATH)
+    parser.add_argument("--lps-primary-path", type=Path, default=LPS_PRIMARY_PATH)
+    parser.add_argument("--lps-supplemental-path", type=Path, default=LPS_SUPPLEMENTAL_PATH)
+    parser.add_argument("--defense-path", type=Path, default=DEFENSE_SUBTYPES_PATH)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    setup_logging()
+    args = parse_args(argv)
+
+    start_time = datetime.now(timezone.utc)
+    logger.info("TL02 enrichment analysis starting at %s", start_time.isoformat(timespec="seconds"))
+
+    # Determine shared bacteria and phage lists from the interaction matrix
+    bacteria_set: set[str] = set()
+    phage_set: set[str] = set()
+    with args.label_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            bacteria_set.add(row["bacteria"])
+            phage_set.add(row["phage"])
+
+    bacteria = sorted(bacteria_set)
+    phages = sorted(phage_set)
+    logger.info("Interaction panel: %d bacteria, %d phages", len(bacteria), len(phages))
+
+    # Load interaction matrix
+    interaction_matrix = load_interaction_matrix(args.label_path, bacteria, phages)
+
+    # Load phage PHROG matrices
+    rbp_matrix, rbp_phrog_names, anti_def_matrix, anti_def_phrog_names = load_pharokka_phrog_matrices(
+        args.cached_annotations_dir, phages
+    )
+
+    # Load host feature matrices
+    omp_matrix, omp_feature_names = load_omp_receptor_host_matrix(args.omp_path, bacteria)
+    lps_matrix, lps_feature_names = load_lps_host_matrix(args.lps_primary_path, args.lps_supplemental_path, bacteria)
+    defense_matrix, defense_feature_names = load_defense_host_matrix(args.defense_path, bacteria)
+
+    ensure_directory(args.output_dir)
+
+    # Analysis 1: RBP PHROGs x OMP receptor variant clusters
+    rbp_omp_rows = run_single_enrichment(
+        name="rbp_phrog_x_omp_receptor",
+        phage_matrix=rbp_matrix,
+        host_matrix=omp_matrix,
+        interaction_matrix=interaction_matrix,
+        phage_feature_names=[f"RBP_PHROG_{p}" for p in rbp_phrog_names],
+        host_feature_names=omp_feature_names,
+        output_dir=args.output_dir,
+    )
+
+    # Analysis 2: RBP PHROGs x LPS core type
+    rbp_lps_rows = run_single_enrichment(
+        name="rbp_phrog_x_lps_core",
+        phage_matrix=rbp_matrix,
+        host_matrix=lps_matrix,
+        interaction_matrix=interaction_matrix,
+        phage_feature_names=[f"RBP_PHROG_{p}" for p in rbp_phrog_names],
+        host_feature_names=lps_feature_names,
+        output_dir=args.output_dir,
+    )
+
+    # Analysis 3: Anti-defense gene PHROGs x defense system subtypes
+    antidef_defense_rows = run_single_enrichment(
+        name="antidef_phrog_x_defense_subtype",
+        phage_matrix=anti_def_matrix,
+        host_matrix=defense_matrix,
+        interaction_matrix=interaction_matrix,
+        phage_feature_names=[f"ANTIDEF_PHROG_{p}" for p in anti_def_phrog_names],
+        host_feature_names=defense_feature_names,
+        output_dir=args.output_dir,
+    )
+
+    # Write manifest
+    manifest = {
+        "step": "TL02_enrichment_analysis",
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "panel": {"n_bacteria": len(bacteria), "n_phages": len(phages)},
+        "analyses": {
+            "rbp_phrog_x_omp_receptor": {
+                "n_phage_features": len(rbp_phrog_names),
+                "n_host_features": len(omp_feature_names),
+                "n_tests": len(rbp_omp_rows),
+                "n_significant": sum(1 for r in rbp_omp_rows if r["significant"]),
+            },
+            "rbp_phrog_x_lps_core": {
+                "n_phage_features": len(rbp_phrog_names),
+                "n_host_features": len(lps_feature_names),
+                "n_tests": len(rbp_lps_rows),
+                "n_significant": sum(1 for r in rbp_lps_rows if r["significant"]),
+            },
+            "antidef_phrog_x_defense_subtype": {
+                "n_phage_features": len(anti_def_phrog_names),
+                "n_host_features": len(defense_feature_names),
+                "n_tests": len(antidef_defense_rows),
+                "n_significant": sum(1 for r in antidef_defense_rows if r["significant"]),
+            },
+        },
+    }
+    write_json(args.output_dir / "manifest.json", manifest)
+
+    end_time = datetime.now(timezone.utc)
+    logger.info(
+        "TL02 enrichment analysis completed at %s (elapsed: %s)",
+        end_time.isoformat(timespec="seconds"),
+        end_time - start_time,
+    )
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
