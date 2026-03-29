@@ -364,7 +364,7 @@ graph LR
     lab notebook
   - These results directly inform whether TL03 builds pairwise features from the learned associations or falls back to
     the PHROG binary matrix
-- [ ] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
+- [x] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
   - Collapse duplicate PHROG carrier profiles before feature construction (32 PHROGs reduce to ~25 unique profiles due
     to co-occurrence groups like 136/15437/4465/9017 and 1002/1154/967/972)
   - Use TL02 enrichment results (380 significant RBP PHROG x OMP/LPS associations) to build pairwise features for each

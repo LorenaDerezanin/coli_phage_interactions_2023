@@ -576,7 +576,7 @@ tracks:
         learned associations or falls back to the PHROG binary matrix
     - id: TL03
       title: Build mechanistic RBP-receptor compatibility features from annotations
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Collapse duplicate PHROG carrier profiles before feature construction (32
