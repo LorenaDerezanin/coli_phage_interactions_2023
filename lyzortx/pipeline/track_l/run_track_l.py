@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from lyzortx.log_config import setup_logging
-from lyzortx.pipeline.track_l.steps import parse_annotations, run_pharokka
+from lyzortx.pipeline.track_l.steps import parse_annotations, run_enrichment_analysis, run_pharokka
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +46,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["annotate", "parse", "all"],
+        choices=["annotate", "parse", "enrich", "all"],
         default="all",
         help=(
             "Track L step to run. "
             "'annotate' runs pharokka on all FNA files. "
             "'parse' parses pharokka outputs into summary tables. "
-            "'all' runs both steps sequentially."
+            "'enrich' runs TL02 PHROG x host-feature enrichment analyses. "
+            "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
     parser.add_argument(
@@ -109,6 +110,9 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.step in {"parse", "all"}:
         parse_annotations.main([])
+
+    if args.step == "enrich":
+        run_enrichment_analysis.main([])
 
 
 if __name__ == "__main__":
