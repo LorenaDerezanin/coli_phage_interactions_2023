@@ -1,3 +1,46 @@
+### 2026-03-29: Fix conda environment solve failure — downgrade openjdk 25 to 24
+
+#### Executive summary
+
+The `codex-implement.yml` workflow (and `claude-pr-review.yml`, `codex-pr-lifecycle.yml`) failed on `conda env create`
+because `openjdk=25.0.2` on linux-64 requires `harfbuzz >=12.3.2`, which pulls in `icu >=78`. Meanwhile,
+`mmseqs2=18.8cc5c` depends on `aria2` → `libxml2 <2.14` → `icu <76`, creating an unsatisfiable constraint. Fixed by
+pinning `openjdk=24.0.2`, whose linux-64 build requires only `harfbuzz >=11.4.5` (compatible with `icu 75`).
+
+#### Root cause
+
+Commit `1140205` ([ORCH][TL01]) added bioinformatics tools to `environment.yml` including `openjdk=25.0.2` and
+`mmseqs2=18.8cc5c`. On macOS (osx-arm64), `openjdk` has minimal dependencies (`libzlib` only), so the environment
+solved fine locally. On linux-64 (CI runners), `openjdk` has heavy GUI/font dependencies including `harfbuzz`, which
+introduces transitive `icu` version constraints that conflict with `mmseqs2`'s `aria2` → `libxml2` chain.
+
+#### Fix
+
+Changed `openjdk=25.0.2` → `openjdk=24.0.2` in `environment.yml`. JDK 24 is the latest non-EA release before 25 and
+its linux-64 conda-forge build requires `harfbuzz >=11.4.5` (not `>=12.3.2`), which is compatible with `icu 75.x`
+shared by `libxml2`. JDK 25 (the bleeding-edge GA) added `harfbuzz >=12.3.2` which forced `icu >=78` — incompatible
+with bioconda's `mmseqs2` package chain.
+
+JDK 23 was also viable (`harfbuzz >=10.2`), and JDK 21 LTS (`harfbuzz >=8.2` for older builds) would have worked too,
+but the latest 21.0.10 build also requires `harfbuzz >=12.3.2` — so the safest minimal downgrade is JDK 24.
+
+Pharokka 1.9.1 uses Java only for minced (CRISPR detection) and tRNAscan, both of which work with JDK 24. No
+pharokka-specific JDK 25 features are needed.
+
+#### Bonus: strip conda from Claude PR review workflow
+
+While investigating, found that `claude-pr-review.yml` (both auto-review and interactive jobs) was creating the full
+`phage_env` conda environment — including pharokka, mmseqs2, openjdk — just to run Python orchestration helpers
+(`review_threads`, `parse_model_directive`) and pre-commit. Replaced with `setup-python` + `pip install -r
+requirements.txt`, which is faster and avoids the bioinformatics dependency chain entirely. The `codex-pr-lifecycle.yml`
+workflow was kept on conda because it runs Codex which may need to execute pipeline code.
+
+#### Verification
+
+- Rebuilt `phage_env` from scratch locally with `openjdk=24.0.2` — solved and installed cleanly.
+- Verified `java -version` (24.0.2), `mmseqs version` (18.8cc5c), `pharokka.py --version` (1.9.1) all functional.
+- CI verification pending on next push.
+
 ### 2026-03-24: gh skill parse-logs command for CI log analysis
 
 #### Executive summary

@@ -10,7 +10,7 @@ dependencies:
   - mash=2.3
   - minced=0.4.2
   - mmseqs2=18.8cc5c
-  - openjdk=25.0.2
+  - openjdk=24.0.2
   - pharokka=1.9.1
   - trnascan-se=2.0.12
   - pip:
