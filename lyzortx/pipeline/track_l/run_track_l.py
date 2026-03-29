@@ -7,6 +7,7 @@ import argparse
 import logging
 import shutil
 import sys
+from os import cpu_count
 from pathlib import Path
 
 if __package__ in {None, ""}:
@@ -60,17 +61,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Path to pharokka database directory",
     )
+    cores = cpu_count() or 4
+    threads_per_phage = 2
+    default_parallel = max(1, cores // threads_per_phage)
     parser.add_argument(
         "--threads",
         type=int,
-        default=2,
-        help="Threads per pharokka invocation",
+        default=threads_per_phage,
+        help=f"Threads per pharokka invocation (default: {threads_per_phage})",
     )
     parser.add_argument(
         "--parallel",
         type=int,
-        default=4,
-        help="Number of phages to annotate in parallel",
+        default=default_parallel,
+        help=f"Number of phages in parallel (default: {default_parallel}, from {cores} cores)",
     )
     parser.add_argument(
         "--force",

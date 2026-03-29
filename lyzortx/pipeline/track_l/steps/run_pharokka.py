@@ -13,6 +13,7 @@ import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
+from os import cpu_count
 from pathlib import Path
 from typing import Sequence
 
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 FNA_DIR = Path("data/genomics/phages/FNA")
 OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/pharokka_annotations")
 EXPECTED_PHAGE_COUNT = 97
+THREADS_PER_PHAGE = 2
 
 
 def discover_fna_files(fna_dir: Path) -> list[Path]:
@@ -141,17 +143,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Path to pharokka database directory",
     )
+    cores = cpu_count() or 4
+    default_parallel = max(1, cores // THREADS_PER_PHAGE)
     parser.add_argument(
         "--threads",
         type=int,
-        default=2,
-        help="Threads per pharokka invocation",
+        default=THREADS_PER_PHAGE,
+        help=f"Threads per pharokka invocation (default: {THREADS_PER_PHAGE})",
     )
     parser.add_argument(
         "--parallel",
         type=int,
-        default=4,
-        help="Number of phages to annotate in parallel",
+        default=default_parallel,
+        help=f"Number of phages to annotate in parallel (default: {default_parallel}, auto-detected from {cores} cores)",
     )
     parser.add_argument(
         "--force",
