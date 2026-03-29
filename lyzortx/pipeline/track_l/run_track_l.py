@@ -58,8 +58,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--database-dir",
         type=Path,
-        required=True,
-        help="Path to pharokka database directory",
+        default=None,
+        help="Path to pharokka database directory (required for annotate step)",
     )
     cores = cpu_count() or 4
     threads_per_phage = 2
@@ -89,6 +89,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
     if args.step in {"annotate", "all"}:
+        if args.database_dir is None:
+            msg = "--database-dir is required for the annotate step"
+            raise SystemExit(msg)
         run_pharokka.main(
             [
                 "--database-dir",
