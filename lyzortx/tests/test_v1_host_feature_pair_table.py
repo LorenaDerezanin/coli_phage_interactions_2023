@@ -2,7 +2,11 @@ import csv
 import json
 from pathlib import Path
 
+import joblib
+
 from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import (
+    DEFENSE_SUBTYPE_MASK_NAME,
+    build_defense_column_mask,
     build_defense_feature_rows,
     main,
     merge_host_feature_blocks,
@@ -22,6 +26,7 @@ def test_build_defense_feature_rows_filters_support_and_adds_derived_features() 
         min_present_count=1,
         max_present_count=2,
     )
+    mask = build_defense_column_mask(rows, min_present_count=1, max_present_count=2)
 
     assert numeric_columns == [
         "host_defense_subtype_abi_d",
@@ -36,6 +41,7 @@ def test_build_defense_feature_rows_filters_support_and_adds_derived_features() 
     assert feature_rows[0]["host_defense_has_crispr"] == 1
     assert feature_rows[1]["host_defense_abi_burden"] == 2
     assert manifest["retained_subtype_count"] == 4
+    assert mask["ordered_feature_columns"] == numeric_columns
 
 
 def test_merge_host_feature_blocks_preserves_expected_missingness() -> None:
@@ -305,6 +311,7 @@ def test_main_writes_host_matrix_pair_table_and_manifests(tmp_path: Path, monkey
         pair_rows = list(csv.DictReader(handle))
     join_audit = json.loads(join_audit_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mask = joblib.load(output_dir / DEFENSE_SUBTYPE_MASK_NAME)
 
     assert len(host_rows) == 2
     assert len(pair_rows) == 2
@@ -316,3 +323,11 @@ def test_main_writes_host_matrix_pair_table_and_manifests(tmp_path: Path, monkey
         == 0
     )
     assert manifest["host_feature_count"] > 0
+    assert mask["retained_subtype_columns"] == ["AbiD", "CAS_Class1-Type-I"]
+    assert mask["ordered_feature_columns"] == [
+        "host_defense_subtype_abi_d",
+        "host_defense_subtype_cas_class1_type_i",
+        "host_defense_diversity",
+        "host_defense_has_crispr",
+        "host_defense_abi_burden",
+    ]
