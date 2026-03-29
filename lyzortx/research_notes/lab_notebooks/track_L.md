@@ -97,7 +97,8 @@ pairwise mechanistic features in TL03/TL04.
 
 #### Data dimensions
 
-- **Interaction panel**: 369 bacteria × 96 phages = 35,424 pairs (9,720 lytic, 25,704 non-lytic).
+- **Interaction panel**: 369 bacteria × 96 phages = 35,424 pairs (35,266 resolved: 9,720 lytic, 25,546 non-lytic;
+  158 unresolved pairs excluded from enrichment).
 - **RBP PHROGs**: 43 unique across 97 phages, 32 present in ≥2 phages (used in enrichment).
 - **Anti-defense PHROGs**: 13 unique, 12 present in ≥2 phages.
 - **OMP receptor features**: 107 (receptor, cluster) pairs with ≥5 bacteria across 12 receptor proteins.
@@ -139,8 +140,8 @@ pairwise mechanistic features in TL03/TL04.
   use enrichment odds ratios as candidate feature weights — not treat these as confirmed molecular mechanisms.
 - **TL04 (defense evasion features)**: 39 significant anti-defense × defense associations. The lower rate and caveats
   about annotation specificity suggest these should be treated as weaker candidates than the RBP-receptor features.
-- **No escape hatch needed**: With 379+ significant associations (after duplicate collapse: ~250 unique), enrichment-based
-  features are viable for TL03.
+- **No escape hatch needed**: With 379 significant associations (286 unique after collapsing duplicate PHROG carrier
+  profiles), enrichment-based features are viable for TL03.
 
 #### Non-protein host factors considered
 

@@ -211,6 +211,56 @@ class TestComputeEnrichment:
         # but the odds ratio should be moderate, not extreme
         assert results[0].odds_ratio < 10.0
 
+    def test_resolved_mask_excludes_unresolved_pairs(self) -> None:
+        """Unresolved pairs (resolved_mask=0) must be excluded from all counts.
+
+        Uses the real interaction slice. Mask out the last 5 hosts entirely
+        (set resolved_mask rows 15-19 to 0). Counts should reflect only the
+        first 15 hosts.
+        """
+        interaction = REAL_INTERACTION_SLICE
+        n_hosts, n_phages = interaction.shape
+        phage_matrix = np.zeros((n_phages, 1), dtype=np.int8)
+        phage_matrix[5:, 0] = 1
+        host_matrix = np.zeros((n_hosts, 1), dtype=np.int8)
+        host_matrix[:10, 0] = 1
+
+        resolved = np.ones((n_hosts, n_phages), dtype=np.int8)
+        resolved[15:, :] = 0  # mask out last 5 hosts
+
+        results_masked = compute_enrichment(
+            phage_matrix,
+            host_matrix,
+            interaction,
+            ["pf"],
+            ["hf"],
+            n_permutations=TEST_N_PERMS,
+            resolved_mask=resolved,
+        )
+        results_unmasked = compute_enrichment(
+            phage_matrix,
+            host_matrix,
+            interaction,
+            ["pf"],
+            ["hf"],
+            n_permutations=TEST_N_PERMS,
+        )
+
+        r_m = results_masked[0]
+        r_u = results_unmasked[0]
+
+        # Masked should have fewer total pairs (15*10=150 vs 20*10=200)
+        masked_total = r_m.n_both + r_m.n_phage_only + r_m.n_host_only + r_m.n_neither
+        unmasked_total = r_u.n_both + r_u.n_phage_only + r_u.n_host_only + r_u.n_neither
+        assert masked_total == 15 * n_phages
+        assert unmasked_total == n_hosts * n_phages
+        assert masked_total < unmasked_total
+
+        # Lysis counts should also differ (hosts 15-19 are the most susceptible)
+        masked_lysis = r_m.a_lysis_both + r_m.b_lysis_phage_only + r_m.c_lysis_host_only + r_m.d_lysis_neither
+        unmasked_lysis = r_u.a_lysis_both + r_u.b_lysis_phage_only + r_u.c_lysis_host_only + r_u.d_lysis_neither
+        assert masked_lysis < unmasked_lysis
+
 
 class TestResultsToRows:
     """Tests for CSV row conversion."""
