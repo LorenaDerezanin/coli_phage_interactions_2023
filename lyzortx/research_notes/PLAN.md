@@ -350,7 +350,7 @@ graph LR
   - Extract per-phage RBP gene list with functional family annotations
   - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
   - All 97 phages must produce >0 annotated CDS
-- [ ] **TL02** Build annotation-interaction enrichment module and run PHROG x receptor/defense analysis. Model:
+- [x] **TL02** Build annotation-interaction enrichment module and run PHROG x receptor/defense analysis. Model:
       `gpt-5.4`.
   - Build a reusable enrichment module (annotation_interaction_enrichment.py) that takes any (phage binary feature
     matrix, host binary feature matrix, interaction matrix) and produces a Fisher's exact test enrichment table with
