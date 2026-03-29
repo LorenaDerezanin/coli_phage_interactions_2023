@@ -116,15 +116,27 @@ pairwise mechanistic features in TL03/TL04.
 
 - **924 tests** (12 PHROGs × 77 defense subtypes), **39 significant** (4.2%).
 
+#### Caveats
+
+- **Duplicate PHROG profiles**: The 32 RBP PHROGs reduce to ~25 unique phage-carrier patterns (e.g., 136/15437/4465/9017
+  always co-occur, as do 1002/1154/967/972 and 2097/4277). The 379 significant associations are not 379 independent
+  biological discoveries — TL03 should collapse identical PHROG profiles before building features.
+- **P-value resolution**: With 1000 permutations, 281/379 significant OMP hits are censored at the minimum p-value
+  (0.001). This is sufficient for significance screening (all survive BH) but does not rank top hits.
+- **Residual confounding**: The permutation test conditions on phage feature and permutes host labels, but does not
+  control for host phylogenetic lineage or correlated feature blocks. Some associations may reflect lineage correlation
+  rather than specific molecular interactions. The anti-defense results (4.2% significance) are particularly susceptible
+  — generic methyltransferases mapping to diverse defense subtypes are more plausibly explained by lineage than by
+  specific evasion.
+
 #### Implications for TL03/TL04
 
-- **TL03 (RBP-receptor features)**: 379 significant PHROG-receptor associations provide interaction-level signal.
-  Enrichment odds ratios serve as feature weights reflecting genuine interaction effects.
-- **TL04 (defense evasion features)**: 39 significant anti-defense × defense associations — smaller but still
-  meaningful. The lower rate (4.2%) may reflect that anti-defense genes are rarer (12 PHROGs vs 32 RBP PHROGs) and
-  the signal is weaker, or that many defense systems are evaded through mechanisms not captured by annotation patterns.
-- **No escape hatch needed**: With 379+ significant RBP-receptor associations, the enrichment-based features are the
-  right path for TL03.
+- **TL03 (RBP-receptor features)**: 379 significant PHROG-receptor associations provide candidate interaction features.
+  TL03 should collapse duplicate PHROG profiles and use the enrichment odds ratios as feature weights.
+- **TL04 (defense evasion features)**: 39 significant anti-defense × defense associations. The lower rate and caveats
+  about annotation specificity suggest these should be treated as weaker candidates than the RBP-receptor features.
+- **No escape hatch needed**: With 379+ significant associations (after duplicate collapse: ~250 unique), enrichment-based
+  features are viable for TL03.
 
 #### Non-protein host factors considered
 
