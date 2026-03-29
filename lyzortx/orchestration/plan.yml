@@ -608,7 +608,7 @@ tracks:
         — include in TL05 evaluation as a separate optional block'
     - id: TL05
       title: Retrain v1 model with mechanistic pairwise features and measure lift
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Evaluate TL03 (RBP-receptor) and TL04 (defense-evasion) features separately,

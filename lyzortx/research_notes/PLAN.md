@@ -382,7 +382,7 @@ graph LR
   - Caveat: TL02 found only 27 significant anti-defense x defense associations (2.9%), weaker than the RBP-receptor
     signal. Generic methyltransferase annotations inflate the anti-defense gene set. Treat these as experimental
     candidates — include in TL05 evaluation as a separate optional block
-- [ ] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
+- [x] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
   - Evaluate TL03 (RBP-receptor) and TL04 (defense-evasion) features separately, not as a bundle — TL04 signal is weaker
     and may hurt rather than help
   - Add features to the locked defense + phage_genomic baseline
