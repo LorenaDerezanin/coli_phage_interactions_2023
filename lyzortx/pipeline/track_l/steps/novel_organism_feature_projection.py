@@ -5,15 +5,16 @@ from __future__ import annotations
 import csv
 import math
 from pathlib import Path
-from typing import Dict, Mapping, Sequence, Tuple
+from typing import Dict, Mapping, Tuple
 
 import joblib
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
 
+from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import _parse_binary_flag
 from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import (
-    NUCLEOTIDE_TO_INDEX,
     _count_valid_kmer_windows,
+    _gc_content,
     compute_kmer_frequency_vector,
     read_fasta_records,
 )
@@ -24,21 +25,6 @@ EXPECTED_DEFENSE_SOURCE_KEY = "retained_subtype_columns"
 EXPECTED_DEFENSE_RETAINED_FEATURE_KEY = "retained_feature_columns"
 EXPECTED_DEFENSE_FEATURE_KEY = "ordered_feature_columns"
 EXPECTED_DEFENSE_DERIVED_KEY = "derived_columns"
-
-
-def _gc_content(sequences: Sequence[str]) -> float:
-    gc_count = 0
-    valid_count = 0
-    for sequence in sequences:
-        for char in sequence:
-            if char not in NUCLEOTIDE_TO_INDEX:
-                continue
-            valid_count += 1
-            if char in {"G", "C"}:
-                gc_count += 1
-    if valid_count == 0:
-        raise ValueError("Cannot compute GC content from sequences with no A/C/G/T bases")
-    return gc_count / valid_count
 
 
 def _infer_kmer_size_from_svd(svd: TruncatedSVD) -> int:
@@ -175,14 +161,7 @@ def project_novel_host(defense_finder_output_path: Path, column_mask_path: Path)
     for source_column, feature_column in zip(retained_source_columns, retained_feature_columns, strict=True):
         if source_column not in row:
             raise KeyError(f"Missing retained Defense Finder column {source_column!r} in {defense_finder_output_path}")
-        raw_value = str(row[source_column]).strip()
-        if raw_value in {"", "0", "0.0"}:
-            value = 0
-        else:
-            parsed = float(raw_value)
-            if parsed < 0:
-                raise ValueError(f"Expected non-negative defense subtype count, found {row[source_column]!r}")
-            value = 1 if parsed > 0 else 0
+        value = _parse_binary_flag(str(row[source_column]))
         output[feature_column] = value
         defense_diversity += value
         if source_column.startswith("Abi"):
