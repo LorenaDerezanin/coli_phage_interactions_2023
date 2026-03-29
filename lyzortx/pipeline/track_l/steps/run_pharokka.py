@@ -11,6 +11,7 @@ import argparse
 import logging
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -143,8 +144,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--threads",
         type=int,
-        default=8,
+        default=2,
         help="Threads per pharokka invocation",
+    )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=4,
+        help="Number of phages to annotate in parallel",
     )
     parser.add_argument(
         "--force",
@@ -154,12 +161,38 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _annotate_one(
+    fna_path: Path,
+    output_dir: Path,
+    database_dir: Path,
+    threads: int,
+    force: bool,
+) -> tuple[str, int]:
+    """Worker: annotate a single phage and return (phage_name, cds_count).
+
+    Runs in a child process via ProcessPoolExecutor. Re-initialises logging
+    so that messages from workers are formatted correctly.
+    """
+    setup_logging()
+    phage_name = fna_path.stem
+    phage_output_dir = run_pharokka_on_file(fna_path, output_dir, database_dir, threads, force)
+    cds_count = verify_annotations(phage_output_dir, phage_name)
+    return phage_name, cds_count
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     setup_logging()
     args = parse_args(argv)
 
     logger.info("Starting pharokka annotation of phage genomes")
-    logger.info("FNA dir: %s  Output dir: %s  Database: %s", args.fna_dir, args.output_dir, args.database_dir)
+    logger.info(
+        "FNA dir: %s  Output dir: %s  Database: %s  Parallel: %d  Threads/phage: %d",
+        args.fna_dir,
+        args.output_dir,
+        args.database_dir,
+        args.parallel,
+        args.threads,
+    )
 
     fna_files = discover_fna_files(args.fna_dir)
     logger.info("Found %d FNA files", len(fna_files))
@@ -174,23 +207,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     total_cds = 0
     failed: list[str] = []
+    completed = 0
 
-    for i, fna_path in enumerate(fna_files, 1):
-        phage_name = fna_path.stem
-        logger.info("[%d/%d] Processing %s", i, len(fna_files), phage_name)
-        try:
-            phage_output_dir = run_pharokka_on_file(
-                fna_path, args.output_dir, args.database_dir, args.threads, args.force
-            )
-            cds_count = verify_annotations(phage_output_dir, phage_name)
-            total_cds += cds_count
-            logger.info("  %s: %d CDS annotated", phage_name, cds_count)
-        except (RuntimeError, FileNotFoundError, ValueError):
-            logger.exception("Failed for %s", phage_name)
-            failed.append(phage_name)
+    with ProcessPoolExecutor(max_workers=args.parallel) as executor:
+        futures = {
+            executor.submit(
+                _annotate_one, fna_path, args.output_dir, args.database_dir, args.threads, args.force
+            ): fna_path.stem
+            for fna_path in fna_files
+        }
+        for future in as_completed(futures):
+            phage_name = futures[future]
+            completed += 1
+            try:
+                _, cds_count = future.result()
+                total_cds += cds_count
+                logger.info("[%d/%d] %s: %d CDS annotated", completed, len(fna_files), phage_name, cds_count)
+            except Exception:
+                logger.exception("[%d/%d] Failed for %s", completed, len(fna_files), phage_name)
+                failed.append(phage_name)
 
     if failed:
-        logger.error("Pharokka failed for %d phages: %s", len(failed), ", ".join(failed))
+        logger.error("Pharokka failed for %d phages: %s", len(failed), ", ".join(sorted(failed)))
         msg = f"Pharokka annotation failed for {len(failed)} phages"
         raise RuntimeError(msg)
 

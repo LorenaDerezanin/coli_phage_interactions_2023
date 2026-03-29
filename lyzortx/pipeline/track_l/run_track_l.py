@@ -35,8 +35,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--threads",
         type=int,
-        default=8,
+        default=2,
         help="Threads per pharokka invocation",
+    )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=4,
+        help="Number of phages to annotate in parallel",
     )
     parser.add_argument(
         "--force",
@@ -56,6 +62,8 @@ def main(argv: list[str] | None = None) -> None:
                 str(args.database_dir),
                 "--threads",
                 str(args.threads),
+                "--parallel",
+                str(args.parallel),
                 *(["--force"] if args.force else []),
             ]
         )

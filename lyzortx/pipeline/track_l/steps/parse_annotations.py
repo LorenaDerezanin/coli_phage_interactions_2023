@@ -31,6 +31,7 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 logger = logging.getLogger(__name__)
 
 ANNOTATIONS_DIR = Path("lyzortx/generated_outputs/track_l/pharokka_annotations")
+CACHED_ANNOTATIONS_DIR = Path("data/annotations/pharokka")
 OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/parsed_summaries")
 EXPECTED_PHAGE_COUNT = 97
 
@@ -41,7 +42,7 @@ COL_ANNOT = "annot"
 COL_CATEGORY = "category"
 COL_START = "start"
 COL_STOP = "stop"
-COL_FRAME = "frame"
+COL_STRAND = "strand"
 COL_CONTIG = "contig"
 
 # The 10 PHROG functional categories (as defined in pharokka source)
@@ -96,7 +97,7 @@ class CdsRecord:
     gene: str
     start: int
     stop: int
-    frame: str
+    strand: str
     contig: str
     phrog: str
     annot: str
@@ -133,7 +134,7 @@ def parse_merged_tsv(tsv_path: Path) -> list[CdsRecord]:
                     gene=row[COL_GENE],
                     start=int(row[COL_START]),
                     stop=int(row[COL_STOP]),
-                    frame=row[COL_FRAME],
+                    strand=row[COL_STRAND],
                     contig=row[COL_CONTIG],
                     phrog=row[COL_PHROG],
                     annot=row[COL_ANNOT],
@@ -202,6 +203,28 @@ def discover_phage_dirs(annotations_dir: Path) -> list[Path]:
         msg = f"No pharokka output directories found in {annotations_dir}"
         raise FileNotFoundError(msg)
     return dirs
+
+
+def discover_cached_phages(cached_dir: Path) -> list[tuple[str, Path]]:
+    """Find phages from a flat directory of cached TSVs.
+
+    Returns sorted list of (phage_name, tsv_path) tuples.
+    """
+    if not cached_dir.is_dir():
+        msg = f"Cached annotations directory does not exist: {cached_dir}"
+        raise FileNotFoundError(msg)
+
+    tsvs = sorted(cached_dir.glob("*_cds_final_merged_output.tsv"))
+    if not tsvs:
+        msg = f"No cached merged TSVs found in {cached_dir}"
+        raise FileNotFoundError(msg)
+
+    results = []
+    for tsv in tsvs:
+        # Strip _cds_final_merged_output.tsv suffix to get phage name
+        phage_name = tsv.name.removesuffix("_cds_final_merged_output.tsv")
+        results.append((phage_name, tsv))
+    return results
 
 
 def write_category_summary(summaries: list[PhageSummary], output_dir: Path) -> Path:
@@ -312,22 +335,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     setup_logging()
     args = parse_args(argv)
 
-    logger.info("Starting annotation parsing from %s", args.annotations_dir)
+    # Try generated outputs first, fall back to cached tracked TSVs
+    phage_entries: list[tuple[str, Path]] = []
+    if args.annotations_dir.is_dir():
+        try:
+            phage_dirs = discover_phage_dirs(args.annotations_dir)
+            phage_entries = [(d.name, d / f"{d.name}_cds_final_merged_output.tsv") for d in phage_dirs]
+            logger.info("Using generated annotations from %s (%d phages)", args.annotations_dir, len(phage_entries))
+        except FileNotFoundError:
+            pass
 
-    phage_dirs = discover_phage_dirs(args.annotations_dir)
-    logger.info("Found %d phage annotation directories", len(phage_dirs))
+    if not phage_entries and CACHED_ANNOTATIONS_DIR.is_dir():
+        phage_entries = discover_cached_phages(CACHED_ANNOTATIONS_DIR)
+        logger.info("Using cached annotations from %s (%d phages)", CACHED_ANNOTATIONS_DIR, len(phage_entries))
 
-    if len(phage_dirs) != EXPECTED_PHAGE_COUNT:
+    if not phage_entries:
+        msg = (
+            f"No annotations found in {args.annotations_dir} or {CACHED_ANNOTATIONS_DIR}. "
+            "Run pharokka first or ensure cached TSVs are present."
+        )
+        raise FileNotFoundError(msg)
+
+    if len(phage_entries) != EXPECTED_PHAGE_COUNT:
         logger.warning(
-            "Expected %d phage directories but found %d",
+            "Expected %d phages but found %d",
             EXPECTED_PHAGE_COUNT,
-            len(phage_dirs),
+            len(phage_entries),
         )
 
     summaries: list[PhageSummary] = []
-    for phage_dir in phage_dirs:
-        phage_name = phage_dir.name
-        tsv_path = phage_dir / f"{phage_name}_cds_final_merged_output.tsv"
+    for phage_name, tsv_path in phage_entries:
         records = parse_merged_tsv(tsv_path)
         summary = summarize_phage(phage_name, records)
         summaries.append(summary)

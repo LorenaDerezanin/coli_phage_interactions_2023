@@ -24,24 +24,26 @@ from lyzortx.pipeline.track_l.steps.parse_annotations import (
 # ---------------------------------------------------------------------------
 
 MERGED_TSV_HEADER = (
-    "gene\tstart\tstop\tframe\tcontig\tscore\tmmseqs_phrog\tmmseqs_alnScore\t"
-    "mmseqs_seqIdentity\tmmseqs_eVal\tmmseqs_top_hit\tpyhmmer_phrog\t"
-    "pyhmmer_bitscore\tpyhmmer_evalue\tphrog\tMethod\tRegion\tcolor\t"
+    "gene\tstart\tstop\tstrand\tcontig\tscore\tmmseqs_phrog\tmmseqs_alnScore\t"
+    "mmseqs_seqIdentity\tmmseqs_eVal\tpyhmmer_phrog\t"
+    "pyhmmer_bitscore\tpyhmmer_evalue\tcustom_hmm_id\tcustom_hmm_bitscore\t"
+    "custom_hmm_evalue\tphrog\tMethod\tRegion\tcolor\t"
     "annot\tcategory\tvfdb_hit\tvfdb_alnScore\tvfdb_seqIdentity\tvfdb_eVal\t"
     "vfdb_short_name\tvfdb_description\tvfdb_species\tCARD_hit\tCARD_alnScore\t"
     "CARD_seqIdentity\tCARD_eVal\tCARD_species\tARO_Accession\tCARD_short_name\t"
     "Protein_Accession\tDNA_Accession\tAMR_Gene_Family\tDrug_Class\t"
-    "Resistance_Mechanism"
+    "Resistance_Mechanism\ttransl_table"
 )
 
-NONE_FIELDS = "\t".join(["None"] * 19)
+NONE_FIELDS = "\t".join(["None"] * 20)
 
 
 def _make_row(gene: str, start: int, stop: int, phrog: str, annot: str, category: str) -> str:
     """Build a single TSV data row with the pharokka merged output columns."""
     return (
         f"{gene}\t{start}\t{stop}\t+\tcontig_1\t-10.0\t{phrog}\t50\t0.6\t1e-5\t"
-        f"hit_1\tNo_PHROG\tNo_PHROG\tNo_PHROG\t{phrog}\tPHANOTATE\tCDS\t#838383\t"
+        f"No_PHROG\tNo_PHROG\tNo_PHROG\tNo_custom_hmm\tNo_custom_hmm\tNo_custom_hmm\t"
+        f"{phrog}\tPHANOTATE\tCDS\t#838383\t"
         f"{annot}\t{category}\t{NONE_FIELDS}"
     )
 
