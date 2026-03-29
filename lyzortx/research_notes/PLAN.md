@@ -350,27 +350,41 @@ graph LR
   - Extract per-phage RBP gene list with functional family annotations
   - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
   - All 97 phages must produce >0 annotated CDS
-- [ ] **TL02** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
-  - For each phage-host pair, compute whether the phage has annotated RBPs that target receptor classes present on the
-    host (using Track C OMP receptor data)
+- [ ] **TL02** Build annotation-interaction enrichment module and run PHROG x receptor/defense analysis. Model:
+      `gpt-5.4`.
+  - Build a reusable enrichment module (annotation_interaction_enrichment.py) that takes any (phage binary feature
+    matrix, host binary feature matrix, interaction matrix) and produces a Fisher's exact test enrichment table with
+    odds ratios, p-values, and Benjamini-Hochberg corrected significance
+  - Run three enrichment analyses: (1) RBP PHROG IDs (43) x OMP receptor variant clusters (22), (2) RBP PHROG IDs (43) x
+    LPS core type (~5), (3) anti-defense gene PHROG IDs x defense system subtypes (82)
+  - Each analysis uses the full interaction matrix (positive and negative outcomes), not just generalist/specialist
+    tails
+  - Output enrichment tables as CSVs under lyzortx/generated_outputs/track_l/enrichment/
+  - Document which PHROG-receptor and PHROG-defense associations are significant (BH-corrected p < 0.05) in the track_L
+    lab notebook
+  - These results directly inform whether TL03 builds pairwise features from the learned associations or falls back to
+    the PHROG binary matrix
+- [ ] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
+  - Use TL02 enrichment results to build pairwise features for each phage-host pair — does the phage carry an RBP PHROG
+    significantly associated with lysis of hosts carrying this receptor?
+  - Also include the phage x RBP-PHROG binary matrix (43 columns) as a direct phage-level feature block
   - Features must be derived from genome annotations only, not from training labels
   - Output CSV joinable on bacteria+phage pair
   - Compare against the existing RBP_list.csv curated annotations as a sanity check
-  - Escape hatch: if no reliable RBP-to-receptor mapping can be constructed from Pharokka PHROG annotations alone (i.e.,
-    annotations are too coarse to distinguish receptor targets), document the gap in the lab notebook and proceed to
-    TL04 with TL03 features only
-- [ ] **TL03** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
-  - For each phage-host pair, compute whether the phage encodes anti-defense genes that counter the host defense systems
-    (using Track C defense data)
+  - Escape hatch: if TL02 enrichment shows no significant PHROG-receptor associations, use the PHROG binary matrix as
+    the sole RBP feature block and document the gap in the lab notebook
+- [ ] **TL04** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
+  - Use TL02 enrichment results to build pairwise features for each phage-host pair — does the phage encode anti-defense
+    genes whose PHROG families are significantly associated with lysis of hosts carrying specific defense systems?
   - Features must be derived from Pharokka anti-defense annotations, not from training label collaborative filtering
   - Output CSV joinable on bacteria+phage pair
-- [ ] **TL04** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
-  - Add whichever of TL02+TL03 produced usable features to the locked defense + phage_genomic baseline
+- [ ] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
+  - Add whichever of TL03+TL04 produced usable features to the locked defense + phage_genomic baseline
   - Retrain with TG01 hyperparameters on the ST03 holdout split
   - Report AUC, top-3, Brier delta vs the current locked baseline
   - If mechanistic features improve metrics, propose a new locked v1 config
   - Run SHAP on the new model to verify mechanistic features contribute signal
-- [ ] **TL05** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
+- [ ] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
   - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature CSV so novel phage FNAs can be
     projected into the existing 24-dim embedding
   - Save the TC01 defense subtype column mask (variance filter thresholds and ordered column list) so novel Defense
@@ -381,32 +395,32 @@ graph LR
     the model-ready host feature vector
   - Round-trip test on one panel phage and one panel host confirms output matches the pre-computed feature table within
     floating-point tolerance
-- [ ] **TL06** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
+- [ ] **TL07** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
   - Input is a genome assembly FASTA file for a novel E. coli strain
   - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense system annotation
   - Output is parsed into the same 79-column defense subtype vector the locked model expects, using the column mask from
-    TL05
+    TL06
   - Add defense-finder to environment.yml (pip-installable via PyPI)
   - Test by running on one publicly available E. coli genome (e.g., K-12 MG1655) and verifying >0 defense systems
     detected
   - End-to-end test confirms the output vector has the correct shape and column names matching the training feature set
-- [ ] **TL07** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
+- [ ] **TL08** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
   - Function signature: infer(host_genome_path, phage_fna_paths, model_path) returning DataFrame with columns phage,
     p_lysis, rank
-  - Computes host defense features via TL06 runner
-  - Computes phage k-mer features via TL05 saved SVD transform
+  - Computes host defense features via TL07 runner
+  - Computes phage k-mer features via TL06 saved SVD transform
   - Creates cross-product of (1 host x N phages), scores with trained LightGBM, applies isotonic calibration, ranks by
     calibrated probability
   - No dependency on the static pair table or the 404-strain panel metadata
   - Integration test using one panel strain genome reproduces the locked model predictions for that strain within
     calibration tolerance
-- [ ] **TL08** Validate generalized inference on Virus-Host DB positive pairs. Model: `gpt-5.4`.
+- [ ] **TL09** Validate generalized inference on Virus-Host DB positive pairs. Model: `gpt-5.4`.
   - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage genome accessions on NCBI — expect ~70
     strains, ~900 phage genomes, ~500 positive pairs
   - Download genome assemblies from NCBI for at least 10 novel hosts (strains not in the 404 training panel) that each
     have >=5 associated phage genomes
   - Download the associated phage genome FNA files from NCBI
-  - Run the TL07 generalized inference function on each novel host x its associated phages plus the 96 panel phages
+  - Run the TL08 generalized inference function on each novel host x its associated phages plus the 96 panel phages
     (rank known-positive phages against the full union of panel + VHdb phages for that host)
   - Positive-only validation metrics: (a) median predicted P(lysis) for known positive pairs — expect significantly
     above the population base rate of ~30%, (b) for each host, rank of known-positive phages among all candidate phages

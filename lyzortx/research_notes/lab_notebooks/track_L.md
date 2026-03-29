@@ -46,9 +46,31 @@ revealed strong discriminative signal in the RBP PHROG repertoire:
   only 1 shared (PHROG 817). This means the specific PHROG IDs, not just counts, carry strong signal.
 - Track C provides 12 host OMP receptor types (22 variant clusters at 99% identity) and 82 defense system subtypes.
 
+Host range distribution across the 96-phage interaction panel (369 bacteria): min=6 strains (411_P1), Q1=42, median=78,
+Q3=164, max=262 (DIJ07_P2). No phages have ≤3 positive strains; 10 phages lyse ≤20 strains.
+
 This suggests the most informative feature for TL02 is a **phage x RBP-PHROG binary matrix** (43 columns), not just RBP
 count or diversity. Even better: cross with host receptor data via enrichment analysis to learn empirical PHROG → receptor
 associations from the interaction matrix.
+
+#### Generalization principle
+
+The key design goal of Track L: PHROG-receptor associations are learned from the interaction matrix during training, but
+at prediction time only genomes are needed. For a novel phage, run pharokka → extract RBP PHROGs → feature vector. For
+a novel host, run BLAST against OMP DB + DefenseFinder → receptor/defense feature vector. The model applies the learned
+PHROG-receptor weights to predict lysis without any interaction data for the new pair. This is what TL06-TL09 implement.
+
+#### Non-protein host factors considered
+
+Beyond OMP protein receptors and defense systems, several non-protein surface structures affect phage adsorption:
+
+- **LPS core type** (R1-R4, K12) — available in Track C, will be tested in TL02 enrichment (RBP PHROGs x LPS type).
+- **K-antigen / polysaccharide capsule** — Track C has Klebsiella capsule type but 94% missing. Sparse signal.
+- **O-antigen type** — determines phage adsorption for some phages. Available in Track C surface features.
+- **Phase variation** — stochastic receptor expression switching (e.g., FimH, Ag43). Cannot be captured from genome
+  alone — inherently epigenetic. Acknowledged as a limitation.
+- **Phage depolymerases** — enzymes that degrade capsule/LPS. Pharokka found 18 "polysaccharide chain length
+  determinant" genes but cannot distinguish capsule-type targets. Deferred to Future note in project.md.
 
 #### Next steps
 
