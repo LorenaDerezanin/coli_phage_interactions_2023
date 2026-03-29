@@ -81,9 +81,8 @@ pairwise mechanistic features in TL03/TL04.
 - `lyzortx/pipeline/track_l/steps/run_enrichment_analysis.py`: Loads pharokka RBP/anti-defense annotations, host OMP
   receptor clusters, LPS core types, and defense system subtypes, constructs binary matrices, runs three enrichment
   analyses. Wired into `run_track_l.py` as `--step enrich`.
-- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 14 unit tests using a 20×10 slice of the real interaction
-  matrix, covering BH correction, permutation test, contingency table arithmetic, resolved-mask exclusion, and main
-  effect confounding.
+- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 14 unit tests using a 20×10 slice of the real interaction matrix, covering BH correction, permutation
+  test, contingency table arithmetic, resolved-mask exclusion, and main effect confounding.
 
 #### Design decisions
 

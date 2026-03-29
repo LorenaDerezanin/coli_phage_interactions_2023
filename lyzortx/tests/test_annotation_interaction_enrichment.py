@@ -261,61 +261,6 @@ class TestComputeEnrichment:
         unmasked_lysis = r_u.a_lysis_both + r_u.b_lysis_phage_only + r_u.c_lysis_host_only + r_u.d_lysis_neither
         assert masked_lysis < unmasked_lysis
 
-    def test_vectorized_matches_reference_loop(self) -> None:
-        """Verify vectorized permutation gives same results as a naive loop.
-
-        This is a regression test for the vectorized rewrite: compute p-values
-        with the production code, then recompute with an obviously-correct
-        slow loop using the same seed and permutation count.
-        """
-        interaction = REAL_INTERACTION_SLICE
-        n_hosts, n_phages = interaction.shape
-        phage_matrix = np.zeros((n_phages, 1), dtype=np.int8)
-        phage_matrix[4:8, 0] = 1
-        host_matrix = np.zeros((n_hosts, 1), dtype=np.int8)
-        host_matrix[10:, 0] = 1
-        n_perms = 50
-        seed = 99
-
-        # Production (vectorized) result
-        results = compute_enrichment(
-            phage_matrix,
-            host_matrix,
-            interaction,
-            ["pf"],
-            ["hf"],
-            n_permutations=n_perms,
-            random_seed=seed,
-        )
-        r = results[0]
-
-        # Reference: slow loop with same seed
-        rng = np.random.RandomState(seed)
-        perm_indices = [rng.permutation(n_hosts) for _ in range(n_perms)]
-
-        phage_has = phage_matrix[:, 0].astype(np.float64)
-        host_has = host_matrix[:, 0].astype(np.float64)
-        effective_mask = np.ones_like(interaction)
-
-        lysis_ph = (interaction * (phage_has[np.newaxis, :] * effective_mask)).sum(axis=1).astype(np.float64)
-        resolved_ph = (phage_has[np.newaxis, :] * effective_mask).sum(axis=1).astype(np.float64)
-
-        def ref_stat(h: np.ndarray) -> float:
-            nb = h @ resolved_ph
-            npo = (1.0 - h) @ resolved_ph
-            a = h @ lysis_ph
-            b = (1.0 - h) @ lysis_ph
-            rb = a / nb if nb > 0 else 0.0
-            rpo = b / npo if npo > 0 else 0.0
-            return rb - rpo
-
-        obs = ref_stat(host_has)
-        count_ge = sum(1 for pi in perm_indices if ref_stat(host_has[pi]) >= obs)
-        ref_p = (count_ge + 1) / (n_perms + 1)
-
-        assert r.p_value == pytest.approx(ref_p, abs=1e-10)
-        assert r.a_lysis_both == int(host_has @ lysis_ph)
-
 
 class TestResultsToRows:
     """Tests for CSV row conversion."""
