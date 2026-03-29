@@ -19,6 +19,7 @@ python -m ipykernel install --user --name phage_env --display-name phage_env
 Now when you run notebooks in `jupyter lab`, make sure to select the `phage_env` kernel.
 
 ## Optional: automatic env activation with direnv
+
 This repository includes a tracked `.envrc` that runs `conda activate phage_env` when you enter the repository
 directory.
 
