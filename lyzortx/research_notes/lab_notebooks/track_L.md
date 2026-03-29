@@ -65,22 +65,34 @@ PHROG-receptor weights to predict lysis without any interaction data for the new
 #### Executive summary
 
 Built a reusable Fisher's exact test enrichment module (`annotation_interaction_enrichment.py`) and ran three analyses
-on the full 369×96 interaction matrix (9,720 lytic pairs, 27.4% base rate). All three analyses found strong,
-biologically plausible signal: 1,500/3,424 significant RBP PHROG × OMP receptor associations, 76/160 RBP PHROG × LPS
-core associations, and 522/924 anti-defense PHROG × defense subtype associations (BH-corrected p < 0.05). These results
-strongly support building pairwise mechanistic features in TL03/TL04.
+on the full 369×96 interaction matrix (9,720 lytic pairs, 27.4% base rate). The test conditions on the phage carrying
+the PHROG, then asks whether the host feature increases lysis — controlling for phage main effects. Results: 662/3,424
+significant RBP PHROG × OMP receptor associations, 34/160 RBP PHROG × LPS core associations, and 139/924 anti-defense
+PHROG × defense subtype associations (BH-corrected p < 0.05). These results support building pairwise mechanistic
+features in TL03/TL04.
 
 #### What was implemented
 
 - `lyzortx/pipeline/track_l/steps/annotation_interaction_enrichment.py`: Reusable enrichment module. Takes any (phage
   binary feature matrix, host binary feature matrix, interaction matrix) triple. For each (phage_feature, host_feature)
-  pair, builds a 2×2 contingency table (lysis when both present vs all other combinations) and runs one-sided Fisher's
-  exact test (alternative='greater'). Applies Benjamini-Hochberg FDR correction across all tests within each analysis.
+  pair, builds a 2×2 contingency table **conditioned on the phage having the feature** (host_has vs host_lacks among
+  phages with the PHROG), then runs one-sided Fisher's exact test (alternative='greater'). This controls for phage main
+  effects — a generalist PHROG that lyses everything will not show spurious enrichment for every host feature. Applies
+  Benjamini-Hochberg FDR correction across all tests within each analysis.
 - `lyzortx/pipeline/track_l/steps/run_enrichment_analysis.py`: Loads pharokka RBP/anti-defense annotations, host OMP
   receptor clusters, LPS core types, and defense system subtypes, constructs binary matrices, runs three enrichment
   analyses. Wired into `run_track_l.py` as `--step enrich`.
-- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 12 unit tests for BH correction, Fisher's test, matrix
-  dimension validation, and contingency table arithmetic.
+- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 13 unit tests for BH correction, Fisher's test, matrix
+  dimension validation, contingency table arithmetic, and a regression test for phage main effect confounding.
+
+#### Bug caught and fixed during review
+
+The initial implementation used a "both present vs everything else" contingency table. This conflated phage main effects
+with interaction effects: a PHROG carried by generalist phages (lysis rate ~60%) appeared significantly enriched against
+nearly every host feature (96/107 receptor clusters), because the "everything else" denominator included all pairs where
+the phage lacked the PHROG (lower baseline lysis). The fix: condition on the phage having the PHROG, then test whether
+the host feature increases lysis within that subset. This dropped the significance rate from 44-57% to 15-21%, which
+is biologically plausible for genuine interaction effects.
 
 #### Data dimensions
 
@@ -93,54 +105,34 @@ strongly support building pairwise mechanistic features in TL03/TL04.
 
 #### Analysis 1: RBP PHROG × OMP receptor variant clusters
 
-- **3,424 tests** (32 PHROGs × 107 receptor clusters), **1,500 significant** (43.8%).
-- Significant pairs show mean lysis rate 56.9% vs 15.1% for non-significant (base rate 27.4%).
-- Top associations: RBP PHROGs 136, 15437, 4465, 9017 × TOLC cluster 99_66 — OR=108.9, lysis rate 97.6% when both
-  present (BH p = 1.7×10⁻²¹). These four PHROGs share a common phage subset (likely the same generalist phages), and
-  TOLC_99_66 marks a susceptible host subgroup.
-- Second tier: PHROG 16472 × OMPC_99_41 and PHROGs 1699/2056 × NFRA_99_93 (OR≈29, lysis rate 91.7%).
-- 27 of 32 tested PHROGs have at least one significant receptor association.
+- **3,424 tests** (32 PHROGs × 107 receptor clusters), **662 significant** (19.3%).
+- Max significance for any single PHROG: 32/107 receptor clusters (PHROGs 2097/4277). Former top generalist PHROGs
+  (136, 15437, 4465, 9017) dropped from 96/107 to 25/107 after controlling for phage main effect.
+- Top associations now reflect genuine interaction effects where the receptor variant matters above and beyond the
+  phage's baseline lysis rate.
 
 #### Analysis 2: RBP PHROG × LPS core type
 
-- **160 tests** (32 PHROGs × 5 LPS types), **76 significant** (47.5%).
-- Top associations: PHROGs 2097/4277 × R4 (OR=7.0, lysis 72.1%), PHROGs 2097/4277 × R1 (OR=6.5, lysis 67.6%).
-- PHROGs 136/15437/4465/9017 show broad enrichment across R1, R3, R4 — consistent with their generalist phage origin.
-- All 5 LPS types have significant associations. 19 of 32 PHROGs have at least one significant LPS association.
+- **160 tests** (32 PHROGs × 5 LPS types), **34 significant** (21.3%).
+- Associations here represent RBP PHROGs whose phages lyse hosts with a specific LPS core type at a higher rate than
+  hosts lacking it, given that the phage carries the PHROG.
 
 #### Analysis 3: Anti-defense PHROG × defense system subtypes
 
-- **924 tests** (12 PHROGs × 77 defense subtypes), **522 significant** (56.5%).
-- Top: PHROG 799 × Rst_gop_beta_cll and Thoeris_I (OR=∞, 100% lysis when both present). PHROG 799 is an
-  anti-restriction methyltransferase — its association with Rst (restriction-like) and Thoeris (abortive infection)
-  systems is biologically plausible.
-- PHROGs 116/67 × Rst_gop_beta_cll (OR=∞, 100% lysis, BH p=3.7×10⁻¹⁰) and × Thoeris_I (BH p=1.5×10⁻⁸).
-- PHROG 4452 × Thoeris_I/II (OR=∞/29.2) — another anti-defense gene with strong Thoeris evasion signal.
-- 11 of 12 tested anti-defense PHROGs have significant defense subtype associations.
-- 75 of 77 defense subtypes have at least one significant anti-defense association.
-
-#### Interpretation
-
-The high fraction of significant tests (~44–57%) is not an artifact of multiple testing. It reflects genuine biological
-structure: generalist phages carry specific RBP repertoires that enable them to infect many host subgroups, so each of
-their PHROGs will be enriched for lysis against multiple host features. The BH correction is valid here because these
-are independent hypotheses (each PHROG × feature pair is a separate biological mechanism), and the p-values are
-extremely small (many < 10⁻²⁰).
-
-The lysis rate gap between significant and non-significant pairs (57% vs 15% for RBP × OMP) confirms these are real
-mechanistic associations, not statistical noise at the margins of the base rate.
+- **924 tests** (12 PHROGs × 77 defense subtypes), **139 significant** (15.0%).
+- These represent genuine anti-defense gene × defense system interactions where carrying the anti-defense gene increases
+  lysis of hosts with the defense system, beyond the phage's baseline.
 
 #### Implications for TL03/TL04
 
-- **TL03 (RBP-receptor features)**: Strong support for building pairwise features. For each phage-host pair, the model
-  can encode: "does the phage carry an RBP PHROG that is significantly enriched for lysis against hosts with this OMP
-  receptor cluster / LPS core type?" The enrichment odds ratios serve as natural feature weights.
-- **TL04 (defense evasion features)**: Even stronger support. The anti-defense PHROG × defense subtype enrichment at
-  56.5% significance rate with extreme ORs means the model can learn which phage anti-defense genes successfully evade
-  which host defense systems.
+- **TL03 (RBP-receptor features)**: Results support building pairwise features. 662 significant PHROG-receptor
+  associations provide interaction-level signal for the model. The enrichment odds ratios serve as feature weights,
+  now reflecting genuine interaction effects rather than phage popularity.
+- **TL04 (defense evasion features)**: 139 significant anti-defense × defense associations provide a smaller but still
+  meaningful feature set.
 - **No escape hatch needed**: The acceptance criteria for TL03 included a fallback to the raw PHROG binary matrix if
-  enrichment showed no significant associations. With 1,500+ significant RBP-receptor associations, the enrichment-based
-  features are clearly the right path.
+  enrichment showed no significant associations. With 662+ significant RBP-receptor associations, the enrichment-based
+  features are the right path.
 
 #### Non-protein host factors considered
 

@@ -56,11 +56,14 @@ class TestComputeEnrichment:
     """Tests for the main enrichment computation."""
 
     def test_perfect_enrichment(self) -> None:
-        """When phage feature + host feature perfectly predicts lysis."""
-        # 4 phages, 4 hosts
-        # Phage 0,1 have feature; phage 2,3 don't
-        # Host 0,1 have feature; host 2,3 don't
-        # Lysis only when both have the feature
+        """When host feature perfectly predicts lysis among phages with the feature.
+
+        The corrected test conditions on the phage having the feature, then
+        asks whether the host feature increases lysis probability. Here:
+        - Phages 0,1 have the feature, phages 2,3 don't
+        - Among phages 0,1: lysis only when host has the feature (a=4, b=0)
+        - The 2x2 table is [[4, 0], [0, 4]] → OR=inf, p significant
+        """
         phage_matrix = np.array([[1], [1], [0], [0]], dtype=np.int8)
         host_matrix = np.array([[1], [1], [0], [0]], dtype=np.int8)
         # interaction_matrix[host, phage]
@@ -77,7 +80,9 @@ class TestComputeEnrichment:
         assert len(results) == 1
         r = results[0]
         assert r.a_lysis_both == 4  # 2 hosts x 2 phages, all lysis
+        assert r.b_lysis_phage_only == 0  # phage has feature but host lacks: no lysis
         assert r.n_both == 4
+        assert r.n_phage_only == 4
         assert r.p_value < 0.05
         assert r.odds_ratio == float("inf")
 
@@ -96,6 +101,42 @@ class TestComputeEnrichment:
         # With random data, p-value should be > 0.05 most of the time
         # We can't assert this deterministically, but with seed 42 it should hold
         assert results[0].p_value > 0.01
+
+    def test_generalist_phrog_not_enriched(self) -> None:
+        """A PHROG carried by generalist phages should NOT show enrichment.
+
+        This is the key regression test: if phages with a PHROG lyse hosts
+        at the same rate regardless of whether the host has the receptor,
+        the conditioned test should find no enrichment. The old "both vs
+        everything else" table would have found spurious enrichment here
+        because it conflated the phage main effect with the interaction.
+        """
+        # 6 phages: 0-2 have the PHROG, 3-5 don't
+        # 6 hosts: 0-2 have the receptor, 3-5 don't
+        phage_matrix = np.array([[1], [1], [1], [0], [0], [0]], dtype=np.int8)
+        host_matrix = np.array([[1], [1], [1], [0], [0], [0]], dtype=np.int8)
+        # Generalist: phages 0-2 lyse ALL hosts (regardless of receptor)
+        # Specialist: phages 3-5 lyse NO hosts
+        interaction = np.array(
+            [
+                [1, 1, 1, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0],
+            ],
+            dtype=np.int8,
+        )
+        results = compute_enrichment(phage_matrix, host_matrix, interaction, ["pf"], ["hf"])
+        assert len(results) == 1
+        r = results[0]
+        # Among phages with the PHROG: lysis rate is 100% regardless of host feature
+        # a / n_both == b / n_phage_only == 1.0
+        # No interaction effect → should NOT be significant
+        assert r.a_lysis_both == 9  # 3 hosts x 3 phages
+        assert r.b_lysis_phage_only == 9  # 3 hosts x 3 phages, still all lysis
+        assert r.p_value > 0.5  # No enrichment at all
 
     def test_multiple_features(self) -> None:
         """Test with multiple phage and host features."""

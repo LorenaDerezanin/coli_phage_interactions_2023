@@ -171,23 +171,24 @@ def compute_enrichment(
             c = int((interaction_matrix * mask_host_only).sum())
             d = int((interaction_matrix * mask_neither).sum())
 
-            # 2x2 contingency table for Fisher's test:
-            # [[lysis_both, lysis_phage_only], [lysis_host_only, lysis_neither]]
-            # vs
-            # [[no_lysis_both, no_lysis_phage_only], [no_lysis_host_only, no_lysis_neither]]
+            # 2x2 contingency table for Fisher's test, conditioned on the
+            # phage having the feature (controls for phage main effect):
             #
-            # But Fisher's test needs the 2x2 table oriented as:
-            # feature_present vs feature_absent (rows) x lysis vs no_lysis (cols)
+            #              lysis         no_lysis
+            # host_has:    a             n_both - a
+            # host_lacks:  b             n_phage_only - b
             #
-            # For the "both present" enrichment question:
-            # Row 1: both present → [a, n_both - a]
-            # Row 2: not both present → [b+c+d, (n_phage_only+n_host_only+n_neither) - (b+c+d)]
-            lysis_both = a
-            no_lysis_both = n_both - a
-            lysis_other = b + c + d
-            no_lysis_other = (n_phage_only + n_host_only + n_neither) - (b + c + d)
-
-            table = np.array([[lysis_both, no_lysis_both], [lysis_other, no_lysis_other]])
+            # This asks: among interactions where the phage carries this
+            # PHROG, does the host carrying this receptor increase the
+            # probability of lysis? A naive "both vs everything else"
+            # table would conflate the phage main effect with the
+            # interaction effect.
+            table = np.array(
+                [
+                    [a, n_both - a],
+                    [b, n_phage_only - b],
+                ]
+            )
             odds_ratio, p_value = stats.fisher_exact(table, alternative="greater")
 
             results.append(
