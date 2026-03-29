@@ -34,7 +34,38 @@ RBP gene list, and anti-defense gene list. All 97 phages must produce >0 annotat
 - **Per-phage output directories**: Each phage gets its own pharokka output directory under
   `lyzortx/generated_outputs/track_l/pharokka_annotations/<phage_name>/`, matching pharokka's native output structure.
 
+#### Key findings from exploratory analysis
+
+Post-annotation analysis comparing generalist phages (200-262 strains lysed) vs narrow-range phages (6-17 strains)
+revealed strong discriminative signal in the RBP PHROG repertoire:
+
+- **43 unique RBP PHROG families** across the 97-phage panel.
+- Generalists carry **6-9 RBPs** with diverse subtypes (long/short tail fiber, tail spike, host specificity protein,
+  baseplate wedge connector). Narrow-range phages carry **0-3 RBPs**, mostly generic tail spike or tail fiber.
+- PHROG repertoires are **almost completely disjoint**: 19 PHROGs exclusive to generalists, 7 exclusive to narrow-range,
+  only 1 shared (PHROG 817). This means the specific PHROG IDs, not just counts, carry strong signal.
+- Track C provides 12 host OMP receptor types (22 variant clusters at 99% identity) and 82 defense system subtypes.
+
+This suggests the most informative feature for TL02 is a **phage x RBP-PHROG binary matrix** (43 columns), not just RBP
+count or diversity. Even better: cross with host receptor data via enrichment analysis to learn empirical PHROG → receptor
+associations from the interaction matrix.
+
 #### Next steps
 
-TL02/TL03 will consume `rbp_genes.csv` and `anti_defense_genes.csv` to build mechanistic feature blocks for the
-prediction model.
+1. **Build a reusable enrichment module** (`annotation_interaction_enrichment.py`) that takes any (phage feature matrix,
+   host feature matrix, interaction matrix) triple and produces a Fisher's exact test enrichment table with odds ratios,
+   p-values, and BH-corrected significance. This module will be used by both TL02 and TL03.
+2. **Run enrichment analysis on three pairings:**
+   - RBP PHROGs (43) x OMP receptor variants (22) — core RBP-receptor signal
+   - RBP PHROGs (43) x LPS core type (~5 types) — tail spikes that bind LPS directly
+   - Anti-defense gene PHROGs x defense system subtypes (82) — for TL03
+3. **TL02:** Use the significant PHROG-receptor associations to build pairwise features. For each phage-host pair:
+   does the phage carry an RBP PHROG that is significantly associated with lysis of hosts carrying this receptor? The
+   enrichment odds ratios become the feature weights.
+4. **TL03:** Same logic for anti-defense genes x host defense systems.
+5. **Depolymerase annotation (deferred):** Pharokka annotations are too coarse for capsule-depolymerase matching
+   (18 "polysaccharide chain length determinant" hits, no capsule-type specificity). Dedicated tools exist (DepoScope,
+   DePP, PDP-Miner) but none predict capsule-type specificity — they only classify binary depolymerase yes/no. Running
+   Pfam/InterPro on tail spike sequences to get glycosyl hydrolase family would be more informative. Defer until
+   enrichment analysis shows whether capsule features (Track C has LPS core type + Klebsiella capsule with 94% missing)
+   carry enough signal to justify the effort.
