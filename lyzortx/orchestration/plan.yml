@@ -542,7 +542,7 @@ tracks:
     tasks:
     - id: TL01
       title: Annotate all 97 phage genomes with Pharokka
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn,
@@ -560,8 +560,8 @@ tracks:
       status: pending
       model: gpt-5.4
       acceptance_criteria:
-      - Build a reusable enrichment module (annotation_interaction_enrichment.py) that
-        takes any (phage binary feature matrix, host binary feature matrix, interaction
+      - Build a reusable enrichment module (annotation_interaction_enrichment.py)
+        that takes any (phage binary feature matrix, host binary feature matrix, interaction
         matrix) and produces a Fisher's exact test enrichment table with odds ratios,
         p-values, and Benjamini-Hochberg corrected significance
       - 'Run three enrichment analyses: (1) RBP PHROG IDs (43) x OMP receptor variant

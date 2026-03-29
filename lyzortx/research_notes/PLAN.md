@@ -340,7 +340,7 @@ graph LR
   mechanistic features from Pharokka. (2) Build a generalized inference pipeline that accepts arbitrary E. coli genomes
   and phage FNA files, computes features from sequence, and predicts lysis — removing the hard dependency on the fixed
   404-strain panel.
-- [ ] **TL01** Annotate all 97 phage genomes with Pharokka. Model: `gpt-5.4-mini`.
+- [x] **TL01** Annotate all 97 phage genomes with Pharokka. Model: `gpt-5.4-mini`.
   - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn, mash, dnaapler) to environment.yml and
     verify pharokka runs in CI
   - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
