@@ -10,6 +10,10 @@ plugins:
     headings: false
     strict: false
     stern: false
+  # MD024: duplicate headings — allow identical subheadings under different parents
+  # (lab notebook entries repeat "Executive summary", "What was implemented", etc.)
+  md024:
+    allow_different_nesting: true
   # MD025: multiple top-level headings in the same document
   md025:
     enabled: false
