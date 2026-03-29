@@ -85,10 +85,17 @@ def _lysis_rate_diff(
     interaction_matrix: NDArray[np.int8],
     host_has: NDArray[np.int8],
     phage_has: NDArray[np.int8],
+    resolved_mask: NDArray[np.int8] | None = None,
 ) -> float:
-    """Compute lysis rate difference: host_has - host_lacks, conditioned on phage_has."""
+    """Compute lysis rate difference: host_has - host_lacks, conditioned on phage_has.
+
+    If resolved_mask is provided, only count pairs where resolved_mask[i,j] == 1.
+    """
     mask_both = np.outer(host_has, phage_has)
     mask_phage_only = np.outer(1 - host_has, phage_has)
+    if resolved_mask is not None:
+        mask_both = mask_both * resolved_mask
+        mask_phage_only = mask_phage_only * resolved_mask
     n_both = mask_both.sum()
     n_phage_only = mask_phage_only.sum()
     if n_both == 0 or n_phage_only == 0:
@@ -118,6 +125,7 @@ def compute_enrichment(
     host_feature_names: Sequence[str],
     n_permutations: int = N_PERMUTATIONS,
     random_seed: int = RANDOM_SEED,
+    resolved_mask: NDArray[np.int8] | None = None,
 ) -> list[EnrichmentResult]:
     """Compute permutation-based enrichment for all feature pairs.
 
@@ -142,6 +150,10 @@ def compute_enrichment(
         Number of permutations for p-value computation.
     random_seed
         Seed for reproducible permutations.
+    resolved_mask
+        Optional binary matrix of shape (n_hosts, n_phages). 1=resolved
+        label, 0=unresolved. If provided, unresolved pairs are excluded
+        from all counts and statistics.
 
     Returns
     -------
@@ -184,11 +196,17 @@ def compute_enrichment(
             host_has = host_matrix[:, hf_idx]
             host_lacks = 1 - host_has
 
-            # Observed statistics
+            # Observed statistics (applying resolved_mask if provided)
             mask_both = np.outer(host_has, phage_has)
             mask_phage_only = np.outer(host_lacks, phage_has)
             mask_host_only = np.outer(host_has, 1 - phage_has)
             mask_neither = np.outer(host_lacks, 1 - phage_has)
+
+            if resolved_mask is not None:
+                mask_both = mask_both * resolved_mask
+                mask_phage_only = mask_phage_only * resolved_mask
+                mask_host_only = mask_host_only * resolved_mask
+                mask_neither = mask_neither * resolved_mask
 
             n_both = int(mask_both.sum())
             n_phage_only = int(mask_phage_only.sum())
@@ -200,13 +218,13 @@ def compute_enrichment(
             c = int((interaction_matrix * mask_host_only).sum())
             d = int((interaction_matrix * mask_neither).sum())
 
-            obs_stat = _lysis_rate_diff(interaction_matrix, host_has, phage_has)
+            obs_stat = _lysis_rate_diff(interaction_matrix, host_has, phage_has, resolved_mask)
 
             # Permutation p-value: shuffle host labels
             count_ge = 0
             for _ in range(n_permutations):
                 host_perm = host_has[rng.permutation(n_hosts)]
-                perm_stat = _lysis_rate_diff(interaction_matrix, host_perm, phage_has)
+                perm_stat = _lysis_rate_diff(interaction_matrix, host_perm, phage_has, resolved_mask)
                 if perm_stat >= obs_stat:
                     count_ge += 1
 

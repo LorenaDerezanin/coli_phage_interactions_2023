@@ -53,7 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'annotate' runs pharokka on all FNA files. "
             "'parse' parses pharokka outputs into summary tables. "
             "'enrich' runs TL02 PHROG x host-feature enrichment analyses. "
-            "'all' runs all steps sequentially."
+            "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
     parser.add_argument(
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.step in {"parse", "all"}:
         parse_annotations.main([])
 
-    if args.step in {"enrich", "all"}:
+    if args.step == "enrich":
         run_enrichment_analysis.main([])
 
 

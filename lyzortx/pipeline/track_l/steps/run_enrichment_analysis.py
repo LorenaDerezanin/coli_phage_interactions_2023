@@ -165,34 +165,49 @@ def load_interaction_matrix(
     label_path: Path,
     bacteria: list[str],
     phages: list[str],
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Load the binary interaction matrix from label set v1.
 
-    Returns matrix of shape (n_bacteria, n_phages) with 1=lysis, 0=no lysis.
+    Returns (interaction, resolved_mask) where both are shape (n_bacteria, n_phages).
+    interaction[i,j] = 1 means lysis, 0 means no lysis or unresolved.
+    resolved_mask[i,j] = 1 means the pair has a resolved label (0 or 1),
+    0 means unresolved (empty any_lysis). Unresolved pairs should be excluded
+    from enrichment statistics.
     """
     bact_to_idx = {b: i for i, b in enumerate(bacteria)}
     phage_to_idx = {p: i for i, p in enumerate(phages)}
 
     matrix = np.zeros((len(bacteria), len(phages)), dtype=np.int8)
+    resolved = np.zeros((len(bacteria), len(phages)), dtype=np.int8)
     with label_path.open(encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
             b = row["bacteria"]
             p = row["phage"]
             label = row["any_lysis"].strip()
-            if b in bact_to_idx and p in phage_to_idx and label in ("1", "1.0"):
-                matrix[bact_to_idx[b], phage_to_idx[p]] = 1
+            if b not in bact_to_idx or p not in phage_to_idx:
+                continue
+            bi, pi = bact_to_idx[b], phage_to_idx[p]
+            if label in ("1", "1.0"):
+                matrix[bi, pi] = 1
+                resolved[bi, pi] = 1
+            elif label in ("0", "0.0"):
+                resolved[bi, pi] = 1
+            # else: unresolved — leave both at 0
 
+    n_resolved = int(resolved.sum())
     total_lysis = int(matrix.sum())
     total_pairs = matrix.size
     logger.info(
-        "Interaction matrix: %d bacteria x %d phages, %d lytic (%.1f%%)",
+        "Interaction matrix: %d bacteria x %d phages, %d resolved pairs (%d unresolved), %d lytic (%.1f%% of resolved)",
         len(bacteria),
         len(phages),
+        n_resolved,
+        total_pairs - n_resolved,
         total_lysis,
-        100.0 * total_lysis / total_pairs,
+        100.0 * total_lysis / n_resolved if n_resolved > 0 else 0.0,
     )
-    return matrix
+    return matrix, resolved
 
 
 def load_omp_receptor_host_matrix(
@@ -348,6 +363,7 @@ def run_single_enrichment(
     phage_feature_names: list[str],
     host_feature_names: list[str],
     output_dir: Path,
+    resolved_mask: np.ndarray | None = None,
 ) -> list[dict[str, object]]:
     """Run one enrichment analysis and write CSV output."""
     logger.info("Starting enrichment analysis: %s", name)
@@ -357,6 +373,7 @@ def run_single_enrichment(
         interaction_matrix=interaction_matrix,
         phage_feature_names=phage_feature_names,
         host_feature_names=host_feature_names,
+        resolved_mask=resolved_mask,
     )
     rows = results_to_rows(results)
 
@@ -402,8 +419,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     phages = sorted(phage_set)
     logger.info("Interaction panel: %d bacteria, %d phages", len(bacteria), len(phages))
 
-    # Load interaction matrix
-    interaction_matrix = load_interaction_matrix(args.label_path, bacteria, phages)
+    # Load interaction matrix and resolved-pair mask
+    interaction_matrix, resolved_mask = load_interaction_matrix(args.label_path, bacteria, phages)
 
     # Load phage PHROG matrices
     rbp_matrix, rbp_phrog_names, anti_def_matrix, anti_def_phrog_names = load_pharokka_phrog_matrices(
@@ -426,6 +443,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         phage_feature_names=[f"RBP_PHROG_{p}" for p in rbp_phrog_names],
         host_feature_names=omp_feature_names,
         output_dir=args.output_dir,
+        resolved_mask=resolved_mask,
     )
 
     # Analysis 2: RBP PHROGs x LPS core type
@@ -437,6 +455,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         phage_feature_names=[f"RBP_PHROG_{p}" for p in rbp_phrog_names],
         host_feature_names=lps_feature_names,
         output_dir=args.output_dir,
+        resolved_mask=resolved_mask,
     )
 
     # Analysis 3: Anti-defense gene PHROGs x defense system subtypes
@@ -448,6 +467,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         phage_feature_names=[f"ANTIDEF_PHROG_{p}" for p in anti_def_phrog_names],
         host_feature_names=defense_feature_names,
         output_dir=args.output_dir,
+        resolved_mask=resolved_mask,
     )
 
     # Write manifest
