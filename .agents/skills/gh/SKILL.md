@@ -245,6 +245,36 @@ author; always inspect `user.login` before attributing feedback.
 threads provide. Parsing actionable feedback from unstructured comment text is inherently less reliable. The long-term
 fix is to ensure the reviewing agent always submits formal reviews (see PR #48 for the LangGraph-based approach).
 
+## 11. Responding to review comments — always reply inline
+
+**The rule:** When addressing review feedback (from Codex, claude-code-action, or humans), always reply as a threaded
+inline reply to the specific review comment. Never post a top-level PR comment summarizing your responses.
+
+**Why:** Top-level PR comments are not threaded — they appear in the general conversation timeline, disconnected from
+the code they reference. Reviewers have to manually match "Fixed item 1" to the original comment. Inline replies appear
+directly under the original comment, making it obvious which feedback was addressed and which wasn't.
+
+**How:**
+
+```bash
+# 1. List inline review comments to get their IDs
+gh api repos/OWNER/REPO/pulls/123/comments \
+  -q '.[] | "\(.id) | \(.path):\(.line) | \(.body[0:80])"'
+
+# 2. Reply to each comment individually using the reply endpoint
+gh api repos/OWNER/REPO/pulls/123/comments/COMMENT_ID/replies \
+  -X POST -f body="Fixed in abc123.
+
+Posted by Claude Opus 4.6"
+```
+
+**Key details:**
+- The reply endpoint is `/pulls/{pr}/comments/{comment_id}/replies` — the PR number IS required (see rule 7).
+- Reply to **each** review comment separately, even if the response is similar. This marks each thread as addressed.
+- When pushing back on a comment, reply inline with the reasoning — don't just ignore it.
+- When a comment is addressed with a code fix, reply with a brief note ("Fixed" or "Fixed — made `--database-dir`
+  optional") so the reviewer knows it was seen.
+
 ## Quick self-check before running
 
 Before executing any `gh` command that sets `--body`:
@@ -256,3 +286,4 @@ Before executing any `gh` command that sets `--body`:
 5. ✅ If I just pushed commits: does the PR description still match the full branch content?
 6. ✅ When reading PR feedback: am I checking all three endpoints (reviews, inline comments, issue comments)?
 7. ✅ When interpreting PR comments: am I checking the `user` field to distinguish who posted each comment?
+8. ✅ When responding to review comments: am I replying inline to each comment, not posting a top-level summary?

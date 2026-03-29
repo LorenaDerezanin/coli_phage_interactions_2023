@@ -26,6 +26,11 @@
 - **How to detect GitHub Actions:** Check `GITHUB_ACTIONS=true`.
 - **Git identity in CI:** Git `user.name` and `user.email` are pre-configured before the agent runs. Do not attempt to
   set them yourself.
+- **`conda run` does not source activation scripts.** Packages that install to non-standard paths (e.g., openjdk puts
+  `java` in `$CONDA_PREFIX/lib/jvm/bin/`) will not be on `PATH` under `conda run`. For tools that depend on activation
+  scripts, use `conda activate` in a shell instead.
+- **Long-running local jobs need `caffeinate`.** macOS idle sleep suspends all processes. When launching a pipeline that
+  takes more than a few minutes, run `caffeinate -dims -w <pid> &` to prevent sleep until the process exits.
 - **Generated outputs do not exist in CI.** This repo runs in GitHub Actions (Codex). A fresh checkout contains only
   source code and committed data — no `lyzortx/generated_outputs/` artifacts. If a task depends on generated outputs
   from a previous track, it must either regenerate them (by running the prerequisite steps) or fail loudly. It must
@@ -267,6 +272,13 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   (or in a local helper) so the reader can see input and expected output together without scrolling. For rendering or
   serialization tests, assert on the actual output (e.g., specific strings in the rendered HTML/Markdown), not only on
   intermediate data structures.
+- **Test the tricky logic, not the plumbing** — Focus coverage on classification, parsing, pattern matching, and data
+  transformation functions — code where subtle bugs hide. Do not write tests for CLI entry points, argparse wiring,
+  subprocess calls, or trivial guard clauses that just check `Path.exists()`. Those test the stdlib, not your code.
+- **Test fixtures must match real data formats** — When testing parsers for external tool output (e.g., pharokka TSVs,
+  BLAST results), build test fixtures from actual column names and realistic values. Do not guess at schemas — verify
+  against real output first, then encode the real format in test helpers. Schema mismatches (e.g., `frame` vs `strand`)
+  are the most common parser bug.
 
 # Coding Principles
 

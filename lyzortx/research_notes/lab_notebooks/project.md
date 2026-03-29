@@ -932,3 +932,37 @@ validate receptor assignments for their phage panels. Structure-based receptor g
 **What to do if triggered:** Scope a new track (e.g., Track M: Structural RBP-Receptor Prediction) with explicit
 acceptance criteria for structure prediction, tip domain extraction, clustering, and receptor assignment. Evaluate
 whether the expected lift justifies the computational cost before committing.
+
+#### Future: Depolymerase domain annotation for capsule-specificity matching
+
+**Trigger:** Enrichment analysis (TL02) shows that host capsule/LPS features carry signal for lysis prediction, but
+pharokka's generic annotations ("polysaccharide chain length determinant protein", "tail spike protein") are too coarse
+to distinguish which capsule types a phage can degrade.
+
+**Context (2026-03-29):** TL01 found 18 "polysaccharide chain length determinant" genes across the panel, but pharokka
+does not annotate capsule-type specificity. Dedicated depolymerase tools (DepoScope, DePP, PDP-Miner) only classify
+binary depolymerase yes/no — none predict capsule-type targets. The most promising approach is running Pfam/InterPro on
+tail spike protein sequences to identify glycosyl hydrolase families, which can be mapped to polysaccharide substrate
+classes via literature. Track C has LPS core type (~5 types, well-covered) and Klebsiella capsule type (94% missing), so
+the host-side signal may be sparse.
+
+**What to do if triggered:** Run `hmmscan` against Pfam-A on the pharokka `.faa` tail spike sequences (already available
+in the per-phage output). Extract glycosyl hydrolase family annotations and map to substrate specificity using CAZy
+database cross-references. If enough phages carry classifiable depolymerase domains and enough hosts have capsule type
+data, add depolymerase-capsule compatibility as a pairwise feature alongside RBP-receptor features.
+
+#### Future: External interaction matrices as additional training data
+
+**Trigger:** The model architecture is validated on the internal 97-phage panel and generalizes to external phage/host
+genomes via the annotation-based feature pipeline (TL05-TL08 complete).
+
+**Context (2026-03-29):** Because Track L features (RBP PHROGs, anti-defense genes, host receptors, defense systems) are
+defined by universal sequence databases (PHROGs, Pfam, OMP BLAST clusters, DefenseFinder), any external phage-host
+interaction dataset can be encoded into the same feature space. External phage genomes get pharokka-annotated and their
+RBPs assigned to the same PHROG families; external host genomes get receptor-typed and defense-system-annotated with the
+same pipelines. The external interaction matrix then provides additional (PHROG, receptor) → lysis observations that
+strengthen the learned associations.
+
+**What to do if triggered:** Identify external interaction datasets (e.g., from NCBI, PhageScope, published
+supplementary tables). Run the Track L annotation + Track C host typing pipelines on the external genomes. Pool the
+encoded interactions with internal training data and retrain. Measure lift from the expanded training set.
