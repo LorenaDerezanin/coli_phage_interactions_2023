@@ -84,19 +84,16 @@ pairwise mechanistic features in TL03/TL04.
 - `lyzortx/tests/test_annotation_interaction_enrichment.py`: 13 unit tests using a 20×10 slice of the real interaction
   matrix, covering BH correction, permutation test, contingency table arithmetic, and main effect confounding.
 
-#### Two bugs caught and fixed during review
+#### Design decisions
 
-1. **Phage main effect confounding (v1 bug)**: The initial implementation used a "both present vs everything else"
-   contingency table with Fisher's exact test. This conflated phage main effects with interaction effects: a PHROG
-   carried by generalist phages (lysis rate ~60%) appeared significantly enriched against 96/107 receptor clusters. Fix:
-   condition on the phage having the PHROG, then test whether the host feature increases lysis within that subset.
-
-2. **Anticonservative Fisher's test (v2 bug)**: The conditioned Fisher's test was still anticonservative — null
-   calibration with random features on the real interaction matrix showed 25% of tests at p < 0.05 (expected: 5%).
-   Cause: Fisher's exact test assumes independent observations, but interaction matrix entries are correlated (some hosts
-   are generally susceptible, some phages are generalists). Fix: replace Fisher's with a permutation test that shuffles
-   host labels, preserving the interaction matrix correlation structure. Null calibration confirmed: 3% at the 5%
-   threshold (well-calibrated, slightly conservative).
+- **Conditioning on phage feature**: The test conditions on the phage carrying the PHROG, then asks whether the host
+  feature increases lysis within that subset. This controls for the phage main effect — generalist PHROGs do not show
+  spurious enrichment for every host feature.
+- **Permutation p-values over Fisher's exact test**: Fisher's exact test assumes independent observations, but
+  interaction matrix entries are correlated (some hosts are generally susceptible, some phages are generalists). Null
+  calibration with random features on the real interaction matrix showed Fisher's yielded 25% false positives at p < 0.05
+  (expected: 5%). Permuting host labels (1000 permutations) preserves this correlation structure and gives calibrated
+  p-values (3% at the 5% threshold in null calibration).
 
 #### Data dimensions
 

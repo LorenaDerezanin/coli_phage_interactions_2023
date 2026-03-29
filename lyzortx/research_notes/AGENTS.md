@@ -22,6 +22,16 @@ When the `/replan` skill is used and results in plan changes, write entries to b
 evidence, metric comparisons). The project entry should document the strategic decision (e.g., which tracks were killed
 or restructured, and why). Include source citations (URLs + quotes) for any claims about external library behavior.
 
+## In-flight entry editing
+
+When an entry was added within the current PR and subsequent work in the same PR invalidates statements in that entry
+(e.g., a metric turned out to be wrong, a method was replaced), delete the false statements and replace them with
+correct ones. Do not preserve stale claims with "initially we thought X" hedging — the git history records the
+evolution. The entry as merged should read as a clean, accurate record of the final state.
+
+This applies only to entries added in the current PR. Entries from prior PRs are historical records and must not be
+modified (see Done Task Immutability in the root AGENTS.md).
+
 ## Entry format
 
 - Each entry starts with `### YYYY-MM-DD: Title` (date heading level 3).
