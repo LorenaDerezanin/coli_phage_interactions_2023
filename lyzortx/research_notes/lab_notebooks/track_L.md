@@ -174,3 +174,81 @@ Beyond OMP protein receptors and defense systems, several non-protein surface st
    Pfam/InterPro on tail spike sequences to get glycosyl hydrolase family would be more informative. Defer until
    enrichment analysis shows whether capsule features (Track C has LPS core type + Klebsiella capsule with 94% missing)
    carry enough signal to justify the effort.
+
+### 2026-03-29: TL03 Mechanistic RBP-receptor compatibility features from annotations
+
+#### Executive summary
+
+Built `build_mechanistic_rbp_receptor_features.py`, a Track L step that turns TL02 enrichment hits plus Pharokka RBP
+PHROG annotations into a pairwise feature matrix for the full 369×96 panel. The builder collapses the 32 panel RBP
+PHROGs to 25 unique carrier profiles before feature construction, then emits two blocks: (1) 25 direct phage-level
+collapsed-profile features copied onto each pair row, and (2) 302 weighted pairwise compatibility features where the
+value is `lysis_rate_diff` when the phage carries the collapsed profile and the host carries the enriched OMP/LPS
+feature, else 0. The output is joinable on `pair_id` / `bacteria` / `phage`.
+
+#### What was implemented
+
+- `lyzortx/pipeline/track_l/steps/build_mechanistic_rbp_receptor_features.py`: TL03 builder. It:
+  - bootstraps Track A labels and TL02 enrichment outputs if they are missing from a fresh checkout,
+  - rebuilds the panel RBP PHROG matrix from cached Pharokka TSVs,
+  - collapses duplicate PHROG carrier profiles,
+  - collapses duplicate significant enrichment hits onto those profiles,
+  - writes the feature CSV, column metadata, profile metadata, sanity-check CSV, and manifest.
+- `lyzortx/pipeline/track_l/run_track_l.py`: added `--step rbp-features` to run TL03 directly.
+- `lyzortx/tests/test_track_l_mechanistic_rbp_receptor_features.py`: 5 unit tests covering duplicate-profile
+  collapsing, collapsed-association merging, pairwise feature emission, curated-vs-Pharokka sanity rows, and a
+  minimal end-to-end `main()` run.
+
+#### Data dimensions and outputs
+
+- **Panel pairs**: 35,424 bacteria-phage pairs (369 bacteria × 96 phages).
+- **Collapsed direct phage block**: 25 columns from the 32 panel RBP PHROGs.
+- **Collapsed pairwise block**: 302 weighted columns total.
+  - 286 OMP receptor-cluster compatibility columns.
+  - 16 LPS core compatibility columns.
+- **Duplicate co-occurrence groups confirmed in the real data**:
+  - `1002/1154/967/972` (11 carrier phages)
+  - `136/15437/4465/9017` (6 carrier phages)
+  - `2097/4277` (14 carrier phages)
+
+#### Design decisions
+
+- **Collapse before feature construction**: The builder collapses PHROGs by their 96-phage carrier vector before using
+  TL02 outputs. This removes exact duplicates from both the direct phage block and the weighted pairwise block.
+- **Use `lysis_rate_diff`, not odds ratio**: TL03 uses the same conditional effect size as TL02's test statistic
+  (`lysis_rate_both - lysis_rate_phage_only`) because it is bounded, signed, and better behaved than `inf`/0 odds
+  ratios from sparse contingency tables.
+- **Bootstrap missing prerequisites**: Because generated outputs are absent on fresh CI checkouts, the TL03 builder
+  regenerates `label_set_v1_pairs.csv` and the TL02 enrichment CSVs when the default inputs are missing, then fails
+  loudly if those rebuilds do not produce the expected files.
+- **Keep TL03 separate from TE01**: The new mechanistic block lives under Track L outputs and does not overwrite the
+  existing Track E curated genus/subfamily lookup features. That avoids silently changing downstream experiments that
+  already depend on TE01.
+
+#### Sanity check against `RBP_list.csv`
+
+- **Any-RBP presence agreement**: 74/96 phages.
+- **Both curated and Pharokka call RBP present**: 74 phages.
+- **Curated-only**: 15 phages.
+- **Pharokka-only**: 7 phages.
+- **Curated positives**: 89 phages.
+- **Pharokka positives**: 81 phages.
+
+The disagreement pattern is asymmetric but still useful as a sanity check. Pharokka recovers most curated positives,
+but misses a minority of curated fiber/spike calls; conversely, Pharokka calls RBP-like tail proteins in seven phages
+that are `NA` in the curated list (`536_P1`, `536_P6`, `536_P7`, `536_P9`, `DIJ07_P1`, `DIJ07_P2`, `LF31_P1`). This
+supports using the annotation-derived block as an automated feature source while treating the curated list as an
+imperfect reference rather than ground truth.
+
+#### Interpretation
+
+- **The mechanistic block is viable**: TL02's 404 significant RBP×OMP/LPS hits collapse to 302 unique pairwise
+  features after duplicate-profile merging, so TL03 produces a non-trivial mechanistic feature space without label
+  leakage at feature-build time.
+- **Most signal is OMP-linked, not LPS-linked**: 286/302 collapsed pairwise features are OMP-based, with OmpC the
+  single largest receptor family (42 collapsed columns). Only 16 collapsed LPS columns survive, mostly `LPS_R1`.
+- **The direct phage block is sparse but not empty**: 78/96 phages carry at least one collapsed profile; the maximum is
+  5 profiles on a single phage, and 43 phages carry exactly 1.
+- **Curated-vs-Pharokka mismatch is tolerable for this use case**: the goal is not to recreate `RBP_list.csv` exactly,
+  but to derive a reproducible genome-only feature block. The 74/96 agreement rate is good enough for a sanity check,
+  but the disagreement counts should be acknowledged if TL05 shows surprising behavior.
