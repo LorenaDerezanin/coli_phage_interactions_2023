@@ -14,7 +14,12 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from lyzortx.log_config import setup_logging
-from lyzortx.pipeline.track_l.steps import parse_annotations, run_enrichment_analysis, run_pharokka
+from lyzortx.pipeline.track_l.steps import (
+    build_mechanistic_rbp_receptor_features,
+    parse_annotations,
+    run_enrichment_analysis,
+    run_pharokka,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +51,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["annotate", "parse", "enrich", "all"],
+        choices=["annotate", "parse", "enrich", "rbp-features", "all"],
         default="all",
         help=(
             "Track L step to run. "
             "'annotate' runs pharokka on all FNA files. "
             "'parse' parses pharokka outputs into summary tables. "
             "'enrich' runs TL02 PHROG x host-feature enrichment analyses. "
+            "'rbp-features' runs TL03 mechanistic RBP-receptor feature construction. "
             "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
@@ -113,6 +119,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.step == "enrich":
         run_enrichment_analysis.main([])
+    if args.step == "rbp-features":
+        build_mechanistic_rbp_receptor_features.main([])
 
 
 if __name__ == "__main__":
