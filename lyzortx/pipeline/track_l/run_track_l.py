@@ -18,6 +18,7 @@ from lyzortx.pipeline.track_l.steps import (
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
     parse_annotations,
+    retrain_mechanistic_v1_model,
     run_enrichment_analysis,
     run_pharokka,
 )
@@ -52,7 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["annotate", "parse", "enrich", "rbp-features", "defense-features", "all"],
+        choices=["annotate", "parse", "enrich", "rbp-features", "defense-features", "retrain-mechanistic-v1", "all"],
         default="all",
         help=(
             "Track L step to run. "
@@ -61,6 +62,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'enrich' runs TL02 PHROG x host-feature enrichment analyses. "
             "'rbp-features' runs TL03 mechanistic RBP-receptor feature construction. "
             "'defense-features' runs TL04 mechanistic defense-evasion feature construction. "
+            "'retrain-mechanistic-v1' runs TL05 model retraining, lift measurement, and SHAP summary. "
             "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
@@ -125,6 +127,8 @@ def main(argv: list[str] | None = None) -> None:
         build_mechanistic_rbp_receptor_features.main([])
     if args.step == "defense-features":
         build_mechanistic_defense_evasion_features.main([])
+    if args.step == "retrain-mechanistic-v1":
+        retrain_mechanistic_v1_model.main([])
 
 
 if __name__ == "__main__":
