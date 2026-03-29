@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import hashlib
 import json
 import logging
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -35,7 +38,7 @@ from lyzortx.pipeline.track_l.steps import (
 
 logger = logging.getLogger(__name__)
 
-IDENTIFIER_COLUMNS: Tuple[str, ...] = ("pair_id", "bacteria", "phage")
+IDENTIFIER_COLUMNS: tuple[str, ...] = ("pair_id", "bacteria", "phage")
 DEFAULT_TG01_SUMMARY_PATH = Path("lyzortx/generated_outputs/track_g/tg01_v1_binary_classifier/tg01_model_summary.json")
 DEFAULT_V1_LOCK_PATH = Path("lyzortx/pipeline/track_g/v1_feature_configuration.json")
 DEFAULT_TL03_OUTPUT_PATH = Path(
@@ -51,10 +54,10 @@ DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/mechanistic_v1_lift
 class ArmSpec:
     arm_id: str
     display_name: str
-    included_blocks: Tuple[str, ...]
-    tl03_columns: Tuple[str, ...]
-    tl04_columns: Tuple[str, ...]
-    numeric_columns: Tuple[str, ...]
+    included_blocks: tuple[str, ...]
+    tl03_columns: tuple[str, ...]
+    tl04_columns: tuple[str, ...]
+    numeric_columns: tuple[str, ...]
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -143,8 +146,8 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _deduplicate(values: Sequence[str]) -> Tuple[str, ...]:
-    out: List[str] = []
+def _deduplicate(values: Sequence[str]) -> tuple[str, ...]:
+    out: list[str] = []
     seen: set[str] = set()
     for value in values:
         if value in seen:
@@ -154,7 +157,7 @@ def _deduplicate(values: Sequence[str]) -> Tuple[str, ...]:
     return tuple(out)
 
 
-def _load_rows_and_columns(path: Path) -> tuple[List[Dict[str, str]], Tuple[str, ...]]:
+def _load_rows_and_columns(path: Path) -> tuple[list[dict[str, str]], tuple[str, ...]]:
     rows = read_csv_rows(path)
     if not rows:
         raise ValueError(f"No rows found in {path}")
@@ -202,7 +205,7 @@ def ensure_prerequisite_outputs(args: argparse.Namespace) -> None:
     ensure_default_tl04_output(args.tl04_feature_path)
 
 
-def load_v1_lock(path: Path) -> Dict[str, object]:
+def load_v1_lock(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     locked_blocks = list(payload.get("winner_subset_blocks", []))
@@ -214,7 +217,7 @@ def load_v1_lock(path: Path) -> Dict[str, object]:
     return dict(payload)
 
 
-def load_tg01_lock(path: Path) -> Dict[str, object]:
+def load_tg01_lock(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     return {
@@ -224,8 +227,8 @@ def load_tg01_lock(path: Path) -> Dict[str, object]:
     }
 
 
-def partition_track_c_defense_columns(track_c_columns: Sequence[str]) -> Tuple[str, ...]:
-    partitioned = train_v1_binary_classifier._deduplicate_preserving_order(track_c_columns)
+def partition_track_c_defense_columns(track_c_columns: Sequence[str]) -> tuple[str, ...]:
+    partitioned = train_v1_binary_classifier.deduplicate_preserving_order(track_c_columns)
     if not partitioned:
         raise ValueError("Track C feature table has no columns.")
     defense_columns = partition_track_c_columns(partitioned)["defense_subtypes"]
@@ -240,7 +243,7 @@ def build_arm_specs(
     track_d_columns: Sequence[str],
     tl03_columns: Sequence[str],
     tl04_columns: Sequence[str],
-) -> List[ArmSpec]:
+) -> list[ArmSpec]:
     baseline_numeric = _deduplicate([*V0_NUMERIC_FEATURE_COLUMNS, *defense_columns, *track_d_columns])
     tl03_numeric = _deduplicate([*baseline_numeric, *tl03_columns])
     tl04_numeric = _deduplicate([*baseline_numeric, *tl04_columns])
@@ -325,7 +328,7 @@ def build_global_feature_importance_rows(
     track_d_columns: Sequence[str],
     tl03_columns: Sequence[str],
     tl04_columns: Sequence[str],
-) -> List[Dict[str, object]]:
+) -> list[dict[str, object]]:
     if hasattr(shap_matrix, "toarray"):
         values = np.asarray(shap_matrix.toarray())
     else:
@@ -361,13 +364,13 @@ def compute_fold_metrics(
     *,
     estimator_factory: Any,
     locked_params: Mapping[str, object],
-) -> List[Dict[str, object]]:
-    fold_metrics: List[Dict[str, object]] = []
+) -> list[dict[str, object]]:
+    fold_metrics: list[dict[str, object]] = []
     for dataset in fold_datasets:
         estimator = estimator_factory(locked_params, dataset.fold_id)
         estimator.fit(dataset.X_train, dataset.y_train, sample_weight=dataset.sample_weights)
-        probabilities = train_v1_binary_classifier._predict_probabilities(estimator, dataset.X_valid)
-        scored_rows = []
+        probabilities = train_v1_binary_classifier.predict_probabilities(estimator, dataset.X_valid)
+        scored_rows: list[dict[str, object]] = []
         for row, probability in zip(dataset.valid_rows, probabilities):
             scored = dict(row)
             scored["predicted_probability"] = probability
@@ -387,7 +390,7 @@ def compute_fold_metrics(
     return fold_metrics
 
 
-def summarize_fold_metrics(fold_metrics: Sequence[Mapping[str, object]]) -> Dict[str, Optional[float]]:
+def summarize_fold_metrics(fold_metrics: Sequence[Mapping[str, object]]) -> dict[str, Optional[float]]:
     return train_v1_binary_classifier.summarize_fold_metrics(fold_metrics)
 
 
@@ -399,7 +402,7 @@ def evaluate_arm(
     track_d_columns: Sequence[str],
     locked_params: Mapping[str, object],
     estimator_factory: Any,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     arm_feature_space = build_arm_feature_space(
         arm,
         defense_columns=defense_columns,
@@ -425,7 +428,7 @@ def evaluate_arm(
         params=locked_params,
         sample_weight_key="training_weight_v3",
     )
-    holdout_prediction_rows: List[Dict[str, object]] = []
+    holdout_prediction_rows: list[dict[str, object]] = []
     for row, probability in zip(holdout_rows, holdout_probabilities):
         scored = dict(row)
         scored["predicted_probability"] = probability
@@ -472,7 +475,7 @@ def summarize_arm_metrics(
     *,
     baseline_binary_metrics: Mapping[str, Optional[float]],
     baseline_top3_metrics: Mapping[str, object],
-) -> Dict[str, object]:
+) -> dict[str, object]:
     holdout_binary_metrics = arm_result["holdout_binary_metrics"]
     holdout_top3_metrics = arm_result["holdout_top3_metrics"]
     auc = holdout_binary_metrics["roc_auc"]
@@ -508,7 +511,7 @@ def select_proposed_arm(
     arm_metrics: Sequence[Mapping[str, object]],
     *,
     baseline_arm_id: str,
-) -> Optional[Dict[str, object]]:
+) -> Optional[dict[str, object]]:
     baseline = next(row for row in arm_metrics if row["arm_id"] == baseline_arm_id)
     baseline_auc = baseline["holdout_roc_auc"]
     baseline_top3 = baseline["holdout_top3_hit_rate_all_strains"]
@@ -518,9 +521,9 @@ def select_proposed_arm(
         dict(row)
         for row in arm_metrics
         if row["arm_id"] != baseline_arm_id
+        and float(row["holdout_roc_auc"]) >= float(baseline_auc)
         and (
-            float(row["holdout_roc_auc"]) > float(baseline_auc)
-            or float(row["holdout_top3_hit_rate_all_strains"]) > float(baseline_top3)
+            float(row["holdout_top3_hit_rate_all_strains"]) > float(baseline_top3)
             or float(row["holdout_brier_score"]) < float(baseline_brier)
         )
     ]
@@ -543,7 +546,7 @@ def select_best_mechanistic_arm(
     arm_metrics: Sequence[Mapping[str, object]],
     *,
     baseline_arm_id: str,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     candidates = [dict(row) for row in arm_metrics if row["arm_id"] != baseline_arm_id]
     candidates.sort(
         key=lambda row: (
@@ -562,6 +565,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     logger.info("TL05 starting: retrain mechanistic v1 model")
     ensure_directory(args.output_dir)
     ensure_prerequisite_outputs(args)
+    try:
+        shap_available = importlib.util.find_spec("shap") is not None
+    except ValueError:
+        shap_available = "shap" in sys.modules
+    if not shap_available:
+        raise ModuleNotFoundError("TL05 requires shap to compute SHAP explanations.")
 
     tg01_lock = load_tg01_lock(args.tg01_summary_path)
     current_v1_lock = load_v1_lock(args.v1_lock_path)
@@ -632,7 +641,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     shap_feature_matrix = shap_result["vectorizer"].transform(
         [
-            train_v1_binary_classifier._build_feature_dict(
+            train_v1_binary_classifier.build_feature_dict(
                 row,
                 categorical_columns=shap_result["feature_space"].categorical_columns,
                 numeric_columns=shap_result["feature_space"].numeric_columns,
@@ -656,7 +665,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         tl03_columns=tl03_feature_columns,
         tl04_columns=tl04_feature_columns,
     )
-    shap_block_totals: Dict[str, float] = {}
+    shap_block_totals: dict[str, float] = {}
     for row in shap_global_rows:
         block = str(row["feature_block"])
         shap_block_totals[block] = shap_block_totals.get(block, 0.0) + float(row["mean_abs_shap"])
@@ -667,7 +676,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_label=shap_arm_id,
     )
     explain_index_by_pair_id = {row["pair_id"]: index for index, row in enumerate(shap_result["holdout_rows"])}
-    shap_pair_rows: List[Dict[str, object]] = []
+    shap_pair_rows: list[dict[str, object]] = []
     for row in shap_prediction_rows:
         explain_index = explain_index_by_pair_id.get(row["pair_id"])
         if explain_index is None:

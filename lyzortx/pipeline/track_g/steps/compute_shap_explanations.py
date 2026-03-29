@@ -404,11 +404,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_e_isolation_rows = read_csv_rows(args.track_e_isolation_distance_path)
     calibrated_rows = read_csv_rows(args.tg02_predictions_path, required_columns=TG02_REQUIRED_COLUMNS)
 
-    track_d_feature_columns = train_v1_binary_classifier._deduplicate_preserving_order(
+    track_d_feature_columns = train_v1_binary_classifier.deduplicate_preserving_order(
         [column for column in track_d_genome_rows[0].keys() if column != "phage"]
         + [column for column in track_d_distance_rows[0].keys() if column != "phage"]
     )
-    track_e_feature_columns = train_v1_binary_classifier._deduplicate_preserving_order(
+    track_e_feature_columns = train_v1_binary_classifier.deduplicate_preserving_order(
         [column for column in track_e_rbp_rows[0].keys() if column not in train_v1_binary_classifier.IDENTIFIER_COLUMNS]
         + [
             column
@@ -444,7 +444,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     explain_rows = [dict(row) for row in merged_rows if str(row["is_hard_trainable"]) == "1"]
     feature_matrix = vectorizer.transform(
         [
-            train_v1_binary_classifier._build_feature_dict(
+            train_v1_binary_classifier.build_feature_dict(
                 row,
                 categorical_columns=feature_space.categorical_columns,
                 numeric_columns=feature_space.numeric_columns,
@@ -452,7 +452,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for row in explain_rows
         ]
     )
-    model_probabilities = train_v1_binary_classifier._predict_probabilities(estimator, feature_matrix)
+    model_probabilities = train_v1_binary_classifier.predict_probabilities(estimator, feature_matrix)
 
     import shap
 

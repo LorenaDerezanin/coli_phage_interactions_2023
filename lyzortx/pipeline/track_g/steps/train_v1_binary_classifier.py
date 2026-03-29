@@ -198,6 +198,25 @@ def _build_feature_dict(
     return features
 
 
+def deduplicate_preserving_order(values: Iterable[str]) -> Tuple[str, ...]:
+    """Return `values` with duplicates removed while preserving the first occurrence."""
+    return _deduplicate_preserving_order(values)
+
+
+def build_feature_dict(
+    row: Mapping[str, object],
+    *,
+    categorical_columns: Sequence[str],
+    numeric_columns: Sequence[str],
+) -> Dict[str, object]:
+    """Public wrapper for the feature-vector dictionary builder used by downstream steps."""
+    return _build_feature_dict(
+        row,
+        categorical_columns=categorical_columns,
+        numeric_columns=numeric_columns,
+    )
+
+
 def compute_binary_metrics(y_true: Sequence[int], y_prob: Sequence[float]) -> Dict[str, Optional[float]]:
     if not y_true:
         raise ValueError("No labels available for metric computation.")
@@ -224,6 +243,11 @@ def _predict_probabilities(estimator: Any, X: Any) -> List[float]:
             category=UserWarning,
         )
         return [float(value) for value in estimator.predict_proba(X)[:, 1]]
+
+
+def predict_probabilities(estimator: Any, X: Any) -> List[float]:
+    """Public wrapper for probability scoring used by TL05 and SHAP explanation steps."""
+    return _predict_probabilities(estimator, X)
 
 
 def compute_top3_hit_rate(rows: Sequence[Mapping[str, object]], *, probability_key: str) -> Dict[str, object]:
