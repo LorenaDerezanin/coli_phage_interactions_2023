@@ -128,7 +128,7 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
     cached_dir.mkdir()
 
     label_path.write_text(
-        "bacteria,phage\nB1,P1\nB2,P1\nB3,P1\nB4,P1\nB5,P1\nB1,P2\nB2,P2\nB3,P2\nB4,P2\nB5,P2\n",
+        "bacteria,phage\nB1,P1\nB2,P1\nB3,P1\nB4,P1\nB5,P1\nB6,P1\nB1,P2\nB2,P2\nB3,P2\nB4,P2\nB5,P2\nB6,P2\n",
         encoding="utf-8",
     )
     (cached_dir / "P1_cds_final_merged_output.tsv").write_text(
@@ -166,7 +166,7 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     defense_path.write_text(
-        "bacteria;BREX_I;RM_Type_I\nB1;1;0\nB2;1;0\nB3;1;0\nB4;1;0\nB5;1;0\n",
+        "bacteria;BREX_I;RM_Type_I\nB1;1;0\nB2;1;0\nB3;1;0\nB4;1;0\nB5;1;0\nB6;0;1\n",
         encoding="utf-8",
     )
     antidef_enrichment_path.write_text(
@@ -202,12 +202,14 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
         csv.DictReader((output_dir / "mechanistic_defense_evasion_feature_metadata_v1.csv").open(encoding="utf-8"))
     )
 
-    assert len(feature_rows) == 10
+    assert len(feature_rows) == 12
     assert len(profile_rows) == 1
     duplicate_profile = next(
         row for row in profile_rows if row["member_features"] == "ANTIDEF_PHROG_11|ANTIDEF_PHROG_22"
     )
     pairwise_column = f"tl04_pair_{duplicate_profile['profile_id']}_x_defense_brex_i_weight"
-    assert any(float(row[pairwise_column]) == 0.4 for row in feature_rows if row["pair_id"] == "B1__P1")
+    feature_rows_by_pair = {row["pair_id"]: row for row in feature_rows}
+    assert float(feature_rows_by_pair["B1__P1"][pairwise_column]) == 0.4
+    assert float(feature_rows_by_pair["B6__P1"][pairwise_column]) == 0.0
     assert {row["experimental_status"] for row in profile_rows} == {EXPERIMENTAL_STATUS}
     assert {row["experimental_status"] for row in metadata_rows} == {EXPERIMENTAL_STATUS}
