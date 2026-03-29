@@ -19,8 +19,11 @@ jobs:
   implement:
     name: Implement Task
     if: >-
-      github.event_name == 'workflow_dispatch'
-      || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
+      vars.AUTOMATION_ENABLED != 'false'
+      && (
+        github.event_name == 'workflow_dispatch'
+        || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
