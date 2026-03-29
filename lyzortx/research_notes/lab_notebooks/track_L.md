@@ -81,8 +81,9 @@ pairwise mechanistic features in TL03/TL04.
 - `lyzortx/pipeline/track_l/steps/run_enrichment_analysis.py`: Loads pharokka RBP/anti-defense annotations, host OMP
   receptor clusters, LPS core types, and defense system subtypes, constructs binary matrices, runs three enrichment
   analyses. Wired into `run_track_l.py` as `--step enrich`.
-- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 13 unit tests using a 20×10 slice of the real interaction
-  matrix, covering BH correction, permutation test, contingency table arithmetic, and main effect confounding.
+- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 14 unit tests using a 20×10 slice of the real interaction
+  matrix, covering BH correction, permutation test, contingency table arithmetic, resolved-mask exclusion, and main
+  effect confounding.
 
 #### Design decisions
 
@@ -122,14 +123,14 @@ pairwise mechanistic features in TL03/TL04.
 - **Duplicate PHROG profiles**: The 32 RBP PHROGs reduce to ~25 unique phage-carrier patterns (e.g., 136/15437/4465/9017
   always co-occur, as do 1002/1154/967/972 and 2097/4277). The 380 significant associations are not 380 independent
   biological discoveries — TL03 should collapse identical PHROG profiles before building features.
-- **P-value resolution**: With 1000 permutations, ~315/380 significant OMP hits are at the p-value floor (0.001). The
+- **P-value resolution**: With 1000 permutations, 313/380 significant OMP hits are at the p-value floor (0.001). The
   BH boundary is partly quantized: 95 hits fall in the BH 0.03–0.07 zone, and ~65 borderline significant hits could
   flip with more permutations. The 314 floor hits (where ≤1 permutation exceeded the observed statistic) are robust.
   For the screening purpose of this step (feeding candidate pairs to TL03), this resolution is sufficient. TL03 should
   not treat the counts or rankings from this screen as precise.
 - **Residual confounding**: The permutation test conditions on phage feature and permutes host labels, but does not
   control for host phylogenetic lineage or correlated feature blocks. Some associations may reflect lineage correlation
-  rather than specific molecular interactions. The anti-defense results (4.2% significance) are particularly susceptible
+  rather than specific molecular interactions. The anti-defense results (2.9% significance) are particularly susceptible
   — generic methyltransferases mapping to diverse defense subtypes are more plausibly explained by lineage than by
   specific evasion.
 

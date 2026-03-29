@@ -365,23 +365,29 @@ graph LR
   - These results directly inform whether TL03 builds pairwise features from the learned associations or falls back to
     the PHROG binary matrix
 - [ ] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
-  - Use TL02 enrichment results to build pairwise features for each phage-host pair — does the phage carry an RBP PHROG
-    significantly associated with lysis of hosts carrying this receptor?
-  - Also include the phage x RBP-PHROG binary matrix (43 columns) as a direct phage-level feature block
+  - Collapse duplicate PHROG carrier profiles before feature construction (32 PHROGs reduce to ~25 unique profiles due
+    to co-occurrence groups like 136/15437/4465/9017 and 1002/1154/967/972)
+  - Use TL02 enrichment results (380 significant RBP PHROG x OMP/LPS associations) to build pairwise features for each
+    phage-host pair — use lysis_rate_diff from the enrichment CSV as feature weights (better-behaved than odds ratios)
+  - Also include the phage x RBP-PHROG binary matrix (collapsed to unique profiles) as a direct phage-level feature
+    block
   - Features must be derived from genome annotations only, not from training labels
   - Output CSV joinable on bacteria+phage pair
   - Compare against the existing RBP_list.csv curated annotations as a sanity check
-  - Escape hatch: if TL02 enrichment shows no significant PHROG-receptor associations, use the PHROG binary matrix as
-    the sole RBP feature block and document the gap in the lab notebook
 - [ ] **TL04** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
   - Use TL02 enrichment results to build pairwise features for each phage-host pair — does the phage encode anti-defense
     genes whose PHROG families are significantly associated with lysis of hosts carrying specific defense systems?
   - Features must be derived from Pharokka anti-defense annotations, not from training label collaborative filtering
   - Output CSV joinable on bacteria+phage pair
+  - Caveat: TL02 found only 27 significant anti-defense x defense associations (2.9%), weaker than the RBP-receptor
+    signal. Generic methyltransferase annotations inflate the anti-defense gene set. Treat these as experimental
+    candidates — include in TL05 evaluation as a separate optional block
 - [ ] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
-  - Add whichever of TL03+TL04 produced usable features to the locked defense + phage_genomic baseline
+  - Evaluate TL03 (RBP-receptor) and TL04 (defense-evasion) features separately, not as a bundle — TL04 signal is weaker
+    and may hurt rather than help
+  - Add features to the locked defense + phage_genomic baseline
   - Retrain with TG01 hyperparameters on the ST03 holdout split
-  - Report AUC, top-3, Brier delta vs the current locked baseline
+  - Report AUC, top-3, Brier delta vs the current locked baseline for each feature block independently and combined
   - If mechanistic features improve metrics, propose a new locked v1 config
   - Run SHAP on the new model to verify mechanistic features contribute signal
 - [ ] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
