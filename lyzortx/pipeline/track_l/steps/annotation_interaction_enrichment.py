@@ -284,13 +284,17 @@ def compute_enrichment(
 
 
 def results_to_rows(results: list[EnrichmentResult]) -> list[dict[str, object]]:
-    """Convert enrichment results to a list of dicts suitable for CSV output."""
+    """Convert enrichment results to a list of dicts suitable for CSV output.
+
+    lysis_rate_both and lysis_rate_phage_only are the two rates from the
+    conditional test (conditioned on phage having the feature). lysis_rate_diff
+    is the test statistic (host_has rate - host_lacks rate).
+    """
     rows = []
     for r in results:
         lysis_rate_both = r.a_lysis_both / r.n_both if r.n_both > 0 else 0.0
-        n_other = r.n_phage_only + r.n_host_only + r.n_neither
-        lysis_other = r.b_lysis_phage_only + r.c_lysis_host_only + r.d_lysis_neither
-        lysis_rate_other = lysis_other / n_other if n_other > 0 else 0.0
+        lysis_rate_phage_only = r.b_lysis_phage_only / r.n_phage_only if r.n_phage_only > 0 else 0.0
+        lysis_rate_diff = lysis_rate_both - lysis_rate_phage_only
         rows.append(
             {
                 "phage_feature": r.phage_feature,
@@ -298,9 +302,10 @@ def results_to_rows(results: list[EnrichmentResult]) -> list[dict[str, object]]:
                 "n_both": r.n_both,
                 "lysis_both": r.a_lysis_both,
                 "lysis_rate_both": round(lysis_rate_both, 4),
-                "n_other": n_other,
-                "lysis_other": lysis_other,
-                "lysis_rate_other": round(lysis_rate_other, 4),
+                "n_phage_only": r.n_phage_only,
+                "lysis_phage_only": r.b_lysis_phage_only,
+                "lysis_rate_phage_only": round(lysis_rate_phage_only, 4),
+                "lysis_rate_diff": round(lysis_rate_diff, 4),
                 "odds_ratio": round(r.odds_ratio, 4) if np.isfinite(r.odds_ratio) else "inf",
                 "p_value": r.p_value,
                 "bh_p_value": r.bh_p_value,
@@ -316,9 +321,10 @@ ENRICHMENT_CSV_FIELDNAMES: list[str] = [
     "n_both",
     "lysis_both",
     "lysis_rate_both",
-    "n_other",
-    "lysis_other",
-    "lysis_rate_other",
+    "n_phage_only",
+    "lysis_phage_only",
+    "lysis_rate_phage_only",
+    "lysis_rate_diff",
     "odds_ratio",
     "p_value",
     "bh_p_value",

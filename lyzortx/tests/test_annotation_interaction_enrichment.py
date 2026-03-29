@@ -286,7 +286,10 @@ class TestResultsToRows:
         row = rows[0]
         assert row["phage_feature"] == "pf1"
         assert row["host_feature"] == "hf1"
-        assert row["lysis_rate_both"] == pytest.approx(0.5)
+        assert row["lysis_rate_both"] == pytest.approx(0.5)  # 10/20
+        assert row["lysis_rate_phage_only"] == pytest.approx(5 / 30, abs=1e-4)  # rounded to 4dp
+        assert row["lysis_rate_diff"] == pytest.approx(0.5 - 5 / 30, abs=1e-4)
+        assert row["n_phage_only"] == 30
         assert row["significant"] is True
 
     def test_infinite_odds_ratio(self) -> None:
