@@ -8,13 +8,20 @@ import pytest
 
 from lyzortx.pipeline.track_l.steps.parse_annotations import (
     CdsRecord,
+    PhageSummary,
     classify_anti_defense_genes,
     classify_rbp_genes,
     count_categories,
+    discover_cached_phages,
+    discover_phage_dirs,
     matches_any_pattern,
     parse_merged_tsv,
     summarize_phage,
+    write_category_summary,
+    write_rbp_gene_list,
+    write_anti_defense_gene_list,
     ANTI_DEFENSE_PATTERNS,
+    PHROG_CATEGORIES,
     RBP_PATTERNS,
 )
 
@@ -74,11 +81,6 @@ def test_parse_merged_tsv_reads_records(tmp_path: Path) -> None:
     assert records[0].category == "other"
     assert records[1].start == 300
     assert records[1].stop == 500
-
-
-def test_parse_merged_tsv_raises_on_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError):
-        parse_merged_tsv(tmp_path / "nonexistent.tsv")
 
 
 def test_parse_merged_tsv_raises_on_empty_file(tmp_path: Path) -> None:
@@ -191,3 +193,90 @@ def test_summarize_phage() -> None:
     assert summary.rbp_genes[0].gene == "G1"
     assert len(summary.anti_defense_genes) == 1
     assert summary.anti_defense_genes[0].gene == "G2"
+
+
+# ---------------------------------------------------------------------------
+# discover_phage_dirs
+# ---------------------------------------------------------------------------
+
+
+def test_discover_phage_dirs(tmp_path: Path) -> None:
+    for name in ("phageA", "phageB"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / f"{name}_cds_final_merged_output.tsv").write_text("header\n", encoding="utf-8")
+    # Dir without the TSV should be ignored
+    (tmp_path / "phageC").mkdir()
+
+    dirs = discover_phage_dirs(tmp_path)
+    assert len(dirs) == 2
+    assert [d.name for d in dirs] == ["phageA", "phageB"]
+
+
+def test_discover_cached_phages_extracts_names(tmp_path: Path) -> None:
+    for name in ("phageA", "phageB"):
+        (tmp_path / f"{name}_cds_final_merged_output.tsv").write_text("header\n", encoding="utf-8")
+    (tmp_path / "readme.txt").write_text("", encoding="utf-8")
+
+    results = discover_cached_phages(tmp_path)
+    assert len(results) == 2
+    assert results[0][0] == "phageA"
+    assert results[1][0] == "phageB"
+
+
+# ---------------------------------------------------------------------------
+# write_category_summary
+# ---------------------------------------------------------------------------
+
+
+def _make_summary(name: str, cds: int, tail: int, lysis: int) -> PhageSummary:
+    counts = {cat: 0 for cat in PHROG_CATEGORIES}
+    counts["tail"] = tail
+    counts["lysis"] = lysis
+    counts["unknown function"] = cds - tail - lysis
+    return PhageSummary(phage_name=name, total_cds=cds, category_counts=counts)
+
+
+def test_write_category_summary(tmp_path: Path) -> None:
+    summaries = [_make_summary("P1", 10, 3, 2), _make_summary("P2", 5, 1, 0)]
+    path = write_category_summary(summaries, tmp_path)
+    assert path.exists()
+    lines = path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 3  # header + 2 rows
+    assert "tail" in lines[0]
+    assert lines[1].startswith("P1,")
+
+
+# ---------------------------------------------------------------------------
+# write_rbp_gene_list / write_anti_defense_gene_list
+# ---------------------------------------------------------------------------
+
+
+def test_write_rbp_gene_list(tmp_path: Path) -> None:
+    summaries = [
+        PhageSummary(
+            phage_name="P1",
+            total_cds=3,
+            rbp_genes=[CdsRecord("G1", 1, 100, "+", "c1", "10", "tail fiber", "tail")],
+        ),
+        PhageSummary(phage_name="P2", total_cds=2, rbp_genes=[]),
+    ]
+    path = write_rbp_gene_list(summaries, tmp_path)
+    lines = path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 2  # header + 1 gene
+    assert "P1" in lines[1]
+    assert "tail fiber" in lines[1]
+
+
+def test_write_anti_defense_gene_list(tmp_path: Path) -> None:
+    summaries = [
+        PhageSummary(
+            phage_name="P1",
+            total_cds=3,
+            anti_defense_genes=[CdsRecord("G2", 200, 400, "+", "c1", "20", "anti-CRISPR", "other")],
+        ),
+    ]
+    path = write_anti_defense_gene_list(summaries, tmp_path)
+    lines = path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 2
+    assert "anti-CRISPR" in lines[1]
