@@ -2,26 +2,20 @@
 """Reusable enrichment module for annotation-interaction analysis.
 
 Takes any (phage binary feature matrix, host binary feature matrix,
-interaction matrix) triple and produces a Fisher's exact test enrichment
-table with odds ratios, p-values, and Benjamini-Hochberg corrected
+interaction matrix) triple and produces an enrichment table with odds
+ratios, permutation-based p-values, and Benjamini-Hochberg corrected
 significance.
 
 The enrichment question for each (phage_feature, host_feature) pair is:
-  "Are interactions where the phage carries this feature AND the host
-   carries this feature enriched for lysis (positive outcome) compared
-   to all other interactions?"
+  "Among interactions where the phage carries this PHROG, does the host
+   carrying this receptor increase the probability of lysis?"
 
-The 2x2 contingency table for each pair:
-
-                    host_feature=1    host_feature=0
-  phage_feature=1   a (lysis+both)    b (lysis+phage_only)
-  phage_feature=0   c (lysis+host_only) d (lysis+neither)
-
-...where a,b,c,d are the number of lytic (positive) interactions in each
-cell, and the total interactions in each cell form the denominator.
-
-We use a one-sided Fisher's exact test (alternative='greater') to test
-whether the odds of lysis are higher when both features are present.
+We condition on the phage feature (controlling for the phage main effect)
+and use a permutation test on host labels (controlling for the correlation
+structure in the interaction matrix). Fisher's exact test is anticonservative
+here because interaction matrix entries are not independent — susceptible
+hosts and broad-range phages create row/column correlations that inflate
+the effective sample size.
 """
 
 from __future__ import annotations
@@ -32,14 +26,16 @@ from typing import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import stats
 
 logger = logging.getLogger(__name__)
+
+N_PERMUTATIONS = 1000
+RANDOM_SEED = 42
 
 
 @dataclass(frozen=True)
 class EnrichmentResult:
-    """Result of a single Fisher's exact test for one feature pair."""
+    """Result of a single enrichment test for one feature pair."""
 
     phage_feature: str
     host_feature: str
@@ -85,36 +81,71 @@ def benjamini_hochberg(p_values: NDArray[np.floating]) -> NDArray[np.floating]:
     return result
 
 
+def _lysis_rate_diff(
+    interaction_matrix: NDArray[np.int8],
+    host_has: NDArray[np.int8],
+    phage_has: NDArray[np.int8],
+) -> float:
+    """Compute lysis rate difference: host_has - host_lacks, conditioned on phage_has."""
+    mask_both = np.outer(host_has, phage_has)
+    mask_phage_only = np.outer(1 - host_has, phage_has)
+    n_both = mask_both.sum()
+    n_phage_only = mask_phage_only.sum()
+    if n_both == 0 or n_phage_only == 0:
+        return 0.0
+    a = (interaction_matrix * mask_both).sum()
+    b = (interaction_matrix * mask_phage_only).sum()
+    return float(a / n_both - b / n_phage_only)
+
+
+def _odds_ratio(a: int, b: int, n_both: int, n_phage_only: int) -> float:
+    """Compute odds ratio for the conditional 2x2 table."""
+    # Table: [[a, n_both - a], [b, n_phage_only - b]]
+    c0 = n_both - a
+    d0 = n_phage_only - b
+    if c0 == 0 or b == 0:
+        return float("inf") if a > 0 and d0 > 0 else 1.0
+    if a == 0 or d0 == 0:
+        return 0.0
+    return (a * d0) / (b * c0)
+
+
 def compute_enrichment(
     phage_matrix: NDArray[np.int8],
     host_matrix: NDArray[np.int8],
     interaction_matrix: NDArray[np.int8],
     phage_feature_names: Sequence[str],
     host_feature_names: Sequence[str],
+    n_permutations: int = N_PERMUTATIONS,
+    random_seed: int = RANDOM_SEED,
 ) -> list[EnrichmentResult]:
-    """Compute Fisher's exact test enrichment for all feature pairs.
+    """Compute permutation-based enrichment for all feature pairs.
+
+    For each (phage_feature, host_feature) pair, conditions on the phage
+    having the feature and tests whether the host feature increases lysis.
+    P-values are computed by permuting host labels, which preserves the
+    correlation structure in the interaction matrix.
 
     Parameters
     ----------
     phage_matrix
         Binary matrix of shape (n_phages, n_phage_features).
-        phage_matrix[i, j] == 1 means phage i has feature j.
     host_matrix
         Binary matrix of shape (n_hosts, n_host_features).
-        host_matrix[i, k] == 1 means host i has feature k.
     interaction_matrix
-        Binary matrix of shape (n_hosts, n_phages).
-        interaction_matrix[i, j] == 1 means host i + phage j = lysis.
-        interaction_matrix[i, j] == 0 means no lysis.
+        Binary matrix of shape (n_hosts, n_phages). 1=lysis, 0=no lysis.
     phage_feature_names
-        Names for the phage feature columns (length n_phage_features).
+        Names for the phage feature columns.
     host_feature_names
-        Names for the host feature columns (length n_host_features).
+        Names for the host feature columns.
+    n_permutations
+        Number of permutations for p-value computation.
+    random_seed
+        Seed for reproducible permutations.
 
     Returns
     -------
-    List of EnrichmentResult, one per (phage_feature, host_feature) pair,
-    with BH-corrected p-values applied across all tests.
+    List of EnrichmentResult with BH-corrected p-values.
     """
     n_hosts, n_phages = interaction_matrix.shape
     n_phage_features = phage_matrix.shape[1]
@@ -135,31 +166,29 @@ def compute_enrichment(
 
     total_tests = n_phage_features * n_host_features
     logger.info(
-        "Running enrichment: %d phage features x %d host features = %d tests",
+        "Running enrichment: %d phage features x %d host features = %d tests, %d permutations",
         n_phage_features,
         n_host_features,
         total_tests,
+        n_permutations,
     )
 
+    rng = np.random.RandomState(random_seed)
     results: list[EnrichmentResult] = []
     p_values: list[float] = []
 
     for pf_idx in range(n_phage_features):
-        phage_has = phage_matrix[:, pf_idx]  # (n_phages,)
-        phage_lacks = 1 - phage_has
+        phage_has = phage_matrix[:, pf_idx]
 
         for hf_idx in range(n_host_features):
-            host_has = host_matrix[:, hf_idx]  # (n_hosts,)
+            host_has = host_matrix[:, hf_idx]
             host_lacks = 1 - host_has
 
-            # Build quadrant masks over the interaction matrix
-            # interaction_matrix is (n_hosts, n_phages)
-            # For each quadrant, count total pairs and lytic pairs
-            # Using outer products to create (n_hosts, n_phages) masks
+            # Observed statistics
             mask_both = np.outer(host_has, phage_has)
             mask_phage_only = np.outer(host_lacks, phage_has)
-            mask_host_only = np.outer(host_has, phage_lacks)
-            mask_neither = np.outer(host_lacks, phage_lacks)
+            mask_host_only = np.outer(host_has, 1 - phage_has)
+            mask_neither = np.outer(host_lacks, 1 - phage_has)
 
             n_both = int(mask_both.sum())
             n_phage_only = int(mask_phage_only.sum())
@@ -171,25 +200,18 @@ def compute_enrichment(
             c = int((interaction_matrix * mask_host_only).sum())
             d = int((interaction_matrix * mask_neither).sum())
 
-            # 2x2 contingency table for Fisher's test, conditioned on the
-            # phage having the feature (controls for phage main effect):
-            #
-            #              lysis         no_lysis
-            # host_has:    a             n_both - a
-            # host_lacks:  b             n_phage_only - b
-            #
-            # This asks: among interactions where the phage carries this
-            # PHROG, does the host carrying this receptor increase the
-            # probability of lysis? A naive "both vs everything else"
-            # table would conflate the phage main effect with the
-            # interaction effect.
-            table = np.array(
-                [
-                    [a, n_both - a],
-                    [b, n_phage_only - b],
-                ]
-            )
-            odds_ratio, p_value = stats.fisher_exact(table, alternative="greater")
+            obs_stat = _lysis_rate_diff(interaction_matrix, host_has, phage_has)
+
+            # Permutation p-value: shuffle host labels
+            count_ge = 0
+            for _ in range(n_permutations):
+                host_perm = host_has[rng.permutation(n_hosts)]
+                perm_stat = _lysis_rate_diff(interaction_matrix, host_perm, phage_has)
+                if perm_stat >= obs_stat:
+                    count_ge += 1
+
+            p_value = (count_ge + 1) / (n_permutations + 1)
+            or_val = _odds_ratio(a, b, n_both, n_phage_only)
 
             results.append(
                 EnrichmentResult(
@@ -203,7 +225,7 @@ def compute_enrichment(
                     n_phage_only=n_phage_only,
                     n_host_only=n_host_only,
                     n_neither=n_neither,
-                    odds_ratio=odds_ratio,
+                    odds_ratio=or_val,
                     p_value=p_value,
                     bh_p_value=0.0,  # placeholder
                 )

@@ -64,35 +64,39 @@ PHROG-receptor weights to predict lysis without any interaction data for the new
 
 #### Executive summary
 
-Built a reusable Fisher's exact test enrichment module (`annotation_interaction_enrichment.py`) and ran three analyses
-on the full 369×96 interaction matrix (9,720 lytic pairs, 27.4% base rate). The test conditions on the phage carrying
-the PHROG, then asks whether the host feature increases lysis — controlling for phage main effects. Results: 662/3,424
-significant RBP PHROG × OMP receptor associations, 34/160 RBP PHROG × LPS core associations, and 139/924 anti-defense
-PHROG × defense subtype associations (BH-corrected p < 0.05). These results support building pairwise mechanistic
-features in TL03/TL04.
+Built a permutation-based enrichment module (`annotation_interaction_enrichment.py`) and ran three analyses on the full
+369×96 interaction matrix (9,720 lytic pairs, 27.4% base rate). The test conditions on the phage carrying the PHROG,
+then permutes host labels to get calibrated p-values that respect the correlation structure of the interaction matrix.
+Results: 379/3,424 significant RBP PHROG × OMP receptor associations, 25/160 RBP PHROG × LPS core associations, and
+39/924 anti-defense PHROG × defense subtype associations (BH-corrected p < 0.05). These results support building
+pairwise mechanistic features in TL03/TL04.
 
 #### What was implemented
 
 - `lyzortx/pipeline/track_l/steps/annotation_interaction_enrichment.py`: Reusable enrichment module. Takes any (phage
   binary feature matrix, host binary feature matrix, interaction matrix) triple. For each (phage_feature, host_feature)
-  pair, builds a 2×2 contingency table **conditioned on the phage having the feature** (host_has vs host_lacks among
-  phages with the PHROG), then runs one-sided Fisher's exact test (alternative='greater'). This controls for phage main
-  effects — a generalist PHROG that lyses everything will not show spurious enrichment for every host feature. Applies
-  Benjamini-Hochberg FDR correction across all tests within each analysis.
+  pair, computes the lysis rate difference conditioned on the phage having the feature (host_has rate − host_lacks rate).
+  P-values are computed by permuting host labels (1000 permutations), which preserves the row/column correlation
+  structure of the interaction matrix. Applies Benjamini-Hochberg FDR correction across all tests within each analysis.
 - `lyzortx/pipeline/track_l/steps/run_enrichment_analysis.py`: Loads pharokka RBP/anti-defense annotations, host OMP
   receptor clusters, LPS core types, and defense system subtypes, constructs binary matrices, runs three enrichment
   analyses. Wired into `run_track_l.py` as `--step enrich`.
-- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 13 unit tests for BH correction, Fisher's test, matrix
-  dimension validation, contingency table arithmetic, and a regression test for phage main effect confounding.
+- `lyzortx/tests/test_annotation_interaction_enrichment.py`: 13 unit tests using a 20×10 slice of the real interaction
+  matrix, covering BH correction, permutation test, contingency table arithmetic, and main effect confounding.
 
-#### Bug caught and fixed during review
+#### Two bugs caught and fixed during review
 
-The initial implementation used a "both present vs everything else" contingency table. This conflated phage main effects
-with interaction effects: a PHROG carried by generalist phages (lysis rate ~60%) appeared significantly enriched against
-nearly every host feature (96/107 receptor clusters), because the "everything else" denominator included all pairs where
-the phage lacked the PHROG (lower baseline lysis). The fix: condition on the phage having the PHROG, then test whether
-the host feature increases lysis within that subset. This dropped the significance rate from 44-57% to 15-21%, which
-is biologically plausible for genuine interaction effects.
+1. **Phage main effect confounding (v1 bug)**: The initial implementation used a "both present vs everything else"
+   contingency table with Fisher's exact test. This conflated phage main effects with interaction effects: a PHROG
+   carried by generalist phages (lysis rate ~60%) appeared significantly enriched against 96/107 receptor clusters. Fix:
+   condition on the phage having the PHROG, then test whether the host feature increases lysis within that subset.
+
+2. **Anticonservative Fisher's test (v2 bug)**: The conditioned Fisher's test was still anticonservative — null
+   calibration with random features on the real interaction matrix showed 25% of tests at p < 0.05 (expected: 5%).
+   Cause: Fisher's exact test assumes independent observations, but interaction matrix entries are correlated (some hosts
+   are generally susceptible, some phages are generalists). Fix: replace Fisher's with a permutation test that shuffles
+   host labels, preserving the interaction matrix correlation structure. Null calibration confirmed: 3% at the 5%
+   threshold (well-calibrated, slightly conservative).
 
 #### Data dimensions
 
@@ -105,34 +109,25 @@ is biologically plausible for genuine interaction effects.
 
 #### Analysis 1: RBP PHROG × OMP receptor variant clusters
 
-- **3,424 tests** (32 PHROGs × 107 receptor clusters), **662 significant** (19.3%).
-- Max significance for any single PHROG: 32/107 receptor clusters (PHROGs 2097/4277). Former top generalist PHROGs
-  (136, 15437, 4465, 9017) dropped from 96/107 to 25/107 after controlling for phage main effect.
-- Top associations now reflect genuine interaction effects where the receptor variant matters above and beyond the
-  phage's baseline lysis rate.
+- **3,424 tests** (32 PHROGs × 107 receptor clusters), **379 significant** (11.1%).
 
 #### Analysis 2: RBP PHROG × LPS core type
 
-- **160 tests** (32 PHROGs × 5 LPS types), **34 significant** (21.3%).
-- Associations here represent RBP PHROGs whose phages lyse hosts with a specific LPS core type at a higher rate than
-  hosts lacking it, given that the phage carries the PHROG.
+- **160 tests** (32 PHROGs × 5 LPS types), **25 significant** (15.6%).
 
 #### Analysis 3: Anti-defense PHROG × defense system subtypes
 
-- **924 tests** (12 PHROGs × 77 defense subtypes), **139 significant** (15.0%).
-- These represent genuine anti-defense gene × defense system interactions where carrying the anti-defense gene increases
-  lysis of hosts with the defense system, beyond the phage's baseline.
+- **924 tests** (12 PHROGs × 77 defense subtypes), **39 significant** (4.2%).
 
 #### Implications for TL03/TL04
 
-- **TL03 (RBP-receptor features)**: Results support building pairwise features. 662 significant PHROG-receptor
-  associations provide interaction-level signal for the model. The enrichment odds ratios serve as feature weights,
-  now reflecting genuine interaction effects rather than phage popularity.
-- **TL04 (defense evasion features)**: 139 significant anti-defense × defense associations provide a smaller but still
-  meaningful feature set.
-- **No escape hatch needed**: The acceptance criteria for TL03 included a fallback to the raw PHROG binary matrix if
-  enrichment showed no significant associations. With 662+ significant RBP-receptor associations, the enrichment-based
-  features are the right path.
+- **TL03 (RBP-receptor features)**: 379 significant PHROG-receptor associations provide interaction-level signal.
+  Enrichment odds ratios serve as feature weights reflecting genuine interaction effects.
+- **TL04 (defense evasion features)**: 39 significant anti-defense × defense associations — smaller but still
+  meaningful. The lower rate (4.2%) may reflect that anti-defense genes are rarer (12 PHROGs vs 32 RBP PHROGs) and
+  the signal is weaker, or that many defense systems are evaded through mechanisms not captured by annotation patterns.
+- **No escape hatch needed**: With 379+ significant RBP-receptor associations, the enrichment-based features are the
+  right path for TL03.
 
 #### Non-protein host factors considered
 
