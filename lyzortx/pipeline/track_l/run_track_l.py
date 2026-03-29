@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_l.steps import (
+    build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
     parse_annotations,
     run_enrichment_analysis,
@@ -51,7 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["annotate", "parse", "enrich", "rbp-features", "all"],
+        choices=["annotate", "parse", "enrich", "rbp-features", "defense-features", "all"],
         default="all",
         help=(
             "Track L step to run. "
@@ -59,6 +60,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'parse' parses pharokka outputs into summary tables. "
             "'enrich' runs TL02 PHROG x host-feature enrichment analyses. "
             "'rbp-features' runs TL03 mechanistic RBP-receptor feature construction. "
+            "'defense-features' runs TL04 mechanistic defense-evasion feature construction. "
             "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
@@ -121,6 +123,8 @@ def main(argv: list[str] | None = None) -> None:
         run_enrichment_analysis.main([])
     if args.step == "rbp-features":
         build_mechanistic_rbp_receptor_features.main([])
+    if args.step == "defense-features":
+        build_mechanistic_defense_evasion_features.main([])
 
 
 if __name__ == "__main__":
