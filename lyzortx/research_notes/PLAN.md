@@ -336,10 +336,11 @@ graph LR
 
 ## Track L: Mechanistic Features and Generalized Inference
 
-- **Guiding Principle:** Two goals: (1) Replace deleted label-derived pairwise features (Track E) with annotation-based
-  mechanistic features from Pharokka. (2) Build a generalized inference pipeline that accepts arbitrary E. coli genomes
-  and phage FNA files, computes features from sequence, and predicts lysis — removing the hard dependency on the fixed
-  404-strain panel.
+- **Guiding Principle:** Original two-goal track: (1) test annotation-derived mechanistic pairwise features as
+  replacements for deleted label-derived pairwise blocks, and (2) build a generalized inference pipeline for arbitrary
+  genomes. TL12 dead-ended goal (1) for the current v1 lock: the enrichment-derived pairwise path did not produce an
+  honest lift. The remaining Track L question is whether a materially richer, fully deployable bundle with
+  genome-derivable compatibility signal can improve round-trip behavior enough to justify broader external validation.
 - [x] **TL01** Annotate all 97 phage genomes with Pharokka. Model: `gpt-5.4-mini`.
   - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn, mash, dnaapler) to environment.yml and
     verify pharokka runs in CI
@@ -487,23 +488,30 @@ graph LR
     pairwise path as a dead end for the current v1 lock instead of proposing a new configuration
   - Document the decision, including the rejected arms and why they were rejected, in the Track L and project lab
     notebooks
-- [ ] **TL13** Rebuild the generalized inference bundle with a feature-parity and self-contained artifact contract.
+- [ ] **TL13** Audit and rebuild the generalized inference bundle only if deployable compatibility signal is available.
       Model: `gpt-5.4`.
   - Start by producing a feature-parity audit table for the panel model: every training-time feature block must be
     labeled as deployable now, deployable in this task, or not deployable, with a one-sentence rationale for each
+  - The parity audit must explicitly classify the TL11/TL12 mechanistic pairwise path as dead-ended for the current v1
+    lock, then state whether any subset of that biology is still deployable and worth testing for generalized inference.
+    Do not frame TL13 as another attempt to win the panel lock.
   - The task fails if any feature block used by the rebuilt deployable bundle is dropped or substituted without being
     listed explicitly in the parity audit and in the bundle metadata
   - All runtime artifacts required by inference must resolve relative to the saved bundle directory; any hardcoded
     repo-root path or hidden dependency on gitignored generated outputs is a failure
   - Include at least one newly deployable compatibility block beyond defense+k-mer if the parity audit identifies one as
-    technically available from raw genomes; if none are available, the task must fail loudly with that conclusion rather
-    than silently rebuilding another feature-impoverished bundle
-  - Add ablation checks on real examples showing that each newly added deployable block changes the inference surface;
-    wiring a block that has no measurable effect on any example host-phage ranking does not satisfy the task
+    technically available from raw genomes; if none are available, the task must fail loudly with the conclusion that
+    generalized inference remains blocked by missing deployable compatibility signal rather than silently rebuilding
+    another feature-impoverished bundle
+  - Add ablation checks on real examples showing that each newly added deployable block changes the inference surface,
+    and require the richer bundle to improve at least one predeclared round-trip metric versus the current TL08/TL09
+    bundle on a saved panel-host cohort; wiring a block that has no measurable effect or no round-trip improvement does
+    not satisfy the task
   - Regenerate round-trip reference predictions for a predeclared panel-host cohort with available assemblies and save
     them inside the bundle so downstream validation is not limited by missing reference artifacts
-- [ ] **TL14** Re-run external validation with a strict cohort contract and multi-host round-trip sanity check. Model:
-      `gpt-5.4`.
+- [ ] **TL14** Run external validation only if TL13 clears the round-trip gate. Model: `gpt-5.4`.
+  - TL14 is only justified if TL13 produced both a materially richer deployable feature set and an improved round-trip
+    result on the saved panel-host cohort; if TL13 fails that gate, do not run broad positive-only validation by inertia
   - Materialize and save the exact validation cohort before scoring: host IDs, host assembly accessions, phage
     accessions, positive-pair counts, unique-phage counts, candidate-set sizes, and which hosts qualify for panel
     round-trip comparison

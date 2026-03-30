@@ -1104,3 +1104,21 @@ Key holdout results from the hardened rerun:
 The best mechanistic arm was still TL04, but the stricter lock gate still rejected it: ROC-AUC delta vs baseline was
 `+0.002444` with paired bootstrap CI `[-0.002404, 0.007416]`, and top-3 delta was `-0.015384` with CI
 `[-0.047648, 0.025000]`. So the implementation fixes improved correctness and reproducibility, not the model story.
+
+### 2026-03-31: Plan update after TL12 — stop treating mechanistic pairwise rebuilds as a pending v1 lock path
+
+Track L was replanned again after the hardened TL12 rerun. The key change is strategic, not technical: TL03/TL04 are
+no longer treated as a promising near-term route to a better locked panel model. TL12 answered that question twice
+already, once on the first clean rerun and once after the hotfixes to the rerun path, and both answers were the same:
+`no honest lift`.
+
+So the plan now separates two stories that had been mixed together:
+
+- **Dead-ended for the current v1 lock**: annotation-derived mechanistic pairwise features as a replacement for the
+  locked panel model.
+- **Still alive**: generalized inference, but only if a richer deployable bundle can add real genome-derivable
+  compatibility signal and improve round-trip behavior first.
+
+Concretely, TL13 is now framed as a feature-parity audit plus deployable compatibility experiment, and TL14 is now
+gated on TL13 proving that the richer bundle actually improves round-trip behavior on panel hosts. If TL13 cannot
+clear that gate, the right next step is another replan, not external validation by inertia.

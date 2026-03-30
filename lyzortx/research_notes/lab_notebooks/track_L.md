@@ -974,3 +974,38 @@ After rerunning on that hardened path, the verdict stayed the same: **no honest 
 2. TL03 remains clearly non-competitive on ROC-AUC, and the combined arm still fails to rescue it.
 3. The new result is more trustworthy than the earlier TL12 notebook entry because it was produced after fixing stale
    default-artifact recovery, manifest-path validation, and holdout-only zero-fill scope.
+
+### 2026-03-31: Replan follow-up after TL12/TL12-hotfix — freeze panel-lift work, keep deployable-bundle work
+
+#### Executive summary
+
+The TL11/TL12 sequence answered the main question behind the mechanistic pairwise rebuild: does holdout-clean
+annotation-derived pairwise signal produce an honest lift over the locked `defense + phage_genomic` baseline? The
+answer is now clearly no. That means the rest of Track L should not keep spending effort as if TL03/TL04 are waiting to
+become a lockable panel feature block after one more rerun.
+
+The plan was updated accordingly:
+
+- the Track L description now states that the mechanistic pairwise path is dead-ended for the current v1 lock;
+- TL13 is now explicitly framed as a deployable-bundle audit plus compatibility-signal experiment, not another panel
+  lift attempt; and
+- TL14 is now contingent on TL13 clearing a round-trip gate, so broad external validation does not run by inertia on
+  another feature-impoverished bundle.
+
+#### Why this replan is warranted
+
+1. TL12 and the follow-up hardened rerun both reached the same conclusion: **no honest lift**.
+2. The least-bad mechanistic arm (TL04) still sits inside the noise band and still gives up top-3 ranking quality.
+3. The remaining high-value open problem from TL08/TL09 is different: generalized inference is missing deployable
+   compatibility signal and therefore needs a richer feature-parity audit, not another attempt to relitigate the panel
+   lock.
+
+#### What stays alive
+
+- TL13 remains worth doing, but only as a go/no-go decision on deployable features.
+- TL14 remains worth doing only if TL13 first proves that the richer bundle materially improves round-trip behavior on
+  panel hosts with saved references.
+
+#### What is now dead-ended
+
+- Further TL03/TL04/TL12-style panel-lift work aimed at replacing the current locked v1 configuration.
