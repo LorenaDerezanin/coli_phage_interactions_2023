@@ -640,3 +640,54 @@ coverage delta summaries on every PR, per Codecov's common recipes
 
 The Codecov GitHub App must be installed on the repo for annotations to appear on PRs. A `CODECOV_TOKEN` repository
 secret must be configured (available from the Codecov dashboard after app installation).
+
+### 2026-03-30: Replace personal PAT with Czarphage GitHub App for orchestration auth
+
+#### Executive summary
+
+Replaced the `ORCHESTRATOR_PAT` secret (a long-lived personal access token belonging to a human account) with the
+**Czarphage** GitHub App (App ID 3227910) across all four orchestration workflows. Each job now mints a short-lived
+installation token via `actions/create-github-app-token@v2`.
+
+#### Motivation
+
+The orchestration pipeline (`orchestrator.yml`, `codex-implement.yml`, `codex-pr-lifecycle.yml`, `claude-pr-review.yml`)
+authenticates with a PAT to bypass GitHub's anti-recursion protection (the default `github.token` cannot trigger other
+workflows). Using a personal PAT ties automation to an individual account, creates audit ambiguity (commits and API
+calls appear as the PAT owner), and requires manual token rotation.
+
+A GitHub App provides: short-lived auto-rotating tokens (1-hour expiry), a distinct `czarphage[bot]` identity in
+commits and API calls, scoped permissions without repo-wide personal access, and no dependency on any individual's
+account.
+
+#### Design decisions
+
+**1. Token generation as the first step in each job.** The `actions/create-github-app-token@v2` step runs before
+checkout because `actions/checkout` also needs the token. The step requires no repo access — it authenticates directly
+with GitHub's API using the app's private key.
+
+**2. Per-step `GITHUB_TOKEN` env instead of job-level.** Job-level `env` blocks cannot reference step outputs (`${{
+steps.*.outputs.* }}`). Rather than introducing a workaround, each step that needs the token declares it in its own
+`env` block. This is slightly more verbose but explicit about which steps are authenticated.
+
+**3. Git identity set to `czarphage[bot]`.** The noreply email format for GitHub Apps is
+`<APP_ID>+<app-slug>[bot]@users.noreply.github.com`. Commits now show as authored by `czarphage[bot]` rather than
+`github-actions[bot]`, making it clear which automation system produced them.
+
+**4. Token lifetime vs workflow timeout.** GitHub App installation tokens expire after 1 hour. The longest workflow
+timeout is `codex-implement.yml` at 45 minutes, leaving a 15-minute margin. If this proves tight, the token step can
+be repeated mid-job — `actions/create-github-app-token` is idempotent and fast (~2s).
+
+#### Changes
+
+- `orchestrator.yml`: Added token step, moved `GITHUB_TOKEN` to per-step env, updated git identity.
+- `codex-implement.yml`: Same pattern, also updated the agent prompt text (removed PAT reference).
+- `codex-pr-lifecycle.yml`: Same pattern across all conditional steps.
+- `claude-pr-review.yml`: Added token step for the dispatch step only (the rest uses `github.token` or Claude's OIDC).
+- `.github/workflows/AGENTS.md`, `lyzortx/orchestration/README.md`: Removed `ORCHESTRATOR_PAT` references from docs.
+
+#### Post-merge cleanup
+
+After verifying the full orchestration loop works:
+1. Delete the `ORCHESTRATOR_PAT` secret from repo settings.
+2. Revoke the old PAT on the original account.
