@@ -8,14 +8,11 @@ import subprocess
 import sys
 from typing import Any
 
-# TODO: reviewThreads(first: 100) and comments(first: 10) will silently
-# truncate PRs with >100 threads or >10 comments per thread. Add cursor-based
-# pagination if this becomes an issue in practice.
 REVIEW_THREADS_QUERY = """
-query($owner: String!, $repo: String!, $pr: Int!) {
+query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $pr) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $cursor) {
         nodes {
           id
           isResolved
@@ -28,6 +25,10 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               author { login }
             }
           }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
       }
     }
@@ -44,6 +45,17 @@ def extract_threads(graphql_response: dict[str, Any]) -> list[dict[str, Any]]:
         .get("pullRequest", {})
         .get("reviewThreads", {})
         .get("nodes", [])
+    )
+
+
+def extract_page_info(graphql_response: dict[str, Any]) -> dict[str, Any]:
+    """Extract the reviewThreads pageInfo block from a GraphQL response."""
+    return (
+        graphql_response.get("data", {})
+        .get("repository", {})
+        .get("pullRequest", {})
+        .get("reviewThreads", {})
+        .get("pageInfo", {})
     )
 
 
@@ -95,8 +107,11 @@ def format_prompt(pr_number: int, threads: list[dict[str, Any]]) -> str:
 
 def fetch_threads(owner: str, repo: str, pr_number: int) -> dict[str, Any]:
     """Call gh api graphql to fetch review threads. Requires gh CLI."""
-    result = subprocess.run(
-        [
+    all_threads: list[dict[str, Any]] = []
+    cursor: str | None = None
+
+    while True:
+        command = [
             "gh",
             "api",
             "graphql",
@@ -108,12 +123,28 @@ def fetch_threads(owner: str, repo: str, pr_number: int) -> dict[str, Any]:
             f"repo={repo}",
             "-F",
             f"pr={pr_number}",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return json.loads(result.stdout)
+        ]
+        if cursor is not None:
+            command.extend(["-f", f"cursor={cursor}"])
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        response = json.loads(result.stdout)
+        all_threads.extend(extract_threads(response))
+
+        page_info = extract_page_info(response)
+        if not page_info.get("hasNextPage"):
+            break
+
+        cursor = page_info.get("endCursor")
+        if not cursor:
+            raise ValueError("GitHub GraphQL returned hasNextPage=true without an endCursor for reviewThreads")
+
+    return {"data": {"repository": {"pullRequest": {"reviewThreads": {"nodes": all_threads}}}}}
 
 
 def main() -> None:
