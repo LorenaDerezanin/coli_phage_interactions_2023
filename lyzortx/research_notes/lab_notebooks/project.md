@@ -1080,3 +1080,27 @@ Key holdout results:
 The ROC-AUC delta CI for TL04 was still `[-0.002322, 0.007935]`, so it never cleared the lock threshold even though
 its point estimate was the best of the mechanistic arms. TL03 and the combined arm were clearly worse. The correct
 interpretation is that the pairwise enrichment path remains exploratory only; it is not a v1 lock candidate.
+
+### 2026-03-31: TL12 follow-up patch confirmed the same outcome on a hardened rerun path
+
+The follow-up patch for issue `#280` did not change the scientific conclusion, but it did materially harden the rerun
+path that produced it. The fixes were:
+
+- restrict TL11 zero-fill semantics to holdout evaluation rows only, while keeping non-holdout pair joins fail-fast;
+- validate TL11 provenance from the actual CLI-supplied manifest paths rather than assuming default sibling manifests;
+- rebuild stale default TL11/TL02 artifacts automatically before the rerun instead of trusting pre-replan generated
+  outputs; and
+- remove duplicate CV fold training plus add phase/progress logging so the rerun is observable and faster.
+
+After those fixes, TL05 was rerun end-to-end again and still landed on `no honest lift`.
+
+Key holdout results from the hardened rerun:
+
+- Baseline `defense + phage_genomic`: ROC-AUC `0.837060`, top-3 `0.907692`, Brier `0.159486`.
+- `+TL03`: ROC-AUC `0.822245`, top-3 `0.907692`, Brier `0.156530`.
+- `+TL04`: ROC-AUC `0.839504`, top-3 `0.892308`, Brier `0.156965`.
+- `+TL03+TL04`: ROC-AUC `0.823165`, top-3 `0.892308`, Brier `0.155707`.
+
+The best mechanistic arm was still TL04, but the stricter lock gate still rejected it: ROC-AUC delta vs baseline was
+`+0.002444` with paired bootstrap CI `[-0.002404, 0.007416]`, and top-3 delta was `-0.015384` with CI
+`[-0.047648, 0.025000]`. So the implementation fixes improved correctness and reproducibility, not the model story.
