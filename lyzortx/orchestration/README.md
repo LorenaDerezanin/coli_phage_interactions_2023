@@ -160,8 +160,10 @@ required — the workflow fails if it is missing.
 
 Claude reads `AGENTS.md` review guidelines, submits formal `APPROVE` or `COMMENT` reviews via MCP GitHub tools, and is
 the sole judge of thread resolution (can resolve/unresolve threads via GraphQL mutations). Requires the
-`ANTHROPIC_API_KEY` repository secret. After reviewing, it dispatches downstream actions: auto-merge on approval, or
-`codex-pr-lifecycle.yml` on commented reviews.
+`ANTHROPIC_API_KEY` repository secret. The workflow explicitly allows the repo's `czarphage` GitHub App bot to trigger
+re-reviews after Codex pushes, which would otherwise be blocked by `claude-code-action`'s default "no bots" policy.
+After reviewing, it dispatches downstream actions: auto-merge on approval, or `codex-pr-lifecycle.yml` on commented
+reviews.
 
 ### codex-pr-lifecycle.yml
 

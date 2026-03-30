@@ -691,3 +691,31 @@ be repeated mid-job — `actions/create-github-app-token` is idempotent and fast
 After verifying the full orchestration loop works:
 1. Delete the `ORCHESTRATOR_PAT` secret from repo settings.
 2. Revoke the old PAT on the original account.
+
+### 2026-03-30: Allow Czarphage bot-authored PR updates through Claude review workflow
+
+#### Executive summary
+
+Fixed `claude-pr-review.yml` so `anthropics/claude-code-action@v1` accepts PR events initiated by the repo's own
+GitHub App (`czarphage` / `czarphage[bot]`). Without this allowlist entry, Claude auto-review failed on synchronize
+events after Codex pushed follow-up commits.
+
+#### Design decisions
+
+**1. Narrow allowlist, not wildcard bots.** Set `allowed_bots: "czarphage,czarphage[bot]"` on the auto-review step
+instead of `'*'`. This keeps the workflow scoped to the one automation identity that legitimately pushes PR updates in
+this repo, rather than allowing arbitrary third-party bot-authored prompts.
+
+**2. Fix only the auto-review path.** The failure occurred on `pull_request` synchronize events for orchestrator-task
+PRs, so the change was limited to the `auto-review` job. The interactive `@claude` path was left unchanged because it
+does not need bot-triggered invocation.
+
+**3. Document the bot handoff explicitly.** Updated `lyzortx/orchestration/README.md` to say that Claude re-reviews
+Codex follow-up pushes from the `czarphage` GitHub App. That behavior is otherwise non-obvious when reading the
+workflow list in isolation.
+
+#### Failure evidence
+
+GitHub Actions run `23767069559`, job `69250897074` failed inside `anthropics/claude-code-action@v1` with:
+"Workflow initiated by non-human actor: czarphage (type: Bot). Add bot to allowed_bots list or use '*' to allow all
+bots."

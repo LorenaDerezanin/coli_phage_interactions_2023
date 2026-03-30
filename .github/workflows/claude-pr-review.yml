@@ -69,6 +69,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "czarphage,czarphage[bot]"
           use_sticky_comment: true
           track_progress: true
           claude_args: >-
