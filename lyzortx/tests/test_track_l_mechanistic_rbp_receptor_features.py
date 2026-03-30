@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+from lyzortx.pipeline.track_l.steps import build_mechanistic_rbp_receptor_features as rbp_module
 from lyzortx.pipeline.track_l.steps.build_mechanistic_rbp_receptor_features import (
     build_feature_rows,
     build_sanity_check_rows,
@@ -329,13 +330,157 @@ def test_main_writes_mechanistic_feature_outputs(tmp_path: Path) -> None:
     profile_rows = list(csv.DictReader((output_dir / "mechanistic_rbp_profile_metadata_v1.csv").open(encoding="utf-8")))
     sanity_rows = list(csv.DictReader((output_dir / "mechanistic_rbp_sanity_check_v1.csv").open(encoding="utf-8")))
 
-    assert len(feature_rows) == 3
+    assert len(feature_rows) == 2
     assert len(profile_rows) == 1
     duplicate_profile = next(row for row in profile_rows if row["member_features"] == "RBP_PHROG_136|RBP_PHROG_15437")
     pairwise_column = f"tl03_pair_{duplicate_profile['profile_id']}_x_lps_r1_weight"
+    assert {row["pair_id"] for row in feature_rows} == {"B1__P1", "B1__P2"}
     assert any(float(row[pairwise_column]) == 0.6 for row in feature_rows if row["pair_id"] == "B1__P1")
     assert any(row["agreement_has_rbp"] == "1" for row in sanity_rows)
     manifest = json.loads((output_dir / "mechanistic_rbp_receptor_manifest_v1.json").read_text(encoding="utf-8"))
     assert manifest["provenance"]["excluded_holdout_bacteria_ids"] == ["B2"]
     assert manifest["provenance"]["split_assignments"]["path"] == str(split_path)
+    assert manifest["holdout_exclusion"]["excluded_pair_rows"] == 1
     assert manifest["outputs"]["feature_csv_sha256"] == _sha256(output_dir / "mechanistic_rbp_receptor_features_v1.csv")
+
+
+def test_main_reports_holdout_exclusion_independently_of_feature_row_drops(monkeypatch, tmp_path: Path) -> None:
+    label_path = tmp_path / "labels.csv"
+    cached_dir = tmp_path / "cached"
+    omp_path = tmp_path / "omp.tsv"
+    lps_primary_path = tmp_path / "lps_primary.tsv"
+    lps_supplemental_path = tmp_path / "lps_supplemental.tsv"
+    omp_enrichment_path = tmp_path / "omp_enrichment.csv"
+    lps_enrichment_path = tmp_path / "lps_enrichment.csv"
+    split_path = tmp_path / "st03_split_assignments.csv"
+    rbp_list_path = tmp_path / "RBP_list.csv"
+    output_dir = tmp_path / "out"
+
+    cached_dir.mkdir()
+    label_path.write_text("bacteria,phage\nB1,P1\nB2,P1\nB1,P2\n", encoding="utf-8")
+    omp_path.write_text("bacteria\tOMPC\nB1\t99_1\n", encoding="utf-8")
+    lps_primary_path.write_text("bacteria\tLPS_type\nB1\tR1\n", encoding="utf-8")
+    lps_supplemental_path.write_text("Strain\tLPS_type\n", encoding="utf-8")
+    omp_enrichment_path.write_text(
+        "phage_feature,host_feature,lysis_rate_diff,significant\nRBP_PHROG_136,OMPC_99_1,0.6,True\n",
+        encoding="utf-8",
+    )
+    lps_enrichment_path.write_text(
+        "phage_feature,host_feature,lysis_rate_diff,significant\nRBP_PHROG_136,LPS_R1,0.6,True\n",
+        encoding="utf-8",
+    )
+    split_path.write_text(
+        "pair_id,bacteria,split_holdout,split_cv5_fold\n"
+        "B1__P1,B1,train_non_holdout,0\n"
+        "B2__P1,B2,holdout_test,-1\n"
+        "B1__P2,B1,train_non_holdout,1\n",
+        encoding="utf-8",
+    )
+    rbp_list_path.write_text(
+        "phage;Morphotype;Family;Subfamily;Genus;RBP;type\n"
+        "P1;Myoviridae;Other;Other;X;P1_gene;fiber\n"
+        "P2;Myoviridae;Other;Other;X;P2_gene;spike\n",
+        encoding="utf-8",
+    )
+
+    fake_provenance = {
+        "manifest_path": tmp_path / "manifest.json",
+        "split_assignments_path": split_path,
+        "split_assignments_sha256": "split-sha",
+        "holdout_bacteria_ids": ["B2"],
+        "enrichment_inputs": {},
+        "enrichment_manifest_sha256": "manifest-sha",
+    }
+
+    def fake_read_delimited_rows(path: Path, delimiter: str = ",") -> list[dict[str, str]]:
+        if path == label_path:
+            return [
+                {"bacteria": "B1", "phage": "P1"},
+                {"bacteria": "B2", "phage": "P1"},
+                {"bacteria": "B1", "phage": "P2"},
+            ]
+        if path == omp_enrichment_path:
+            return [
+                {
+                    "phage_feature": "RBP_PHROG_136",
+                    "host_feature": "OMPC_99_1",
+                    "lysis_rate_diff": "0.6",
+                    "significant": "True",
+                }
+            ]
+        if path == lps_enrichment_path:
+            return [
+                {
+                    "phage_feature": "RBP_PHROG_136",
+                    "host_feature": "LPS_R1",
+                    "lysis_rate_diff": "0.6",
+                    "significant": "True",
+                }
+            ]
+        raise AssertionError(f"unexpected path: {path}")
+
+    real_build_feature_rows = rbp_module.build_feature_rows
+
+    def fake_build_feature_rows(*args, **kwargs):
+        feature_rows, feature_columns = real_build_feature_rows(*args, **kwargs)
+        return feature_rows[:-1], feature_columns
+
+    monkeypatch.setattr(rbp_module, "ensure_default_label_path", lambda *_: None)
+    monkeypatch.setattr(rbp_module, "ensure_default_tl02_outputs", lambda *_: None)
+    monkeypatch.setattr(rbp_module, "load_tl02_holdout_clean_provenance", lambda *_: fake_provenance)
+    monkeypatch.setattr(rbp_module, "read_delimited_rows", fake_read_delimited_rows)
+    monkeypatch.setattr(
+        rbp_module,
+        "load_pharokka_phrog_matrices",
+        lambda *_: (np.array([[1], [0]], dtype=np.int8), ["136"], None, None),
+    )
+    monkeypatch.setattr(
+        rbp_module, "load_omp_receptor_host_matrix", lambda *_: (np.array([[1]], dtype=np.int8), ["OMPC_99_1"])
+    )
+    monkeypatch.setattr(rbp_module, "load_lps_host_matrix", lambda *_: (np.array([[1]], dtype=np.int8), ["LPS_R1"]))
+    monkeypatch.setattr(
+        rbp_module,
+        "load_curated_rbp_summary",
+        lambda *_: {
+            "P1": {"curated_rbp_count": 1, "curated_types": {"fiber"}, "curated_has_rbp": 1},
+            "P2": {"curated_rbp_count": 1, "curated_types": {"spike"}, "curated_has_rbp": 1},
+        },
+    )
+    monkeypatch.setattr(
+        rbp_module,
+        "load_pharokka_rbp_gene_summary",
+        lambda *_: {
+            "P1": {"pharokka_rbp_gene_count": 1, "pharokka_has_rbp": 1},
+            "P2": {"pharokka_rbp_gene_count": 1, "pharokka_has_rbp": 1},
+        },
+    )
+    monkeypatch.setattr(rbp_module, "build_feature_rows", fake_build_feature_rows)
+
+    exit_code = rbp_module.main(
+        [
+            "--label-path",
+            str(label_path),
+            "--cached-annotations-dir",
+            str(cached_dir),
+            "--omp-path",
+            str(omp_path),
+            "--lps-primary-path",
+            str(lps_primary_path),
+            "--lps-supplemental-path",
+            str(lps_supplemental_path),
+            "--omp-enrichment-path",
+            str(omp_enrichment_path),
+            "--lps-enrichment-path",
+            str(lps_enrichment_path),
+            "--rbp-list-path",
+            str(rbp_list_path),
+            "--st03-split-assignments-path",
+            str(split_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    manifest = json.loads((output_dir / "mechanistic_rbp_receptor_manifest_v1.json").read_text(encoding="utf-8"))
+    assert manifest["holdout_exclusion"]["excluded_pair_rows"] == 1
