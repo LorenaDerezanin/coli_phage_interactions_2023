@@ -364,22 +364,43 @@ def ensure_default_tl02_outputs(
     label_path: Path,
     omp_enrichment_path: Path,
     lps_enrichment_path: Path,
+    split_assignments_path: Path,
 ) -> None:
+    should_rebuild = False
     if omp_enrichment_path.exists() and lps_enrichment_path.exists():
-        return
+        try:
+            load_tl02_holdout_clean_provenance(
+                omp_enrichment_path,
+                lps_enrichment_path,
+                split_assignments_path,
+            )
+            return
+        except (FileNotFoundError, ValueError):
+            should_rebuild = True
+    else:
+        should_rebuild = True
+
     if (
         label_path != LABEL_SET_V1_PATH
         or omp_enrichment_path != DEFAULT_OMP_ENRICHMENT_PATH
         or lps_enrichment_path != DEFAULT_LPS_ENRICHMENT_PATH
     ):
-        missing = [str(path) for path in (omp_enrichment_path, lps_enrichment_path) if not path.exists()]
-        raise FileNotFoundError("Missing TL02 enrichment input(s): " + ", ".join(missing))
+        if should_rebuild:
+            missing = [str(path) for path in (omp_enrichment_path, lps_enrichment_path) if not path.exists()]
+            detail = ", ".join(missing) if missing else "stale TL02 manifest"
+            raise FileNotFoundError("Missing TL02 enrichment input(s): " + detail)
+        return
     ensure_default_label_path(label_path)
-    logger.info("TL02 enrichment outputs missing; running Track L enrichment analysis")
+    logger.info("TL02 enrichment outputs missing or stale; running Track L enrichment analysis")
     run_tl02_enrichment(None)
     missing = [str(path) for path in (omp_enrichment_path, lps_enrichment_path) if not path.exists()]
     if missing:
         raise FileNotFoundError("TL02 rebuild did not produce expected enrichment input(s): " + ", ".join(missing))
+    load_tl02_holdout_clean_provenance(
+        omp_enrichment_path,
+        lps_enrichment_path,
+        split_assignments_path,
+    )
 
 
 def load_tl02_holdout_clean_provenance(
@@ -452,7 +473,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.info("TL03 mechanistic RBP-receptor feature build starting at %s", start_time.isoformat(timespec="seconds"))
 
     ensure_default_label_path(args.label_path)
-    ensure_default_tl02_outputs(args.label_path, args.omp_enrichment_path, args.lps_enrichment_path)
+    ensure_default_tl02_outputs(
+        args.label_path,
+        args.omp_enrichment_path,
+        args.lps_enrichment_path,
+        args.st03_split_assignments_path,
+    )
     provenance = load_tl02_holdout_clean_provenance(
         args.omp_enrichment_path,
         args.lps_enrichment_path,

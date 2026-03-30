@@ -931,3 +931,46 @@ rate, and Brier score.
   holdout comparison, not a mechanistic proof.
 - TL11 excluded holdout bacteria from the enrichment build; TL12 therefore zero-fills missing TL11 pair rows on the
   holdout side rather than pretending the features were learned from those strains.
+
+### 2026-03-31: TL12 follow-up patch hardened the rerun mechanics without changing the verdict
+
+#### Executive summary
+
+The follow-up patch after PR `#283` fixed two real contract bugs in the rerun path:
+
+- zero-fill for missing TL11 pair rows is now limited to `holdout_test` rows only; training/CV joins still fail fast;
+- TL05 validates the actual CLI-provided TL11 manifest paths and rebuilds stale default TL11/TL02 artifacts before
+  evaluating, rather than trusting whatever pre-existing generated outputs happen to be on disk.
+
+It also removed duplicate CV-fold training in TL05 and added phase/progress logging so the rerun no longer goes quiet.
+After rerunning on that hardened path, the verdict stayed the same: **no honest lift**.
+
+#### Hardened-rerun holdout results
+
+- Locked baseline `defense + phage_genomic`:
+  - ROC-AUC `0.837060` (`0.806037` to `0.864883`)
+  - top-3 hit rate `0.907692` (`0.809425` to `0.951220`)
+  - Brier score `0.159486` (`0.142176` to `0.177996`)
+- `+TL03` RBP-receptor:
+  - ROC-AUC `0.822245` (`0.793170` to `0.850166`)
+  - top-3 hit rate `0.907692` (`0.794768` to `0.945946`)
+  - Brier score `0.156530` (`0.140885` to `0.173137`)
+  - ROC-AUC delta `-0.014815` (`-0.024446` to `-0.005030`)
+- `+TL04` defense-evasion:
+  - ROC-AUC `0.839504` (`0.809889` to `0.868042`)
+  - top-3 hit rate `0.892308` (`0.794872` to `0.944482`)
+  - Brier score `0.156965` (`0.140532` to `0.174330`)
+  - ROC-AUC delta `0.002444` (`-0.002404` to `0.007416`)
+- `+TL03+TL04` combined:
+  - ROC-AUC `0.823165` (`0.795989` to `0.848961`)
+  - top-3 hit rate `0.892308` (`0.774980` to `0.926829`)
+  - Brier score `0.155707` (`0.140804` to `0.171521`)
+  - ROC-AUC delta `-0.013895` (`-0.023834` to `-0.002206`)
+
+#### Interpretation
+
+1. TL04 is still the least-bad mechanistic arm, but its ROC-AUC delta CI still crosses zero and its top-3 delta still
+   crosses negative territory, so it remains outside the lockable region.
+2. TL03 remains clearly non-competitive on ROC-AUC, and the combined arm still fails to rescue it.
+3. The new result is more trustworthy than the earlier TL12 notebook entry because it was produced after fixing stale
+   default-artifact recovery, manifest-path validation, and holdout-only zero-fill scope.

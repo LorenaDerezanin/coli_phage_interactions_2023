@@ -248,16 +248,37 @@ def ensure_default_label_path(label_path: Path) -> None:
         raise FileNotFoundError(f"Track A rebuild did not produce expected label file: {label_path}")
 
 
-def ensure_default_tl02_output(label_path: Path, antidef_enrichment_path: Path) -> None:
+def ensure_default_tl02_output(
+    label_path: Path,
+    antidef_enrichment_path: Path,
+    split_assignments_path: Path,
+) -> None:
+    should_rebuild = False
     if antidef_enrichment_path.exists():
-        return
+        try:
+            load_tl02_holdout_clean_provenance(
+                antidef_enrichment_path,
+                split_assignments_path,
+            )
+            return
+        except (FileNotFoundError, ValueError):
+            should_rebuild = True
+    else:
+        should_rebuild = True
     if label_path != LABEL_SET_V1_PATH or antidef_enrichment_path != DEFAULT_ANTIDEF_ENRICHMENT_PATH:
-        raise FileNotFoundError(f"Missing TL02 enrichment input: {antidef_enrichment_path}")
+        if should_rebuild:
+            detail = str(antidef_enrichment_path) if not antidef_enrichment_path.exists() else "stale TL02 manifest"
+            raise FileNotFoundError(f"Missing TL02 enrichment input: {detail}")
+        return
     ensure_default_label_path(label_path)
-    logger.info("TL02 anti-defense enrichment output missing; running Track L enrichment analysis")
+    logger.info("TL02 anti-defense enrichment output missing or stale; running Track L enrichment analysis")
     run_tl02_enrichment(None)
     if not antidef_enrichment_path.exists():
         raise FileNotFoundError(f"TL02 rebuild did not produce expected enrichment input: {antidef_enrichment_path}")
+    load_tl02_holdout_clean_provenance(
+        antidef_enrichment_path,
+        split_assignments_path,
+    )
 
 
 def load_tl02_holdout_clean_provenance(
@@ -321,7 +342,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "TL04 mechanistic defense-evasion feature build starting at %s", start_time.isoformat(timespec="seconds")
     )
 
-    ensure_default_tl02_output(args.label_path, args.antidef_enrichment_path)
+    ensure_default_tl02_output(
+        args.label_path,
+        args.antidef_enrichment_path,
+        args.st03_split_assignments_path,
+    )
     provenance = load_tl02_holdout_clean_provenance(
         args.antidef_enrichment_path,
         args.st03_split_assignments_path,

@@ -522,7 +522,7 @@ def merge_expanded_feature_rows(
         for pair_index, columns in pair_indexes:
             pair_row = pair_index.get(pair_id)
             if pair_row is None:
-                if not allow_missing_pair_features:
+                if not allow_missing_pair_features or str(merged["split_holdout"]) != "holdout_test":
                     raise KeyError(f"Missing pair-level feature row for pair_id {pair_id}")
                 for column in columns:
                     merged[column] = 0.0

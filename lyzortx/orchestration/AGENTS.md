@@ -17,6 +17,40 @@
 - Done tasks may omit either — they are historical records, not dispatchable work.
 - The orchestrator validates both fields at load time and raises `ValueError` if either is missing on a pending task.
 
+# Model Tier Selection for Plan Tasks
+
+- Do not choose `gpt-5.4-mini` by surface appearance alone. Some tasks look mechanical but are actually fragile
+  artifact-boundary work.
+- Escalate to `gpt-5.4` when a task does any of the following:
+  - consumes outputs from an upstream task whose schema, provenance, or exclusion rules recently changed
+  - changes evaluation, locking, sweep-selection, or model-comparison logic
+  - depends on gitignored generated outputs that may exist locally in stale pre-replan form
+  - introduces a permissive fallback such as zero-fill, cache reuse, or auto-regeneration
+  - requires interpreting notebook or PR postmortem findings rather than just applying explicit edits
+- Reserve `gpt-5.4-mini` for truly bounded mechanical work where the main risks are local code edits rather than
+  cross-artifact contract mismatches.
+
+# Acceptance Criteria for Artifact-Boundary Tasks
+
+- If a task touches generated artifacts or evaluation semantics, the acceptance criteria must constrain boundary
+  behavior explicitly. Include, when relevant:
+  - a stale-artifact check: existing default outputs must be regenerated or rejected if their schema/provenance is old
+  - a provenance-path check: validation must follow the actual CLI-provided artifact path, not a hardcoded default
+  - a narrow-fallback check: permissive behavior must be limited to the intended context
+- When adding a permissive fallback, require two tests:
+  - one proving the fallback works in the intended narrow context
+  - one proving strict failure still occurs outside that context
+- Never accept criteria that say only "rerun downstream task on clean outputs" when the upstream change alters what rows
+  or files exist. The task text must restate the changed contract.
+
+# Skills and Model Fit
+
+- Treat the `replan` skill as guidance that must work for the weakest model tier named in the resulting tasks.
+- If a task would require extra judgment, tighter sequencing, or more explicit artifact-handling instructions for
+  `gpt-5.4-mini` to succeed, either:
+  - add that low-freedom guidance directly to the acceptance criteria, or
+  - assign the task to `gpt-5.4` instead
+
 # Task Status Management
 
 - Never manually set a task's `status` to `done` in `plan.yml`. The orchestrator automatically marks tasks as done when

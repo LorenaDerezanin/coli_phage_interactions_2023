@@ -376,6 +376,14 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
   operations instead of Python loops over arrays. Parallelize over available cores when work is embarrassingly parallel
   (e.g., `concurrent.futures`, multiprocessing). Prefer batch operations over per-element calls. A 3-minute job that
   could run in 3 seconds wastes developer time on every iteration.
+- **Optimize the repeated hotspot first** — When a pipeline step is slow, first remove duplicated expensive work before
+  adding clever machinery. Typical wins are: avoid retraining the same folds twice, avoid rebuilding the same feature
+  matrices inside nested loops, and avoid per-resample Python object copying in bootstrap code. These changes usually
+  buy more than micro-optimizing arithmetic.
+- **Keep performance fixes readable** — Performance work is only a win if the next agent can still reason about it.
+  Prefer named helpers, clear constants, and phase-level logging over opaque one-liners or heavily fused control flow.
+  If a fallback or optimization is intentionally narrow (for example, holdout-only zero-fill), encode that scope
+  explicitly in the code and in tests.
 
 # External Service Integration Development
 
