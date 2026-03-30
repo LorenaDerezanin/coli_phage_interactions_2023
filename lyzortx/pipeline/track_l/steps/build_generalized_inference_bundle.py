@@ -182,16 +182,17 @@ def build_genome_only_feature_space(
     *,
     host_feature_columns: Sequence[str],
     phage_feature_columns: Sequence[str],
+    pairwise_feature_columns: Sequence[str] = (),
 ) -> train_v1_binary_classifier.FeatureSpace:
     numeric_columns = train_v1_binary_classifier.deduplicate_preserving_order(
-        [*host_feature_columns, *phage_feature_columns]
+        [*host_feature_columns, *phage_feature_columns, *pairwise_feature_columns]
     )
     return train_v1_binary_classifier.FeatureSpace(
         categorical_columns=(),
         numeric_columns=numeric_columns,
         track_c_additional_columns=tuple(host_feature_columns),
         track_d_columns=tuple(phage_feature_columns),
-        track_e_columns=(),
+        track_e_columns=tuple(pairwise_feature_columns),
     )
 
 
@@ -233,6 +234,57 @@ def build_training_rows(
 
     merged_rows.sort(key=lambda row: (str(row["bacteria"]), str(row["phage"])))
     return merged_rows
+
+
+def augment_rows_with_pair_features(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    pair_feature_rows: Sequence[Mapping[str, object]],
+    pair_feature_columns: Sequence[str],
+) -> list[dict[str, object]]:
+    if not pair_feature_columns:
+        return [dict(row) for row in rows]
+    pair_feature_index = {str(row["pair_id"]): dict(row) for row in pair_feature_rows}
+    augmented_rows: list[dict[str, object]] = []
+    for row in rows:
+        augmented = dict(row)
+        pair_row = pair_feature_index.get(str(row["pair_id"]))
+        if pair_row is None:
+            if str(row["split_holdout"]) != "holdout_test":
+                raise KeyError(f"Missing deployable pair feature row for pair_id {row['pair_id']}")
+            for column in pair_feature_columns:
+                augmented[column] = 0.0
+            augmented_rows.append(augmented)
+            continue
+        for column in pair_feature_columns:
+            if column not in pair_row:
+                raise KeyError(f"Missing deployable pair feature column {column} for pair_id {row['pair_id']}")
+            augmented[column] = pair_row[column]
+        augmented_rows.append(augmented)
+    return augmented_rows
+
+
+def augment_phage_rows_with_features(
+    phage_rows: Sequence[Mapping[str, str]],
+    *,
+    extra_phage_feature_rows: Sequence[Mapping[str, object]],
+    extra_phage_feature_columns: Sequence[str],
+) -> list[dict[str, object]]:
+    if not extra_phage_feature_columns:
+        return [dict(row) for row in phage_rows]
+    phage_feature_index = {str(row["phage"]): dict(row) for row in extra_phage_feature_rows}
+    augmented_rows: list[dict[str, object]] = []
+    for row in phage_rows:
+        augmented = dict(row)
+        extra_row = phage_feature_index.get(str(row["phage"]))
+        if extra_row is None:
+            raise KeyError(f"Missing deployable phage feature row for phage {row['phage']}")
+        for column in extra_phage_feature_columns:
+            if column not in extra_row:
+                raise KeyError(f"Missing deployable phage feature column {column} for phage {row['phage']}")
+            augmented[column] = extra_row[column]
+        augmented_rows.append(augmented)
+    return augmented_rows
 
 
 def fit_calibrator_from_cv_rows(
@@ -329,6 +381,12 @@ def build_model_bundle(
     lightgbm_params: Mapping[str, object],
     random_state: int,
     calibration_fold: int,
+    extra_phage_feature_rows: Sequence[Mapping[str, object]] = (),
+    extra_phage_feature_columns: Sequence[str] = (),
+    pair_feature_rows: Sequence[Mapping[str, object]] = (),
+    pair_feature_columns: Sequence[str] = (),
+    bundle_task_id: str = "TL08",
+    bundle_format_version: str = "tl08_genome_only_inference_bundle_v2",
 ) -> dict[str, Any]:
     logger.info("Starting TL08 generalized inference bundle build")
     ensure_directory(output_dir)
@@ -342,6 +400,11 @@ def build_model_bundle(
     phage_rows = read_csv_rows(phage_kmer_feature_path)
     if not phage_rows:
         raise ValueError(f"No phage feature rows found in {phage_kmer_feature_path}")
+    phage_rows = augment_phage_rows_with_features(
+        phage_rows,
+        extra_phage_feature_rows=extra_phage_feature_rows,
+        extra_phage_feature_columns=extra_phage_feature_columns,
+    )
     phage_feature_columns = [column for column in phage_rows[0].keys() if column != "phage"]
 
     merged_rows = build_training_rows(
@@ -350,9 +413,15 @@ def build_model_bundle(
         host_rows=host_feature_rows,
         phage_rows=phage_rows,
     )
+    merged_rows = augment_rows_with_pair_features(
+        merged_rows,
+        pair_feature_rows=pair_feature_rows,
+        pair_feature_columns=pair_feature_columns,
+    )
     feature_space = build_genome_only_feature_space(
         host_feature_columns=host_feature_columns,
         phage_feature_columns=phage_feature_columns,
+        pairwise_feature_columns=pair_feature_columns,
     )
     calibrator, calibration_row_count = fit_calibrator_from_cv_rows(
         merged_rows,
@@ -399,8 +468,8 @@ def build_model_bundle(
     joblib.dump(defense_mask, defense_mask_path)
 
     bundle_payload = {
-        "format_version": "tl08_genome_only_inference_bundle_v2",
-        "task_id": "TL08",
+        "format_version": bundle_format_version,
+        "task_id": bundle_task_id,
         "trained_at_utc": datetime.now(timezone.utc).isoformat(),
         "lightgbm_estimator": estimator,
         "feature_vectorizer": vectorizer,
@@ -410,6 +479,7 @@ def build_model_bundle(
             "numeric_columns": list(feature_space.numeric_columns),
             "host_feature_columns": list(host_feature_columns),
             "phage_feature_columns": list(phage_feature_columns),
+            "pairwise_feature_columns": list(pair_feature_columns),
         },
         "artifacts": {
             "phage_svd_filename": PHAGE_SVD_FILENAME,
@@ -462,7 +532,7 @@ def build_model_bundle(
     write_json(
         manifest_path,
         {
-            "task_id": "TL08",
+            "task_id": bundle_task_id,
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
             "bundle_path": str(bundle_path),
             "panel_predictions_path": str(predictions_path),

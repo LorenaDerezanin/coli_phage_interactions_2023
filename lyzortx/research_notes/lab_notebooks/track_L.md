@@ -1009,3 +1009,93 @@ The plan was updated accordingly:
 #### What is now dead-ended
 
 - Further TL03/TL04/TL12-style panel-lift work aimed at replacing the current locked v1 configuration.
+
+### 2026-03-30: TL13 Audit and rebuild the deployable generalized inference bundle
+
+#### Executive summary
+
+TL13 started with the required feature-parity audit for the panel model and did not treat the task as another attempt
+to win the v1 panel lock. The audit outcome was:
+
+- deployable now: `track_c_defense`, `track_d_phage_genomic_kmers`
+- deployable in this task: `tl04_antidef_defense_pairwise`
+- not deployable: `st04_v0_baseline_metadata`, `track_c_omp_surface`,
+  `track_e_curated_rbp_receptor_compatibility`, `track_e_isolation_host_distance`,
+  `tl03_rbp_receptor_pairwise`
+
+That audit makes the current state explicit:
+
+- the TL11/TL12 mechanistic pairwise path is dead-ended for the current v1 lock; and
+- the only biology-derived subset still deployable and worth testing for generalized inference is the TL04
+  anti-defense x host-defense path, because both sides can be projected from raw genomes at inference time via bundle-
+  local Pharokka annotations plus DefenseFinder output.
+
+#### What changed
+
+- Added a TL13 bundle builder that writes the parity audit, rebuilds a baseline TL08-style bundle and a richer TL13
+  candidate bundle, and fails if the extra deployable block changes no predictions or improves none of the predeclared
+  round-trip metrics.
+- Added a deployable TL04 runtime contract that stores the anti-defense profile lookup, the direct phage block, and
+  the pairwise compatibility weights inside the saved bundle instead of depending on repo-root paths or gitignored
+  artifacts.
+- Copied the panel Pharokka merged TSV cache into the bundle directory so inference-time annotation lookup resolves
+  relative to the saved bundle.
+- Regenerated and saved round-trip reference predictions plus the saved panel-host cohort manifest inside the TL13
+  output directory.
+
+#### Feature-parity audit verdict
+
+- `st04_v0_baseline_metadata`: not deployable. These are panel-only assay and metadata features and cannot be rebuilt
+  for arbitrary novel pairs.
+- `track_c_defense`: deployable now. TL07 already projects DefenseFinder-derived host-defense features from raw host
+  assemblies.
+- `track_c_omp_surface`: not deployable. The repo still has no inference-time raw-host OMP/LPS/capsule projector.
+- `track_d_phage_genomic_kmers`: deployable now. TL06 already projects phage tetranucleotide SVD features from raw
+  genomes.
+- `track_e_curated_rbp_receptor_compatibility`: not deployable. This block depends on panel taxon metadata rather than
+  a raw-genome contract.
+- `track_e_isolation_host_distance`: not deployable. This requires isolation metadata that is absent for arbitrary
+  inference-time genomes.
+- `tl03_rbp_receptor_pairwise`: not deployable. TL11/TL12 already dead-ended this path for the current lock, and the
+  missing raw-host receptor projector means no honest deployable TL03 subset exists right now.
+- `tl04_antidef_defense_pairwise`: deployable in this task. TL11/TL12 dead-ended it for panel locking, but the
+  anti-defense x defense subset is still technically deployable for generalized inference because both inputs are
+  available from raw genomes.
+
+#### Round-trip gate results
+
+- The predeclared round-trip host set did **not** survive intact once constrained to hosts with both available
+  assemblies and saved panel reference predictions. The actual reference-backed cohort collapsed to a single host:
+  `EDL933` (`taxid 155864`).
+- That is a real current-data limitation, not a placeholder: the saved reference-backed cohort written by TL13 contains
+  exactly one host and should be treated as narrow evidence rather than broad external validation.
+- On that `EDL933` cohort, the newly deployable TL04 block changed the inference surface for all `96` panel phages.
+- The predeclared round-trip metrics were:
+  - median absolute probability delta to saved panel references: lower is better
+  - maximum absolute probability delta to saved panel references: lower is better
+  - identical rank count: higher is better
+- Baseline TL08-style bundle on `EDL933`:
+  - median absolute probability delta `0.15954457834757846`
+  - maximum absolute probability delta `0.31832564516129036`
+  - identical rank count `10`
+- Candidate TL13 bundle on `EDL933`:
+  - median absolute probability delta `0.16009493046608564`
+  - maximum absolute probability delta `0.3052022061068702`
+  - identical rank count `3`
+- Surface-delta summary for the richer bundle vs baseline:
+  - changed prediction count `96`
+  - median absolute probability delta `0.016349391349391285`
+  - maximum absolute probability delta `0.10569225843001057`
+
+#### Interpretation
+
+1. TL13 clears its stated go/no-go gate, but narrowly: the richer deployable bundle improved only the predeclared
+   `max_abs_probability_delta_max` metric and worsened both the median delta and rank-identity metric.
+2. The mechanistic pairwise work remains dead-ended for the current v1 panel lock. TL13 should be read as a deployable
+   compatibility-bundle experiment, not as evidence that TL04 became lockable for the panel model.
+3. The deployable biology subset worth carrying forward is specifically the TL04 anti-defense x defense path. TL03
+   remains blocked by missing deployable host receptor features, and the rest of the non-genome-derived training blocks
+   remain non-deployable.
+4. Because the saved reference-backed round-trip cohort collapsed to `EDL933` only, TL13 establishes bundle-relative
+   runtime completeness and a real changed inference surface, but not broad evidence that the richer bundle generalizes
+   across multiple external panel hosts yet.
