@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +46,14 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def load_json(path: Path) -> Dict[str, object]:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected a JSON object in {path}")
+    return payload
+
+
 def read_delimited_rows(path: Path, delimiter: str = ",") -> List[Dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter=delimiter)
@@ -62,6 +71,15 @@ def require_columns(rows: Sequence[Mapping[str, str]], path: Path, columns: Iter
     missing = [column for column in columns if column not in rows[0]]
     if missing:
         raise ValueError(f"Missing required columns in {path}: {', '.join(sorted(missing))}")
+
+
+def load_holdout_bacteria_ids(split_assignments_path: Path) -> List[str]:
+    rows = read_delimited_rows(split_assignments_path)
+    require_columns(rows, split_assignments_path, ("bacteria", "split_holdout"))
+    holdout_bacteria = sorted({row["bacteria"] for row in rows if row["split_holdout"] == "holdout_test"})
+    if not holdout_bacteria:
+        raise ValueError(f"No holdout bacteria found in {split_assignments_path}")
+    return holdout_bacteria
 
 
 def normalize_token(token: str) -> str:

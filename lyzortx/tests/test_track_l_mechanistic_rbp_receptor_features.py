@@ -1,3 +1,4 @@
+import json
 import csv
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from lyzortx.pipeline.track_l.steps.build_mechanistic_rbp_receptor_features impo
     collapse_significant_associations,
     main,
 )
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import _sha256
 
 
 MERGED_TSV_HEADER = (
@@ -139,6 +141,49 @@ def test_build_feature_rows_emits_direct_and_pairwise_blocks() -> None:
     assert by_pair_id["B1__P1"][direct_column] == 1
 
 
+def test_build_feature_rows_zeroes_pairwise_weight_when_host_lacks_receptor() -> None:
+    collapsed_matrix, profiles, feature_to_profile_id = collapse_duplicate_profiles(
+        ["RBP_PHROG_136", "RBP_PHROG_15437"],
+        np.array([[1, 1], [0, 0]], dtype=np.int8),
+    )
+    phage_to_profile_presence = {
+        "P1": {profile.profile_id: int(collapsed_matrix[0, index]) for index, profile in enumerate(profiles)},
+        "P2": {profile.profile_id: int(collapsed_matrix[1, index]) for index, profile in enumerate(profiles)},
+    }
+    associations = [
+        collapse_significant_associations(
+            [
+                {
+                    "phage_feature": "RBP_PHROG_136",
+                    "host_feature": "OMPC_99_1",
+                    "lysis_rate_diff": "0.6",
+                    "significant": "True",
+                }
+            ],
+            feature_to_profile_id,
+            {profile.profile_id: profile for profile in profiles},
+        )[0]
+    ]
+    pair_rows = [
+        {"pair_id": "B1__P1", "bacteria": "B1", "phage": "P1"},
+        {"pair_id": "B2__P1", "bacteria": "B2", "phage": "P1"},
+    ]
+    bacteria_to_host_features = {"B1": {"OMPC_99_1"}, "B2": set()}
+
+    feature_rows, _ = build_feature_rows(
+        pair_rows,
+        phage_to_profile_presence,
+        bacteria_to_host_features,
+        profiles,
+        associations,
+    )
+
+    pairwise_column = associations[0].pairwise_column
+    by_pair_id = {row["pair_id"]: row for row in feature_rows}
+    assert by_pair_id["B1__P1"][pairwise_column] == 0.6
+    assert by_pair_id["B2__P1"][pairwise_column] == 0.0
+
+
 def test_build_sanity_check_rows_tracks_curated_vs_pharokka_presence() -> None:
     rows = build_sanity_check_rows(
         panel_phages=["P1", "P2"],
@@ -170,6 +215,7 @@ def test_main_writes_mechanistic_feature_outputs(tmp_path: Path) -> None:
     lps_supplemental_path = tmp_path / "lps_supplemental.tsv"
     omp_enrichment_path = tmp_path / "omp_enrichment.csv"
     lps_enrichment_path = tmp_path / "lps_enrichment.csv"
+    split_path = tmp_path / "st03_split_assignments.csv"
     rbp_list_path = tmp_path / "RBP_list.csv"
     output_dir = tmp_path / "out"
 
@@ -214,10 +260,40 @@ def test_main_writes_mechanistic_feature_outputs(tmp_path: Path) -> None:
         "RBP_PHROG_15437,LPS_R1,0.6,True\n",
         encoding="utf-8",
     )
+    split_path.write_text(
+        "pair_id,bacteria,split_holdout,split_cv5_fold\n"
+        "B1__P1,B1,train_non_holdout,0\n"
+        "B2__P1,B2,holdout_test,-1\n"
+        "B1__P2,B1,train_non_holdout,1\n",
+        encoding="utf-8",
+    )
     rbp_list_path.write_text(
         "phage;Morphotype;Family;Subfamily;Genus;RBP;type\n"
         "P1;Myoviridae;Other;Other;X;P1_gene;fiber\n"
         "P2;Myoviridae;Other;Other;X;P2_gene;spike\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "manifest.json").write_text(
+        json.dumps(
+            {
+                "step": "TL02_enrichment_analysis",
+                "holdout_exclusion": {
+                    "split_assignments": {"path": str(split_path), "sha256": _sha256(split_path)},
+                    "excluded_holdout_bacteria_ids": ["B2"],
+                    "excluded_holdout_bacteria_count": 1,
+                },
+                "outputs": {
+                    "rbp_phrog_x_omp_receptor": {
+                        "path": str(omp_enrichment_path),
+                        "sha256": _sha256(omp_enrichment_path),
+                    },
+                    "rbp_phrog_x_lps_core": {
+                        "path": str(lps_enrichment_path),
+                        "sha256": _sha256(lps_enrichment_path),
+                    },
+                },
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -239,6 +315,8 @@ def test_main_writes_mechanistic_feature_outputs(tmp_path: Path) -> None:
             str(lps_enrichment_path),
             "--rbp-list-path",
             str(rbp_list_path),
+            "--st03-split-assignments-path",
+            str(split_path),
             "--output-dir",
             str(output_dir),
         ]
@@ -257,3 +335,7 @@ def test_main_writes_mechanistic_feature_outputs(tmp_path: Path) -> None:
     pairwise_column = f"tl03_pair_{duplicate_profile['profile_id']}_x_lps_r1_weight"
     assert any(float(row[pairwise_column]) == 0.6 for row in feature_rows if row["pair_id"] == "B1__P1")
     assert any(row["agreement_has_rbp"] == "1" for row in sanity_rows)
+    manifest = json.loads((output_dir / "mechanistic_rbp_receptor_manifest_v1.json").read_text(encoding="utf-8"))
+    assert manifest["provenance"]["excluded_holdout_bacteria_ids"] == ["B2"]
+    assert manifest["provenance"]["split_assignments"]["path"] == str(split_path)
+    assert manifest["outputs"]["feature_csv_sha256"] == _sha256(output_dir / "mechanistic_rbp_receptor_features_v1.csv")

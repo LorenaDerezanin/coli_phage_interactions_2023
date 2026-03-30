@@ -806,3 +806,74 @@ The first TL03 Codex implement run failed in CI before task code executed becaus
 was unsatisfiable on the runner (`openjdk` solver conflict). That is separate from the scientific mistakes above, but it
 supports tightening future Track L tasks so environment solvability is validated explicitly whenever new bioinformatics
 dependencies are part of the work.
+
+### 2026-03-30: TL11 Rebuild TL03/TL04 mechanistic blocks from holdout-clean enrichment
+
+#### Executive summary
+
+Rebuilt the TL03 and TL04 mechanistic feature blocks from the TL10 holdout-excluded enrichment outputs and added
+provenance checks so stale pre-TL10 enrichment artifacts fail fast. The rebuilt outputs now carry manifests that record
+the exact enrichment CSV paths, the ST03 split file, the excluded holdout bacteria IDs, and SHA-256 hashes for the
+emitted artifacts. Compared with the leaked rebuilds, TL03 gained 14 pairwise columns and TL04 lost 6 pairwise
+columns, with the largest changes concentrated in a handful of OMP- and defense-linked associations.
+
+#### What changed
+
+- `lyzortx/pipeline/track_l/steps/run_enrichment_analysis.py` now writes a holdout-aware manifest for TL02 with the
+  split file path, excluded ST03 bacteria IDs, and output hashes.
+- `lyzortx/pipeline/track_l/steps/build_mechanistic_rbp_receptor_features.py` and
+  `lyzortx/pipeline/track_l/steps/build_mechanistic_defense_evasion_features.py` now validate that TL02 manifest
+  before rebuilding, record the TL02 provenance in their own manifests, and store output file hashes.
+- The default TL02 bootstrap now recreates the missing ST01 -> ST01b -> ST02 -> ST03 Steel Thread prerequisites when
+  the split file is absent, so the Track L rebuild works on a fresh checkout.
+- `lyzortx/research_notes/ad_hoc_analysis_code/compare_tl11_mechanistic_rebuilds.py` captures the clean-vs-leaked
+  comparison used for the notebook deltas.
+
+#### Rebuilt output statistics
+
+- TL03 holdout-clean output:
+  - `25` direct profile columns
+  - `316` pairwise columns
+  - `341` total feature columns
+  - `28,782` rows with any non-zero mechanistic signal
+  - `20,703` rows with any non-zero pairwise signal
+- TL03 leaked output:
+  - `25` direct profile columns
+  - `302` pairwise columns
+  - `327` total feature columns
+  - `28,782` rows with any non-zero mechanistic signal
+  - `19,926` rows with any non-zero pairwise signal
+- TL04 holdout-clean output:
+  - `11` direct profile columns
+  - `19` pairwise columns
+  - `30` total feature columns
+  - `24,354` rows with any non-zero mechanistic signal
+  - `7,663` rows with any non-zero pairwise signal
+- TL04 leaked output:
+  - `11` direct profile columns
+  - `25` pairwise columns
+  - `36` total feature columns
+  - `24,354` rows with any non-zero mechanistic signal
+  - `9,425` rows with any non-zero pairwise signal
+
+#### Most important changed associations
+
+- TL03 gained `tl03_pair_profile_009_x_ompc_99_79_weight` at `0.5178` and `tl03_pair_profile_009_x_ompc_99_50_weight`
+  at `0.4313`; both were absent from the leaked rebuild.
+- TL03 dropped leaked-only weights such as `tl03_pair_profile_013_x_yncd_99_65_weight` at `0.4522`,
+  `tl03_pair_profile_013_x_fhua_99_39_weight` at `0.4199`, and
+  `tl03_pair_profile_002_x_nfra_99_93_weight` at `0.3718`.
+- TL04 gained `tl04_pair_profile_004_x_defense_thoeris_ii_weight` at `0.3612` and
+  `tl04_pair_profile_008_x_defense_septu_weight` at `0.1676`.
+- TL04 dropped leaked-only weights such as `tl04_pair_profile_002_x_defense_rloc_weight` at `0.2827`,
+  `tl04_pair_profile_011_x_defense_thoeris_ii_weight` at `0.2765`, and
+  `tl04_pair_profile_010_x_defense_bsta_weight` at `0.2305`.
+
+#### Interpretation
+
+1. The holdout-clean rebuild is materially sparser for TL04 and slightly denser for TL03, which is what we want after
+   removing leaked signal from the enrichment stage.
+2. The largest shifts are not rounding noise; they are discrete association changes, especially around OmpC-linked RBP
+   profiles and Thoeris/Rloc/BstA defense associations.
+3. The TL03/TL04 manifests now make the provenance auditable enough to reject stale pre-TL10 artifacts in future
+   rebuilds.

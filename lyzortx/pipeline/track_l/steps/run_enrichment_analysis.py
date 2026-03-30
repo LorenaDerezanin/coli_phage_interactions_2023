@@ -29,6 +29,13 @@ if __package__ in {None, ""}:
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
+from lyzortx.pipeline.steel_thread_v0.steps import (
+    st01_label_policy,
+    st01b_confidence_tiers,
+    st02_build_pair_table,
+    st03_build_splits,
+)
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import _sha256
 from lyzortx.pipeline.track_l.steps.annotation_interaction_enrichment import (
     ENRICHMENT_CSV_FIELDNAMES,
     compute_enrichment,
@@ -171,6 +178,21 @@ def load_holdout_bacteria(st03_split_assignments_path: Path) -> set[str]:
     if not holdout_bacteria:
         raise ValueError(f"No holdout bacteria found in {st03_split_assignments_path}")
     return holdout_bacteria
+
+
+def ensure_default_st03_split_path(st03_split_assignments_path: Path) -> None:
+    if st03_split_assignments_path.exists():
+        return
+    if st03_split_assignments_path != ST03_SPLIT_ASSIGNMENTS_PATH:
+        raise FileNotFoundError(f"Missing ST0.3 split assignments: {st03_split_assignments_path}")
+    logger.info("ST0.3 split assignments missing at %s; rebuilding ST0.3 splits", st03_split_assignments_path)
+    logger.info("Bootstrapping Steel Thread prerequisites for ST0.3")
+    st01_label_policy.main([])
+    st01b_confidence_tiers.main([])
+    st02_build_pair_table.main([])
+    st03_build_splits.main([])
+    if not st03_split_assignments_path.exists():
+        raise FileNotFoundError(f"ST0.3 rebuild did not produce expected split file: {st03_split_assignments_path}")
 
 
 def select_non_holdout_bacteria(bacteria: Sequence[str], holdout_bacteria: set[str]) -> list[str]:
@@ -436,6 +458,8 @@ def main(argv: Sequence[str] | None = None, holdout_bacteria: Sequence[str] | No
     phages = sorted({row["phage"] for row in label_rows})
     logger.info("Interaction panel before holdout exclusion: %d bacteria, %d phages", len(bacteria), len(phages))
 
+    ensure_default_st03_split_path(args.st03_split_assignments_path)
+
     holdout_bacteria_set = (
         set(holdout_bacteria)
         if holdout_bacteria is not None
@@ -507,6 +531,25 @@ def main(argv: Sequence[str] | None = None, holdout_bacteria: Sequence[str] | No
         "step": "TL02_enrichment_analysis",
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "panel": {"n_bacteria": len(bacteria), "n_phages": len(phages)},
+        "holdout_exclusion": {
+            "split_assignments": {
+                "path": str(args.st03_split_assignments_path),
+                "sha256": _sha256(args.st03_split_assignments_path),
+            },
+            "excluded_holdout_bacteria_ids": sorted(holdout_bacteria_set),
+            "excluded_holdout_bacteria_count": len(holdout_bacteria_set),
+        },
+        "inputs": {
+            "label_set_v1_pairs": {"path": str(args.label_path), "sha256": _sha256(args.label_path)},
+            "cached_annotations_dir": str(args.cached_annotations_dir),
+            "omp_clusters": {"path": str(args.omp_path), "sha256": _sha256(args.omp_path)},
+            "lps_primary": {"path": str(args.lps_primary_path), "sha256": _sha256(args.lps_primary_path)},
+            "lps_supplemental": {
+                "path": str(args.lps_supplemental_path),
+                "sha256": _sha256(args.lps_supplemental_path),
+            },
+            "defense_subtypes": {"path": str(args.defense_path), "sha256": _sha256(args.defense_path)},
+        },
         "analyses": {
             "rbp_phrog_x_omp_receptor": {
                 "n_phage_features": len(rbp_phrog_names),
@@ -525,6 +568,20 @@ def main(argv: Sequence[str] | None = None, holdout_bacteria: Sequence[str] | No
                 "n_host_features": len(defense_feature_names),
                 "n_tests": len(antidef_defense_rows),
                 "n_significant": sum(1 for r in antidef_defense_rows if r["significant"]),
+            },
+        },
+        "outputs": {
+            "rbp_phrog_x_omp_receptor": {
+                "path": str(args.output_dir / "enrichment_rbp_phrog_x_omp_receptor.csv"),
+                "sha256": _sha256(args.output_dir / "enrichment_rbp_phrog_x_omp_receptor.csv"),
+            },
+            "rbp_phrog_x_lps_core": {
+                "path": str(args.output_dir / "enrichment_rbp_phrog_x_lps_core.csv"),
+                "sha256": _sha256(args.output_dir / "enrichment_rbp_phrog_x_lps_core.csv"),
+            },
+            "antidef_phrog_x_defense_subtype": {
+                "path": str(args.output_dir / "enrichment_antidef_phrog_x_defense_subtype.csv"),
+                "sha256": _sha256(args.output_dir / "enrichment_antidef_phrog_x_defense_subtype.csv"),
             },
         },
     }
