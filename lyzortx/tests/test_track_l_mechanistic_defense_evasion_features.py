@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+from lyzortx.pipeline.track_l.steps import build_mechanistic_defense_evasion_features as defense_module
 from lyzortx.pipeline.track_l.steps.build_mechanistic_defense_evasion_features import (
     EXPERIMENTAL_STATUS,
     build_feature_rows,
@@ -315,3 +316,95 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
     assert manifest["outputs"]["feature_csv_sha256"] == _sha256(
         output_dir / "mechanistic_defense_evasion_features_v1.csv"
     )
+
+
+def test_main_reports_holdout_exclusion_independently_of_feature_row_drops(monkeypatch, tmp_path: Path) -> None:
+    label_path = tmp_path / "labels.csv"
+    cached_dir = tmp_path / "cached"
+    defense_path = tmp_path / "defense.csv"
+    antidef_enrichment_path = tmp_path / "antidef_enrichment.csv"
+    split_path = tmp_path / "st03_split_assignments.csv"
+    output_dir = tmp_path / "out"
+
+    cached_dir.mkdir()
+    label_path.write_text("bacteria,phage\nB1,P1\nB2,P1\nB1,P2\n", encoding="utf-8")
+    defense_path.write_text("bacteria;BREX_I\nB1;1\n", encoding="utf-8")
+    antidef_enrichment_path.write_text(
+        "phage_feature,host_feature,lysis_rate_diff,significant\nANTIDEF_PHROG_11,defense_BREX_I,0.4,True\n",
+        encoding="utf-8",
+    )
+    split_path.write_text(
+        "pair_id,bacteria,split_holdout,split_cv5_fold\n"
+        "B1__P1,B1,train_non_holdout,0\n"
+        "B2__P1,B2,holdout_test,-1\n"
+        "B1__P2,B1,train_non_holdout,1\n",
+        encoding="utf-8",
+    )
+
+    fake_provenance = {
+        "manifest_path": tmp_path / "manifest.json",
+        "split_assignments_path": split_path,
+        "split_assignments_sha256": "split-sha",
+        "holdout_bacteria_ids": ["B2"],
+        "enrichment_inputs": {},
+        "enrichment_manifest_sha256": "manifest-sha",
+    }
+
+    def fake_read_delimited_rows(path: Path, delimiter: str = ",") -> list[dict[str, str]]:
+        if path == label_path:
+            return [
+                {"bacteria": "B1", "phage": "P1"},
+                {"bacteria": "B2", "phage": "P1"},
+                {"bacteria": "B1", "phage": "P2"},
+            ]
+        if path == antidef_enrichment_path:
+            return [
+                {
+                    "phage_feature": "ANTIDEF_PHROG_11",
+                    "host_feature": "defense_BREX_I",
+                    "lysis_rate_diff": "0.4",
+                    "significant": "True",
+                }
+            ]
+        raise AssertionError(f"unexpected path: {path}")
+
+    real_build_feature_rows = defense_module.build_feature_rows
+
+    def fake_build_feature_rows(*args, **kwargs):
+        feature_rows, feature_columns = real_build_feature_rows(*args, **kwargs)
+        return feature_rows[:-1], feature_columns
+
+    monkeypatch.setattr(defense_module, "ensure_default_label_path", lambda *_: None)
+    monkeypatch.setattr(defense_module, "ensure_default_tl02_output", lambda *_: None)
+    monkeypatch.setattr(defense_module, "load_tl02_holdout_clean_provenance", lambda *_: fake_provenance)
+    monkeypatch.setattr(defense_module, "read_delimited_rows", fake_read_delimited_rows)
+    monkeypatch.setattr(
+        defense_module,
+        "load_pharokka_phrog_matrices",
+        lambda *_: (None, None, np.array([[1], [0]], dtype=np.int8), ["11"]),
+    )
+    monkeypatch.setattr(
+        defense_module, "load_defense_host_matrix", lambda *_: (np.array([[1]], dtype=np.int8), ["BREX_I"])
+    )
+    monkeypatch.setattr(defense_module, "build_feature_rows", fake_build_feature_rows)
+
+    exit_code = defense_module.main(
+        [
+            "--label-path",
+            str(label_path),
+            "--cached-annotations-dir",
+            str(cached_dir),
+            "--defense-path",
+            str(defense_path),
+            "--antidef-enrichment-path",
+            str(antidef_enrichment_path),
+            "--st03-split-assignments-path",
+            str(split_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    manifest = json.loads((output_dir / "mechanistic_defense_evasion_manifest_v1.json").read_text(encoding="utf-8"))
+    assert manifest["holdout_exclusion"]["excluded_pair_rows"] == 1

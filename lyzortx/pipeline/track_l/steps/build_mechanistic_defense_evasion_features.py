@@ -329,7 +329,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     label_rows = read_delimited_rows(args.label_path)
     all_pair_rows = build_pair_rows(label_rows)
-    pair_rows = [row for row in all_pair_rows if row["bacteria"] not in set(provenance["holdout_bacteria_ids"])]
+    holdout_bacteria = set(provenance["holdout_bacteria_ids"])
+    pair_rows = [row for row in all_pair_rows if row["bacteria"] not in holdout_bacteria]
     bacteria = sorted({row["bacteria"] for row in pair_rows})
     phages = sorted({row["phage"] for row in pair_rows})
 
@@ -429,7 +430,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "enrichment_inputs": provenance["enrichment_inputs"],
         },
         "holdout_exclusion": {
-            "excluded_pair_rows": len(all_pair_rows) - len(feature_rows),
+            "excluded_pair_rows": len(all_pair_rows) - len(pair_rows),
         },
         "inputs": {
             "label_set_v1_pairs": {"path": str(args.label_path), "sha256": _sha256(args.label_path)},
