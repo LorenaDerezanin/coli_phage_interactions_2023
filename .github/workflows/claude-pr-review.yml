@@ -115,26 +115,12 @@ jobs:
           PR_NUM="${{ github.event.pull_request.number }}"
           LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
             --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state')
-          UNRESOLVED_REVIEW_THREADS=$(gh api graphql \
-            -f owner="${{ github.repository_owner }}" \
-            -f repo="${{ github.event.repository.name }}" \
-            -F number="$PR_NUM" \
-            -f query='
-              query($owner: String!, $repo: String!, $number: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $number) {
-                    reviewThreads(first: 100) {
-                      nodes {
-                        isResolved
-                      }
-                    }
-                  }
-                }
-              }
-            ' \
-            --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
-              | select(.isResolved == false)
-            ] | length')
+          UNRESOLVED_REVIEW_THREADS=$(python -m lyzortx.orchestration.review_threads \
+            "${{ github.repository_owner }}" \
+            "${{ github.event.repository.name }}" \
+            "$PR_NUM" \
+            /dev/null \
+            --count-only)
           UNRESOLVED_REVIEW_THREADS=${UNRESOLVED_REVIEW_THREADS:-}
           if ! [[ "$UNRESOLVED_REVIEW_THREADS" =~ ^[0-9]+$ ]]; then
             echo "::error::Failed to fetch unresolved review thread count: '${UNRESOLVED_REVIEW_THREADS}'"

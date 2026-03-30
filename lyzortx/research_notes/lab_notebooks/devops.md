@@ -23,16 +23,21 @@ while any review feedback is still open.
 
 #### Implementation
 
-Updated `claude-pr-review.yml` to query PR review threads via GitHub GraphQL, count unresolved threads, and gate
-auto-merge on that count being zero. The workflow still accepts a clean Claude approval path, but any unresolved review
-thread now forces the "request addressing feedback" path through the Codex PR lifecycle workflow.
+Updated `claude-pr-review.yml` to gate auto-merge on the unresolved-thread count returned by the shared
+`lyzortx.orchestration.review_threads` helper. That keeps the Claude merge gate aligned with the Codex lifecycle, which
+already uses the same helper to decide whether feedback remains. The workflow still accepts a clean Claude approval
+path, but any unresolved review thread now forces the "request addressing feedback" path through the Codex PR
+lifecycle workflow.
 
 #### Follow-up after PR #283
 
 PR #283 showed that author filtering was the wrong design entirely. The intended policy is that any unresolved review
 thread blocks auto-merge, not only comments authored by Claude. The GraphQL author-login mismatch (`claude[bot]` in
 REST, `claude` in GraphQL) was just the symptom that exposed this. The correct fix is to remove author filtering and
-count every unresolved review thread on the PR.
+count every unresolved review thread on the PR. A second follow-up was needed after review pointed out that the
+workflow's inline GraphQL query also disagreed with `review_threads.py` on outdated threads and silently capped itself
+at 100 threads. Moving the count into the shared helper, and adding thread pagination there, keeps the automation
+consistent.
 
 ### 2026-03-29: Fix conda environment solve failure — downgrade openjdk 25 to 24
 

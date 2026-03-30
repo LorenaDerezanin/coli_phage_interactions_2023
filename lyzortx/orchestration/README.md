@@ -91,8 +91,9 @@ stateDiagram-v2
   workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
 - `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
-- `review_threads.py` — fetches unresolved PR review threads via GraphQL and formats them into a Codex feedback prompt.
-  Includes a signing instruction so Codex identifies itself in every reply ("Posted by Codex \<model\>").
+- `review_threads.py` — fetches unresolved PR review threads via GitHub GraphQL, paginates across thread pages, filters
+  to unresolved non-outdated threads, and formats them into a Codex feedback prompt. Includes a signing instruction so
+  Codex identifies itself in every reply ("Posted by Codex \<model\>").
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
 - `ci_token_usage.py` — CLI for token/cost analysis across all LLM-invoking workflows (Codex + Claude).
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.
@@ -177,9 +178,9 @@ Claude reads `AGENTS.md` review guidelines, submits formal `APPROVE` or `COMMENT
 the sole judge of thread resolution (can resolve/unresolve threads via GraphQL mutations). Requires the
 `ANTHROPIC_API_KEY` repository secret. The workflow explicitly allows the repo's `czarphage` GitHub App bot to trigger
 re-reviews after Codex pushes, which would otherwise be blocked by `claude-code-action`'s default "no bots" policy.
-After reviewing, it auto-merges only when Claude's latest review is `APPROVED` and the PR has zero unresolved review
-threads. If Claude leaves a `COMMENTED` review or any unresolved review threads remain, it dispatches
-`codex-pr-lifecycle.yml`.
+After reviewing, it auto-merges only when Claude's latest review is `APPROVED` and the shared
+`lyzortx.orchestration.review_threads` helper reports zero unresolved review threads. If Claude leaves a `COMMENTED`
+review or any unresolved review threads remain, it dispatches `codex-pr-lifecycle.yml`.
 
 ### codex-pr-lifecycle.yml
 

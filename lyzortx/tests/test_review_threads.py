@@ -1,7 +1,12 @@
 """Tests for review_threads."""
 
+import json
+from types import SimpleNamespace
+
 from lyzortx.orchestration.review_threads import (
+    extract_page_info,
     extract_threads,
+    fetch_threads,
     filter_unresolved,
     format_prompt,
     format_thread,
@@ -41,6 +46,28 @@ def test_extract_threads() -> None:
 
 def test_extract_threads_empty_response() -> None:
     assert extract_threads({}) == []
+
+
+def test_extract_page_info() -> None:
+    response = {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "pageInfo": {
+                            "hasNextPage": True,
+                            "endCursor": "CURSOR_1",
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert extract_page_info(response) == {"hasNextPage": True, "endCursor": "CURSOR_1"}
+
+
+def test_extract_page_info_empty_response() -> None:
+    assert extract_page_info({}) == {}
 
 
 def test_filter_unresolved_keeps_active() -> None:
@@ -105,3 +132,53 @@ def test_format_prompt_empty() -> None:
     prompt = format_prompt(1, [])
     assert "PR #1" in prompt
     assert "Address every unresolved thread" in prompt
+
+
+def test_fetch_threads_paginates(monkeypatch) -> None:
+    first_page = {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [_thread(id="page1")],
+                        "pageInfo": {
+                            "hasNextPage": True,
+                            "endCursor": "CURSOR_1",
+                        },
+                    }
+                }
+            }
+        }
+    }
+    second_page = {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [_thread(id="page2")],
+                        "pageInfo": {
+                            "hasNextPage": False,
+                            "endCursor": None,
+                        },
+                    }
+                }
+            }
+        }
+    }
+    responses = iter([first_page, second_page])
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], capture_output: bool, text: bool, check: bool) -> SimpleNamespace:
+        assert capture_output is True
+        assert text is True
+        assert check is True
+        commands.append(command)
+        return SimpleNamespace(stdout=json.dumps(next(responses)))
+
+    monkeypatch.setattr("lyzortx.orchestration.review_threads.subprocess.run", fake_run)
+
+    result = fetch_threads("owner", "repo", 42)
+
+    assert [thread["id"] for thread in extract_threads(result)] == ["page1", "page2"]
+    assert not any(part == "cursor=CURSOR_1" for part in commands[0])
+    assert any(part == "cursor=CURSOR_1" for part in commands[1])
