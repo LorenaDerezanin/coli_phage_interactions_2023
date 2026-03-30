@@ -23,11 +23,14 @@ jobs:
       || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
-    env:
-      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
-
     steps:
+      - name: Generate Czarphage token
+        id: czarphage
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CZARPHAGE_APP_ID }}
+          private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+
       - name: Resolve issue number
         id: issue
         run: |
@@ -40,7 +43,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.ORCHESTRATOR_PAT }}
+          token: ${{ steps.czarphage.outputs.token }}
           fetch-depth: 0
 
       - name: Create phage_env with conda
@@ -57,6 +60,8 @@ jobs:
 
       - name: Extract model from issue
         id: model
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           gh issue view "$ISSUE_NUM" --json body --jq '.body' > /tmp/issue_body.txt
@@ -69,6 +74,8 @@ jobs:
           echo "Using model: ${MODEL}"
 
       - name: Build prompt
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           {
@@ -94,7 +101,7 @@ jobs:
             echo "When posting any GitHub comment (issue comments, PR comments, review replies),"
             echo "end every comment with a signature line: 'Posted by Codex <model>'"
             echo "where <model> is the model you are running as (e.g., gpt-5.4)."
-            echo "This is required because you are posting via a shared PAT, not a bot account."
+            echo "This is required for transparency about which agent produced the comment."
           } > /tmp/codex_prompt.txt
 
       - name: Install pre-commit hooks
@@ -104,8 +111,8 @@ jobs:
 
       - name: Configure git identity for Codex agent
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "czarphage[bot]"
+          git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
 
       # Workaround for https://github.com/openai/codex/issues/12572
       # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
@@ -115,6 +122,8 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Implement task with Codex
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -123,6 +132,8 @@ jobs:
           prompt-file: /tmp/codex_prompt.txt
 
       - name: Verify Codex created a PR
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           ISSUE_NUM="${{ steps.issue.outputs.number }}"
           # Use Python instead of gh pr list --search to avoid GitHub search index lag.

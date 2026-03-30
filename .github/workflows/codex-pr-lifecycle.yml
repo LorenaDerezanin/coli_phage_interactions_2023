@@ -2,9 +2,9 @@ name: Codex PR Lifecycle
 
 # Triggered exclusively by workflow_dispatch — either from the Claude PR
 # Review workflow (after it posts a COMMENTED review) or manually.
-# This eliminates the self-trigger loop where Codex thread replies (posted
-# via ORCHESTRATOR_PAT as the repo owner) fired pull_request_review events
-# that cancelled the in-progress Codex run via the concurrency group.
+# This eliminates the self-trigger loop where Codex thread replies fired
+# pull_request_review events that cancelled the in-progress Codex run via
+# the concurrency group.
 on:
   workflow_dispatch:
     inputs:
@@ -31,13 +31,18 @@ jobs:
     name: Address Review Feedback
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
-    env:
-      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
-
     steps:
+      - name: Generate Czarphage token
+        id: czarphage
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CZARPHAGE_APP_ID }}
+          private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+
       - name: Resolve PR number and branch
         id: pr
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ inputs.pr_number }}"
           echo "number=${PR_NUM}" >> "$GITHUB_OUTPUT"
@@ -49,7 +54,7 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.branch }}
           fetch-depth: 0
-          token: ${{ secrets.ORCHESTRATOR_PAT }}
+          token: ${{ steps.czarphage.outputs.token }}
 
       - name: Create phage_env with conda
         shell: bash
@@ -65,6 +70,8 @@ jobs:
 
       - name: Check for unresolved review threads
         id: comments
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
@@ -75,6 +82,8 @@ jobs:
 
       - name: No feedback — label as clean
         if: steps.comments.outputs.has_feedback == 'false'
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
@@ -84,6 +93,8 @@ jobs:
       - name: Check review round cap
         if: steps.comments.outputs.has_feedback == 'true'
         id: round
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           ROUND=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
@@ -98,6 +109,8 @@ jobs:
 
       - name: Collect unresolved review feedback
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
@@ -113,8 +126,8 @@ jobs:
       - name: Configure git identity for Codex agent
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "czarphage[bot]"
+          git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
 
       - name: Install pre-commit hooks
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
@@ -133,6 +146,8 @@ jobs:
       - name: Extract model from linked issue
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         id: model
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           BODY=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json body --jq '.body')
@@ -152,6 +167,8 @@ jobs:
 
       - name: Fix with Codex
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -165,6 +182,8 @@ jobs:
 
       - name: Bump review round
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))

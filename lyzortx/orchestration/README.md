@@ -167,9 +167,9 @@ the sole judge of thread resolution (can resolve/unresolve threads via GraphQL m
 
 - `workflow_dispatch`: triggered by `claude-pr-review.yml` after a COMMENTED review, or manually with a PR number.
 
-The `workflow_dispatch`-only trigger prevents a self-cancellation loop: when Codex replies to review threads using the
-`ORCHESTRATOR_PAT`, GitHub emits `pull_request_review` events as the PAT owner. Previously these events re-triggered the
-lifecycle workflow and cancelled the in-progress Codex run via the concurrency group.
+The `workflow_dispatch`-only trigger prevents a self-cancellation loop: when Codex replies to review threads, GitHub
+emits `pull_request_review` events. Previously these events re-triggered the lifecycle workflow and cancelled the
+in-progress Codex run via the concurrency group.
 
 The `address-feedback` job runs the Codex fix loop. A concurrency group ensures only one lifecycle run per PR at a time,
 preventing race conditions on the review round cap.
