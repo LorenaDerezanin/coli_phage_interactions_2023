@@ -43,17 +43,23 @@ jobs:
     if: ${{ github.event_name != 'issues' || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # PAT required: github.token can't trigger other workflows (GitHub anti-recursion).
+    # App token required: github.token can't trigger other workflows (GitHub anti-recursion).
     # Both gh CLI and Python orchestrator read GITHUB_TOKEN.
     env:
-      GITHUB_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
       GITHUB_REPOSITORY: ${{ github.repository }}
 
     steps:
+      - name: Generate Czarphage token
+        id: czarphage
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CZARPHAGE_APP_ID }}
+          private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.ORCHESTRATOR_PAT }}
+          token: ${{ steps.czarphage.outputs.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -102,6 +108,8 @@ jobs:
           PY
 
       - name: Run orchestrator command
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -119,6 +127,8 @@ jobs:
           python -m lyzortx.orchestration.orchestrator "${args[@]}"
 
       - name: Emit current status
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           python -m lyzortx.orchestration.orchestrator \
             --command status \
@@ -129,8 +139,8 @@ jobs:
       # Plan updates must land on main for the orchestrator to stay in sync.
       - name: Commit plan updates
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "czarphage[bot]"
+          git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
           git add lyzortx/orchestration/plan.yml lyzortx/research_notes/PLAN.md
           if ! git diff --cached --quiet; then
             git commit -m "Update plan: mark completed task"

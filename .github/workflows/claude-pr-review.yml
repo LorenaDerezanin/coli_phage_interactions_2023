@@ -98,10 +98,18 @@ jobs:
 
       # After Claude reviews, check the outcome and trigger downstream actions.
       # Auto-merge on approval; dispatch Codex lifecycle on commented reviews.
+      - name: Generate Czarphage token
+        if: steps.check.outputs.skip != 'true'
+        id: czarphage
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CZARPHAGE_APP_ID }}
+          private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+
       - name: Check review outcome and dispatch
         if: steps.check.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+          GH_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ github.event.pull_request.number }}"
           LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \

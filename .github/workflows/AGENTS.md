@@ -11,8 +11,8 @@
 - `codex-pr-lifecycle.yml` is triggered exclusively via `workflow_dispatch` (from `claude-pr-review.yml` or manually).
   It runs the Codex fix loop for unresolved review threads. The 3-round cap (`codex-review-round-N` labels) prevents
   infinite loops. A concurrency group ensures only one lifecycle run per PR at a time. The `workflow_dispatch`-only
-  trigger prevents a self-cancellation loop where Codex thread replies (posted via ORCHESTRATOR_PAT) would fire
-  `pull_request_review` events that cancel the in-progress run.
+  trigger prevents a self-cancellation loop where Codex thread replies would fire `pull_request_review` events that
+  cancel the in-progress run.
 
 # Concurrency and Thread Safety
 
