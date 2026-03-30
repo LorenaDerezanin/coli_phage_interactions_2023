@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_l.steps import (
+    build_generalized_inference_bundle,
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
     parse_annotations,
@@ -53,7 +54,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["annotate", "parse", "enrich", "rbp-features", "defense-features", "retrain-mechanistic-v1", "all"],
+        choices=[
+            "annotate",
+            "parse",
+            "enrich",
+            "rbp-features",
+            "defense-features",
+            "retrain-mechanistic-v1",
+            "generalized-inference-bundle",
+            "all",
+        ],
         default="all",
         help=(
             "Track L step to run. "
@@ -63,6 +73,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'rbp-features' runs TL03 mechanistic RBP-receptor feature construction. "
             "'defense-features' runs TL04 mechanistic defense-evasion feature construction. "
             "'retrain-mechanistic-v1' runs TL05 model retraining, lift measurement, and SHAP summary. "
+            "'generalized-inference-bundle' builds the TL08 genome-only LightGBM + isotonic inference artifact. "
             "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
@@ -129,6 +140,8 @@ def main(argv: list[str] | None = None) -> None:
         build_mechanistic_defense_evasion_features.main([])
     if args.step == "retrain-mechanistic-v1":
         retrain_mechanistic_v1_model.main([])
+    if args.step == "generalized-inference-bundle":
+        build_generalized_inference_bundle.main([])
 
 
 if __name__ == "__main__":

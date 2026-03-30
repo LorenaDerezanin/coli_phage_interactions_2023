@@ -493,3 +493,61 @@ fresh CI checkouts because generated artifacts are gitignored. A live smoke test
   generated artifacts are regenerated explicitly rather than silently treated as empty data.
 - The MG1655 smoke test confirms the workflow is biologically nontrivial on a real E. coli genome and that the output
   width matches the training schema exactly.
+
+### 2026-03-30: TL08 Generalized inference bundle for arbitrary genomes
+
+#### Executive summary
+
+Built a deployable genome-only inference path for Track L. The new bundle builder trains a LightGBM model on the
+canonical panel labels using only features that are available for arbitrary genomes at prediction time: host defense
+subtypes from TL07 and phage tetranucleotide embedding features from TL06. It saves a self-contained bundle containing
+the fitted estimator, `DictVectorizer`, isotonic calibrator, copied TD02 SVD artifact, copied defense mask, and a
+reference panel-prediction CSV. The new `infer(host_genome_path, phage_fna_paths, model_path)` function runs TL07 for
+the host, projects each phage FNA through the saved SVD, scores the host × phage cross-product, applies isotonic
+calibration, and returns a ranked DataFrame with columns `phage`, `p_lysis`, and `rank`.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_l/steps/build_generalized_inference_bundle.py`.
+  - Rebuilds missing ST0.2 / ST0.3 / TD02 / TG01 defaults when invoked through the Track L runner.
+  - Trains a genome-only LightGBM bundle using the locked TG01 hyperparameters and ST0.3 weighting/split contract.
+  - Fits isotonic calibration on the designated non-holdout calibration fold.
+  - Copies the phage SVD and defense mask next to the saved model so inference does not depend on generated panel
+    directories elsewhere in the repo.
+  - Writes `tl08_locked_panel_predictions.csv` for regression testing and auditability.
+- Added `lyzortx/pipeline/track_l/steps/generalized_inference.py`.
+  - Exposes `infer(host_genome_path, phage_fna_paths, model_path)`.
+  - Calls the TL07 host runner, projects phage genomes with TL06, vectorizes the feature rows with the saved
+    `DictVectorizer`, scores with the saved LightGBM model, calibrates with the saved isotonic regressor, and ranks by
+    calibrated probability.
+- Updated `lyzortx/pipeline/track_l/run_track_l.py` with a `generalized-inference-bundle` step.
+- Added `lyzortx/tests/test_track_l_generalized_inference.py`.
+  - Covers the row-merging contract for the training table.
+  - Builds a real panel-derived bundle in a temp directory and verifies `infer(...)` reproduces the saved per-phage
+    calibrated predictions for panel host `001-023` when given the same phage genomes.
+
+#### Design decision
+
+- The current locked v1 panel model includes feature blocks that are not available for arbitrary genomes on a fresh
+  host/phage pair. TL08 therefore locks a separate genome-only deployment bundle rather than pretending the full
+  panel-only metadata stack can be generalized. Training still uses the canonical panel labels, splits, and weights, but
+  the saved inference artifact itself depends only on genome-derivable inputs.
+
+#### Test notes
+
+- The phage side of the integration test is fully real: it uses the committed panel FNA files and the saved TD02 SVD
+  projection path.
+- The host side stubs the TL07 external-tool boundary in the regression test because this repository does not ship the
+  underlying panel host FASTA assemblies. The stub writes the exact projected defense-feature row for panel host
+  `001-023`, which is sufficient to verify that TL08 reproduces the locked calibrated panel predictions once the host
+  features are available.
+
+#### Interpretation
+
+- TL08 now provides the missing deployment contract for Track L: a single saved bundle plus raw genomes are enough to
+  score arbitrary host-phage combinations with the model's calibrated ranking surface.
+- Saving bundle-local copies of the SVD and defense mask eliminates hidden dependencies on gitignored generated outputs,
+  which was the main operational blocker for fresh-clone inference.
+- The integration test is honest about the repo's current data gap. We can verify the full inference math against panel
+  predictions now, but a true end-to-end host-genome regression on a panel strain will require committing or
+  regenerating local host assemblies in a follow-up task.
