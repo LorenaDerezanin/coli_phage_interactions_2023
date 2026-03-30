@@ -4,6 +4,9 @@ from lyzortx.pipeline.track_l import run_track_l
 def _stub_all_steps(monkeypatch, calls):
     """Replace every step's module main() with a recorder."""
     monkeypatch.setattr(run_track_l.run_pharokka, "main", lambda argv: calls.append("annotate"))
+    monkeypatch.setattr(
+        run_track_l, "cache_key_tsvs", lambda annotations_dir, cached_dir: calls.append("cache-key-tsvs")
+    )
     monkeypatch.setattr(run_track_l.parse_annotations, "main", lambda argv: calls.append("parse"))
     monkeypatch.setattr(run_track_l.run_enrichment_analysis, "main", lambda argv: calls.append("enrich"))
     monkeypatch.setattr(
@@ -55,6 +58,7 @@ def test_all_runs_every_step_in_order(monkeypatch) -> None:
     run_track_l.main(["--step", "all", "--database-dir", "/fake/db"])
     assert calls == [
         "annotate",
+        "cache-key-tsvs",
         "parse",
         "enrich",
         "rbp-features",

@@ -3,7 +3,7 @@
 
 Loads pharokka RBP and anti-defense annotations, host OMP receptor clusters,
 LPS core types, and defense system subtypes, then runs three enrichment
-analyses using the full interaction matrix:
+analyses using the ST0.3 non-holdout interaction matrix:
 
 1. RBP PHROG IDs x OMP receptor variant clusters
 2. RBP PHROG IDs x LPS core type
@@ -28,6 +28,7 @@ if __package__ in {None, ""}:
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
 from lyzortx.pipeline.track_l.steps.annotation_interaction_enrichment import (
     ENRICHMENT_CSV_FIELDNAMES,
     compute_enrichment,
@@ -39,11 +40,13 @@ logger = logging.getLogger(__name__)
 # Data paths
 CACHED_ANNOTATIONS_DIR = Path("data/annotations/pharokka")
 LABEL_SET_V1_PATH = Path("lyzortx/generated_outputs/track_a/labels/label_set_v1_pairs.csv")
+ST03_SPLIT_ASSIGNMENTS_PATH = Path("lyzortx/generated_outputs/steel_thread_v0/intermediate/st03_split_assignments.csv")
 OMP_CLUSTERS_PATH = Path("data/genomics/bacteria/outer_membrane_proteins/blast_results_cured_clusters=99_wide.tsv")
 LPS_PRIMARY_PATH = Path("data/genomics/bacteria/outer_core_lps/LPS_type_waaL_370.txt")
 LPS_SUPPLEMENTAL_PATH = Path("data/genomics/bacteria/outer_core_lps/LPS_type_waaL_host.txt")
 DEFENSE_SUBTYPES_PATH = Path("data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv")
 OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/enrichment")
+ST03_REQUIRED_COLUMNS: tuple[str, ...] = ("bacteria", "split_holdout")
 
 # Receptor columns in OMP data
 RECEPTOR_COLUMNS = (
@@ -159,6 +162,23 @@ def load_pharokka_phrog_matrices(
                 anti_def_matrix[pidx, anti_def_phrog_to_idx[p]] = 1
 
     return rbp_matrix, rbp_phrog_names, anti_def_matrix, anti_def_phrog_names
+
+
+def load_holdout_bacteria(st03_split_assignments_path: Path) -> set[str]:
+    """Load bacteria IDs assigned to the ST0.3 holdout split."""
+    rows = read_csv_rows(st03_split_assignments_path, required_columns=ST03_REQUIRED_COLUMNS)
+    holdout_bacteria = {row["bacteria"] for row in rows if row["split_holdout"] == "holdout_test"}
+    if not holdout_bacteria:
+        raise ValueError(f"No holdout bacteria found in {st03_split_assignments_path}")
+    return holdout_bacteria
+
+
+def select_non_holdout_bacteria(bacteria: Sequence[str], holdout_bacteria: set[str]) -> list[str]:
+    """Return bacteria IDs that are not in the holdout split."""
+    selected = [bacteria_id for bacteria_id in bacteria if bacteria_id not in holdout_bacteria]
+    if not selected:
+        raise ValueError("No non-holdout bacteria remain after filtering ST0.3 holdout strains.")
+    return selected
 
 
 def load_interaction_matrix(
@@ -392,6 +412,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--cached-annotations-dir", type=Path, default=CACHED_ANNOTATIONS_DIR)
     parser.add_argument("--label-path", type=Path, default=LABEL_SET_V1_PATH)
+    parser.add_argument("--st03-split-assignments-path", type=Path, default=ST03_SPLIT_ASSIGNMENTS_PATH)
     parser.add_argument("--omp-path", type=Path, default=OMP_CLUSTERS_PATH)
     parser.add_argument("--lps-primary-path", type=Path, default=LPS_PRIMARY_PATH)
     parser.add_argument("--lps-supplemental-path", type=Path, default=LPS_SUPPLEMENTAL_PATH)
@@ -399,7 +420,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, holdout_bacteria: Sequence[str] | None = None) -> int:
     setup_logging()
     args = parse_args(argv)
 
@@ -407,17 +428,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.info("TL02 enrichment analysis starting at %s", start_time.isoformat(timespec="seconds"))
 
     # Determine shared bacteria and phage lists from the interaction matrix
-    bacteria_set: set[str] = set()
-    phage_set: set[str] = set()
-    with args.label_path.open(encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        for row in reader:
-            bacteria_set.add(row["bacteria"])
-            phage_set.add(row["phage"])
+    label_rows = read_csv_rows(args.label_path, required_columns=("bacteria", "phage"))
+    if not label_rows:
+        raise ValueError(f"No rows found in {args.label_path}")
 
-    bacteria = sorted(bacteria_set)
-    phages = sorted(phage_set)
-    logger.info("Interaction panel: %d bacteria, %d phages", len(bacteria), len(phages))
+    bacteria = sorted({row["bacteria"] for row in label_rows})
+    phages = sorted({row["phage"] for row in label_rows})
+    logger.info("Interaction panel before holdout exclusion: %d bacteria, %d phages", len(bacteria), len(phages))
+
+    holdout_bacteria_set = (
+        set(holdout_bacteria)
+        if holdout_bacteria is not None
+        else load_holdout_bacteria(args.st03_split_assignments_path)
+    )
+    missing_holdout_bacteria = holdout_bacteria_set - set(bacteria)
+    if missing_holdout_bacteria:
+        raise ValueError("Holdout bacteria missing from label table: " + ", ".join(sorted(missing_holdout_bacteria)))
+    bacteria = select_non_holdout_bacteria(bacteria, holdout_bacteria_set)
+    logger.info(
+        "Excluded %d ST0.3 holdout bacteria; %d bacteria remain for enrichment",
+        len(holdout_bacteria_set),
+        len(bacteria),
+    )
 
     # Load interaction matrix and resolved-pair mask
     interaction_matrix, resolved_mask = load_interaction_matrix(args.label_path, bacteria, phages)

@@ -119,19 +119,24 @@ class TestComputeEnrichment:
         assert r.a_lysis_both > 0
         assert r.p_value < 0.10  # real signal should be detectable
 
-    def test_random_features_not_significant(self) -> None:
-        """Random binary features should not show enrichment on real data."""
+    def test_random_binary_features_have_low_false_positive_rate(self) -> None:
+        """Random binary features should stay near the nominal 5% error rate."""
         interaction = REAL_INTERACTION_SLICE
         n_hosts, n_phages = interaction.shape
         rng = np.random.RandomState(42)
-        phage_matrix = rng.randint(0, 2, size=(n_phages, 1)).astype(np.int8)
-        host_matrix = rng.randint(0, 2, size=(n_hosts, 1)).astype(np.int8)
+        phage_matrix = rng.randint(0, 2, size=(n_phages, 8)).astype(np.int8)
+        host_matrix = rng.randint(0, 2, size=(n_hosts, 8)).astype(np.int8)
 
         results = compute_enrichment(
-            phage_matrix, host_matrix, interaction, ["pf"], ["hf"], n_permutations=TEST_N_PERMS
+            phage_matrix,
+            host_matrix,
+            interaction,
+            [f"pf{i}" for i in range(phage_matrix.shape[1])],
+            [f"hf{i}" for i in range(host_matrix.shape[1])],
+            n_permutations=100,
         )
-        assert len(results) == 1
-        assert results[0].p_value > 0.01
+        false_positive_rate = sum(r.bh_p_value < 0.05 for r in results) / len(results)
+        assert false_positive_rate < 0.10
 
     def test_multiple_features(self) -> None:
         """Test with multiple phage and host features on real data."""

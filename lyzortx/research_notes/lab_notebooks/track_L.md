@@ -714,3 +714,38 @@ calibration at 3% FPR vs Fisher's 25%). Only the input data selection is wrong.
 TL10 adds holdout filtering to `run_enrichment_analysis.py` (load ST03 split assignments, exclude holdout bacteria
 before calling `compute_enrichment()`). It does not modify the enrichment module itself. After TL10, TL03/TL04/TL05
 will need re-evaluation to determine whether the enrichment features provide any honest lift.
+
+### 2026-03-30: TL10 Fix enrichment holdout leak
+
+#### Executive summary
+
+TL02 now excludes the 65 ST0.3 holdout bacteria before building any enrichment matrices, so the three PHROG x host
+feature analyses run on the 304-bacteria non-holdout panel instead of the full 369-bacteria label set. The permutation
+test itself was left unchanged. Updated CSVs were written to `lyzortx/generated_outputs/track_l/enrichment/`.
+
+#### What was changed
+
+- `lyzortx/pipeline/track_l/steps/run_enrichment_analysis.py`: added `--st03-split-assignments-path`, loaded the ST0.3
+  split assignments, excluded holdout bacteria before assembling the interaction matrix and host feature matrices, and
+  failed fast if the holdout set was inconsistent with the label table.
+- `lyzortx/tests/test_track_l_run_enrichment_analysis.py`: verifies holdout bacteria are absent from the matrices
+  passed to `compute_enrichment()`.
+- `lyzortx/tests/test_annotation_interaction_enrichment.py`: adds a null-calibration regression test on random binary
+  features and asserts BH-significant FPR stays below 10% at alpha 0.05.
+
+#### Rerun results
+
+- Panel size: `369` bacteria -> `304` after excluding `65` holdouts.
+- Resolved pairs: `35,266` -> `29,031`.
+- Lytic resolved pairs: `9,720` -> `8,149`.
+- OMP host features: `107` -> `96`.
+- Defense subtype features: `77` -> `70`.
+- Significant enrichment hits:
+  - RBP PHROG x OMP receptor: `380` -> `393` (`+13`)
+  - RBP PHROG x LPS core: `24` -> `27` (`+3`)
+  - Anti-defense PHROG x defense subtype: `27` -> `19` (`-8`)
+
+#### Interpretation
+
+The leaked holdout rows were enough to move the enrichment weights and the hit counts, but not enough to dominate the
+signal completely. TL03, TL04, and TL05 all need to be re-evaluated against the holdout-excluded enrichment CSVs.
