@@ -143,6 +143,11 @@ jobs:
               | select(.isResolved == false)
               | select(any(.comments.nodes[]?; .author.login == "claude[bot]"))
             ] | length')
+          CLAUDE_UNRESOLVED_THREADS=${CLAUDE_UNRESOLVED_THREADS:-}
+          if ! [[ "$CLAUDE_UNRESOLVED_THREADS" =~ ^[0-9]+$ ]]; then
+            echo "::error::Failed to fetch unresolved Claude thread count: '${CLAUDE_UNRESOLVED_THREADS}'"
+            exit 1
+          fi
 
           if [ "$LATEST_REVIEW" = "APPROVED" ] && [ "$CLAUDE_UNRESOLVED_THREADS" -eq 0 ]; then
             echo "Claude approved with zero unresolved comment threads — enabling auto-merge."
