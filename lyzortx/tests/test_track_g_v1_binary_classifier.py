@@ -4,6 +4,7 @@ import sys
 import types
 
 import numpy as np
+import pytest
 
 from lyzortx.pipeline.track_g import run_track_g
 from lyzortx.pipeline.track_g.steps import calibrate_gbm_outputs
@@ -119,6 +120,34 @@ def test_merge_expanded_feature_rows_can_zero_fill_missing_pair_features() -> No
     )
 
     assert merged[1]["lookup_available"] == 0.0
+
+
+def test_merge_expanded_feature_rows_still_raises_on_non_holdout_miss_with_zero_fill_enabled() -> None:
+    with pytest.raises(KeyError, match="Missing pair-level feature row for pair_id B1__P1"):
+        merge_expanded_feature_rows(
+            track_c_pair_rows=[
+                {
+                    "pair_id": "B1__P1",
+                    "bacteria": "B1",
+                    "phage": "P1",
+                    "label_hard_any_lysis": "1",
+                }
+            ],
+            split_rows=[
+                {
+                    "pair_id": "B1__P1",
+                    "bacteria": "B1",
+                    "phage": "P1",
+                    "cv_group": "G1",
+                    "split_holdout": "train_non_holdout",
+                    "split_cv5_fold": "0",
+                    "is_hard_trainable": "1",
+                }
+            ],
+            phage_feature_blocks=[[{"phage": "P1", "phage_gc_content": "0.5"}]],
+            pair_feature_blocks=[[{"pair_id": "B2__P1", "bacteria": "B2", "phage": "P1", "lookup_available": "1"}]],
+            allow_missing_pair_features=True,
+        )
 
 
 def test_build_feature_space_keeps_v0_columns_and_adds_track_specific_blocks() -> None:

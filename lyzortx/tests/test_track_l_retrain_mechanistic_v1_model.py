@@ -133,6 +133,7 @@ def test_bootstrap_holdout_metric_cis_reports_arm_and_delta_intervals() -> None:
         },
         bootstrap_samples=32,
         bootstrap_random_state=7,
+        baseline_arm_id=tl05.LOCKED_BASELINE_ARM_ID,
     )
 
     assert bootstrap_summary["locked_baseline_defense_phage_genomic"]["holdout_roc_auc"].bootstrap_samples_used == 32
@@ -145,6 +146,57 @@ def test_bootstrap_holdout_metric_cis_reports_arm_and_delta_intervals() -> None:
     )
 
 
+def test_ensure_default_tl11_bundle_rebuilds_stale_default_manifest(tmp_path: Path) -> None:
+    feature_path = tmp_path / "tl03.csv"
+    manifest_path = tmp_path / "tl03_manifest.json"
+    split_path = tmp_path / "st03.csv"
+    feature_path.write_text("pair_id,bacteria,phage,tl03_signal\nB1__P1,B1,P1,1.0\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps({"task_id": "TL03"}), encoding="utf-8")
+    split_path.write_text(
+        "pair_id,bacteria,split_holdout,split_cv5_fold\nB1__P1,B1,holdout_test,-1\n",
+        encoding="utf-8",
+    )
+
+    rebuild_calls: list[list[str]] = []
+
+    def fake_rebuild(argv):
+        rebuild_calls.append(list(argv))
+        feature_path.write_text("pair_id,bacteria,phage,tl03_signal\nB1__P1,B1,P1,1.0\n", encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "task_id": "TL03",
+                    "provenance": {
+                        "split_assignments": {"path": str(split_path)},
+                        "excluded_holdout_bacteria_ids": ["B1"],
+                    },
+                    "holdout_exclusion": {"excluded_pair_rows": 1},
+                    "outputs": {
+                        "feature_csv": str(feature_path),
+                        "feature_csv_sha256": tl05._sha256(feature_path),
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    tl05._ensure_default_tl11_bundle(
+        feature_path=feature_path,
+        manifest_path=manifest_path,
+        expected_task_id="TL03",
+        expected_split_assignments_path=split_path,
+        default_feature_path=feature_path,
+        default_manifest_path=manifest_path,
+        rebuild_fn=fake_rebuild,
+        bundle_label="TL03",
+    )
+
+    assert rebuild_calls == [[]]
+    provenance = tl05.load_tl11_feature_provenance(feature_path, manifest_path, "TL03", split_path)
+    assert provenance["excluded_pair_rows"] == 1
+    assert provenance["holdout_bacteria_ids"] == ["B1"]
+
+
 def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, monkeypatch) -> None:
     st03_path = tmp_path / "st03_split_assignments.csv"
     st02_path = tmp_path / "st02_pair_table.csv"
@@ -153,6 +205,8 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
     track_d_distance_path = tmp_path / "phage_distance_embedding_features.csv"
     tl03_path = tmp_path / "tl03.csv"
     tl04_path = tmp_path / "tl04.csv"
+    tl03_manifest_path = tmp_path / "tl03_manifest.json"
+    tl04_manifest_path = tmp_path / "tl04_manifest.json"
     tg01_summary_path = tmp_path / "tg01_model_summary.json"
     lock_path = tmp_path / "v1_feature_configuration.json"
     output_dir = tmp_path / "out"
@@ -201,6 +255,8 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
         "B2__P2,B2,P2,0,0.0\n",
         encoding="utf-8",
     )
+    tl03_manifest_path.write_text("{}", encoding="utf-8")
+    tl04_manifest_path.write_text("{}", encoding="utf-8")
     tg01_summary_path.write_text(
         json.dumps(
             {
@@ -345,17 +401,28 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
         "load_v1_lock",
         lambda path: {"winner_subset_blocks": ["defense", "phage_genomic"], "source_lock_task_id": "TG09"},
     )
-    monkeypatch.setattr(
-        tl05,
-        "load_tl11_feature_provenance",
-        lambda *args, **kwargs: {
-            "manifest_path": str(tmp_path / "fake_manifest.json"),
+    provenance_calls: list[tuple[Path, Path, str, Path]] = []
+
+    def fake_load_tl11_feature_provenance(
+        feature_path: Path,
+        manifest_path: Path,
+        expected_task_id: str,
+        expected_split_assignments_path: Path,
+    ) -> dict[str, object]:
+        provenance_calls.append((feature_path, manifest_path, expected_task_id, expected_split_assignments_path))
+        return {
+            "manifest_path": str(manifest_path),
             "manifest_sha256": "fake",
-            "feature_path": str(args[0]),
+            "feature_path": str(feature_path),
             "feature_sha256": "fake",
             "holdout_bacteria_ids": ["B2"],
             "excluded_pair_rows": 1,
-        },
+        }
+
+    monkeypatch.setattr(
+        tl05,
+        "load_tl11_feature_provenance",
+        fake_load_tl11_feature_provenance,
     )
     monkeypatch.setattr(tl05, "evaluate_arm", fake_evaluate_arm)
     fake_shap_module = types.SimpleNamespace(TreeExplainer=FakeExplainer)
@@ -377,6 +444,10 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
             str(tl03_path),
             "--tl04-feature-path",
             str(tl04_path),
+            "--tl03-manifest-path",
+            str(tl03_manifest_path),
+            "--tl04-manifest-path",
+            str(tl04_manifest_path),
             "--tg01-summary-path",
             str(tg01_summary_path),
             "--v1-lock-path",
@@ -398,3 +469,7 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
     assert (output_dir / "tl05_no_honest_lift_rejections.json").exists()
     assert "holdout_roc_auc_ci_low" in metrics_rows[0]
     assert shap_rows
+    assert provenance_calls == [
+        (tl03_path, tl03_manifest_path, "TL03", st03_path),
+        (tl04_path, tl04_manifest_path, "TL04", st03_path),
+    ]

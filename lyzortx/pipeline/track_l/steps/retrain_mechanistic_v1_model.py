@@ -4,16 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
-import hashlib
-import json
-import logging
-import sys
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from collections import defaultdict
+import hashlib
+import importlib.util
+import json
+import logging
 from pathlib import Path
-from collections.abc import Mapping, Sequence
+import sys
 from typing import Any, Optional
 
 import numpy as np
@@ -58,8 +58,10 @@ DEFAULT_TL04_MANIFEST_PATH = Path(
 )
 DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/mechanistic_v1_lift")
 DEFAULT_BOOTSTRAP_SAMPLES = 1000
+LOCKED_BASELINE_ARM_ID = "locked_baseline_defense_phage_genomic"
 PRIMARY_LOCK_METRIC = "holdout_roc_auc"
 SECONDARY_LOCK_METRICS = ("holdout_top3_hit_rate_all_strains", "holdout_brier_score")
+BOOTSTRAP_METRIC_NAMES = ("holdout_roc_auc", "holdout_top3_hit_rate_all_strains", "holdout_brier_score")
 
 
 @dataclass(frozen=True)
@@ -126,6 +128,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_TL04_OUTPUT_PATH,
         help="TL04 mechanistic defense-evasion feature CSV.",
+    )
+    parser.add_argument(
+        "--tl03-manifest-path",
+        type=Path,
+        default=DEFAULT_TL03_MANIFEST_PATH,
+        help="TL03 mechanistic RBP-receptor manifest JSON.",
+    )
+    parser.add_argument(
+        "--tl04-manifest-path",
+        type=Path,
+        default=DEFAULT_TL04_MANIFEST_PATH,
+        help="TL04 mechanistic defense-evasion manifest JSON.",
     )
     parser.add_argument(
         "--tg01-summary-path",
@@ -208,28 +222,6 @@ def ensure_default_tg01_summary(path: Path) -> None:
         raise FileNotFoundError(f"TG01 rebuild did not produce expected summary: {path}")
 
 
-def ensure_default_tl03_output(path: Path) -> None:
-    if path.exists():
-        return
-    if path != DEFAULT_TL03_OUTPUT_PATH:
-        raise FileNotFoundError(f"Missing TL03 feature input: {path}")
-    logger.info("TL03 outputs missing at %s; regenerating TL03", path)
-    build_mechanistic_rbp_receptor_features.main([])
-    if not path.exists():
-        raise FileNotFoundError(f"TL03 rebuild did not produce expected feature file: {path}")
-
-
-def ensure_default_tl04_output(path: Path) -> None:
-    if path.exists():
-        return
-    if path != DEFAULT_TL04_OUTPUT_PATH:
-        raise FileNotFoundError(f"Missing TL04 feature input: {path}")
-    logger.info("TL04 outputs missing at %s; regenerating TL04", path)
-    build_mechanistic_defense_evasion_features.main([])
-    if not path.exists():
-        raise FileNotFoundError(f"TL04 rebuild did not produce expected feature file: {path}")
-
-
 def _validate_tl11_manifest(
     *,
     feature_path: Path,
@@ -289,12 +281,73 @@ def _validate_tl11_manifest(
     }
 
 
+def _ensure_default_tl11_bundle(
+    *,
+    feature_path: Path,
+    manifest_path: Path,
+    expected_task_id: str,
+    expected_split_assignments_path: Path,
+    default_feature_path: Path,
+    default_manifest_path: Path,
+    rebuild_fn: Any,
+    bundle_label: str,
+) -> None:
+    should_rebuild = False
+    if not feature_path.exists() or not manifest_path.exists():
+        if feature_path != default_feature_path or manifest_path != default_manifest_path:
+            missing = feature_path if not feature_path.exists() else manifest_path
+            raise FileNotFoundError(f"Missing {bundle_label} artifact: {missing}")
+        should_rebuild = True
+    else:
+        try:
+            _validate_tl11_manifest(
+                feature_path=feature_path,
+                manifest_path=manifest_path,
+                expected_task_id=expected_task_id,
+                expected_split_assignments_path=expected_split_assignments_path,
+            )
+        except (FileNotFoundError, ValueError):
+            if feature_path != default_feature_path or manifest_path != default_manifest_path:
+                raise
+            should_rebuild = True
+
+    if not should_rebuild:
+        return
+
+    logger.info("%s artifacts missing or stale; regenerating %s", bundle_label, expected_task_id)
+    rebuild_fn([])
+    _validate_tl11_manifest(
+        feature_path=feature_path,
+        manifest_path=manifest_path,
+        expected_task_id=expected_task_id,
+        expected_split_assignments_path=expected_split_assignments_path,
+    )
+
+
 def ensure_prerequisite_outputs(args: argparse.Namespace) -> None:
     if args.skip_prerequisites:
         return
     ensure_default_tg01_summary(args.tg01_summary_path)
-    ensure_default_tl03_output(args.tl03_feature_path)
-    ensure_default_tl04_output(args.tl04_feature_path)
+    _ensure_default_tl11_bundle(
+        feature_path=args.tl03_feature_path,
+        manifest_path=args.tl03_manifest_path,
+        expected_task_id="TL03",
+        expected_split_assignments_path=args.st03_split_assignments_path,
+        default_feature_path=DEFAULT_TL03_OUTPUT_PATH,
+        default_manifest_path=DEFAULT_TL03_MANIFEST_PATH,
+        rebuild_fn=build_mechanistic_rbp_receptor_features.main,
+        bundle_label="TL03",
+    )
+    _ensure_default_tl11_bundle(
+        feature_path=args.tl04_feature_path,
+        manifest_path=args.tl04_manifest_path,
+        expected_task_id="TL04",
+        expected_split_assignments_path=args.st03_split_assignments_path,
+        default_feature_path=DEFAULT_TL04_OUTPUT_PATH,
+        default_manifest_path=DEFAULT_TL04_MANIFEST_PATH,
+        rebuild_fn=build_mechanistic_defense_evasion_features.main,
+        bundle_label="TL04",
+    )
 
 
 def load_tl11_feature_provenance(
@@ -356,7 +409,7 @@ def build_arm_specs(
     combined_numeric = _deduplicate([*baseline_numeric, *tl03_columns, *tl04_columns])
     return [
         ArmSpec(
-            arm_id="locked_baseline_defense_phage_genomic",
+            arm_id=LOCKED_BASELINE_ARM_ID,
             display_name="Locked defense + phage-genomic baseline",
             included_blocks=("defense", "phage_genomic"),
             tl03_columns=(),
@@ -470,8 +523,9 @@ def compute_fold_metrics(
     *,
     estimator_factory: Any,
     locked_params: Mapping[str, object],
-) -> list[dict[str, object]]:
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     fold_metrics: list[dict[str, object]] = []
+    cv_prediction_rows: list[dict[str, object]] = []
     for dataset in fold_datasets:
         estimator = estimator_factory(locked_params, dataset.fold_id)
         estimator.fit(dataset.X_train, dataset.y_train, sample_weight=dataset.sample_weights)
@@ -480,7 +534,9 @@ def compute_fold_metrics(
         for row, probability in zip(dataset.valid_rows, probabilities):
             scored = dict(row)
             scored["predicted_probability"] = probability
+            scored["prediction_context"] = "non_holdout_oof"
             scored_rows.append(scored)
+            cv_prediction_rows.append(scored)
 
         fold_metrics.append(
             {
@@ -493,7 +549,8 @@ def compute_fold_metrics(
                 ),
             }
         )
-    return fold_metrics
+    cv_prediction_rows.sort(key=lambda row: (str(row["bacteria"]), str(row["phage"])))
+    return fold_metrics, cv_prediction_rows
 
 
 def summarize_fold_metrics(fold_metrics: Sequence[Mapping[str, object]]) -> dict[str, Optional[float]]:
@@ -509,24 +566,19 @@ def evaluate_arm(
     locked_params: Mapping[str, object],
     estimator_factory: Any,
 ) -> dict[str, object]:
+    logger.info("TL05 evaluating arm %s", arm.arm_id)
     arm_feature_space = build_arm_feature_space(
         arm,
         defense_columns=defense_columns,
         track_d_columns=track_d_columns,
     )
     fold_datasets = train_v1_binary_classifier.prepare_fold_datasets(merged_rows, arm_feature_space)
-    fold_metrics = compute_fold_metrics(
+    fold_metrics, cv_prediction_rows = compute_fold_metrics(
         fold_datasets,
         estimator_factory=estimator_factory,
         locked_params=locked_params,
     )
     cv_summary = summarize_fold_metrics(fold_metrics)
-    cv_prediction_rows = train_v1_binary_classifier.score_rows_with_cv_predictions(
-        fold_datasets,
-        estimator_factory=estimator_factory,
-        best_params=locked_params,
-        probability_column="predicted_probability",
-    )
     estimator, vectorizer, _, holdout_rows, holdout_probabilities = train_v1_binary_classifier.fit_final_estimator(
         merged_rows,
         arm_feature_space,
@@ -557,6 +609,14 @@ def evaluate_arm(
         holdout_prediction_rows,
         probability_key="predicted_probability",
         model_label=arm.arm_id,
+    )
+
+    logger.info(
+        "TL05 arm %s complete: holdout ROC-AUC=%s top3=%s brier=%s",
+        arm.arm_id,
+        holdout_binary_metrics["roc_auc"],
+        holdout_top3_metrics["top3_hit_rate_all_strains"],
+        holdout_binary_metrics["brier_score"],
     )
 
     return {
@@ -659,26 +719,30 @@ def bootstrap_holdout_metric_cis(
     *,
     bootstrap_samples: int,
     bootstrap_random_state: int,
+    baseline_arm_id: str,
 ) -> dict[str, dict[str, BootstrapMetricCI]]:
     if bootstrap_samples < 1:
         raise ValueError("bootstrap_samples must be >= 1")
 
-    baseline_arm_id = "locked_baseline_defense_phage_genomic"
     if baseline_arm_id not in holdout_rows_by_arm:
         raise ValueError("Missing baseline arm for bootstrap evaluation.")
 
-    holdout_by_bacteria = defaultdict(list)
+    holdout_by_bacteria: dict[str, list[Mapping[str, object]]] = defaultdict(list)
     for row in holdout_rows_by_arm[baseline_arm_id]:
-        holdout_by_bacteria[str(row["bacteria"])].append(dict(row))
+        holdout_by_bacteria[str(row["bacteria"])].append(row)
 
-    bacteria_ids = sorted(holdout_by_bacteria.keys())
+    bacteria_ids = tuple(sorted(holdout_by_bacteria.keys()))
     if not bacteria_ids:
         raise ValueError("No holdout bacteria available for bootstrap evaluation.")
 
-    arm_bacteria_sets = {
-        arm_id: {bacteria: [dict(row) for row in rows if str(row["bacteria"]) == bacteria] for bacteria in bacteria_ids}
-        for arm_id, rows in holdout_rows_by_arm.items()
+    arm_bacteria_sets: dict[str, dict[str, list[Mapping[str, object]]]] = {
+        arm_id: {bacteria: [] for bacteria in bacteria_ids} for arm_id in holdout_rows_by_arm
     }
+    for arm_id, rows in holdout_rows_by_arm.items():
+        for row in rows:
+            bacteria = str(row["bacteria"])
+            if bacteria in arm_bacteria_sets[arm_id]:
+                arm_bacteria_sets[arm_id][bacteria].append(row)
     for arm_id, bacteria_map in arm_bacteria_sets.items():
         missing = [bacteria for bacteria in bacteria_ids if not bacteria_map.get(bacteria)]
         if missing:
@@ -686,26 +750,29 @@ def bootstrap_holdout_metric_cis(
 
     rng = np.random.default_rng(bootstrap_random_state)
     metric_samples: dict[str, dict[str, list[float]]] = {
-        arm_id: {"holdout_roc_auc": [], "holdout_top3_hit_rate_all_strains": [], "holdout_brier_score": []}
-        for arm_id in holdout_rows_by_arm
+        arm_id: {metric_name: [] for metric_name in BOOTSTRAP_METRIC_NAMES} for arm_id in holdout_rows_by_arm
     }
     delta_samples: dict[str, dict[str, list[float]]] = {
-        f"{arm_id}__delta_vs_{baseline_arm_id}": {
-            "holdout_roc_auc": [],
-            "holdout_top3_hit_rate_all_strains": [],
-            "holdout_brier_score": [],
-        }
+        f"{arm_id}__delta_vs_{baseline_arm_id}": {metric_name: [] for metric_name in BOOTSTRAP_METRIC_NAMES}
         for arm_id in holdout_rows_by_arm
         if arm_id != baseline_arm_id
     }
 
-    for _ in range(bootstrap_samples):
-        sampled_bacteria = rng.choice(bacteria_ids, size=len(bacteria_ids), replace=True)
-        sampled_rows_by_arm: dict[str, list[dict[str, object]]] = {}
+    bacteria_count = len(bacteria_ids)
+    progress_interval = max(1, bootstrap_samples // 5)
+    for sample_index in range(bootstrap_samples):
+        if sample_index == 0 or (sample_index + 1) % progress_interval == 0 or sample_index + 1 == bootstrap_samples:
+            logger.info(
+                "TL05 bootstrap progress: %d/%d paired holdout-strain resamples",
+                sample_index + 1,
+                bootstrap_samples,
+            )
+        sampled_bacteria_indices = rng.integers(0, bacteria_count, size=bacteria_count)
+        sampled_rows_by_arm: dict[str, list[Mapping[str, object]]] = {}
         for arm_id, bacteria_map in arm_bacteria_sets.items():
-            sampled_rows: list[dict[str, object]] = []
-            for bacteria in sampled_bacteria:
-                sampled_rows.extend(dict(row) for row in bacteria_map[bacteria])
+            sampled_rows: list[Mapping[str, object]] = []
+            for bacteria_index in sampled_bacteria_indices.tolist():
+                sampled_rows.extend(bacteria_map[bacteria_ids[bacteria_index]])
             sampled_rows_by_arm[arm_id] = sampled_rows
 
         metrics_by_arm = {arm_id: _evaluate_holdout_rows(rows) for arm_id, rows in sampled_rows_by_arm.items()}
@@ -740,9 +807,11 @@ def bootstrap_holdout_metric_cis(
         low, high = np.quantile(np.asarray(values, dtype=float), [0.025, 0.975])
         return safe_round(float(low)), safe_round(float(high)), len(values)
 
+    actual_metrics_by_arm = {arm_id: _evaluate_holdout_rows(rows) for arm_id, rows in holdout_rows_by_arm.items()}
+
     ci_summary: dict[str, dict[str, BootstrapMetricCI]] = {}
     for arm_id, samples in metric_samples.items():
-        actual_metrics = _evaluate_holdout_rows(holdout_rows_by_arm[arm_id])
+        actual_metrics = actual_metrics_by_arm[arm_id]
         ci_summary[arm_id] = {}
         for metric_name, sample_values in samples.items():
             ci_low, ci_high, used = _ci(sample_values)
@@ -850,6 +919,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     tg01_lock = load_tg01_lock(args.tg01_summary_path)
     current_v1_lock = load_v1_lock(args.v1_lock_path)
 
+    logger.info("TL05 loading input tables")
     split_rows = read_csv_rows(args.st03_split_assignments_path)
     track_c_pair_rows, track_c_columns = _load_rows_and_columns(args.track_c_pair_table_path)
     track_d_genome_rows, track_d_genome_columns = _load_rows_and_columns(args.track_d_genome_kmer_path)
@@ -858,13 +928,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     tl04_rows, tl04_columns = _load_rows_and_columns(args.tl04_feature_path)
     tl03_provenance = load_tl11_feature_provenance(
         args.tl03_feature_path,
-        DEFAULT_TL03_MANIFEST_PATH,
+        args.tl03_manifest_path,
         "TL03",
         args.st03_split_assignments_path,
     )
     tl04_provenance = load_tl11_feature_provenance(
         args.tl04_feature_path,
-        DEFAULT_TL04_MANIFEST_PATH,
+        args.tl04_manifest_path,
         "TL04",
         args.st03_split_assignments_path,
     )
@@ -877,6 +947,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     tl03_feature_columns = _deduplicate([column for column in tl03_columns if column not in IDENTIFIER_COLUMNS])
     tl04_feature_columns = _deduplicate([column for column in tl04_columns if column not in IDENTIFIER_COLUMNS])
 
+    logger.info("TL05 merging feature blocks onto %d Track C rows", len(track_c_pair_rows))
     merged_rows = train_v1_binary_classifier.merge_expanded_feature_rows(
         track_c_pair_rows,
         split_rows,
@@ -896,28 +967,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         tl03_columns=tl03_feature_columns,
         tl04_columns=tl04_feature_columns,
     )
-    arm_results = [
-        evaluate_arm(
-            arm,
-            merged_rows,
-            defense_columns=defense_columns,
-            track_d_columns=track_d_feature_columns,
-            locked_params=tg01_lock["best_params"],
-            estimator_factory=lightgbm_factory,
+    logger.info("TL05 evaluating %d arms", len(arm_specs))
+    arm_results = []
+    for arm in arm_specs:
+        arm_results.append(
+            evaluate_arm(
+                arm,
+                merged_rows,
+                defense_columns=defense_columns,
+                track_d_columns=track_d_feature_columns,
+                locked_params=tg01_lock["best_params"],
+                estimator_factory=lightgbm_factory,
+            )
         )
-        for arm in arm_specs
-    ]
 
     arm_holdout_rows = {result["arm"].arm_id: result["holdout_prediction_rows"] for result in arm_results}
+    baseline_result = next(result for result in arm_results if result["arm"].arm_id == LOCKED_BASELINE_ARM_ID)
+    holdout_strain_count = len({str(row["bacteria"]) for row in baseline_result["holdout_prediction_rows"]})
+    logger.info(
+        "TL05 bootstrapping holdout metrics: %d strains, %d samples",
+        holdout_strain_count,
+        args.bootstrap_samples,
+    )
     bootstrap_summary = bootstrap_holdout_metric_cis(
         arm_holdout_rows,
         bootstrap_samples=args.bootstrap_samples,
         bootstrap_random_state=args.bootstrap_random_state,
+        baseline_arm_id=baseline_result["arm"].arm_id,
     )
-
-    baseline_result = next(
-        result for result in arm_results if result["arm"].arm_id == "locked_baseline_defense_phage_genomic"
-    )
+    logger.info("TL05 selecting lock candidate against baseline %s", baseline_result["arm"].arm_id)
     arm_metrics = [
         summarize_arm_metrics(
             result,
@@ -928,14 +1006,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         for result in arm_results
     ]
-    proposed_arm = select_locked_arm(arm_metrics, baseline_arm_id="locked_baseline_defense_phage_genomic")
+    proposed_arm = select_locked_arm(arm_metrics, baseline_arm_id=LOCKED_BASELINE_ARM_ID)
     best_mechanistic_arm = select_best_mechanistic_arm(
         arm_metrics,
-        baseline_arm_id="locked_baseline_defense_phage_genomic",
+        baseline_arm_id=LOCKED_BASELINE_ARM_ID,
     )
     shap_arm_id = proposed_arm["arm_id"] if proposed_arm is not None else best_mechanistic_arm["arm_id"]
     shap_result = next(result for result in arm_results if result["arm"].arm_id == shap_arm_id)
 
+    logger.info("TL05 preparing SHAP explanations for arm %s", shap_arm_id)
     shap_feature_matrix = shap_result["vectorizer"].transform(
         [
             train_v1_binary_classifier.build_feature_dict(
@@ -948,6 +1027,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     import shap  # Heavy dependency; import only when TL05 runs.
 
+    logger.info("TL05 running SHAP explainer for %d holdout rows", len(shap_result["holdout_rows"]))
     shap_explainer = shap.TreeExplainer(shap_result["estimator"])
     shap_explanation = shap_explainer(shap_feature_matrix)
     shap_values = shap_explanation.values
@@ -1134,6 +1214,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "brier_improvement_ci_high_vs_locked_baseline",
     ]
 
+    logger.info("TL05 writing output artifacts to %s", args.output_dir)
     write_csv(args.output_dir / "tl05_mechanistic_lift_metrics.csv", metrics_fieldnames, arm_metrics)
     write_csv(
         args.output_dir / "tl05_mechanistic_pair_predictions.csv",
