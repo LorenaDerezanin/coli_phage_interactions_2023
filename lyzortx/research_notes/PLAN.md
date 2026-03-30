@@ -461,7 +461,7 @@ graph LR
     lyzortx/generated_outputs/track_l/enrichment/
   - Document the before/after significant-hit-count delta in the track_L lab notebook
   - Note: TL03/TL04/TL05 depend on these outputs and will need re-evaluation after this fix (separate tickets)
-- [ ] **TL11** Rebuild TL03/TL04 mechanistic feature blocks from holdout-clean enrichment. Model: `gpt-5.4-mini`.
+- [x] **TL11** Rebuild TL03/TL04 mechanistic feature blocks from holdout-clean enrichment. Model: `gpt-5.4-mini`.
   - Rebuild the TL03 and TL04 outputs using only the TL10 holdout-excluded enrichment CSVs; using any pre-TL10
     enrichment artifact is a failure
   - Write a manifest alongside each rebuilt output recording the exact enrichment input paths, split file, excluded
