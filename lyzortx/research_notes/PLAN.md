@@ -410,7 +410,7 @@ graph LR
   - Test by running on one publicly available E. coli genome (e.g., K-12 MG1655) and verifying >0 defense systems
     detected
   - End-to-end test confirms the output vector has the correct shape and column names matching the training feature set
-- [ ] **TL08** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
+- [x] **TL08** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
   - Function signature: infer(host_genome_path, phage_fna_paths, model_path) returning DataFrame with columns phage,
     p_lysis, rank
   - Computes host defense features via TL07 runner

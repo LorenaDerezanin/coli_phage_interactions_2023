@@ -653,7 +653,7 @@ tracks:
         names matching the training feature set
     - id: TL08
       title: Build generalized inference function for arbitrary genomes
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - 'Function signature: infer(host_genome_path, phage_fna_paths, model_path)
