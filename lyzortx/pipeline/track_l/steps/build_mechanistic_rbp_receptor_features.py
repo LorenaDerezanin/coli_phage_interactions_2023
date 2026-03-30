@@ -27,6 +27,8 @@ from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import (
     build_presence_index,
     collapse_duplicate_profiles as collapse_duplicate_profiles_common,
     collapse_significant_associations as collapse_significant_associations_common,
+    load_holdout_bacteria_ids,
+    load_json,
     read_delimited_rows,
     require_columns,
 )
@@ -37,6 +39,7 @@ from lyzortx.pipeline.track_l.steps.run_enrichment_analysis import (
     LPS_PRIMARY_PATH,
     LPS_SUPPLEMENTAL_PATH,
     OMP_CLUSTERS_PATH,
+    ST03_SPLIT_ASSIGNMENTS_PATH,
     load_lps_host_matrix,
     load_omp_receptor_host_matrix,
     load_pharokka_phrog_matrices,
@@ -57,6 +60,7 @@ ENRICHMENT_REQUIRED_COLUMNS = (
     "lysis_rate_diff",
     "significant",
 )
+TL02_MANIFEST_FILENAME = "manifest.json"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -108,6 +112,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_RBP_LIST_PATH,
         help="Curated RBP_list.csv for sanity-check comparisons.",
+    )
+    parser.add_argument(
+        "--st03-split-assignments-path",
+        type=Path,
+        default=ST03_SPLIT_ASSIGNMENTS_PATH,
+        help="ST0.3 split assignments used to derive the holdout bacteria exclusion list.",
     )
     parser.add_argument(
         "--output-dir",
@@ -314,6 +324,21 @@ def build_profile_metadata_rows(profiles: Sequence[CollapsedProfile]) -> List[Di
     ]
 
 
+def summarize_nonzero_rows(
+    feature_rows: Sequence[Mapping[str, object]], feature_columns: Sequence[str]
+) -> Dict[str, int]:
+    mechanistic_columns = feature_columns[3:]
+    nonzero_row_count = sum(any(float(row[column]) != 0.0 for column in mechanistic_columns) for row in feature_rows)
+    pairwise_nonzero_row_count = sum(
+        any(column.startswith("tl03_pair_") and float(row[column]) != 0.0 for column in mechanistic_columns)
+        for row in feature_rows
+    )
+    return {
+        "nonzero_row_count": nonzero_row_count,
+        "pairwise_nonzero_row_count": pairwise_nonzero_row_count,
+    }
+
+
 def summarize_sanity_check(rows: Sequence[Mapping[str, object]]) -> Dict[str, int]:
     return {
         "phage_count": len(rows),
@@ -351,10 +376,71 @@ def ensure_default_tl02_outputs(
         raise FileNotFoundError("Missing TL02 enrichment input(s): " + ", ".join(missing))
     ensure_default_label_path(label_path)
     logger.info("TL02 enrichment outputs missing; running Track L enrichment analysis")
-    run_tl02_enrichment([])
+    run_tl02_enrichment(None)
     missing = [str(path) for path in (omp_enrichment_path, lps_enrichment_path) if not path.exists()]
     if missing:
         raise FileNotFoundError("TL02 rebuild did not produce expected enrichment input(s): " + ", ".join(missing))
+
+
+def load_tl02_holdout_clean_provenance(
+    omp_enrichment_path: Path,
+    lps_enrichment_path: Path,
+    split_assignments_path: Path,
+) -> dict[str, object]:
+    holdout_bacteria_ids = load_holdout_bacteria_ids(split_assignments_path)
+    manifest_path = omp_enrichment_path.parent / TL02_MANIFEST_FILENAME
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing TL02 manifest: {manifest_path}")
+
+    manifest = load_json(manifest_path)
+    holdout_section = manifest.get("holdout_exclusion")
+    if not isinstance(holdout_section, dict):
+        raise ValueError(f"TL02 manifest missing holdout_exclusion section: {manifest_path}")
+
+    manifest_holdout_ids = holdout_section.get("excluded_holdout_bacteria_ids")
+    if sorted(str(value) for value in manifest_holdout_ids or []) != holdout_bacteria_ids:
+        raise ValueError("TL02 manifest holdout bacteria IDs do not match the ST03 split assignments.")
+
+    split_manifest = holdout_section.get("split_assignments")
+    if not isinstance(split_manifest, dict):
+        raise ValueError(f"TL02 manifest missing split_assignments entry: {manifest_path}")
+    if split_manifest.get("path") != str(split_assignments_path):
+        raise ValueError("TL02 manifest split assignments path does not match the TL03/TL04 rebuild input.")
+
+    outputs = manifest.get("outputs")
+    if not isinstance(outputs, dict):
+        raise ValueError(f"TL02 manifest missing outputs section: {manifest_path}")
+
+    expected_outputs = {
+        "rbp_phrog_x_omp_receptor": omp_enrichment_path,
+        "rbp_phrog_x_lps_core": lps_enrichment_path,
+    }
+    for key, expected_path in expected_outputs.items():
+        entry = outputs.get(key)
+        if not isinstance(entry, dict):
+            raise ValueError(f"TL02 manifest missing output entry for {key}: {manifest_path}")
+        if entry.get("path") != str(expected_path):
+            raise ValueError(f"TL02 manifest output path mismatch for {key}: {expected_path}")
+        if entry.get("sha256") != _sha256(expected_path):
+            raise ValueError(f"TL02 manifest hash mismatch for {key}: {expected_path}")
+
+    return {
+        "manifest_path": manifest_path,
+        "split_assignments_path": split_assignments_path,
+        "split_assignments_sha256": _sha256(split_assignments_path),
+        "holdout_bacteria_ids": holdout_bacteria_ids,
+        "enrichment_inputs": {
+            "rbp_phrog_x_omp_receptor": {
+                "path": str(omp_enrichment_path),
+                "sha256": _sha256(omp_enrichment_path),
+            },
+            "rbp_phrog_x_lps_core": {
+                "path": str(lps_enrichment_path),
+                "sha256": _sha256(lps_enrichment_path),
+            },
+        },
+        "enrichment_manifest_sha256": _sha256(manifest_path),
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -372,6 +458,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     pair_rows = build_pair_rows(label_rows)
     bacteria = sorted({row["bacteria"] for row in pair_rows})
     phages = sorted({row["phage"] for row in pair_rows})
+    provenance = load_tl02_holdout_clean_provenance(
+        args.omp_enrichment_path,
+        args.lps_enrichment_path,
+        args.st03_split_assignments_path,
+    )
 
     rbp_matrix, rbp_phrog_names, _, _ = load_pharokka_phrog_matrices(args.cached_annotations_dir, phages)
     rbp_feature_names = [f"RBP_PHROG_{phrog}" for phrog in rbp_phrog_names]
@@ -414,6 +505,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pharokka_summary = load_pharokka_rbp_gene_summary(args.cached_annotations_dir, phages)
     sanity_check_rows = build_sanity_check_rows(phages, curated_summary, pharokka_summary, phage_to_profile_presence)
     sanity_summary = summarize_sanity_check(sanity_check_rows)
+    nonzero_summary = summarize_nonzero_rows(feature_rows, feature_columns)
 
     metadata_rows = build_feature_metadata_rows(profiles, associations)
     profile_metadata_rows = build_profile_metadata_rows(profiles)
@@ -462,7 +554,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         "collapsed_profile_count": len(profiles),
         "pairwise_association_count": len(associations),
         "feature_block_column_count": len(feature_columns) - 3,
+        "nonzero_row_summary": nonzero_summary,
         "sanity_check_summary": sanity_summary,
+        "provenance": {
+            "tl02_manifest_path": str(provenance["manifest_path"]),
+            "tl02_manifest_sha256": provenance["enrichment_manifest_sha256"],
+            "split_assignments": {
+                "path": str(provenance["split_assignments_path"]),
+                "sha256": provenance["split_assignments_sha256"],
+            },
+            "excluded_holdout_bacteria_ids": provenance["holdout_bacteria_ids"],
+            "excluded_holdout_bacteria_count": len(provenance["holdout_bacteria_ids"]),
+            "enrichment_inputs": provenance["enrichment_inputs"],
+        },
         "inputs": {
             "label_set_v1_pairs": {"path": str(args.label_path), "sha256": _sha256(args.label_path)},
             "cached_annotations_dir": str(args.cached_annotations_dir),
@@ -481,6 +585,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "feature_metadata_csv": str(metadata_output_path),
             "profile_metadata_csv": str(profile_output_path),
             "sanity_check_csv": str(sanity_output_path),
+            "feature_csv_sha256": _sha256(feature_output_path),
+            "feature_metadata_csv_sha256": _sha256(metadata_output_path),
+            "profile_metadata_csv_sha256": _sha256(profile_output_path),
+            "sanity_check_csv_sha256": _sha256(sanity_output_path),
         },
     }
     write_json(manifest_output_path, manifest)
