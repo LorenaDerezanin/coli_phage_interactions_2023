@@ -185,6 +185,50 @@ def test_build_feature_rows_zeroes_pairwise_weight_when_host_lacks_receptor() ->
     assert by_pair_id["B2__P1"][pairwise_column] == 0.0
 
 
+def test_ensure_default_tl02_outputs_rebuilds_with_custom_split_override(tmp_path: Path, monkeypatch) -> None:
+    label_path = tmp_path / "labels.csv"
+    omp_enrichment_path = tmp_path / "omp.csv"
+    lps_enrichment_path = tmp_path / "lps.csv"
+    split_path = tmp_path / "custom_st03.csv"
+    label_path.write_text("bacteria,phage\nB1,P1\n", encoding="utf-8")
+    omp_enrichment_path.write_text("phage_feature,host_feature,lysis_rate_diff,significant\n", encoding="utf-8")
+    lps_enrichment_path.write_text("phage_feature,host_feature,lysis_rate_diff,significant\n", encoding="utf-8")
+
+    monkeypatch.setattr(rbp_module, "LABEL_SET_V1_PATH", label_path)
+    monkeypatch.setattr(rbp_module, "DEFAULT_OMP_ENRICHMENT_PATH", omp_enrichment_path)
+    monkeypatch.setattr(rbp_module, "DEFAULT_LPS_ENRICHMENT_PATH", lps_enrichment_path)
+    monkeypatch.setattr(rbp_module, "ensure_default_label_path", lambda *_: None)
+
+    provenance_calls = {"count": 0}
+
+    def fake_load_provenance(omp_path: Path, lps_path: Path, split_assignments_path: Path) -> dict[str, object]:
+        provenance_calls["count"] += 1
+        assert omp_path == omp_enrichment_path
+        assert lps_path == lps_enrichment_path
+        assert split_assignments_path == split_path
+        if provenance_calls["count"] == 1:
+            raise ValueError("stale manifest")
+        return {"manifest_path": tmp_path / "manifest.json"}
+
+    rebuild_argv: list[list[str]] = []
+
+    def fake_run_tl02_enrichment(argv):
+        rebuild_argv.append(list(argv))
+        return 0
+
+    monkeypatch.setattr(rbp_module, "load_tl02_holdout_clean_provenance", fake_load_provenance)
+    monkeypatch.setattr(rbp_module, "run_tl02_enrichment", fake_run_tl02_enrichment)
+
+    rbp_module.ensure_default_tl02_outputs(
+        label_path=label_path,
+        omp_enrichment_path=omp_enrichment_path,
+        lps_enrichment_path=lps_enrichment_path,
+        split_assignments_path=split_path,
+    )
+
+    assert rebuild_argv == [["--st03-split-assignments-path", str(split_path)]]
+
+
 def test_build_sanity_check_rows_tracks_curated_vs_pharokka_presence() -> None:
     rows = build_sanity_check_rows(
         panel_phages=["P1", "P2"],

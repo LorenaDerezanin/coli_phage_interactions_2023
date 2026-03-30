@@ -63,6 +63,13 @@ ENRICHMENT_REQUIRED_COLUMNS = (
 TL02_MANIFEST_FILENAME = "manifest.json"
 
 
+def _tl02_rebuild_argv(split_assignments_path: Path) -> list[str]:
+    return [
+        "--st03-split-assignments-path",
+        str(split_assignments_path),
+    ]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -392,7 +399,7 @@ def ensure_default_tl02_outputs(
         return
     ensure_default_label_path(label_path)
     logger.info("TL02 enrichment outputs missing or stale; running Track L enrichment analysis")
-    run_tl02_enrichment(None)
+    run_tl02_enrichment(_tl02_rebuild_argv(split_assignments_path))
     missing = [str(path) for path in (omp_enrichment_path, lps_enrichment_path) if not path.exists()]
     if missing:
         raise FileNotFoundError("TL02 rebuild did not produce expected enrichment input(s): " + ", ".join(missing))

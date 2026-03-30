@@ -191,7 +191,7 @@ def test_ensure_default_tl11_bundle_rebuilds_stale_default_manifest(tmp_path: Pa
         bundle_label="TL03",
     )
 
-    assert rebuild_calls == [[]]
+    assert rebuild_calls == [["--st03-split-assignments-path", str(split_path)]]
     provenance = tl05.load_tl11_feature_provenance(feature_path, manifest_path, "TL03", split_path)
     assert provenance["excluded_pair_rows"] == 1
     assert provenance["holdout_bacteria_ids"] == ["B1"]

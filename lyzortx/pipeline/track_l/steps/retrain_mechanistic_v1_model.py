@@ -315,7 +315,12 @@ def _ensure_default_tl11_bundle(
         return
 
     logger.info("%s artifacts missing or stale; regenerating %s", bundle_label, expected_task_id)
-    rebuild_fn([])
+    rebuild_fn(
+        [
+            "--st03-split-assignments-path",
+            str(expected_split_assignments_path),
+        ]
+    )
     _validate_tl11_manifest(
         feature_path=feature_path,
         manifest_path=manifest_path,

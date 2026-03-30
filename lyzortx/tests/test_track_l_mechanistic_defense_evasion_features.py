@@ -164,6 +164,45 @@ def test_build_feature_rows_zeroes_pairwise_weight_when_host_lacks_defense_featu
     assert by_pair_id["B2__P1"][pairwise_column] == 0.0
 
 
+def test_ensure_default_tl02_output_rebuilds_with_custom_split_override(tmp_path: Path, monkeypatch) -> None:
+    label_path = tmp_path / "labels.csv"
+    antidef_enrichment_path = tmp_path / "antidef.csv"
+    split_path = tmp_path / "custom_st03.csv"
+    label_path.write_text("bacteria,phage\nB1,P1\n", encoding="utf-8")
+    antidef_enrichment_path.write_text("phage_feature,host_feature,lysis_rate_diff,significant\n", encoding="utf-8")
+
+    monkeypatch.setattr(defense_module, "LABEL_SET_V1_PATH", label_path)
+    monkeypatch.setattr(defense_module, "DEFAULT_ANTIDEF_ENRICHMENT_PATH", antidef_enrichment_path)
+    monkeypatch.setattr(defense_module, "ensure_default_label_path", lambda *_: None)
+
+    provenance_calls = {"count": 0}
+
+    def fake_load_provenance(enrichment_path: Path, split_assignments_path: Path) -> dict[str, object]:
+        provenance_calls["count"] += 1
+        assert enrichment_path == antidef_enrichment_path
+        assert split_assignments_path == split_path
+        if provenance_calls["count"] == 1:
+            raise ValueError("stale manifest")
+        return {"manifest_path": tmp_path / "manifest.json"}
+
+    rebuild_argv: list[list[str]] = []
+
+    def fake_run_tl02_enrichment(argv):
+        rebuild_argv.append(list(argv))
+        return 0
+
+    monkeypatch.setattr(defense_module, "load_tl02_holdout_clean_provenance", fake_load_provenance)
+    monkeypatch.setattr(defense_module, "run_tl02_enrichment", fake_run_tl02_enrichment)
+
+    defense_module.ensure_default_tl02_output(
+        label_path=label_path,
+        antidef_enrichment_path=antidef_enrichment_path,
+        split_assignments_path=split_path,
+    )
+
+    assert rebuild_argv == [["--st03-split-assignments-path", str(split_path)]]
+
+
 def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
     label_path = tmp_path / "labels.csv"
     cached_dir = tmp_path / "cached"

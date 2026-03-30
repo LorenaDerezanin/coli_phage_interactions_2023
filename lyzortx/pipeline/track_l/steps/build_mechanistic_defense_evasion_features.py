@@ -58,6 +58,13 @@ ENRICHMENT_REQUIRED_COLUMNS = (
 EXPERIMENTAL_STATUS = "experimental_candidate"
 
 
+def _tl02_rebuild_argv(split_assignments_path: Path) -> list[str]:
+    return [
+        "--st03-split-assignments-path",
+        str(split_assignments_path),
+    ]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -272,7 +279,7 @@ def ensure_default_tl02_output(
         return
     ensure_default_label_path(label_path)
     logger.info("TL02 anti-defense enrichment output missing or stale; running Track L enrichment analysis")
-    run_tl02_enrichment(None)
+    run_tl02_enrichment(_tl02_rebuild_argv(split_assignments_path))
     if not antidef_enrichment_path.exists():
         raise FileNotFoundError(f"TL02 rebuild did not produce expected enrichment input: {antidef_enrichment_path}")
     load_tl02_holdout_clean_provenance(
