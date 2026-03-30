@@ -60,6 +60,17 @@ def _coerce_paths(paths: Iterable[str | Path]) -> list[Path]:
     return resolved
 
 
+def _resolve_runtime(
+    model_path: str | Path | None,
+    runtime: InferenceRuntime | None,
+) -> InferenceRuntime:
+    if runtime is not None:
+        return runtime
+    if model_path is None:
+        raise ValueError("model_path is required when runtime is not provided.")
+    return load_runtime(model_path)
+
+
 def load_runtime(model_path: str | Path) -> InferenceRuntime:
     bundle_path = Path(model_path)
     if not bundle_path.exists():
@@ -97,16 +108,17 @@ def _feature_space(feature_space_payload: dict[str, Any]) -> train_v1_binary_cla
 
 def project_host_features(
     host_genome_path: str | Path,
-    model_path: str | Path,
+    model_path: str | Path | None = None,
     *,
     bacteria_id: str | None = None,
+    runtime: InferenceRuntime | None = None,
 ) -> dict[str, object]:
     """Project one host assembly into the feature space expected by a TL08 bundle."""
 
     host_genome = Path(host_genome_path)
     if not host_genome.exists():
         raise FileNotFoundError(f"Host genome FASTA not found: {host_genome}")
-    runtime = load_runtime(model_path)
+    runtime = _resolve_runtime(model_path, runtime)
 
     inference_id = uuid.uuid4().hex[:12]
     host_output_dir = INFER_SCRATCH_ROOT / f"{host_genome.stem}_{inference_id}"
@@ -132,12 +144,14 @@ def project_host_features(
 
 def project_phage_features(
     phage_fna_paths: Sequence[str | Path],
-    model_path: str | Path,
+    model_path: str | Path | None = None,
+    *,
+    runtime: InferenceRuntime | None = None,
 ) -> list[dict[str, object]]:
     """Project one or more phage genomes into the feature space expected by a TL08 bundle."""
 
     phage_paths = _coerce_paths(phage_fna_paths)
-    runtime = load_runtime(model_path)
+    runtime = _resolve_runtime(model_path, runtime)
     projected_rows: list[dict[str, object]] = []
     for phage_path in phage_paths:
         if not phage_path.exists():
@@ -149,13 +163,15 @@ def project_phage_features(
 def score_projected_features(
     host_row: dict[str, object],
     phage_rows: Sequence[dict[str, object]],
-    model_path: str | Path,
+    model_path: str | Path | None = None,
+    *,
+    runtime: InferenceRuntime | None = None,
 ) -> pd.DataFrame:
     """Score one projected host row against projected phage rows using a TL08 bundle."""
 
     if not phage_rows:
         raise ValueError("phage_rows must contain at least one projected phage feature row.")
-    runtime = load_runtime(model_path)
+    runtime = _resolve_runtime(model_path, runtime)
     feature_space = _feature_space(runtime.feature_space_payload)
 
     feature_rows: list[dict[str, object]] = []

@@ -290,8 +290,10 @@ def build_host_candidates(
     assemblies_by_taxid: Mapping[str, Sequence[AssemblyRecord]],
     panel_lookup: Mapping[str, str],
 ) -> list[HostCandidate]:
+    positive_pair_counts: dict[tuple[str, str], int] = defaultdict(int)
     phages_by_host: dict[tuple[str, str], set[str]] = defaultdict(set)
     for pair in pairs:
+        positive_pair_counts[(pair.host_tax_id, pair.host_name)] += 1
         phages_by_host[(pair.host_tax_id, pair.host_name)].add(pair.phage_accession)
 
     candidates: list[HostCandidate] = []
@@ -305,7 +307,7 @@ def build_host_candidates(
             HostCandidate(
                 host_tax_id=host_tax_id,
                 host_name=host_name,
-                positive_pair_count=len(phages),
+                positive_pair_count=positive_pair_counts[(host_tax_id, host_name)],
                 unique_phage_count=len(phages),
                 panel_match=panel_match,
                 is_panel_host=bool(panel_match),
@@ -330,10 +332,11 @@ def select_validation_hosts(
         (
             candidate
             for candidate in host_candidates
-            if not candidate.is_panel_host and candidate.positive_pair_count >= min_positive_phages_per_host
+            if not candidate.is_panel_host and candidate.unique_phage_count >= min_positive_phages_per_host
         ),
         key=lambda candidate: (
             ASSEMBLY_LEVEL_PRIORITY.get(candidate.assembly_level, 9),
+            candidate.unique_phage_count,
             candidate.positive_pair_count,
             candidate.host_name,
         ),
@@ -345,7 +348,15 @@ def select_validation_hosts(
     for candidate in host_candidates:
         if candidate.panel_match and candidate.panel_match in ROUNDTRIP_PANEL_HOSTS:
             existing = roundtrip_by_panel_name.get(candidate.panel_match)
-            if existing is None or candidate.positive_pair_count > existing.positive_pair_count:
+            if existing is None or (
+                candidate.unique_phage_count,
+                candidate.positive_pair_count,
+                candidate.host_name,
+            ) > (
+                existing.unique_phage_count,
+                existing.positive_pair_count,
+                existing.host_name,
+            ):
                 roundtrip_by_panel_name[candidate.panel_match] = candidate
     roundtrip_hosts = [
         roundtrip_by_panel_name[name] for name in ROUNDTRIP_PANEL_HOSTS if name in roundtrip_by_panel_name
@@ -652,7 +663,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise FileNotFoundError(
             f"Missing panel phage FASTAs for {len(missing_panel_fastas)} phages; first missing: {missing_panel_fastas[0]}"
         )
-    panel_phage_feature_rows = generalized_inference.project_phage_features(panel_phage_paths, bundle_path)
+    panel_phage_feature_rows = generalized_inference.project_phage_features(panel_phage_paths, runtime=runtime)
     unique_external_accessions = sorted(
         {accession for accessions in phages_by_taxid.values() for accession in accessions}
     )
@@ -663,7 +674,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         row["phage"]: row
         for row in generalized_inference.project_phage_features(
             [external_phage_paths[accession] for accession in unique_external_accessions],
-            bundle_path,
+            runtime=runtime,
         )
     }
 
@@ -673,14 +684,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         LOGGER.info("Starting TL09 inference for %s", host.host_name)
         host_row = generalized_inference.project_host_features(
             host_fasta_paths[host.host_tax_id],
-            bundle_path,
             bacteria_id=host.panel_match or host.host_name,
+            runtime=runtime,
         )
         candidate_phage_rows = list(panel_phage_feature_rows)
         candidate_phage_rows.extend(
             external_phage_feature_rows[accession] for accession in phages_by_taxid[host.host_tax_id]
         )
-        predictions = generalized_inference.score_projected_features(host_row, candidate_phage_rows, bundle_path)
+        predictions = generalized_inference.score_projected_features(host_row, candidate_phage_rows, runtime=runtime)
         predictions["host_tax_id"] = host.host_tax_id
         predictions["host_name"] = host.host_name
         predictions["panel_match"] = host.panel_match
@@ -688,7 +699,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         prediction_frames.append(predictions)
         if host.panel_match:
             roundtrip_predictions = generalized_inference.score_projected_features(
-                host_row, panel_phage_feature_rows, bundle_path
+                host_row, panel_phage_feature_rows, runtime=runtime
             )
             roundtrip_predictions["host_tax_id"] = host.host_tax_id
             roundtrip_predictions["host_name"] = host.host_name
