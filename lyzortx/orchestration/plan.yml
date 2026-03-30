@@ -638,7 +638,7 @@ tracks:
         the pre-computed feature table within floating-point tolerance
     - id: TL07
       title: Build Defense Finder runner for novel E. coli genomes
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Input is a genome assembly FASTA file for a novel E. coli strain

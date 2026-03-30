@@ -401,7 +401,7 @@ graph LR
     the model-ready host feature vector
   - Round-trip test on one panel phage and one panel host confirms output matches the pre-computed feature table within
     floating-point tolerance
-- [ ] **TL07** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
+- [x] **TL07** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
   - Input is a genome assembly FASTA file for a novel E. coli strain
   - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense system annotation
   - Output is parsed into the same 79-column defense subtype vector the locked model expects, using the column mask from
