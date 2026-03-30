@@ -77,6 +77,50 @@ def test_merge_expanded_feature_rows_adds_split_phage_and_pair_features() -> Non
     assert merged[0]["isolation_host_distance"] == "0.3"
 
 
+def test_merge_expanded_feature_rows_can_zero_fill_missing_pair_features() -> None:
+    merged = merge_expanded_feature_rows(
+        track_c_pair_rows=[
+            {
+                "pair_id": "B1__P1",
+                "bacteria": "B1",
+                "phage": "P1",
+                "label_hard_any_lysis": "1",
+            },
+            {
+                "pair_id": "B2__P1",
+                "bacteria": "B2",
+                "phage": "P1",
+                "label_hard_any_lysis": "0",
+            },
+        ],
+        split_rows=[
+            {
+                "pair_id": "B1__P1",
+                "bacteria": "B1",
+                "phage": "P1",
+                "cv_group": "G1",
+                "split_holdout": "train_non_holdout",
+                "split_cv5_fold": "0",
+                "is_hard_trainable": "1",
+            },
+            {
+                "pair_id": "B2__P1",
+                "bacteria": "B2",
+                "phage": "P1",
+                "cv_group": "G2",
+                "split_holdout": "holdout_test",
+                "split_cv5_fold": "-1",
+                "is_hard_trainable": "1",
+            },
+        ],
+        phage_feature_blocks=[[{"phage": "P1", "phage_gc_content": "0.5"}]],
+        pair_feature_blocks=[[{"pair_id": "B1__P1", "bacteria": "B1", "phage": "P1", "lookup_available": "1"}]],
+        allow_missing_pair_features=True,
+    )
+
+    assert merged[1]["lookup_available"] == 0.0
+
+
 def test_build_feature_space_keeps_v0_columns_and_adds_track_specific_blocks() -> None:
     feature_space = build_feature_space(
         st02_rows=[

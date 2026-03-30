@@ -11,12 +11,14 @@ import logging
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from collections import defaultdict
 from pathlib import Path
 from collections.abc import Mapping, Sequence
 from typing import Any, Optional
 
 import numpy as np
 
+from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
 from lyzortx.pipeline.steel_thread_v0.steps.st04_train_baselines import (
@@ -35,6 +37,7 @@ from lyzortx.pipeline.track_l.steps import (
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
 )
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import load_holdout_bacteria_ids, load_json
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,16 @@ DEFAULT_TL03_OUTPUT_PATH = Path(
 DEFAULT_TL04_OUTPUT_PATH = Path(
     "lyzortx/generated_outputs/track_l/mechanistic_defense_evasion_features/mechanistic_defense_evasion_features_v1.csv"
 )
+DEFAULT_TL03_MANIFEST_PATH = Path(
+    "lyzortx/generated_outputs/track_l/mechanistic_rbp_receptor_features/mechanistic_rbp_receptor_manifest_v1.json"
+)
+DEFAULT_TL04_MANIFEST_PATH = Path(
+    "lyzortx/generated_outputs/track_l/mechanistic_defense_evasion_features/mechanistic_defense_evasion_manifest_v1.json"
+)
 DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/mechanistic_v1_lift")
+DEFAULT_BOOTSTRAP_SAMPLES = 1000
+PRIMARY_LOCK_METRIC = "holdout_roc_auc"
+SECONDARY_LOCK_METRICS = ("holdout_top3_hit_rate_all_strains", "holdout_brier_score")
 
 
 @dataclass(frozen=True)
@@ -58,6 +70,15 @@ class ArmSpec:
     tl03_columns: tuple[str, ...]
     tl04_columns: tuple[str, ...]
     numeric_columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BootstrapMetricCI:
+    point_estimate: Optional[float]
+    ci_low: Optional[float]
+    ci_high: Optional[float]
+    bootstrap_samples_requested: int
+    bootstrap_samples_used: int
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -135,6 +156,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Assume prerequisite Track G/L outputs already exist instead of regenerating them.",
     )
+    parser.add_argument(
+        "--bootstrap-samples",
+        type=int,
+        default=DEFAULT_BOOTSTRAP_SAMPLES,
+        help="Number of paired bootstrap resamples over holdout strains for metric uncertainty.",
+    )
+    parser.add_argument(
+        "--bootstrap-random-state",
+        type=int,
+        default=42,
+        help="Random seed for holdout-strain bootstrap uncertainty estimates.",
+    )
     return parser.parse_args(argv)
 
 
@@ -197,12 +230,85 @@ def ensure_default_tl04_output(path: Path) -> None:
         raise FileNotFoundError(f"TL04 rebuild did not produce expected feature file: {path}")
 
 
+def _validate_tl11_manifest(
+    *,
+    feature_path: Path,
+    manifest_path: Path,
+    expected_task_id: str,
+    expected_split_assignments_path: Path,
+) -> dict[str, object]:
+    if not feature_path.exists():
+        raise FileNotFoundError(f"Missing TL11 feature file: {feature_path}")
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing TL11 manifest: {manifest_path}")
+
+    manifest = load_json(manifest_path)
+    if manifest.get("task_id") != expected_task_id:
+        raise ValueError(f"Unexpected TL11 task_id in {manifest_path}: {manifest.get('task_id')!r}")
+
+    provenance = manifest.get("provenance")
+    if not isinstance(provenance, dict):
+        raise ValueError(f"TL11 manifest missing provenance section: {manifest_path}")
+
+    split_section = provenance.get("split_assignments")
+    if not isinstance(split_section, dict):
+        raise ValueError(f"TL11 manifest missing split_assignments section: {manifest_path}")
+    if split_section.get("path") != str(expected_split_assignments_path):
+        raise ValueError(f"TL11 manifest split assignments path mismatch: {manifest_path}")
+
+    expected_holdout_ids = load_holdout_bacteria_ids(expected_split_assignments_path)
+    manifest_holdout_ids = provenance.get("excluded_holdout_bacteria_ids")
+    if sorted(str(value) for value in manifest_holdout_ids or []) != expected_holdout_ids:
+        raise ValueError(f"TL11 manifest holdout IDs do not match ST03 split assignments: {manifest_path}")
+
+    holdout_section = manifest.get("holdout_exclusion")
+    if not isinstance(holdout_section, dict):
+        raise ValueError(f"TL11 manifest missing holdout_exclusion section: {manifest_path}")
+    if int(holdout_section.get("excluded_pair_rows", 0) or 0) <= 0:
+        raise ValueError(f"TL11 manifest reports no excluded holdout pair rows: {manifest_path}")
+
+    outputs = manifest.get("outputs")
+    if not isinstance(outputs, dict):
+        raise ValueError(f"TL11 manifest missing outputs section: {manifest_path}")
+    output_entry = outputs.get("feature_csv")
+    if not isinstance(output_entry, str):
+        raise ValueError(f"TL11 manifest missing feature_csv output entry: {manifest_path}")
+    if output_entry != str(feature_path):
+        raise ValueError(f"TL11 manifest feature_csv path mismatch: {manifest_path}")
+    expected_hash_key = "feature_csv_sha256"
+    if outputs.get(expected_hash_key) != _sha256(feature_path):
+        raise ValueError(f"TL11 manifest feature_csv hash mismatch: {manifest_path}")
+
+    return {
+        "manifest_path": str(manifest_path),
+        "manifest_sha256": _sha256(manifest_path),
+        "feature_path": str(feature_path),
+        "feature_sha256": _sha256(feature_path),
+        "holdout_bacteria_ids": expected_holdout_ids,
+        "excluded_pair_rows": int(holdout_section["excluded_pair_rows"]),
+    }
+
+
 def ensure_prerequisite_outputs(args: argparse.Namespace) -> None:
     if args.skip_prerequisites:
         return
     ensure_default_tg01_summary(args.tg01_summary_path)
     ensure_default_tl03_output(args.tl03_feature_path)
     ensure_default_tl04_output(args.tl04_feature_path)
+
+
+def load_tl11_feature_provenance(
+    feature_path: Path,
+    manifest_path: Path,
+    expected_task_id: str,
+    expected_split_assignments_path: Path,
+) -> dict[str, object]:
+    return _validate_tl11_manifest(
+        feature_path=feature_path,
+        manifest_path=manifest_path,
+        expected_task_id=expected_task_id,
+        expected_split_assignments_path=expected_split_assignments_path,
+    )
 
 
 def load_v1_lock(path: Path) -> dict[str, object]:
@@ -475,6 +581,8 @@ def summarize_arm_metrics(
     *,
     baseline_binary_metrics: Mapping[str, Optional[float]],
     baseline_top3_metrics: Mapping[str, object],
+    bootstrap_summary: Mapping[str, Mapping[str, BootstrapMetricCI]],
+    baseline_arm_id: str,
 ) -> dict[str, object]:
     holdout_binary_metrics = arm_result["holdout_binary_metrics"]
     holdout_top3_metrics = arm_result["holdout_top3_metrics"]
@@ -484,49 +592,204 @@ def summarize_arm_metrics(
     baseline_top3 = baseline_top3_metrics["top3_hit_rate_all_strains"]
     brier = holdout_binary_metrics["brier_score"]
     baseline_brier = baseline_binary_metrics["brier_score"]
+    arm_id = str(arm_result["arm"].arm_id)
+    arm_bootstrap = bootstrap_summary[arm_id]
+    delta_bootstrap = bootstrap_summary.get(f"{arm_id}__delta_vs_{baseline_arm_id}")
+    is_baseline = arm_id == baseline_arm_id
     return {
-        "arm_id": arm_result["arm"].arm_id,
+        "arm_id": arm_id,
         "arm_label": arm_result["arm"].display_name,
         "included_blocks": list(arm_result["arm"].included_blocks),
         "tl03_feature_count": len(arm_result["arm"].tl03_columns),
         "tl04_feature_count": len(arm_result["arm"].tl04_columns),
         "numeric_feature_count": len(arm_result["arm"].numeric_columns),
         "holdout_roc_auc": auc,
+        "holdout_roc_auc_ci_low": arm_bootstrap["holdout_roc_auc"].ci_low,
+        "holdout_roc_auc_ci_high": arm_bootstrap["holdout_roc_auc"].ci_high,
         "holdout_brier_score": brier,
+        "holdout_brier_score_ci_low": arm_bootstrap["holdout_brier_score"].ci_low,
+        "holdout_brier_score_ci_high": arm_bootstrap["holdout_brier_score"].ci_high,
         "holdout_top3_hit_rate_all_strains": top3,
+        "holdout_top3_hit_rate_all_strains_ci_low": arm_bootstrap["holdout_top3_hit_rate_all_strains"].ci_low,
+        "holdout_top3_hit_rate_all_strains_ci_high": arm_bootstrap["holdout_top3_hit_rate_all_strains"].ci_high,
         "holdout_top3_hit_rate_susceptible_only": holdout_top3_metrics["top3_hit_rate_susceptible_only"],
-        "auc_delta_vs_locked_baseline": safe_round(auc - baseline_auc)
+        "auc_delta_vs_locked_baseline": 0.0
+        if is_baseline
+        else safe_round(auc - baseline_auc)
         if auc is not None and baseline_auc is not None
         else None,
-        "top3_delta_vs_locked_baseline": safe_round(top3 - baseline_top3)
+        "auc_delta_ci_low_vs_locked_baseline": 0.0 if is_baseline else delta_bootstrap["holdout_roc_auc"].ci_low,
+        "auc_delta_ci_high_vs_locked_baseline": 0.0 if is_baseline else delta_bootstrap["holdout_roc_auc"].ci_high,
+        "top3_delta_vs_locked_baseline": 0.0
+        if is_baseline
+        else safe_round(top3 - baseline_top3)
         if top3 is not None and baseline_top3 is not None
         else None,
-        "brier_improvement_vs_locked_baseline": safe_round(baseline_brier - brier)
+        "top3_delta_ci_low_vs_locked_baseline": 0.0
+        if is_baseline
+        else delta_bootstrap["holdout_top3_hit_rate_all_strains"].ci_low,
+        "top3_delta_ci_high_vs_locked_baseline": 0.0
+        if is_baseline
+        else delta_bootstrap["holdout_top3_hit_rate_all_strains"].ci_high,
+        "brier_improvement_vs_locked_baseline": 0.0
+        if is_baseline
+        else safe_round(baseline_brier - brier)
         if brier is not None and baseline_brier is not None
         else None,
+        "brier_improvement_ci_low_vs_locked_baseline": 0.0
+        if is_baseline
+        else delta_bootstrap["holdout_brier_score"].ci_low,
+        "brier_improvement_ci_high_vs_locked_baseline": 0.0
+        if is_baseline
+        else delta_bootstrap["holdout_brier_score"].ci_high,
     }
 
 
-def select_proposed_arm(
+def _evaluate_holdout_rows(rows: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    y_true = [int(str(row["label_hard_any_lysis"])) for row in rows]
+    y_prob = [float(row["predicted_probability"]) for row in rows]
+    return {
+        "binary": train_v1_binary_classifier.compute_binary_metrics(y_true, y_prob),
+        "top3": train_v1_binary_classifier.compute_top3_hit_rate(rows, probability_key="predicted_probability"),
+    }
+
+
+def bootstrap_holdout_metric_cis(
+    holdout_rows_by_arm: Mapping[str, Sequence[Mapping[str, object]]],
+    *,
+    bootstrap_samples: int,
+    bootstrap_random_state: int,
+) -> dict[str, dict[str, BootstrapMetricCI]]:
+    if bootstrap_samples < 1:
+        raise ValueError("bootstrap_samples must be >= 1")
+
+    baseline_arm_id = "locked_baseline_defense_phage_genomic"
+    if baseline_arm_id not in holdout_rows_by_arm:
+        raise ValueError("Missing baseline arm for bootstrap evaluation.")
+
+    holdout_by_bacteria = defaultdict(list)
+    for row in holdout_rows_by_arm[baseline_arm_id]:
+        holdout_by_bacteria[str(row["bacteria"])].append(dict(row))
+
+    bacteria_ids = sorted(holdout_by_bacteria.keys())
+    if not bacteria_ids:
+        raise ValueError("No holdout bacteria available for bootstrap evaluation.")
+
+    arm_bacteria_sets = {
+        arm_id: {bacteria: [dict(row) for row in rows if str(row["bacteria"]) == bacteria] for bacteria in bacteria_ids}
+        for arm_id, rows in holdout_rows_by_arm.items()
+    }
+    for arm_id, bacteria_map in arm_bacteria_sets.items():
+        missing = [bacteria for bacteria in bacteria_ids if not bacteria_map.get(bacteria)]
+        if missing:
+            raise ValueError(f"Missing holdout rows for arm {arm_id}: {', '.join(missing)}")
+
+    rng = np.random.default_rng(bootstrap_random_state)
+    metric_samples: dict[str, dict[str, list[float]]] = {
+        arm_id: {"holdout_roc_auc": [], "holdout_top3_hit_rate_all_strains": [], "holdout_brier_score": []}
+        for arm_id in holdout_rows_by_arm
+    }
+    delta_samples: dict[str, dict[str, list[float]]] = {
+        f"{arm_id}__delta_vs_{baseline_arm_id}": {
+            "holdout_roc_auc": [],
+            "holdout_top3_hit_rate_all_strains": [],
+            "holdout_brier_score": [],
+        }
+        for arm_id in holdout_rows_by_arm
+        if arm_id != baseline_arm_id
+    }
+
+    for _ in range(bootstrap_samples):
+        sampled_bacteria = rng.choice(bacteria_ids, size=len(bacteria_ids), replace=True)
+        sampled_rows_by_arm: dict[str, list[dict[str, object]]] = {}
+        for arm_id, bacteria_map in arm_bacteria_sets.items():
+            sampled_rows: list[dict[str, object]] = []
+            for bacteria in sampled_bacteria:
+                sampled_rows.extend(dict(row) for row in bacteria_map[bacteria])
+            sampled_rows_by_arm[arm_id] = sampled_rows
+
+        metrics_by_arm = {arm_id: _evaluate_holdout_rows(rows) for arm_id, rows in sampled_rows_by_arm.items()}
+        baseline_metrics = metrics_by_arm[baseline_arm_id]
+        for arm_id, metrics in metrics_by_arm.items():
+            metric_samples[arm_id]["holdout_top3_hit_rate_all_strains"].append(
+                float(metrics["top3"]["top3_hit_rate_all_strains"])
+            )
+            metric_samples[arm_id]["holdout_brier_score"].append(float(metrics["binary"]["brier_score"]))
+            if metrics["binary"]["roc_auc"] is not None:
+                metric_samples[arm_id]["holdout_roc_auc"].append(float(metrics["binary"]["roc_auc"]))
+
+        for arm_id, metrics in metrics_by_arm.items():
+            if arm_id == baseline_arm_id:
+                continue
+            delta_key = f"{arm_id}__delta_vs_{baseline_arm_id}"
+            if baseline_metrics["binary"]["roc_auc"] is not None and metrics["binary"]["roc_auc"] is not None:
+                delta_samples[delta_key]["holdout_roc_auc"].append(
+                    float(metrics["binary"]["roc_auc"]) - float(baseline_metrics["binary"]["roc_auc"])
+                )
+            delta_samples[delta_key]["holdout_top3_hit_rate_all_strains"].append(
+                float(metrics["top3"]["top3_hit_rate_all_strains"])
+                - float(baseline_metrics["top3"]["top3_hit_rate_all_strains"])
+            )
+            delta_samples[delta_key]["holdout_brier_score"].append(
+                float(baseline_metrics["binary"]["brier_score"]) - float(metrics["binary"]["brier_score"])
+            )
+
+    def _ci(values: Sequence[float]) -> tuple[Optional[float], Optional[float], int]:
+        if not values:
+            return None, None, 0
+        low, high = np.quantile(np.asarray(values, dtype=float), [0.025, 0.975])
+        return safe_round(float(low)), safe_round(float(high)), len(values)
+
+    ci_summary: dict[str, dict[str, BootstrapMetricCI]] = {}
+    for arm_id, samples in metric_samples.items():
+        actual_metrics = _evaluate_holdout_rows(holdout_rows_by_arm[arm_id])
+        ci_summary[arm_id] = {}
+        for metric_name, sample_values in samples.items():
+            ci_low, ci_high, used = _ci(sample_values)
+            ci_summary[arm_id][metric_name] = BootstrapMetricCI(
+                point_estimate=(
+                    float(actual_metrics["binary"]["roc_auc"])
+                    if metric_name == "holdout_roc_auc"
+                    else float(actual_metrics["top3"]["top3_hit_rate_all_strains"])
+                    if metric_name == "holdout_top3_hit_rate_all_strains"
+                    else float(actual_metrics["binary"]["brier_score"])
+                ),
+                ci_low=ci_low,
+                ci_high=ci_high,
+                bootstrap_samples_requested=bootstrap_samples,
+                bootstrap_samples_used=used,
+            )
+
+    for delta_key, samples in delta_samples.items():
+        ci_summary[delta_key] = {}
+        for metric_name, sample_values in samples.items():
+            ci_low, ci_high, used = _ci(sample_values)
+            ci_summary[delta_key][metric_name] = BootstrapMetricCI(
+                point_estimate=None,
+                ci_low=ci_low,
+                ci_high=ci_high,
+                bootstrap_samples_requested=bootstrap_samples,
+                bootstrap_samples_used=used,
+            )
+
+    return ci_summary
+
+
+def select_locked_arm(
     arm_metrics: Sequence[Mapping[str, object]],
     *,
     baseline_arm_id: str,
 ) -> Optional[dict[str, object]]:
-    baseline = next(row for row in arm_metrics if row["arm_id"] == baseline_arm_id)
-    baseline_auc = baseline["holdout_roc_auc"]
-    baseline_top3 = baseline["holdout_top3_hit_rate_all_strains"]
-    baseline_brier = baseline["holdout_brier_score"]
-
-    eligible = [
-        dict(row)
-        for row in arm_metrics
-        if row["arm_id"] != baseline_arm_id
-        and float(row["holdout_roc_auc"]) >= float(baseline_auc)
-        and (
-            float(row["holdout_top3_hit_rate_all_strains"]) > float(baseline_top3)
-            or float(row["holdout_brier_score"]) < float(baseline_brier)
-        )
-    ]
+    eligible = []
+    for row in arm_metrics:
+        if row["arm_id"] == baseline_arm_id:
+            continue
+        if (
+            float(row["auc_delta_ci_low_vs_locked_baseline"]) > 0.0
+            and float(row["top3_delta_ci_high_vs_locked_baseline"]) >= 0.0
+            and float(row["brier_improvement_ci_high_vs_locked_baseline"]) >= 0.0
+        ):
+            eligible.append(dict(row))
     if not eligible:
         return None
 
@@ -560,7 +823,19 @@ def select_best_mechanistic_arm(
     return candidates[0]
 
 
+def build_lock_rejection_reason(row: Mapping[str, object]) -> str:
+    reasons = []
+    if float(row["auc_delta_ci_low_vs_locked_baseline"]) <= 0.0:
+        reasons.append("AUC delta stays within bootstrap noise")
+    if float(row["top3_delta_ci_high_vs_locked_baseline"]) < 0.0:
+        reasons.append("top-3 hit rate materially degrades")
+    if float(row["brier_improvement_ci_high_vs_locked_baseline"]) < 0.0:
+        reasons.append("Brier score materially degrades")
+    return "; ".join(reasons) if reasons else "meets lock rule"
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    setup_logging()
     args = parse_args(argv)
     logger.info("TL05 starting: retrain mechanistic v1 model")
     ensure_directory(args.output_dir)
@@ -581,6 +856,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     track_d_distance_rows, track_d_distance_columns = _load_rows_and_columns(args.track_d_distance_path)
     tl03_rows, tl03_columns = _load_rows_and_columns(args.tl03_feature_path)
     tl04_rows, tl04_columns = _load_rows_and_columns(args.tl04_feature_path)
+    tl03_provenance = load_tl11_feature_provenance(
+        args.tl03_feature_path,
+        DEFAULT_TL03_MANIFEST_PATH,
+        "TL03",
+        args.st03_split_assignments_path,
+    )
+    tl04_provenance = load_tl11_feature_provenance(
+        args.tl04_feature_path,
+        DEFAULT_TL04_MANIFEST_PATH,
+        "TL04",
+        args.st03_split_assignments_path,
+    )
 
     track_d_feature_columns = _deduplicate(
         [column for column in track_d_genome_columns if column != "phage"]
@@ -595,6 +882,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         split_rows,
         phage_feature_blocks=(track_d_genome_rows, track_d_distance_rows),
         pair_feature_blocks=(tl03_rows, tl04_rows),
+        allow_missing_pair_features=True,
     )
     lightgbm_factory = lambda params, seed_offset: train_v1_binary_classifier.make_lightgbm_estimator(  # noqa: E731
         params,
@@ -620,6 +908,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for arm in arm_specs
     ]
 
+    arm_holdout_rows = {result["arm"].arm_id: result["holdout_prediction_rows"] for result in arm_results}
+    bootstrap_summary = bootstrap_holdout_metric_cis(
+        arm_holdout_rows,
+        bootstrap_samples=args.bootstrap_samples,
+        bootstrap_random_state=args.bootstrap_random_state,
+    )
+
     baseline_result = next(
         result for result in arm_results if result["arm"].arm_id == "locked_baseline_defense_phage_genomic"
     )
@@ -628,10 +923,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result,
             baseline_binary_metrics=baseline_result["holdout_binary_metrics"],
             baseline_top3_metrics=baseline_result["holdout_top3_metrics"],
+            bootstrap_summary=bootstrap_summary,
+            baseline_arm_id=baseline_result["arm"].arm_id,
         )
         for result in arm_results
     ]
-    proposed_arm = select_proposed_arm(arm_metrics, baseline_arm_id="locked_baseline_defense_phage_genomic")
+    proposed_arm = select_locked_arm(arm_metrics, baseline_arm_id="locked_baseline_defense_phage_genomic")
     best_mechanistic_arm = select_best_mechanistic_arm(
         arm_metrics,
         baseline_arm_id="locked_baseline_defense_phage_genomic",
@@ -733,8 +1030,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "baseline_reference_arm_id": baseline_result["arm"].arm_id,
         "best_mechanistic_arm": best_mechanistic_arm,
         "proposed_lock_arm": proposed_arm,
+        "lock_rule": {
+            "primary_metric": PRIMARY_LOCK_METRIC,
+            "secondary_metrics": list(SECONDARY_LOCK_METRICS),
+            "decision_rule": (
+                "Lock only if the candidate's bootstrap CI for ROC-AUC delta vs baseline is entirely above zero "
+                "and the top-3 hit-rate / Brier-improvement deltas are not materially negative."
+            ),
+        },
+        "lock_decision": {
+            "status": "proposed" if proposed_arm is not None else "no_honest_lift",
+            "selected_arm_id": proposed_arm["arm_id"] if proposed_arm is not None else None,
+            "selected_arm_label": proposed_arm["arm_label"] if proposed_arm is not None else None,
+        },
         "shap_arm_id": shap_arm_id,
         "shap_block_importance_totals": shap_block_totals,
+        "bootstrap_ci": {
+            arm_id: {
+                metric_name: {
+                    "point_estimate": metric_ci.point_estimate,
+                    "ci_low": metric_ci.ci_low,
+                    "ci_high": metric_ci.ci_high,
+                    "bootstrap_samples_requested": metric_ci.bootstrap_samples_requested,
+                    "bootstrap_samples_used": metric_ci.bootstrap_samples_used,
+                }
+                for metric_name, metric_ci in bootstrap_summary[arm_id].items()
+            }
+            for arm_id in bootstrap_summary
+            if "__delta_vs_" not in arm_id
+        },
+        "bootstrap_delta_ci_vs_baseline": {
+            arm_id: {
+                metric_name: {
+                    "point_estimate": metric_ci.point_estimate,
+                    "ci_low": metric_ci.ci_low,
+                    "ci_high": metric_ci.ci_high,
+                    "bootstrap_samples_requested": metric_ci.bootstrap_samples_requested,
+                    "bootstrap_samples_used": metric_ci.bootstrap_samples_used,
+                }
+                for metric_name, metric_ci in bootstrap_summary[arm_id].items()
+            }
+            for arm_id in bootstrap_summary
+            if "__delta_vs_" in arm_id
+        },
         "shap_top_features": {
             "global": shap_global_rows[:15],
             "mechanistic_only": [
@@ -763,6 +1101,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             },
             "tl03_features": {"path": str(args.tl03_feature_path), "sha256": _sha256(args.tl03_feature_path)},
             "tl04_features": {"path": str(args.tl04_feature_path), "sha256": _sha256(args.tl04_feature_path)},
+            "tl03_manifest": tl03_provenance,
+            "tl04_manifest": tl04_provenance,
         },
     }
 
@@ -774,12 +1114,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "tl04_feature_count",
         "numeric_feature_count",
         "holdout_roc_auc",
+        "holdout_roc_auc_ci_low",
+        "holdout_roc_auc_ci_high",
         "holdout_brier_score",
+        "holdout_brier_score_ci_low",
+        "holdout_brier_score_ci_high",
         "holdout_top3_hit_rate_all_strains",
+        "holdout_top3_hit_rate_all_strains_ci_low",
+        "holdout_top3_hit_rate_all_strains_ci_high",
         "holdout_top3_hit_rate_susceptible_only",
         "auc_delta_vs_locked_baseline",
+        "auc_delta_ci_low_vs_locked_baseline",
+        "auc_delta_ci_high_vs_locked_baseline",
         "top3_delta_vs_locked_baseline",
+        "top3_delta_ci_low_vs_locked_baseline",
+        "top3_delta_ci_high_vs_locked_baseline",
         "brier_improvement_vs_locked_baseline",
+        "brier_improvement_ci_low_vs_locked_baseline",
+        "brier_improvement_ci_high_vs_locked_baseline",
     ]
 
     write_csv(args.output_dir / "tl05_mechanistic_lift_metrics.csv", metrics_fieldnames, arm_metrics)
@@ -865,8 +1217,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "task_id": "TL05",
             "source_lock_task_id": current_v1_lock.get("source_lock_task_id", "TG09"),
             "selection_policy": (
-                "Select the mechanistic arm that improves at least one holdout metric over the current locked "
-                "defense + phage-genomic baseline, then rank by ROC-AUC, top-3 hit rate, and inverse Brier."
+                "Select the mechanistic arm whose paired bootstrap ROC-AUC delta clears zero and whose top-3 / "
+                "Brier deltas do not materially degrade relative to the current locked defense + phage-genomic "
+                "baseline, then rank by ROC-AUC, top-3 hit rate, and inverse Brier."
             ),
             "baseline_arm_id": baseline_result["arm"].arm_id,
             "proposed_arm_id": proposed_arm["arm_id"],
@@ -881,6 +1234,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "locked_v1_reference": current_v1_lock,
         }
         write_json(args.output_dir / "tl05_proposed_v1_feature_config.json", proposed_config)
+    else:
+        logger.info("TL05 lock rule rejected all mechanistic arms: no honest lift.")
+        rejected_arms = [
+            {
+                "arm_id": row["arm_id"],
+                "arm_label": row["arm_label"],
+                "reason": build_lock_rejection_reason(row),
+            }
+            for row in arm_metrics
+            if row["arm_id"] != baseline_result["arm"].arm_id
+        ]
+        write_json(
+            args.output_dir / "tl05_no_honest_lift_rejections.json",
+            {
+                "task_id": "TL05",
+                "baseline_arm_id": baseline_result["arm"].arm_id,
+                "rejected_arms": rejected_arms,
+                "decision": "no_honest_lift",
+            },
+        )
 
     logger.info("TL05 completed.")
     logger.info("- Locked baseline ROC-AUC: %s", baseline_result["holdout_binary_metrics"]["roc_auc"])

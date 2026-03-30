@@ -877,3 +877,57 @@ columns, with the largest changes concentrated in a handful of OMP- and defense-
    profiles and Thoeris/Rloc/BstA defense associations.
 3. The TL03/TL04 manifests now make the provenance auditable enough to reject stale pre-TL10 artifacts in future
    rebuilds.
+
+### 2026-03-30: TL12 Re-run mechanistic lift evaluation with holdout-clean features and explicit lock rules
+
+#### Executive summary
+
+Re-ran the mechanistic lift evaluation on the same label set and code path, but with the rebuilt TL11 holdout-clean
+TL03/TL04 features. TL05 now validates the TL11 manifests, zero-fills missing TL11 pair rows for holdout bacteria
+instead of crashing, and reports paired bootstrap confidence intervals over holdout strains for ROC-AUC, top-3 hit
+rate, and Brier score.
+
+#### Lock rule
+
+- Predeclared rule: only lock a new mechanistic arm if the paired bootstrap 95% CI for ROC-AUC delta vs the locked
+  baseline is entirely above zero, and the top-3 / Brier deltas do not materially degrade.
+- SHAP is only supporting evidence. It cannot justify a lock when the holdout bootstrap deltas stay within noise.
+
+#### Holdout results
+
+- Locked baseline `defense + phage_genomic`:
+  - ROC-AUC `0.835466` (`0.803481` to `0.864889`)
+  - top-3 hit rate `0.892308` (`0.794872` to `0.933369`)
+  - Brier score `0.146153` (`0.127844` to `0.165627`)
+- `+TL03` RBP-receptor:
+  - ROC-AUC `0.820052` (`0.786865` to `0.851195`)
+  - top-3 hit rate `0.846154` (`0.720855` to `0.878049`)
+  - Brier score `0.148296` (`0.128906` to `0.168768`)
+  - ROC-AUC delta `-0.015414` (`-0.023869` to `-0.006673`)
+- `+TL04` defense-evasion:
+  - ROC-AUC `0.838029` (`0.804850` to `0.867451`)
+  - top-3 hit rate `0.892308` (`0.794118` to `0.931856`)
+  - Brier score `0.144594` (`0.126652` to `0.163641`)
+  - ROC-AUC delta `0.002563` (`-0.002322` to `0.007935`)
+- `+TL03+TL04` combined:
+  - ROC-AUC `0.822875` (`0.793273` to `0.852281`)
+  - top-3 hit rate `0.861538` (`0.756757` to `0.904762`)
+  - Brier score `0.147016` (`0.128598` to `0.166644`)
+  - ROC-AUC delta `-0.012591` (`-0.022734` to `-0.002589`)
+
+#### Decision
+
+- No mechanistic arm cleared the lock rule.
+- TL03 was rejected because it was strictly worse on ROC-AUC and top-3, with ROC-AUC delta still below zero under
+  bootstrap resampling.
+- TL04 was the closest arm, but its ROC-AUC delta CI still crossed zero, so it never left the noise band.
+- The combined arm also stayed inside the noise band and did not rescue the TL03 drop.
+- Conclusion: **no honest lift**. The enrichment-derived pairwise path is a dead end for the current v1 lock.
+
+#### Notebook notes
+
+- The TL12 rerun controls for holdout-strain resampling and the current locked label set.
+- It does not control for lineage confounding beyond the existing split design, so the bootstrap result is an honest
+  holdout comparison, not a mechanistic proof.
+- TL11 excluded holdout bacteria from the enrichment build; TL12 therefore zero-fills missing TL11 pair rows on the
+  holdout side rather than pretending the features were learned from those strains.

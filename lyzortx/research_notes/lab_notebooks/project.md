@@ -1062,3 +1062,21 @@ The first TL03 Codex implement run failed before any repo code ran because `cond
 unsatisfiable on CI (`openjdk` / `fontconfig` solver conflict). That is not a TL03 logic bug, but it is a reminder that
 bioinformatics-heavy tasks should explicitly require CI-compatible environment resolution rather than assuming local and
 CI solvability stay aligned.
+
+### 2026-03-30: TL12 mechanistic lift rerun came back as no honest lift
+
+TL12 re-ran the mechanistic lift evaluation on the TL11 holdout-clean feature rebuild and added a stricter lock rule:
+only promote a mechanistic arm if the paired bootstrap 95% CI for ROC-AUC delta vs the locked baseline is entirely
+above zero, with no material degradation in top-3 hit rate or Brier score. The live rerun used the same label set and
+code path as TL05, zero-filled missing TL11 pair rows on the holdout side, and produced `no honest lift`.
+
+Key holdout results:
+
+- Baseline `defense + phage_genomic`: ROC-AUC `0.835466`, top-3 `0.892308`, Brier `0.146153`.
+- `+TL03`: ROC-AUC `0.820052`, top-3 `0.846154`, Brier `0.148296`.
+- `+TL04`: ROC-AUC `0.838029`, top-3 `0.892308`, Brier `0.144594`.
+- `+TL03+TL04`: ROC-AUC `0.822875`, top-3 `0.861538`, Brier `0.147016`.
+
+The ROC-AUC delta CI for TL04 was still `[-0.002322, 0.007935]`, so it never cleared the lock threshold even though
+its point estimate was the best of the mechanistic arms. TL03 and the combined arm were clearly worse. The correct
+interpretation is that the pairwise enrichment path remains exploratory only; it is not a v1 lock candidate.
