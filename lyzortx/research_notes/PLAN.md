@@ -436,7 +436,7 @@ graph LR
     from genome-derived features should match the pair-table path
   - Document limitations in lab notebook — these are positive-only pairs (no negatives), so AUC and top-3 hit rate
     cannot be computed
-- [ ] **TL10** Fix enrichment holdout leak — TL02 uses full interaction matrix including ST03 holdout strains. Model:
+- [x] **TL10** Fix enrichment holdout leak — TL02 uses full interaction matrix including ST03 holdout strains. Model:
       `gpt-5.4-mini`.
   - Bug: TL02 (PR #259) computes PHROG x receptor/defense enrichment on the full 369x96 interaction matrix including
     ST03 holdout strains. The enrichment weights encode holdout outcomes and leak test information into TL03/TL04
