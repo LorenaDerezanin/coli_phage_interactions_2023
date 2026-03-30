@@ -77,7 +77,7 @@ def test_build_global_feature_importance_rows_labels_blocks() -> None:
 
 
 def test_select_proposed_arm_prefers_highest_auc_mechanistic_gain() -> None:
-    proposal = tl05.select_proposed_arm(
+    proposal = tl05.select_locked_arm(
         [
             {
                 "arm_id": "locked_baseline_defense_phage_genomic",
@@ -90,12 +90,18 @@ def test_select_proposed_arm_prefers_highest_auc_mechanistic_gain() -> None:
                 "holdout_roc_auc": 0.82,
                 "holdout_top3_hit_rate_all_strains": 0.49,
                 "holdout_brier_score": 0.19,
+                "auc_delta_ci_low_vs_locked_baseline": 0.01,
+                "top3_delta_ci_high_vs_locked_baseline": 0.02,
+                "brier_improvement_ci_high_vs_locked_baseline": 0.03,
             },
             {
                 "arm_id": "locked_plus_tl04_defense_evasion",
                 "holdout_roc_auc": 0.79,
                 "holdout_top3_hit_rate_all_strains": 0.55,
                 "holdout_brier_score": 0.18,
+                "auc_delta_ci_low_vs_locked_baseline": -0.01,
+                "top3_delta_ci_high_vs_locked_baseline": 0.01,
+                "brier_improvement_ci_high_vs_locked_baseline": 0.01,
             },
         ],
         baseline_arm_id="locked_baseline_defense_phage_genomic",
@@ -103,6 +109,40 @@ def test_select_proposed_arm_prefers_highest_auc_mechanistic_gain() -> None:
 
     assert proposal is not None
     assert proposal["arm_id"] == "locked_plus_tl03_rbp_receptor"
+
+
+def test_bootstrap_holdout_metric_cis_reports_arm_and_delta_intervals() -> None:
+    bootstrap_summary = tl05.bootstrap_holdout_metric_cis(
+        {
+            "locked_baseline_defense_phage_genomic": [
+                {"bacteria": "B1", "phage": "P1", "label_hard_any_lysis": "1", "predicted_probability": 0.9},
+                {"bacteria": "B1", "phage": "P2", "label_hard_any_lysis": "0", "predicted_probability": 0.2},
+                {"bacteria": "B1", "phage": "P3", "label_hard_any_lysis": "0", "predicted_probability": 0.1},
+                {"bacteria": "B2", "phage": "P1", "label_hard_any_lysis": "0", "predicted_probability": 0.8},
+                {"bacteria": "B2", "phage": "P2", "label_hard_any_lysis": "0", "predicted_probability": 0.2},
+                {"bacteria": "B2", "phage": "P3", "label_hard_any_lysis": "1", "predicted_probability": 0.7},
+            ],
+            "locked_plus_tl03_rbp_receptor": [
+                {"bacteria": "B1", "phage": "P1", "label_hard_any_lysis": "1", "predicted_probability": 0.95},
+                {"bacteria": "B1", "phage": "P2", "label_hard_any_lysis": "0", "predicted_probability": 0.15},
+                {"bacteria": "B1", "phage": "P3", "label_hard_any_lysis": "0", "predicted_probability": 0.05},
+                {"bacteria": "B2", "phage": "P1", "label_hard_any_lysis": "0", "predicted_probability": 0.7},
+                {"bacteria": "B2", "phage": "P2", "label_hard_any_lysis": "0", "predicted_probability": 0.1},
+                {"bacteria": "B2", "phage": "P3", "label_hard_any_lysis": "1", "predicted_probability": 0.85},
+            ],
+        },
+        bootstrap_samples=32,
+        bootstrap_random_state=7,
+    )
+
+    assert bootstrap_summary["locked_baseline_defense_phage_genomic"]["holdout_roc_auc"].bootstrap_samples_used == 32
+    assert bootstrap_summary["locked_plus_tl03_rbp_receptor"]["holdout_roc_auc"].ci_low is not None
+    assert (
+        bootstrap_summary["locked_plus_tl03_rbp_receptor__delta_vs_locked_baseline_defense_phage_genomic"][
+            "holdout_top3_hit_rate_all_strains"
+        ].ci_high
+        is not None
+    )
 
 
 def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, monkeypatch) -> None:
@@ -305,6 +345,18 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
         "load_v1_lock",
         lambda path: {"winner_subset_blocks": ["defense", "phage_genomic"], "source_lock_task_id": "TG09"},
     )
+    monkeypatch.setattr(
+        tl05,
+        "load_tl11_feature_provenance",
+        lambda *args, **kwargs: {
+            "manifest_path": str(tmp_path / "fake_manifest.json"),
+            "manifest_sha256": "fake",
+            "feature_path": str(args[0]),
+            "feature_sha256": "fake",
+            "holdout_bacteria_ids": ["B2"],
+            "excluded_pair_rows": 1,
+        },
+    )
     monkeypatch.setattr(tl05, "evaluate_arm", fake_evaluate_arm)
     fake_shap_module = types.SimpleNamespace(TreeExplainer=FakeExplainer)
     monkeypatch.setitem(sys.modules, "shap", fake_shap_module)
@@ -341,6 +393,8 @@ def test_main_writes_lift_and_shap_outputs_with_mocked_training(tmp_path: Path, 
     shap_rows = list(csv.DictReader((output_dir / "tl05_shap_global_feature_importance.csv").open(encoding="utf-8")))
 
     assert len(metrics_rows) == 4
-    assert summary["proposed_lock_arm"]["arm_id"] == "locked_plus_tl03_rbp_receptor"
-    assert (output_dir / "tl05_proposed_v1_feature_config.json").exists()
-    assert shap_rows[0]["feature_block"] == "tl03_mechanistic"
+    assert summary["lock_decision"]["status"] == "no_honest_lift"
+    assert summary["proposed_lock_arm"] is None
+    assert (output_dir / "tl05_no_honest_lift_rejections.json").exists()
+    assert "holdout_roc_auc_ci_low" in metrics_rows[0]
+    assert shap_rows

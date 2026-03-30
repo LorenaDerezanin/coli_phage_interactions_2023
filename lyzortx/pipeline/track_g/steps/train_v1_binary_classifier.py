@@ -485,6 +485,8 @@ def merge_expanded_feature_rows(
     split_rows: Sequence[Mapping[str, str]],
     phage_feature_blocks: Sequence[Sequence[Mapping[str, str]]],
     pair_feature_blocks: Sequence[Sequence[Mapping[str, str]]],
+    *,
+    allow_missing_pair_features: bool = False,
 ) -> List[Dict[str, object]]:
     split_by_pair = {row["pair_id"]: row for row in split_rows}
     phage_indexes: List[Tuple[Dict[str, Dict[str, str]], Tuple[str, ...]]] = []
@@ -520,7 +522,11 @@ def merge_expanded_feature_rows(
         for pair_index, columns in pair_indexes:
             pair_row = pair_index.get(pair_id)
             if pair_row is None:
-                raise KeyError(f"Missing pair-level feature row for pair_id {pair_id}")
+                if not allow_missing_pair_features:
+                    raise KeyError(f"Missing pair-level feature row for pair_id {pair_id}")
+                for column in columns:
+                    merged[column] = 0.0
+                continue
             for column in columns:
                 merged[column] = pair_row[column]
 
