@@ -621,7 +621,7 @@ tracks:
       - Run SHAP on the new model to verify mechanistic features contribute signal
     - id: TL06
       title: Persist fitted transforms for novel-organism feature projection
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature

@@ -390,7 +390,7 @@ graph LR
   - Report AUC, top-3, Brier delta vs the current locked baseline for each feature block independently and combined
   - If mechanistic features improve metrics, propose a new locked v1 config
   - Run SHAP on the new model to verify mechanistic features contribute signal
-- [ ] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
+- [x] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
   - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature CSV so novel phage FNAs can be
     projected into the existing 24-dim embedding
   - Save the TC01 defense subtype column mask (variance filter thresholds and ordered column list) so novel Defense
