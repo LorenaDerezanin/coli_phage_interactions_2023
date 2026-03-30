@@ -551,3 +551,131 @@ calibration, and returns a ranked DataFrame with columns `phage`, `p_lysis`, and
 - The integration test is honest about the repo's current data gap. We can verify the full inference math against panel
   predictions now, but a true end-to-end host-genome regression on a panel strain will require committing or
   regenerating local host assemblies in a follow-up task.
+
+### 2026-03-30: TL09 Virus-Host DB positive-only validation of generalized inference
+
+#### Executive summary
+
+Built a Track L validation step that mines the live Virus-Host DB, selects assembly-backed _E. coli_ hosts from NCBI,
+downloads the host assemblies plus associated phage genomes, and runs the TL08 genome-only inference bundle on each host
+against the union of its known Virus-Host DB phages plus the 96 panel phages. The current Virus-Host DB snapshot is
+substantially larger than the original plan estimate: after filtering to strain-level _E. coli_ hosts (`tax_id != 562`)
+with RefSeq accessions, it contained **82 hosts**, **1,304 phage accessions**, and **1,323 unique positive pairs**.
+
+The validation result is negative for the current genome-only model. On the 10 selected novel hosts plus 1 round-trip
+panel host, the overall median predicted `P(lysis)` for known positive pairs was **0.0264**, far below both the panel
+base rate (**0.2756**) and the matched random-pair median (**0.2043**). The median host-level positive rank percentile
+was **0.235**, meaning the known positives typically ranked in the bottom quartile of each host's candidate set rather
+than above the midpoint. The one panel-host round-trip comparison that was actually comparable through the saved TL08
+reference table (`EDL933`) also showed poor agreement: median absolute probability delta **0.1595** and only **10/96**
+panel-phage ranks identical.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_l/steps/validate_vhdb_generalized_inference.py`.
+  - Downloads the live Virus-Host DB TSV and RefSeq assembly summary.
+  - Filters to strain-level _E. coli_ hosts with phage RefSeq accessions.
+  - Resolves best host assemblies from RefSeq and downloads host genomic FASTAs.
+  - Downloads associated phage genomes from NCBI `nuccore` FASTA with explicit Entrez rate limiting and retry/backoff.
+  - Builds or reuses the TL08 inference bundle, projects external hosts/phages, scores each host against the union of
+    its known positives plus the 96 panel phages, and writes per-host plus aggregate validation outputs under
+    `lyzortx/generated_outputs/track_l/vhdb_generalized_inference_validation/`.
+  - Computes positive-only metrics and a panel-host round-trip comparison table.
+- Refactored `lyzortx/pipeline/track_l/steps/generalized_inference.py`.
+  - Added reusable helpers to load the TL08 runtime, project hosts, project phages, and score projected feature rows.
+  - Kept the public `infer(host_genome_path, phage_fna_paths, model_path)` contract unchanged.
+- Updated `lyzortx/pipeline/track_l/run_track_l.py` with a `validate-vhdb-generalized-inference` step.
+- Added `lyzortx/tests/test_track_l_vhdb_generalized_inference.py` covering host-name matching, assembly prioritization,
+  cohort selection, and the positive-only metric calculations.
+
+#### Cohort mining and selection
+
+- **Live Virus-Host DB filter result**:
+  - 82 strain-level _E. coli_ hosts
+  - 1,304 phage accessions
+  - 1,323 unique positive host-phage pairs
+- **Hosts with >=5 associated phages and exact RefSeq assembly match**: 24
+- **Novel-host validation cohort (10 hosts)**:
+  - `E. coli O78` (5 phages)
+  - `E. coli str. K-12 substr. DH10B` (5)
+  - `E. coli BW25113` (7)
+  - `E. coli CFT073` (7)
+  - `E. coli O104:H4` (7)
+  - `E. coli O157` (11)
+  - `E. coli ATCC 25922` (17)
+  - `E. coli O26:H11` (19)
+  - `E. coli O121:H19` (52)
+  - `E. coli O145:H28` (60)
+- **Round-trip panel cohort actually comparable through the TL08 saved reference table**:
+  - `EDL933` only. Virus-Host DB also contains `LF82`, `55989`, `536`, and `BL21` aliases, but the current
+    `tl08_locked_panel_predictions.csv` artifact only had saved rows for `EDL933`, so the other panel-host examples
+    could not be compared against a panel-path reference without rebuilding a different reference artifact.
+
+To keep CI/runtime bounded while still satisfying the "at least 10 novel hosts" acceptance criterion, the selection
+policy preferred **complete-genome assemblies with the smallest qualifying positive-set sizes first**, rather than
+trying to score the largest hosts such as _E. coli_ C or MG1655 with hundreds of associated phages each.
+
+#### Validation outputs and metrics
+
+- **Evaluated positives**: 192 host-phage pairs across 11 hosts (10 novel + 1 round-trip panel host).
+- **Candidate set sizes per host**: 98 to 156 phages (known Virus-Host DB positives for that host + 96 panel phages).
+- **Overall metrics**:
+  - Panel base rate from ST0.2 resolved rows: `0.2756`
+  - Median predicted `P(lysis)` for known positives: `0.0264`
+  - Median predicted `P(lysis)` for matched random candidate pairs: `0.2043`
+  - Median host-level positive rank percentile: `0.2353`
+  - Hosts with median positive rank percentile above `0.5`: `3 / 11`
+  - Hosts with median positive `P(lysis)` above the panel base rate: `4 / 11`
+- **Best novel-host slices by positive median `P(lysis)`**:
+  - `E. coli ATCC 25922`: `0.5783`
+  - `E. coli CFT073`: `0.4188`
+  - `E. coli O157`: `0.3460`
+  - `E. coli DH10B`: `0.2824`
+- **Worst slices**:
+  - `E. coli O121:H19`: `0.0264`
+  - `E. coli O145:H28`: `0.0264`
+  - `E. coli O26:H11`: `0.0264`
+  - `EDL933` round-trip positives: `0.0264`
+
+#### Round-trip sanity check
+
+- Only `EDL933` could be compared directly against the saved TL08 panel-prediction artifact.
+- On the 96 panel phages:
+  - median absolute probability delta vs the saved TL08 panel-path predictions: `0.1595`
+  - max absolute probability delta: `0.3183`
+  - identical rank positions: `10 / 96`
+
+This is not a successful round-trip. The genome-derived host projection for the downloaded `EDL933` assembly does not
+recover the saved panel prediction surface with useful fidelity.
+
+#### Interpretation
+
+- **The current TL08 genome-only model does not generalize to this Virus-Host DB external-positive cohort.** The core
+  validation expectations were missed in the wrong direction: known positives scored below the panel base rate, below
+  matched random candidate pairs, and below the candidate-set midpoint by rank.
+- The failure is not uniform. A few hosts (`ATCC 25922`, `CFT073`, `O157`, `DH10B`) showed some signal, but the cohort
+  as a whole is dominated by poor ranking and collapsed probabilities near the isotonic floor.
+- The negative result is biologically plausible. TL08 only uses host defense features plus phage tetranucleotide
+  embeddings. It does **not** use receptor, surface, or annotation-derived mechanistic features at inference time, so
+  external host-range positives that depend strongly on adsorption biology are not well captured.
+- The round-trip miss on `EDL933` suggests the host-genome projection path itself is also part of the problem, not just
+  external cohort shift. Differences between the downloaded assembly's defense profile and the internal panel row appear
+  large enough to materially change the prediction surface.
+
+#### Limitations
+
+- This is a **positive-only** validation. There are no authoritative negatives for the Virus-Host DB cohort, so **AUC,
+  ROC, PR curves, and top-3 hit rate cannot be computed honestly** here.
+- The round-trip check was weaker than originally hoped because only `EDL933` overlapped with the saved TL08 reference
+  prediction artifact. `LF82`, `55989`, `536`, and `BL21` were present in Virus-Host DB but not in the saved reference
+  table generated by the current TL08 bundle build.
+- The selection policy intentionally avoided the largest hosts (for example _E. coli_ C, MG1655, K-12, O157:H7) to keep
+  runtime tractable in CI. That tradeoff preserves coverage of 10 novel hosts but does not exhaust the external cohort.
+
+#### Conclusion
+
+TL09 should be treated as a failed external validation for the current genome-only deployment path, not as supporting
+evidence. If Track L continues, the next technically honest move is to revisit the deployable feature set rather than
+trying to polish this evaluation. The obvious direction is to test whether the annotation-derived mechanistic blocks
+from TL03/TL04 can be made available at inference time for arbitrary genomes, because the current defense + k-mer-only
+bundle is not carrying enough cross-cohort signal.
