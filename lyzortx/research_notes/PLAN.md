@@ -420,7 +420,7 @@ graph LR
   - No dependency on the static pair table or the 404-strain panel metadata
   - Integration test using one panel strain genome reproduces the locked model predictions for that strain within
     calibration tolerance
-- [ ] **TL09** Validate generalized inference on Virus-Host DB positive pairs. Model: `gpt-5.4`.
+- [x] **TL09** Validate generalized inference on Virus-Host DB positive pairs. Model: `gpt-5.4`.
   - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage genome accessions on NCBI — expect ~70
     strains, ~900 phage genomes, ~500 positive pairs
   - Download genome assemblies from NCBI for at least 10 novel hosts (strains not in the 404 training panel) that each

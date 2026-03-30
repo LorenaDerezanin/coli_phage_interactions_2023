@@ -667,7 +667,7 @@ tracks:
         predictions for that strain within calibration tolerance
     - id: TL09
       title: Validate generalized inference on Virus-Host DB positive pairs
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage
