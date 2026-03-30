@@ -966,3 +966,49 @@ strengthen the learned associations.
 **What to do if triggered:** Identify external interaction datasets (e.g., from NCBI, PhageScope, published
 supplementary tables). Run the Track L annotation + Track C host typing pipelines on the external genomes. Pool the
 encoded interactions with internal training data and retrain. Measure lift from the expanded training set.
+
+### 2026-03-30: Track L replan — enrichment holdout leak and external validation failure
+
+#### Executive summary
+
+Post-completion review of Track L identified two independent problems: (1) TL02's enrichment analysis includes ST03
+holdout strains in the interaction matrix, leaking test data into TL03/TL04 feature weights; (2) the TL08 genome-only
+inference bundle fails external validation on Virus-Host DB (known positives score below random pairs). These are
+separate issues — the leak affects in-panel evaluation trustworthiness, the external failure reflects an architectural
+gap in the deployable feature set.
+
+#### What changed in the plan
+
+- **TL10 added**: Fix the enrichment holdout leak in `run_enrichment_analysis.py` by filtering out ST03 holdout bacteria
+  before calling `compute_enrichment()`. Mechanical fix — the permutation test is sound, only the input selection is
+  wrong.
+- **TL03/TL04/TL05**: Remain marked done for now. After TL10 lands, they will need re-evaluation (separate tickets) to
+  determine whether enrichment features provide any honest lift with holdout-clean weights.
+
+#### Diagnosis summary
+
+Three compounding issues in Track L:
+
+1. **TL02 enrichment circularity (confirmed, 98% confidence)**: `run_enrichment_analysis.py` loads
+   `label_set_v1_pairs.csv` (all 369 bacteria) with no holdout filtering. `compute_enrichment()` has no holdout
+   parameter. The TL02 acceptance criteria explicitly said "uses the full interaction matrix." Fixed by TL10.
+
+2. **TL08 genome-only bundle is feature-impoverished (confirmed, 80% confidence)**: TL08 trains on only defense subtypes
+   (79 features) + phage k-mer SVD (26 features). It drops the entire v0 metadata block (serotype, phylogroup,
+   morphotype, ~20 categorical features), OMP receptor variants, UMAP embeddings, and all phage taxonomy. Many of these
+   are genome-derivable but were not wired into TL08. The EDL933 round-trip failure (median P(lysis) delta 0.14, 9/96
+   ranks matching) is primarily explained by this feature-set mismatch, not by defense annotation lossiness.
+
+3. **No pairwise compatibility signal in deployable model (moderate confidence, 70%)**: Neither defense subtypes nor
+   k-mer SVD encode how a specific phage interacts with a specific host surface. The model memorizes panel-specific
+   defense-profile × k-mer-profile combinations that don't transfer to novel genomes. Adding genome-derivable
+   compatibility features (OMP receptors, enrichment-weighted PHROG × receptor pairs) to the inference bundle is the
+   most promising direction, but requires TL10 first to make the enrichment weights honest.
+
+#### What is still sound
+
+- Pharokka annotation pipeline (TL01): correct and biologically reasonable.
+- Enrichment module statistics (TL02 implementation): permutation test, BH correction, phage conditioning all sound.
+- Generalized inference architecture (TL06–TL08): plumbing is correct, transform persistence works.
+- Novel organism projection helpers (TL06, TL07): tested and correct.
+- Leakage diagnosis from Track G (TG04–TG12): rigorous and honest.

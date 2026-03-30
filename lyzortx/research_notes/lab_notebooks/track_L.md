@@ -679,3 +679,38 @@ evidence. If Track L continues, the next technically honest move is to revisit t
 trying to polish this evaluation. The obvious direction is to test whether the annotation-derived mechanistic blocks
 from TL03/TL04 can be made available at inference time for arbitrary genomes, because the current defense + k-mer-only
 bundle is not carrying enough cross-cohort signal.
+
+### 2026-03-30: Replan — TL02 enrichment holdout leak identified
+
+#### Executive summary
+
+Post-completion review of Track L found that TL02's enrichment analysis uses the full 369×96 interaction matrix
+including ST03 holdout strains. The enrichment weights therefore encode holdout outcomes, leaking test information into
+TL03/TL04 features. TL10 has been added to fix this. TL03/TL04/TL05 will need re-evaluation after the fix.
+
+#### Bug details
+
+`run_enrichment_analysis.py` loads `label_set_v1_pairs.csv` (all 369 bacteria) at line 394 and builds the bacteria list
+from all rows at lines 409–423 with no holdout filtering. `compute_enrichment()` at line 96 has no holdout parameter.
+The TL02 acceptance criteria explicitly said "each analysis uses the full interaction matrix" — the implementing agent
+followed the criteria literally.
+
+The permutation test itself is statistically sound (host-label permutation, phage conditioning, BH correction, null
+calibration at 3% FPR vs Fisher's 25%). Only the input data selection is wrong.
+
+#### Impact on downstream tasks
+
+- **TL03/TL04**: Feature weights are derived from enrichment associations computed on all 369 bacteria including holdout.
+  The weights may partially encode holdout-strain patterns.
+- **TL05**: Holdout metric deltas (+0 to +4.6pp top-3 across arms) were already within noise on 65 holdout strains.
+  The local rerun produced different arm rankings than CI, confirming these deltas are not statistically robust. The
+  enrichment leak adds a further validity concern on top of the power concern.
+- **TL06–TL09**: The generalized inference bundle (TL08) uses only defense + k-mer features, not TL03/TL04 enrichment
+  features. TL09's external validation failure is therefore NOT caused by this leak — it is caused by the genome-only
+  feature set lacking compatibility signal. The leak is a separate problem.
+
+#### What TL10 fixes
+
+TL10 adds holdout filtering to `run_enrichment_analysis.py` (load ST03 split assignments, exclude holdout bacteria
+before calling `compute_enrichment()`). It does not modify the enrichment module itself. After TL10, TL03/TL04/TL05
+will need re-evaluation to determine whether the enrichment features provide any honest lift.

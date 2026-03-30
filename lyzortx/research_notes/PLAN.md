@@ -436,6 +436,31 @@ graph LR
     from genome-derived features should match the pair-table path
   - Document limitations in lab notebook — these are positive-only pairs (no negatives), so AUC and top-3 hit rate
     cannot be computed
+- [ ] **TL10** Fix enrichment holdout leak — TL02 uses full interaction matrix including ST03 holdout strains. Model:
+      `gpt-5.4-mini`.
+  - Bug: TL02 (PR #259) computes PHROG x receptor/defense enrichment on the full 369x96 interaction matrix including
+    ST03 holdout strains. The enrichment weights encode holdout outcomes and leak test information into TL03/TL04
+    features.
+  - Root cause: TL02 acceptance criteria said "each analysis uses the full interaction matrix (positive and negative
+    outcomes), not just generalist/specialist tails". The intent was to use both positives and negatives (correct), but
+    the criteria failed to require holdout exclusion.
+  - Bug location 1 — run_enrichment_analysis.py:6: docstring says "using the full interaction matrix"
+  - Bug location 2 — run_enrichment_analysis.py:394: loads label_set_v1_pairs.csv (all 369 bacteria) with no split
+    filtering
+  - Bug location 3 — run_enrichment_analysis.py:409-423: builds bacteria list from all label rows with no holdout
+    exclusion
+  - Bug location 4 — annotation_interaction_enrichment.py:96-105: compute_enrichment() has no holdout parameter
+  - What is NOT broken: the permutation test itself is statistically sound. Only the input data selection is wrong.
+  - Fix: add a holdout_bacteria parameter to run_enrichment_analysis.py that accepts bacteria IDs to exclude. Load ST03
+    split assignments and filter holdout bacteria rows from the interaction matrix, host feature matrices, and resolved
+    mask BEFORE calling compute_enrichment(). Do not modify compute_enrichment() itself.
+  - Add a unit test verifying that holdout bacteria are absent from the matrices passed to compute_enrichment()
+  - Add a null-calibration regression test that runs enrichment on random binary features and asserts FPR is below 10%
+    at alpha 0.05
+  - Rerun all three enrichment analyses with the holdout-excluded matrix and output updated CSVs to
+    lyzortx/generated_outputs/track_l/enrichment/
+  - Document the before/after significant-hit-count delta in the track_L lab notebook
+  - Note: TL03/TL04/TL05 depend on these outputs and will need re-evaluation after this fix (separate tickets)
 
 ## Track J: Reproducibility and Release Quality
 
