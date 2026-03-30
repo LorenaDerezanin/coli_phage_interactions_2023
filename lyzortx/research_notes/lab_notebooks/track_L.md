@@ -749,3 +749,60 @@ test itself was left unchanged. Updated CSVs were written to `lyzortx/generated_
 
 The leaked holdout rows were enough to move the enrichment weights and the hit counts, but not enough to dominate the
 signal completely. TL03, TL04, and TL05 all need to be re-evaluated against the holdout-excluded enrichment CSVs.
+
+### 2026-03-30: Replan follow-up — acceptance-criteria hardening for TL11-TL14
+
+#### Executive summary
+
+After the initial replan, I reviewed the actual TL03-TL09 PRs plus the failed TL03 Codex implement run to separate
+"bug in the implementation" from "task definition let the wrong thing count as done." The follow-on Track L tasks now
+encode the lessons directly. The next pass must prove provenance of holdout-clean inputs, quantify uncertainty before
+locking a mechanistic arm, make the deployable bundle honest about missing feature blocks, and require a real
+round-trip cohort before claiming external validation says anything useful.
+
+#### Why the original criteria were too weak
+
+- **TL03/TL04**: good builders, but their downstream plan path never required manifests or regression tests proving that
+  the rebuilt features came from holdout-clean enrichment outputs rather than stale leaked CSVs.
+- **TL05**: the task asked for metric deltas and SHAP, but did not force bootstrap uncertainty or a decision rule for
+  when a new lock is actually justified. That left room for a noisy +1 to +4 pp top-3 bump to look more decisive than
+  it was.
+- **TL08**: the bundle task required working inference plumbing, not an honest accounting of which training-time
+  signals were dropped when moving to deployable genome-only inference.
+- **TL09**: the validation task required scoring 10 novel hosts, but did not require pre-materializing the exact cohort
+  or proving ahead of time that the round-trip panel hosts were actually comparable through saved reference artifacts.
+
+#### What the new acceptance checks enforce
+
+- **TL11**: rebuilt TL03/TL04 outputs must carry manifests listing the exact enrichment inputs, split file, excluded
+  holdout IDs, and output hashes. Reusing pre-TL10 enrichment outputs is an explicit failure case.
+- **TL11**: fixtures now need negative cases where the host lacks the target receptor/defense feature, and the emitted
+  pairwise weight must be exactly zero. This closes the same kind of weak-fixture gap that PR review had to catch in
+  TL04.
+- **TL12**: the mechanistic re-evaluation must recompute all four arms from the same live code path and report
+  bootstrap CIs. A new lock is forbidden unless the chosen arm beats the noise band and does not materially degrade the
+  other metrics.
+- **TL13**: the deployable bundle must begin with a feature-parity audit table and fail if it silently drops or
+  substitutes feature blocks. Hardcoded repo-root paths and hidden dependencies on gitignored generated outputs are now
+  explicit failures.
+- **TL14**: the external cohort must be saved before scoring, keeping `positive_pair_count`, `unique_phage_count`,
+  `host_count`, and `candidate_set_size` as separate validated quantities. Multi-host round-trip comparison is now a
+  gate rather than a best-effort note in the limitations section.
+
+#### Review-derived lessons encoded into the next tasks
+
+- **TL04 PR review** caught that a test fixture with identical defense profiles could not prove absence behavior. TL11
+  now requires a true zero-feature case.
+- **TL07 PR review** caught that cache short-circuiting happened too late, after expensive preprocessing work. Future
+  runtime tasks should treat "cache hit skips heavy work" as an acceptance requirement, not a review nit.
+- **TL08 PR review** caught that the bundle still relied on hardcoded panel paths. TL13 now treats bundle-relative
+  artifact resolution as part of correctness, not cleanup.
+- **TL09 PR review** caught parser realism, runtime reuse, and cohort-count semantics. TL14 now requires those
+  distinctions in the acceptance criteria themselves.
+
+#### Codex run note
+
+The first TL03 Codex implement run failed in CI before task code executed because `conda env create -f environment.yml`
+was unsatisfiable on the runner (`openjdk` solver conflict). That is separate from the scientific mistakes above, but it
+supports tightening future Track L tasks so environment solvability is validated explicitly whenever new bioinformatics
+dependencies are part of the work.

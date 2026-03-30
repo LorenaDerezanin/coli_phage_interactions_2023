@@ -1012,3 +1012,53 @@ Three compounding issues in Track L:
 - Generalized inference architecture (TL06–TL08): plumbing is correct, transform persistence works.
 - Novel organism projection helpers (TL06, TL07): tested and correct.
 - Leakage diagnosis from Track G (TG04–TG12): rigorous and honest.
+
+### 2026-03-30: Track L replan follow-up — tighten downstream acceptance criteria
+
+#### Executive summary
+
+Reviewed the TL03-TL09 PRs, the failed TL03 Codex implement run, and the Track L notebook entries to identify which
+mistakes were implementation accidents versus plan-specification failures. The main issue was under-specified acceptance
+criteria: several tasks allowed a technically plausible but strategically wrong completion to count as done. The plan
+now adds TL11-TL14 to make the next pass fail fast on the specific mistakes we can already anticipate.
+
+#### What changed in the plan
+
+- **TL11 added**: rebuild TL03/TL04 from TL10's holdout-clean enrichment outputs and emit manifests proving which split
+  and which excluded bacteria IDs were used.
+- **TL12 added**: rerun mechanistic lift with bootstrap confidence intervals and a predeclared lock rule, so tiny noisy
+  deltas can no longer justify a new v1 configuration.
+- **TL13 added**: rebuild the deployable bundle under an explicit feature-parity audit and self-contained-artifact
+  contract; silently dropping training-time feature blocks no longer counts as success.
+- **TL14 added**: rerun external validation under a strict cohort contract with a required multi-host round-trip check,
+  so "validation succeeded as a script run" is separated from "bundle actually generalized."
+
+#### Mistakes these new tasks are meant to prevent
+
+1. **Leaked-but-plausible mechanistic rebuilds**: TL03/TL04 were scientifically framed correctly, but nothing in their
+   original follow-on criteria would have forced the re-evaluation to prove it was using TL10-clean inputs rather than
+   stale leaked enrichment CSVs.
+
+2. **Locking on noise**: TL05 proposed a new mechanistic lock from holdout deltas that were already within noise on a
+   65-strain holdout. The next task must report uncertainty and apply a stated decision rule before it is allowed to
+   promote any arm.
+
+3. **Plumbing without feature-parity honesty**: TL08 proved that the bundle machinery works, but it was allowed to ship
+   a genome-only model that omitted many training-time signals without first surfacing that gap as a formal feature
+   parity audit.
+
+4. **Validation with too-weak round-trip guarantees**: TL09 named several panel-host examples, but only `EDL933` was
+   actually comparable through the saved reference artifact. Future validation tasks must pre-materialize the cohort and
+   treat round-trip host count as a gate, not a hope.
+
+5. **Review-thread fixes discovered too late**: several issues were caught only in PR review rather than by the task
+   contract itself, including weak negative fixtures (TL04), late cache short-circuiting (TL07), hardcoded panel paths
+   in the bundle (TL08), and under-specified parsing/selection semantics (TL09). TL11-TL14 now encode those lessons
+   directly as acceptance checks.
+
+#### Additional note from Codex workflow logs
+
+The first TL03 Codex implement run failed before any repo code ran because `conda env create -f environment.yml` was
+unsatisfiable on CI (`openjdk` / `fontconfig` solver conflict). That is not a TL03 logic bug, but it is a reminder that
+bioinformatics-heavy tasks should explicitly require CI-compatible environment resolution rather than assuming local and
+CI solvability stay aligned.

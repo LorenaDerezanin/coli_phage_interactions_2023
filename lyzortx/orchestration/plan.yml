@@ -727,6 +727,95 @@ tracks:
       - Document the before/after significant-hit-count delta in the track_L lab notebook
       - 'Note: TL03/TL04/TL05 depend on these outputs and will need re-evaluation
         after this fix (separate tickets)'
+    - id: TL11
+      title: Rebuild TL03/TL04 mechanistic feature blocks from holdout-clean enrichment
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Rebuild the TL03 and TL04 outputs using only the TL10 holdout-excluded enrichment
+        CSVs; using any pre-TL10 enrichment artifact is a failure
+      - Write a manifest alongside each rebuilt output recording the exact enrichment
+        input paths, split file, excluded holdout bacteria IDs, and output file hashes
+      - Add a regression test proving no ST03 holdout bacteria IDs appear in any matrix
+        row or emitted feature row used to construct the rebuilt TL03/TL04 outputs
+      - 'Report before/after deltas versus the leaked TL03/TL04 outputs: feature counts,
+        non-zero row counts, and the top weighted associations whose values changed materially'
+      - Add at least one fixture where the target host lacks the relevant receptor or
+        defense feature and assert the emitted pairwise mechanistic weight is exactly
+        zero rather than silently inherited from another row
+      - Document the rebuilt output statistics and the most important changed associations
+        in the Track L lab notebook
+    - id: TL12
+      title: Re-run mechanistic lift evaluation with holdout-clean features and explicit
+        lock rules
+      status: pending
+      model: gpt-5.4-mini
+      acceptance_criteria:
+      - Recompute the baseline, +TL03, +TL04, and +TL03+TL04 arms from the same code
+        path and same label set using the rebuilt TL11 features; comparing against stale
+        saved metrics is a failure
+      - Report bootstrap confidence intervals over holdout strains for AUC, top-3 hit
+        rate, and Brier score for all four arms
+      - 'Predeclare and apply a lock rule in code and notebook text: do not propose
+        a new locked configuration unless the candidate improves the primary metric
+        beyond the bootstrap noise band and does not materially degrade the other metrics'
+      - SHAP may be reported as supporting evidence, but it cannot justify a lock if
+        the holdout deltas remain within noise
+      - If all mechanistic arms are within noise, explicitly conclude "no honest lift"
+        and mark the enrichment-derived pairwise path as a dead end for the current
+        v1 lock instead of proposing a new configuration
+      - Document the decision, including the rejected arms and why they were rejected,
+        in the Track L and project lab notebooks
+    - id: TL13
+      title: Rebuild the generalized inference bundle with a feature-parity and self-contained
+        artifact contract
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - 'Start by producing a feature-parity audit table for the panel model: every
+        training-time feature block must be labeled as deployable now, deployable
+        in this task, or not deployable, with a one-sentence rationale for each'
+      - The task fails if any feature block used by the rebuilt deployable bundle is
+        dropped or substituted without being listed explicitly in the parity audit and
+        in the bundle metadata
+      - All runtime artifacts required by inference must resolve relative to the saved
+        bundle directory; any hardcoded repo-root path or hidden dependency on gitignored
+        generated outputs is a failure
+      - Include at least one newly deployable compatibility block beyond defense+k-mer
+        if the parity audit identifies one as technically available from raw genomes;
+        if none are available, the task must fail loudly with that conclusion rather
+        than silently rebuilding another feature-impoverished bundle
+      - Add ablation checks on real examples showing that each newly added deployable
+        block changes the inference surface; wiring a block that has no measurable effect
+        on any example host-phage ranking does not satisfy the task
+      - Regenerate round-trip reference predictions for a predeclared panel-host cohort
+        with available assemblies and save them inside the bundle so downstream validation
+        is not limited by missing reference artifacts
+    - id: TL14
+      title: Re-run external validation with a strict cohort contract and multi-host
+        round-trip sanity check
+      status: pending
+      model: gpt-5.4
+      acceptance_criteria:
+      - 'Materialize and save the exact validation cohort before scoring: host IDs,
+        host assembly accessions, phage accessions, positive-pair counts, unique-phage
+        counts, candidate-set sizes, and which hosts qualify for panel round-trip
+        comparison'
+      - 'Round-trip validation is an explicit gate, not an aspiration: score at least
+        3 panel hosts with genome assemblies and saved reference predictions; if fewer
+        than 3 qualify, first regenerate the missing references or fail loudly'
+      - Keep positive_pair_count, unique_phage_count, host_count, and candidate_set_size
+        as separate validated quantities in code and tests; selection logic must not
+        conflate them
+      - Positive-only evaluation must report the raw per-host metrics plus aggregate
+        summaries, and must compare known positives against matched random candidate
+        pairs from the same host-specific candidate set
+      - If the rebuilt bundle still misses the expected thresholds, the task may complete
+        only if the notebook and project note explicitly label the result as failed
+        external validation and make no supportive claim about generalization
+      - 'End with one of three explicit conclusions recorded in code outputs and notebooks:
+        deployable bundle validated, deployable bundle failed, or validation inconclusive
+        because the cohort contract could not be satisfied'
   J:
     name: Reproducibility and Release Quality
     description: One-command regeneration and environment freezing for v1 pipeline.
