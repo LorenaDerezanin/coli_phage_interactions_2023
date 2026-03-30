@@ -22,6 +22,7 @@ from lyzortx.pipeline.track_l.steps import (
     retrain_mechanistic_v1_model,
     run_enrichment_analysis,
     run_pharokka,
+    validate_vhdb_generalized_inference,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "defense-features",
             "retrain-mechanistic-v1",
             "generalized-inference-bundle",
+            "validate-vhdb-generalized-inference",
             "all",
         ],
         default="all",
@@ -74,6 +76,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "'defense-features' runs TL04 mechanistic defense-evasion feature construction. "
             "'retrain-mechanistic-v1' runs TL05 model retraining, lift measurement, and SHAP summary. "
             "'generalized-inference-bundle' builds the TL08 genome-only LightGBM + isotonic inference artifact. "
+            "'validate-vhdb-generalized-inference' runs TL09 positive-only validation on Virus-Host DB hosts. "
             "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
         ),
     )
@@ -142,6 +145,8 @@ def main(argv: list[str] | None = None) -> None:
         retrain_mechanistic_v1_model.main([])
     if args.step == "generalized-inference-bundle":
         build_generalized_inference_bundle.main([])
+    if args.step == "validate-vhdb-generalized-inference":
+        validate_vhdb_generalized_inference.main([])
 
 
 if __name__ == "__main__":
