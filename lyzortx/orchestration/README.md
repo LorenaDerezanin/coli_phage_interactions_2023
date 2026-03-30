@@ -110,6 +110,21 @@ A task is ready when:
 
 Task IDs are derived from track letter + ordinal (e.g., `TB03`, `TF01`). Gates use `GNG` prefix.
 
+## Task Authoring Guidance
+
+Plan authors should size tasks by boundary risk, not just by how small the diff sounds.
+
+- Use `gpt-5.4-mini` for bounded mechanical edits where the main risk is local code change.
+- Use `gpt-5.4` for artifact-boundary tasks: downstream reruns after upstream schema/provenance changes, lock-rule
+  changes, stale generated-output handling, or any task that adds a permissive fallback such as zero-fill.
+- For fragile tasks, write low-freedom acceptance criteria. State the exact contract that changed and the exact failure
+  modes to avoid.
+- When a task introduces a fallback, acceptance criteria should require both:
+  - a positive test for the intended narrow use
+  - a negative test proving strict failure still happens outside that use
+- When a task consumes generated artifacts, acceptance criteria should say whether stale default artifacts must be
+  regenerated or rejected.
+
 ## CLI Usage
 
 ```bash

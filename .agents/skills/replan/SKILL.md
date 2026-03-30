@@ -94,6 +94,46 @@ alternatives, proposing new features, analyzing failure modes.
 
 Ask: "Could a junior engineer do this by following explicit instructions?" If yes, it's a mini task.
 
+### Artifact-boundary tasks are not mini by default
+
+Some tasks look mechanical but are actually fragile because they sit at the boundary between old and new artifacts.
+These should usually be `gpt-5.4`, not `gpt-5.4-mini`.
+
+Escalate to `gpt-5.4` when a task does any of the following:
+- consumes outputs from an upstream task whose schema, provenance, exclusion, or holdout rules recently changed
+- re-runs a downstream evaluation after fixing leakage, reproducibility, or artifact validity upstream
+- changes lock rules, sweep selection, or any "winner" decision logic
+- depends on gitignored generated outputs that may exist locally in stale pre-replan form
+- introduces a permissive fallback such as zero-fill, cache reuse, or auto-regeneration
+
+Why: mini models often miss the boundary failures rather than the main logic:
+- validating the wrong sibling manifest because a default path happened to exist
+- widening a permissive fallback across training and CV paths when it was only meant for holdout evaluation
+- trusting stale generated outputs because the filenames match
+- failing one step later because the upstream artifact bootstrap chain was not restated in the task
+
+If you still assign such a task to `gpt-5.4-mini`, the acceptance criteria must compensate by being much more specific.
+
+### Set low freedom for fragile replan tasks
+
+Anthropic's skill guidance says to reduce degrees of freedom when an operation is fragile and consistency matters.
+Apply that here: artifact-boundary tasks need low-freedom acceptance criteria.
+
+Do not write:
+- "rerun mechanistic lift on clean outputs"
+
+Write instead:
+- what artifact contract changed
+- what stale-artifact case must be handled
+- what permissive behavior, if any, is allowed
+- where strict failure must still happen
+
+Example pattern:
+- "Re-run TL05 on TL11-clean outputs, handling the fact that TL11 intentionally omits holdout pair rows."
+- "Allow zero-fill only for holdout evaluation joins; non-holdout join misses remain a hard failure."
+- "Validate provenance against the actual CLI-provided TL03/TL04 artifact paths, not default sibling manifests."
+- "If default generated artifacts predate the new manifest schema, regenerate them or fail loudly."
+
 ### Lock decisions as human-approved
 
 When model selection or configuration sweeps produce results within noise of each other, the winner should be a human
@@ -123,6 +163,20 @@ When two runs of the same pipeline produce different results, investigate before
 
 When documenting findings about library behavior (e.g., "LightGBM deterministic mode handles parallel threads"), always
 include a URL to the official docs and a direct quote. Don't assert from memory.
+
+## Phase 4.5: Test the task spec against the model tier
+
+Anthropic's skill guidance also says to test a skill with all model tiers you plan to use. Apply the same idea to task
+authoring: acceptance criteria must be written for the weakest model you intend to assign.
+
+Before assigning `gpt-5.4-mini`, ask:
+- Would a smaller model know which artifact boundary is dangerous here?
+- Does the task text explicitly name the stale-artifact, path-provenance, and fallback-scope risks?
+- If the model followed the acceptance criteria literally, could it still "complete" the task while being wrong?
+
+If the answer to any of these is yes, either:
+- tighten the acceptance criteria until the unsafe path is ruled out, or
+- assign `gpt-5.4` instead
 
 ## Phase 5: Update all artifacts
 
@@ -167,6 +221,11 @@ When proposing next steps:
 2. Justify why it's the highest-value next step given the current state
 3. Size it (mini vs full model, estimated CI time)
 4. Identify dependencies — can it start now, or does something need to happen first?
+
+For artifact-boundary follow-up tasks, also state:
+- which upstream artifact contract changed
+- whether stale default artifacts must be regenerated or rejected
+- which fallback behavior is permitted and where
 
 Do not suggest presentation or visualization tasks (dashboards, demos, HTML reports). Agents produce bad visual
 artifacts. Presentation work is human-driven.
