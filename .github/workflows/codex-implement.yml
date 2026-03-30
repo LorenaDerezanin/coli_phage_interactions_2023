@@ -128,6 +128,7 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: ${{ steps.model.outputs.model }}
+          allow-bots: true
           sandbox: danger-full-access
           prompt-file: /tmp/codex_prompt.txt
 
