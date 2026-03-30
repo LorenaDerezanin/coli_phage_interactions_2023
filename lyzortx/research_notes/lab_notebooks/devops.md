@@ -1,3 +1,33 @@
+### 2026-03-30: Claude review auto-merge was too permissive for commented approvals
+
+#### Executive summary
+
+PR #279 was closed too fast because `.github/workflows/claude-pr-review.yml` treated Claude's latest review state of
+`APPROVED` as sufficient to enable auto-merge, even when Claude had also left review comments that still needed
+addressing. The workflow now requires both an `APPROVED` latest review and zero unresolved Claude review threads before
+enabling auto-merge. If unresolved Claude feedback remains, it dispatches the Codex lifecycle instead of merging.
+
+#### Root cause
+
+The previous gate looked only at the latest review state returned by `repos/{owner}/{repo}/pulls/{pr}/reviews`. That is
+not a strong enough merge condition for this workflow because an approval and actionable inline comments can coexist on
+the same PR. In practice, that let PR #279 merge before the commented feedback was addressed, which closed the PR while
+review work was still outstanding.
+
+#### Design decision
+
+Interpret "zero comments" operationally as "zero unresolved Claude review threads," not "Claude has never commented on
+the PR." Historical comments remain visible on GitHub after they are addressed, so requiring literal zero comment
+objects would make reviewed PRs permanently unmergeable. Unresolved-thread count matches the real requirement: do not
+merge while Claude still has open feedback.
+
+#### Implementation
+
+Updated `claude-pr-review.yml` to query PR review threads via GitHub GraphQL, count unresolved threads containing
+comments from `claude[bot]`, and gate auto-merge on that count being zero. The workflow still accepts a clean Claude
+approval path, but any unresolved Claude thread now forces the "request addressing feedback" path through the Codex PR
+lifecycle workflow.
+
 ### 2026-03-29: Fix conda environment solve failure — downgrade openjdk 25 to 24
 
 #### Executive summary
