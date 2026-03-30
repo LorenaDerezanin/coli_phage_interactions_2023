@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
+import joblib
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
 
@@ -40,6 +41,7 @@ METADATA_COLUMNS: Tuple[str, ...] = (
     "transform",
     "provenance_note",
 )
+SVD_ARTIFACT_NAME = "phage_genome_kmer_svd.joblib"
 NUCLEOTIDE_TO_INDEX = {"A": 0, "C": 1, "G": 2, "T": 3}
 
 
@@ -225,7 +227,7 @@ def reduce_kmer_matrix(
     *,
     embedding_dim: int,
     random_state: int,
-) -> Tuple[np.ndarray, Dict[str, object]]:
+) -> Tuple[np.ndarray, Dict[str, object], TruncatedSVD]:
     if embedding_dim < 1:
         raise ValueError("embedding_dim must be >= 1")
     if matrix.ndim != 2 or matrix.shape[0] == 0 or matrix.shape[1] == 0:
@@ -246,7 +248,7 @@ def reduce_kmer_matrix(
         "explained_variance_ratio_sum": float(np.sum(svd.explained_variance_ratio_)),
         "singular_values": [float(value) for value in svd.singular_values_],
     }
-    return reduced, metadata
+    return reduced, metadata, svd
 
 
 def _feature_columns(embedding_dim: int) -> Tuple[str, ...]:
@@ -344,7 +346,9 @@ def build_genome_kmer_feature_block(
 
     genome_inputs = discover_genome_inputs(fna_dir)
     matrix, summary_rows = build_kmer_matrix(genome_inputs, k=kmer_size)
-    reduced_matrix, svd_metadata = reduce_kmer_matrix(matrix, embedding_dim=embedding_dim, random_state=random_state)
+    reduced_matrix, svd_metadata, svd = reduce_kmer_matrix(
+        matrix, embedding_dim=embedding_dim, random_state=random_state
+    )
 
     panel_set = set(panel_phages)
     for row in summary_rows:
@@ -369,9 +373,11 @@ def build_genome_kmer_feature_block(
     features_path = output_dir / "phage_genome_kmer_features.csv"
     summary_path = output_dir / "phage_genome_kmer_source_summary.csv"
     metadata_csv_path = output_dir / "phage_genome_kmer_feature_metadata.csv"
+    svd_path = output_dir / SVD_ARTIFACT_NAME
     write_csv(features_path, feature_fieldnames, feature_rows)
     write_csv(summary_path, SUMMARY_COLUMNS, summary_rows)
     write_csv(metadata_csv_path, METADATA_COLUMNS, metadata_rows)
+    joblib.dump(svd, svd_path)
 
     non_panel_genomes = sorted(str(row["phage"]) for row in summary_rows if str(row["phage"]) not in panel_set)
     manifest = {
@@ -399,6 +405,7 @@ def build_genome_kmer_feature_block(
             "feature_metadata_csv": str(metadata_csv_path),
             "source_summary_csv": str(summary_path),
             "feature_columns": list(feature_fieldnames),
+            "svd_joblib": str(svd_path),
         },
         "reproducibility": {
             "one_command": "python lyzortx/pipeline/track_d/run_track_d.py --step genome-kmers",

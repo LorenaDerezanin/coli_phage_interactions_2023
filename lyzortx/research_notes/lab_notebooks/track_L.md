@@ -365,3 +365,47 @@ proposed lock config for `defense + phage_genomic + TL04`.
 - The committed `lyzortx/pipeline/track_g/v1_feature_configuration.json` still records the earlier TG09 lock metrics.
   TL05 retrained the same baseline arm on the current code path and used that live retrain as the comparison point for
   all deltas.
+
+### 2026-03-29: TL06 Persist fitted transforms for novel-organism feature projection
+
+#### Executive summary
+
+Persisted the fitted Track D phage SVD transform and the Track C defense-subtype column mask as joblib artifacts, then
+added reusable projection helpers for novel phage genomes and novel Defense Finder outputs. The projection helpers
+reconstruct the same feature layout used by the panel tables: 24 phage SVD coordinates plus GC content and genome
+length, and 79 retained defense-subtype indicators plus 3 derived defense summary columns.
+
+#### What was implemented
+
+- `lyzortx/pipeline/track_d/steps/build_phage_genome_kmer_features.py`: saves the fitted `TruncatedSVD` object to
+  `phage_genome_kmer_svd.joblib` alongside the existing k-mer feature CSV and records the artifact path in the
+  manifest.
+- `lyzortx/pipeline/track_c/steps/build_v1_host_feature_pair_table.py`: saves the defense-subtype column mask to
+  `defense_subtype_column_mask.joblib`, including the variance-filter thresholds, source subtype order, retained
+  feature order, and derived-column list.
+- `lyzortx/pipeline/track_l/steps/novel_organism_feature_projection.py`: adds
+  `project_novel_phage(fna_path, svd_path)` and
+  `project_novel_host(defense_finder_output_path, column_mask_path)` for novel-organism projection.
+- `lyzortx/tests/test_track_l_novel_organism_feature_projection.py`: real-data round-trip checks against one panel
+  phage and one panel host.
+
+#### Real-data counts
+
+- TD02 input genomes: 97 phage FASTA files.
+- TD02 fitted embedding width: 24 dimensions.
+- TC01 retained defense-subtype columns: 79.
+- TC01 full host feature width: 82 columns after adding defense diversity, CRISPR presence, and Abi burden.
+
+#### Round-trip sanity check
+
+- Phage check used `409_P1` and matched the precomputed panel row within floating-point tolerance.
+- Host check used `001-023` and matched the precomputed panel row within floating-point tolerance.
+- The new helpers also accept the persisted artifacts directly, so TL07 can project novel inputs without rebuilding the
+  panel transforms.
+
+#### Interpretation
+
+- This closes the training/prediction gap for the sequence-derived feature blocks: the panel fit is now reusable at
+  inference time instead of being stranded in CSV-only outputs.
+- Keeping the saved mask and SVD artifact next to their source tables preserves provenance and makes TL07 a straight
+  projection step rather than a re-fit.

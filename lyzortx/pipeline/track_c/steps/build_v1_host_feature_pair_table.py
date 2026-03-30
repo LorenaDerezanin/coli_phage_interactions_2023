@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
+import joblib
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
@@ -42,6 +43,7 @@ DEFENSE_DERIVED_COLUMNS: Tuple[str, ...] = (
     "host_defense_has_crispr",
     "host_defense_abi_burden",
 )
+DEFENSE_SUBTYPE_MASK_NAME = "defense_subtype_column_mask.joblib"
 EXTENDED_CATEGORICAL_COLUMNS: Tuple[str, ...] = (
     "host_surface_klebsiella_capsule_type",
     "host_surface_lps_core_type",
@@ -180,12 +182,12 @@ def _is_missing_value(value: object) -> bool:
     return value in MISSING_VALUE_SENTINELS
 
 
-def build_defense_feature_rows(
+def _defense_subtype_support_summary(
     defense_rows: Sequence[Mapping[str, str]],
     *,
-    min_present_count: int = 5,
-    max_present_count: int = 395,
-) -> Tuple[List[Dict[str, object]], List[str], Dict[str, object]]:
+    min_present_count: int,
+    max_present_count: int,
+) -> Tuple[List[str], Dict[str, int], List[str]]:
     if not defense_rows:
         raise ValueError("Defense subtype rows are empty.")
     if min_present_count < 1:
@@ -201,6 +203,48 @@ def build_defense_feature_rows(
         support_counts[column] = present_count
         if min_present_count <= present_count <= max_present_count:
             retained_subtypes.append(column)
+    return subtype_columns, support_counts, retained_subtypes
+
+
+def build_defense_column_mask(
+    defense_rows: Sequence[Mapping[str, str]],
+    *,
+    min_present_count: int = 5,
+    max_present_count: int = 395,
+) -> Dict[str, object]:
+    subtype_columns, support_counts, retained_subtypes = _defense_subtype_support_summary(
+        defense_rows,
+        min_present_count=min_present_count,
+        max_present_count=max_present_count,
+    )
+    feature_columns = [f"host_defense_subtype_{slugify_token(column)}" for column in retained_subtypes]
+    feature_columns.extend(DEFENSE_DERIVED_COLUMNS)
+    return {
+        "min_present_count": min_present_count,
+        "max_present_count": max_present_count,
+        "source_subtype_columns": subtype_columns,
+        "retained_subtype_columns": retained_subtypes,
+        "retained_feature_columns": feature_columns[: len(retained_subtypes)],
+        "ordered_feature_columns": feature_columns,
+        "derived_columns": list(DEFENSE_DERIVED_COLUMNS),
+        "support_counts": dict(sorted(support_counts.items())),
+    }
+
+
+def build_defense_feature_rows(
+    defense_rows: Sequence[Mapping[str, str]],
+    *,
+    min_present_count: int = 5,
+    max_present_count: int = 395,
+) -> Tuple[List[Dict[str, object]], List[str], Dict[str, object]]:
+    mask = build_defense_column_mask(
+        defense_rows,
+        min_present_count=min_present_count,
+        max_present_count=max_present_count,
+    )
+    retained_subtypes = list(mask["retained_subtype_columns"])
+    subtype_columns = list(mask["source_subtype_columns"])
+    support_counts = dict(mask["support_counts"])
 
     kept_column_names = [f"host_defense_subtype_{slugify_token(column)}" for column in retained_subtypes]
     output_rows: List[Dict[str, object]] = []
@@ -239,6 +283,7 @@ def build_defense_feature_rows(
             column for column in subtype_columns if support_counts[column] > max_present_count
         ],
         "support_counts": dict(sorted(support_counts.items())),
+        "column_mask": mask,
     }
     return output_rows, kept_column_names + list(DEFENSE_DERIVED_COLUMNS), manifest
 
@@ -596,6 +641,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         min_present_count=args.defense_min_present_count,
         max_present_count=args.defense_max_present_count,
     )
+    defense_mask = defense_manifest["column_mask"]
 
     omp_rows_raw = read_omp_rows(args.receptor_clusters_path, "\t")
     omp_summaries = summarize_receptor_categories(
@@ -659,6 +705,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     join_audit_output_path = args.output_dir / f"host_feature_join_audit_{args.version}.json"
     manifest_output_path = args.output_dir / f"pair_table_manifest_{args.version}.json"
     sanity_output_path = args.output_dir / f"lightgbm_sanity_check_{args.version}.json"
+    defense_mask_output_path = args.output_dir / DEFENSE_SUBTYPE_MASK_NAME
 
     write_csv(
         host_matrix_output_path,
@@ -671,6 +718,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pair_table_rows,
     )
     write_json(join_audit_output_path, join_audit)
+    joblib.dump(defense_mask, defense_mask_output_path)
     write_json(
         manifest_output_path,
         {
@@ -718,6 +766,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "pair_table_csv": str(pair_table_output_path),
                 "join_audit_json": str(join_audit_output_path),
                 "lightgbm_sanity_json": str(sanity_output_path),
+                "defense_subtype_column_mask_joblib": str(defense_mask_output_path),
             },
             "notes": {
                 "host_contract": "Rows are anchored to the interaction/ST0.2 host panel.",

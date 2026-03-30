@@ -2,6 +2,8 @@ import csv
 import json
 from pathlib import Path
 
+import joblib
+
 from lyzortx.pipeline.track_d import run_track_d
 from lyzortx.pipeline.track_d.steps.build_phage_protein_sets import read_panel_phages
 from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import (
@@ -48,17 +50,20 @@ def test_build_genome_kmer_feature_block_writes_joinable_panel_csv_and_manifest(
 
     features_path = output_dir / "phage_genome_kmer_features.csv"
     metadata_csv_path = output_dir / "phage_genome_kmer_feature_metadata.csv"
+    svd_path = output_dir / "phage_genome_kmer_svd.joblib"
     manifest_path = output_dir / "manifest.json"
 
     rows = list(csv.DictReader(features_path.open(encoding="utf-8")))
     metadata_rows = list(csv.DictReader(metadata_csv_path.open(encoding="utf-8")))
     manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
+    svd = joblib.load(svd_path)
 
     assert [row["phage"] for row in rows] == ["P1", "P2"]
     assert len(rows[0]) == 1 + 4 + 2
     assert rows[0]["phage_genome_length_nt"] == "24"
     assert float(rows[0]["phage_gc_content"]) == 0.5
     assert len(metadata_rows) == 6
+    assert svd.n_components == manifest["counts"]["embedding_dim_effective"]
     assert manifest["counts"]["discovered_genome_count"] == 3
     assert manifest["counts"]["output_row_count"] == 2
     assert manifest["counts"]["non_panel_genome_count"] == 1
