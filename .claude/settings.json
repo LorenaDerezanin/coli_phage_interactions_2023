@@ -17,6 +17,7 @@
       "Bash(grep *)",
       "Bash(pytest *)",
       "Bash(python -m pytest *)",
+      "Bash(python lyzortx/pipeline/track_*/*.py *)",
       "Bash(scripts/check-rebase-on-main.sh *)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:developers.openai.com)",

@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Entry point for Track L: Mechanistic Features from Pharokka Annotations."""
+"""Entry point for Track L: Mechanistic Features from Pharokka Annotations.
+
+Individual steps and groups (run individually or with 'all'):
+  annotate                — Run pharokka on phage genomes and cache key TSVs.
+  features (group)        — parse → enrich → rbp-features → defense-features.
+  retrain-mechanistic-v1  — Retrain the v1 model with mechanistic features.
+  inference (group)       — generalized-inference-bundle → validate-vhdb.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +14,7 @@ import argparse
 import logging
 import shutil
 import sys
+from collections.abc import Callable
 from os import cpu_count
 from pathlib import Path
 
@@ -31,6 +39,8 @@ ANNOTATIONS_DIR = Path("lyzortx/generated_outputs/track_l/pharokka_annotations")
 CACHED_DIR = Path("data/annotations/pharokka")
 TSV_SUFFIXES = ("_cds_final_merged_output.tsv", "_cds_functions.tsv")
 
+StepFn = Callable[[argparse.Namespace], None]
+
 
 def cache_key_tsvs(annotations_dir: Path, cached_dir: Path) -> int:
     """Copy key pharokka TSVs from per-phage output dirs to the flat cached dir.
@@ -51,34 +61,74 @@ def cache_key_tsvs(annotations_dir: Path, cached_dir: Path) -> int:
     return copied
 
 
+def _run_annotate(args: argparse.Namespace) -> None:
+    if args.database_dir is None:
+        msg = "--database-dir is required for the annotate step"
+        raise SystemExit(msg)
+    run_pharokka.main(
+        [
+            "--database-dir",
+            str(args.database_dir),
+            "--threads",
+            str(args.threads),
+            "--parallel",
+            str(args.parallel),
+            *(["--force"] if args.force else []),
+        ]
+    )
+    copied = cache_key_tsvs(ANNOTATIONS_DIR, CACHED_DIR)
+    logger.info("Cached %d TSV files to %s", copied, CACHED_DIR)
+
+
+# ---------------------------------------------------------------------------
+# Step registry.  Each group is an ordered list of (name, function) pairs.
+# "all" runs every group in order.  When adding a step, add it to the
+# appropriate group — omitting it is a bug.
+# ---------------------------------------------------------------------------
+
+FEATURE_STEPS: list[tuple[str, StepFn]] = [
+    ("parse", lambda _args: parse_annotations.main([])),
+    ("enrich", lambda _args: run_enrichment_analysis.main([])),
+    ("rbp-features", lambda _args: build_mechanistic_rbp_receptor_features.main([])),
+    ("defense-features", lambda _args: build_mechanistic_defense_evasion_features.main([])),
+]
+
+INFERENCE_STEPS: list[tuple[str, StepFn]] = [
+    ("generalized-inference-bundle", lambda _args: build_generalized_inference_bundle.main([])),
+    ("validate-vhdb-generalized-inference", lambda _args: validate_vhdb_generalized_inference.main([])),
+]
+
+# Groups bundle multiple steps behind a single flag.  Single-step entries
+# (annotate, retrain-mechanistic-v1) are reachable by their own name and
+# don't need a group wrapper.
+GROUPS: list[tuple[str, list[tuple[str, StepFn]]]] = [
+    ("features", FEATURE_STEPS),
+    ("inference", INFERENCE_STEPS),
+]
+
+# Full ordered pipeline — all groups plus standalone steps in execution order.
+# "all" runs these top to bottom.
+ALL_STEPS: list[tuple[str, StepFn]] = [
+    ("annotate", _run_annotate),
+    *FEATURE_STEPS,
+    ("retrain-mechanistic-v1", lambda _args: retrain_mechanistic_v1_model.main([])),
+    *INFERENCE_STEPS,
+]
+
+STEP_NAMES = [name for name, _ in ALL_STEPS]
+GROUP_NAMES = [name for name, _ in GROUPS]
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--step",
-        choices=[
-            "annotate",
-            "parse",
-            "enrich",
-            "rbp-features",
-            "defense-features",
-            "retrain-mechanistic-v1",
-            "generalized-inference-bundle",
-            "validate-vhdb-generalized-inference",
-            "all",
-        ],
+        choices=[*STEP_NAMES, *GROUP_NAMES, "all"],
         default="all",
-        help=(
-            "Track L step to run. "
-            "'annotate' runs pharokka on all FNA files. "
-            "'parse' parses pharokka outputs into summary tables. "
-            "'enrich' runs TL02 PHROG x host-feature enrichment analyses. "
-            "'rbp-features' runs TL03 mechanistic RBP-receptor feature construction. "
-            "'defense-features' runs TL04 mechanistic defense-evasion feature construction. "
-            "'retrain-mechanistic-v1' runs TL05 model retraining, lift measurement, and SHAP summary. "
-            "'generalized-inference-bundle' builds the TL08 genome-only LightGBM + isotonic inference artifact. "
-            "'validate-vhdb-generalized-inference' runs TL09 positive-only validation on Virus-Host DB hosts. "
-            "'all' runs annotate + parse (not enrich, which depends on Track A outputs)."
-        ),
+        help="Individual step, group name, or 'all' (default: all).",
     )
     parser.add_argument(
         "--database-dir",
@@ -109,44 +159,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _run_steps(steps: list[tuple[str, StepFn]], args: argparse.Namespace) -> None:
+    for name, fn in steps:
+        logger.info("=== Track L: running step '%s' ===", name)
+        fn(args)
+
+
 def main(argv: list[str] | None = None) -> None:
     setup_logging()
     args = parse_args(argv)
 
-    if args.step in {"annotate", "all"}:
-        if args.database_dir is None:
-            msg = "--database-dir is required for the annotate step"
-            raise SystemExit(msg)
-        run_pharokka.main(
-            [
-                "--database-dir",
-                str(args.database_dir),
-                "--threads",
-                str(args.threads),
-                "--parallel",
-                str(args.parallel),
-                *(["--force"] if args.force else []),
-            ]
-        )
+    if args.step == "all":
+        _run_steps(ALL_STEPS, args)
+        return
 
-        copied = cache_key_tsvs(ANNOTATIONS_DIR, CACHED_DIR)
-        logger.info("Cached %d TSV files to %s", copied, CACHED_DIR)
+    # Check group names first, then individual steps.
+    group_map = dict(GROUPS)
+    if args.step in group_map:
+        _run_steps(group_map[args.step], args)
+        return
 
-    if args.step in {"parse", "all"}:
-        parse_annotations.main([])
-
-    if args.step == "enrich":
-        run_enrichment_analysis.main([])
-    if args.step == "rbp-features":
-        build_mechanistic_rbp_receptor_features.main([])
-    if args.step == "defense-features":
-        build_mechanistic_defense_evasion_features.main([])
-    if args.step == "retrain-mechanistic-v1":
-        retrain_mechanistic_v1_model.main([])
-    if args.step == "generalized-inference-bundle":
-        build_generalized_inference_bundle.main([])
-    if args.step == "validate-vhdb-generalized-inference":
-        validate_vhdb_generalized_inference.main([])
+    step_map = dict(ALL_STEPS)
+    step_map[args.step](args)
 
 
 if __name__ == "__main__":

@@ -18,11 +18,14 @@
 
 # Environment Policy
 
-- **Local development:** Use the `phage_env` conda environment. Activate it with `conda activate phage_env`.
-- **Always use `conda run -n phage_env ...`**, never `conda run -p <path> ...`. The `-n` flag resolves the environment
-  by name regardless of where it is installed; `-p` hard-codes an absolute path that differs across machines.
-- **GitHub Actions workflows:** Bootstrap `phage_env` with `conda env create -f environment.yml -n phage_env`, then
-  run repo Python, pytest, and pre-commit commands via `conda run -n phage_env ...`.
+- **Local development:** Use the `phage_env` conda environment. The repo has a `.envrc` that activates `phage_env` via
+  direnv, so locally `python`, `pip`, `pytest`, etc. already resolve to the phage_env binaries — no `conda run` or
+  `conda activate` prefix needed.
+- **GitHub Actions workflows:** direnv is not available in CI. Bootstrap `phage_env` with
+  `conda env create -f environment.yml -n phage_env`, then run repo commands via `conda run -n phage_env ...`.
+- **`conda run` flag:** When `conda run` is needed (CI only), always use `-n phage_env`, never `-p <path>`. The `-n`
+  flag resolves the environment by name regardless of install location; `-p` hard-codes an absolute path that differs
+  across machines.
 - **How to detect GitHub Actions:** Check `GITHUB_ACTIONS=true`.
 - **Git identity in CI:** Git `user.name` and `user.email` are pre-configured before the agent runs. Do not attempt to
   set them yourself.
@@ -35,6 +38,13 @@
   source code and committed data — no `lyzortx/generated_outputs/` artifacts. If a task depends on generated outputs
   from a previous track, it must either regenerate them (by running the prerequisite steps) or fail loudly. It must
   **never** silently produce empty results, zero-row outputs, or "pending" placeholders and call itself done.
+
+# Dependency Installation Policy
+
+- **Never run `pip install`, `conda install`, or other manual dependency installation commands.** Instead, add the
+  dependency to `requirements.txt` (for pip packages) or `environment.yml` (for conda packages), then run
+  `conda env update -n phage_env -f environment.yml` to apply the change.
+- This ensures the environment is always reproducible from the checked-in config files.
 
 # Fail-Fast on Missing Data
 
