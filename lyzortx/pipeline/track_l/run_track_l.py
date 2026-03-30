@@ -39,7 +39,7 @@ ANNOTATIONS_DIR = Path("lyzortx/generated_outputs/track_l/pharokka_annotations")
 CACHED_DIR = Path("data/annotations/pharokka")
 TSV_SUFFIXES = ("_cds_final_merged_output.tsv", "_cds_functions.tsv")
 
-StepFn = Callable[[argparse.Namespace], None]
+StepFn = Callable[[argparse.Namespace], object]
 
 
 def cache_key_tsvs(annotations_dir: Path, cached_dir: Path) -> int:
