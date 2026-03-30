@@ -177,13 +177,13 @@ Claude reads `AGENTS.md` review guidelines, submits formal `APPROVE` or `COMMENT
 the sole judge of thread resolution (can resolve/unresolve threads via GraphQL mutations). Requires the
 `ANTHROPIC_API_KEY` repository secret. The workflow explicitly allows the repo's `czarphage` GitHub App bot to trigger
 re-reviews after Codex pushes, which would otherwise be blocked by `claude-code-action`'s default "no bots" policy.
-After reviewing, it auto-merges only when Claude's latest review is `APPROVED` and Claude has zero unresolved review
-threads. If Claude leaves a `COMMENTED` review or any unresolved Claude review threads remain, it dispatches
+After reviewing, it auto-merges only when Claude's latest review is `APPROVED` and the PR has zero unresolved review
+threads. If Claude leaves a `COMMENTED` review or any unresolved review threads remain, it dispatches
 `codex-pr-lifecycle.yml`.
 
 ### codex-pr-lifecycle.yml
 
-- `workflow_dispatch`: triggered by `claude-pr-review.yml` when Claude leaves unresolved feedback, or manually with a
+- `workflow_dispatch`: triggered by `claude-pr-review.yml` when review feedback remains unresolved, or manually with a
   PR number.
 
 The `workflow_dispatch`-only trigger prevents a self-cancellation loop: when Codex replies to review threads, GitHub

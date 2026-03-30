@@ -3,9 +3,9 @@
 #### Executive summary
 
 PR #279 was closed too fast because `.github/workflows/claude-pr-review.yml` treated Claude's latest review state of
-`APPROVED` as sufficient to enable auto-merge, even when Claude had also left review comments that still needed
-addressing. The workflow now requires both an `APPROVED` latest review and zero unresolved Claude review threads before
-enabling auto-merge. If unresolved Claude feedback remains, it dispatches the Codex lifecycle instead of merging.
+`APPROVED` as sufficient to enable auto-merge, even when review comments still needed addressing. The workflow now
+requires both an `APPROVED` latest review and zero unresolved review threads before enabling auto-merge. If unresolved
+review feedback remains, it dispatches the Codex lifecycle instead of merging.
 
 #### Root cause
 
@@ -16,17 +16,23 @@ review work was still outstanding.
 
 #### Design decision
 
-Interpret "zero comments" operationally as "zero unresolved Claude review threads," not "Claude has never commented on
-the PR." Historical comments remain visible on GitHub after they are addressed, so requiring literal zero comment
-objects would make reviewed PRs permanently unmergeable. Unresolved-thread count matches the real requirement: do not
-merge while Claude still has open feedback.
+Interpret "zero comments" operationally as "zero unresolved review threads," not "no historical comments exist on the
+PR." Historical comments remain visible on GitHub after they are addressed, so requiring literal zero comment objects
+would make reviewed PRs permanently unmergeable. Unresolved-thread count matches the real requirement: do not merge
+while any review feedback is still open.
 
 #### Implementation
 
-Updated `claude-pr-review.yml` to query PR review threads via GitHub GraphQL, count unresolved threads containing
-comments from `claude[bot]`, and gate auto-merge on that count being zero. The workflow still accepts a clean Claude
-approval path, but any unresolved Claude thread now forces the "request addressing feedback" path through the Codex PR
-lifecycle workflow.
+Updated `claude-pr-review.yml` to query PR review threads via GitHub GraphQL, count unresolved threads, and gate
+auto-merge on that count being zero. The workflow still accepts a clean Claude approval path, but any unresolved review
+thread now forces the "request addressing feedback" path through the Codex PR lifecycle workflow.
+
+#### Follow-up after PR #283
+
+PR #283 showed that author filtering was the wrong design entirely. The intended policy is that any unresolved review
+thread blocks auto-merge, not only comments authored by Claude. The GraphQL author-login mismatch (`claude[bot]` in
+REST, `claude` in GraphQL) was just the symptom that exposed this. The correct fix is to remove author filtering and
+count every unresolved review thread on the PR.
 
 ### 2026-03-29: Fix conda environment solve failure — downgrade openjdk 25 to 24
 
