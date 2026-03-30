@@ -69,7 +69,7 @@ def test_run_novel_host_defense_finder_projects_expected_feature_columns(
         workers: int,
         preserve_raw: bool,
         force_run: bool,
-    ) -> Path:
+    ) -> tuple[Path, dict[str, object]]:
         systems_path = output_dir / f"{assembly_path.stem}_defense_finder_systems.tsv"
         output_dir.mkdir(parents=True, exist_ok=True)
         with systems_path.open("w", encoding="utf-8", newline="") as handle:
@@ -117,6 +117,7 @@ def test_run_novel_host_defense_finder_projects_expected_feature_columns(
                 "genome_nt_count": 24,
                 "predicted_cds_count": 12,
                 "gene_finder_modes": ["meta"],
+                "used_cached_systems": False,
             },
         )
 
@@ -156,3 +157,46 @@ def test_run_novel_host_defense_finder_projects_expected_feature_columns(
     assert float(projected_row["host_defense_subtype_rm_type_i"]) == 1.0
     assert float(projected_row["host_defense_has_crispr"]) == 1.0
     assert float(projected_row["host_defense_diversity"]) == 2.0
+
+
+def test_run_defense_finder_on_assembly_skips_pyrodigal_when_cached(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    assembly_path = tmp_path / "mg1655.fna"
+    assembly_path.write_text(">chromosome\nATGCGTATGCGTATGCGTATGCGT\n", encoding="utf-8")
+    output_dir = tmp_path / "runner_output"
+    output_dir.mkdir()
+    systems_path = output_dir / "mg1655_defense_finder_systems.tsv"
+    systems_path.write_text(
+        "sys_id\ttype\tsubtype\tactivity\nsys_1\tCas\tCAS_Class1-Subtype-I-E\tdefense\n",
+        encoding="utf-8",
+    )
+
+    def fail_if_called(*args: object, **kwargs: object) -> dict[str, object]:
+        raise AssertionError("predict_proteins_with_pyrodigal should not run when cached systems TSV exists")
+
+    monkeypatch.setattr(
+        run_novel_host_defense_finder,
+        "predict_proteins_with_pyrodigal",
+        fail_if_called,
+    )
+
+    resolved_systems_path, protein_metadata = run_novel_host_defense_finder.run_defense_finder_on_assembly(
+        assembly_path,
+        output_dir=output_dir,
+        models_dir=tmp_path / "models",
+        workers=0,
+        preserve_raw=False,
+        force_run=False,
+    )
+
+    assert resolved_systems_path == systems_path
+    assert protein_metadata == {
+        "protein_fasta_path": str(output_dir / "mg1655.prt"),
+        "replicon_count": None,
+        "genome_nt_count": None,
+        "predicted_cds_count": None,
+        "gene_finder_modes": [],
+        "used_cached_systems": True,
+    }

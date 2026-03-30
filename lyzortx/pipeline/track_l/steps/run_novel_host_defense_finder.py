@@ -44,7 +44,6 @@ RAW_SUBTYPE_COUNTS_FILENAME = "defense_finder_subtype_counts.csv"
 PROJECTED_FEATURES_FILENAME = "novel_host_defense_features.csv"
 MANIFEST_FILENAME = "novel_host_defense_manifest.json"
 SYSTEMS_SUFFIX = "_defense_finder_systems.tsv"
-MODEL_DIR_NAMES: Tuple[str, ...] = ("defense-finder-models", "CasFinder")
 DEFENSE_FINDER_COLUMNS: Tuple[str, ...] = ("sys_id", "type", "subtype", "activity")
 PROTEIN_FASTA_SUFFIX = ".prt"
 PINNED_MODEL_REQUIREMENTS: Tuple[Tuple[str, str, str], ...] = (
@@ -174,10 +173,6 @@ def resolve_defense_mask(
     ensure_directory(rebuilt_path.parent)
     joblib.dump(mask, rebuilt_path)
     return rebuilt_path, "rebuilt_from_panel_subtypes"
-
-
-def _models_installed(models_dir: Path) -> bool:
-    return all((models_dir / name).exists() for name in MODEL_DIR_NAMES)
 
 
 def _read_installed_model_version(models_dir: Path, package_name: str) -> str | None:
@@ -324,6 +319,18 @@ def predict_proteins_with_pyrodigal(assembly_path: Path, *, protein_fasta_path: 
         "genome_nt_count": total_nt,
         "predicted_cds_count": total_cds,
         "gene_finder_modes": sorted(gene_finder_modes),
+        "used_cached_systems": False,
+    }
+
+
+def _cached_protein_metadata(protein_fasta_path: Path) -> dict[str, object]:
+    return {
+        "protein_fasta_path": str(protein_fasta_path),
+        "replicon_count": None,
+        "genome_nt_count": None,
+        "predicted_cds_count": None,
+        "gene_finder_modes": [],
+        "used_cached_systems": True,
     }
 
 
@@ -339,6 +346,10 @@ def run_defense_finder_on_assembly(
     systems_path = output_dir / f"{assembly_path.stem}{SYSTEMS_SUFFIX}"
     ensure_directory(output_dir)
     protein_fasta_path = output_dir / f"{assembly_path.stem}{PROTEIN_FASTA_SUFFIX}"
+    if systems_path.exists() and not force_run:
+        logger.info("Skipping Defense Finder and Pyrodigal because %s already exists", systems_path)
+        return systems_path, _cached_protein_metadata(protein_fasta_path)
+
     logger.info("Starting Pyrodigal gene prediction for %s", assembly_path.name)
     pyrodigal_start = datetime.now(timezone.utc)
     protein_metadata = predict_proteins_with_pyrodigal(assembly_path, protein_fasta_path=protein_fasta_path)
@@ -350,10 +361,6 @@ def run_defense_finder_on_assembly(
         protein_metadata["predicted_cds_count"],
         protein_metadata["replicon_count"],
     )
-
-    if systems_path.exists() and not force_run:
-        logger.info("Skipping Defense Finder run because %s already exists", systems_path)
-        return systems_path, protein_metadata
 
     tool_env = _tool_env()
     command = [
@@ -474,6 +481,7 @@ def run_novel_host_defense_finder(
         "unmatched_detected_subtypes": unmatched_detected_subtypes,
         "provenance": {
             "gene_finder_modes": protein_metadata["gene_finder_modes"],
+            "used_cached_systems": protein_metadata["used_cached_systems"],
             "model_status": model_status,
             "mask_status": mask_status,
             "workers": workers,
