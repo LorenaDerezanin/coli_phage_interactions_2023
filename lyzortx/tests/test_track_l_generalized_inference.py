@@ -139,11 +139,15 @@ def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path
     bacteria = "001-023"
     bacteria_predictions = reference_predictions[reference_predictions["bacteria"] == bacteria].copy()
     assert not bacteria_predictions.empty
+    assert (bundle_output_dir / tl08_bundle.PANEL_DEFENSE_SUBTYPES_FILENAME).exists()
 
     defense_rows = _read_semicolon_rows(defense_subtypes_path)
     defense_row = next(row for row in defense_rows if row["bacteria"] == bacteria)
     mask_path = bundle_output_dir / tl08_bundle.DEFENSE_MASK_FILENAME
     mask = joblib.load(mask_path)
+    bundle_payload = joblib.load(build_result["bundle_path"])
+    assert bundle_payload["artifacts"]["panel_defense_subtypes_filename"] == tl08_bundle.PANEL_DEFENSE_SUBTYPES_FILENAME
+    assert bundle_payload["runtime"]["defense_finder_models_dirname"] == tl08_bundle.DEFENSE_FINDER_MODELS_DIRNAME
 
     def fake_run_novel_host_defense_finder(
         assembly_path: Path,
@@ -157,6 +161,8 @@ def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path
         force_run: bool,
         preserve_raw: bool,
     ) -> dict[str, object]:
+        assert panel_defense_subtypes_path == bundle_output_dir / tl08_bundle.PANEL_DEFENSE_SUBTYPES_FILENAME
+        assert models_dir == bundle_output_dir / tl08_bundle.DEFENSE_FINDER_MODELS_DIRNAME
         single_row_path = output_dir / "raw_defense.csv"
         write_csv(single_row_path, list(defense_row.keys()), [defense_row])
         projected = project_novel_host(single_row_path, column_mask_path)

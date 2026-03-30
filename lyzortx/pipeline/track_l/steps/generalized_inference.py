@@ -11,16 +11,9 @@ import pandas as pd
 
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
 from lyzortx.pipeline.track_l.steps import run_novel_host_defense_finder
-from lyzortx.pipeline.track_l.steps.build_generalized_inference_bundle import BUNDLE_FILENAME
 from lyzortx.pipeline.track_l.steps.novel_organism_feature_projection import project_novel_phage
 
 INFER_SCRATCH_ROOT = Path(".scratch/tl08_infer")
-
-
-def _bundle_dir(model_path: Path) -> Path:
-    if model_path.name != BUNDLE_FILENAME:
-        return model_path.parent
-    return model_path.parent
 
 
 def _load_bundle(model_path: Path) -> dict[str, Any]:
@@ -33,6 +26,7 @@ def _load_bundle(model_path: Path) -> dict[str, Any]:
         "isotonic_calibrator",
         "feature_space",
         "artifacts",
+        "runtime",
     }
     missing = sorted(key for key in required_keys if key not in bundle)
     if missing:
@@ -41,7 +35,7 @@ def _load_bundle(model_path: Path) -> dict[str, Any]:
 
 
 def _resolve_artifact_path(model_path: Path, filename: str) -> Path:
-    artifact_path = _bundle_dir(model_path) / filename
+    artifact_path = model_path.parent / filename
     if not artifact_path.exists():
         raise FileNotFoundError(f"Bundle artifact not found next to {model_path}: {artifact_path}")
     return artifact_path
@@ -79,6 +73,11 @@ def infer(host_genome_path: str | Path, phage_fna_paths: Sequence[str | Path], m
     )
     defense_mask_path = _resolve_artifact_path(bundle_path, str(bundle["artifacts"]["defense_mask_filename"]))
     phage_svd_path = _resolve_artifact_path(bundle_path, str(bundle["artifacts"]["phage_svd_filename"]))
+    panel_defense_subtypes_path = _resolve_artifact_path(
+        bundle_path,
+        str(bundle["artifacts"]["panel_defense_subtypes_filename"]),
+    )
+    models_dir = bundle_path.parent / str(bundle["runtime"]["defense_finder_models_dirname"])
 
     inference_id = uuid.uuid4().hex[:12]
     host_output_dir = INFER_SCRATCH_ROOT / f"{host_genome.stem}_{inference_id}"
@@ -86,8 +85,8 @@ def infer(host_genome_path: str | Path, phage_fna_paths: Sequence[str | Path], m
         host_genome,
         output_dir=host_output_dir,
         column_mask_path=defense_mask_path,
-        panel_defense_subtypes_path=Path("data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv"),
-        models_dir=Path(".scratch/defense_finder_models"),
+        panel_defense_subtypes_path=panel_defense_subtypes_path,
+        models_dir=models_dir,
         workers=0,
         force_model_update=False,
         force_run=False,

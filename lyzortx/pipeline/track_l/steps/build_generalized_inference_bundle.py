@@ -52,6 +52,8 @@ DEFAULT_CALIBRATION_FOLD = 0
 BUNDLE_FILENAME = "tl08_generalized_inference_bundle.joblib"
 PHAGE_SVD_FILENAME = "phage_genome_kmer_svd.joblib"
 DEFENSE_MASK_FILENAME = "defense_subtype_column_mask.joblib"
+PANEL_DEFENSE_SUBTYPES_FILENAME = "panel_defense_subtypes.csv"
+DEFENSE_FINDER_MODELS_DIRNAME = "defense_finder_models"
 PANEL_PREDICTIONS_FILENAME = "tl08_locked_panel_predictions.csv"
 MANIFEST_FILENAME = "tl08_generalized_inference_manifest.json"
 LOCKED_LIGHTGBM_KEYS = ("learning_rate", "min_child_samples", "n_estimators", "num_leaves")
@@ -388,14 +390,16 @@ def build_model_bundle(
     bundle_path = output_dir / BUNDLE_FILENAME
     phage_svd_copy_path = output_dir / PHAGE_SVD_FILENAME
     defense_mask_path = output_dir / DEFENSE_MASK_FILENAME
+    panel_defense_subtypes_copy_path = output_dir / PANEL_DEFENSE_SUBTYPES_FILENAME
     predictions_path = output_dir / PANEL_PREDICTIONS_FILENAME
     manifest_path = output_dir / MANIFEST_FILENAME
 
     shutil.copy2(phage_kmer_svd_path, phage_svd_copy_path)
+    shutil.copy2(defense_subtypes_path, panel_defense_subtypes_copy_path)
     joblib.dump(defense_mask, defense_mask_path)
 
     bundle_payload = {
-        "format_version": "tl08_genome_only_inference_bundle_v1",
+        "format_version": "tl08_genome_only_inference_bundle_v2",
         "task_id": "TL08",
         "trained_at_utc": datetime.now(timezone.utc).isoformat(),
         "lightgbm_estimator": estimator,
@@ -410,7 +414,11 @@ def build_model_bundle(
         "artifacts": {
             "phage_svd_filename": PHAGE_SVD_FILENAME,
             "defense_mask_filename": DEFENSE_MASK_FILENAME,
+            "panel_defense_subtypes_filename": PANEL_DEFENSE_SUBTYPES_FILENAME,
             "panel_predictions_filename": PANEL_PREDICTIONS_FILENAME,
+        },
+        "runtime": {
+            "defense_finder_models_dirname": DEFENSE_FINDER_MODELS_DIRNAME,
         },
         "training": {
             "lightgbm_params": dict(lightgbm_params),
@@ -467,6 +475,7 @@ def build_model_bundle(
                 "bundle": _sha256(bundle_path),
                 "phage_svd": _sha256(phage_svd_copy_path),
                 "defense_mask": _sha256(defense_mask_path),
+                "panel_defense_subtypes": _sha256(panel_defense_subtypes_copy_path),
                 "panel_predictions": _sha256(predictions_path),
             },
         },
