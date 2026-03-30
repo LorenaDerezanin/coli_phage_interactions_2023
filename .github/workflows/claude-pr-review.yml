@@ -115,9 +115,37 @@ jobs:
           PR_NUM="${{ github.event.pull_request.number }}"
           LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
             --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state')
+          CLAUDE_UNRESOLVED_THREADS=$(gh api graphql \
+            -f owner="${{ github.repository_owner }}" \
+            -f repo="${{ github.event.repository.name }}" \
+            -F number="$PR_NUM" \
+            -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    reviewThreads(first: 100) {
+                      nodes {
+                        isResolved
+                        comments(first: 100) {
+                          nodes {
+                            author {
+                              login
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ' \
+            --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+              | select(.isResolved == false)
+              | select(any(.comments.nodes[]?; .author.login == "claude[bot]"))
+            ] | length')
 
-          if [ "$LATEST_REVIEW" = "APPROVED" ]; then
-            echo "Claude approved — enabling auto-merge."
+          if [ "$LATEST_REVIEW" = "APPROVED" ] && [ "$CLAUDE_UNRESOLVED_THREADS" -eq 0 ]; then
+            echo "Claude approved with zero unresolved comment threads — enabling auto-merge."
             PR_BODY=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json body --jq '.body')
             MERGE_BODY=$(printf '%s\n\nAuto-merged after Claude approval and passing CI.' "$PR_BODY")
             MERGE_OK=false
@@ -134,8 +162,8 @@ jobs:
               echo "::error::Auto-merge failed after 3 attempts"
               exit 1
             fi
-          elif [ "$LATEST_REVIEW" = "COMMENTED" ]; then
-            echo "Claude left comments — dispatching Codex lifecycle."
+          elif [ "$LATEST_REVIEW" = "COMMENTED" ] || [ "$CLAUDE_UNRESOLVED_THREADS" -gt 0 ]; then
+            echo "Claude feedback remains (${CLAUDE_UNRESOLVED_THREADS} unresolved thread(s)) — dispatching Codex lifecycle."
             gh workflow run codex-pr-lifecycle.yml \
               --repo "${{ github.repository }}" \
               --field pr_number="$PR_NUM"
