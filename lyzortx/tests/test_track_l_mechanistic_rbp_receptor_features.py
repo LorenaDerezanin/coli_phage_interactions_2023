@@ -329,13 +329,15 @@ def test_main_writes_mechanistic_feature_outputs(tmp_path: Path) -> None:
     profile_rows = list(csv.DictReader((output_dir / "mechanistic_rbp_profile_metadata_v1.csv").open(encoding="utf-8")))
     sanity_rows = list(csv.DictReader((output_dir / "mechanistic_rbp_sanity_check_v1.csv").open(encoding="utf-8")))
 
-    assert len(feature_rows) == 3
+    assert len(feature_rows) == 2
     assert len(profile_rows) == 1
     duplicate_profile = next(row for row in profile_rows if row["member_features"] == "RBP_PHROG_136|RBP_PHROG_15437")
     pairwise_column = f"tl03_pair_{duplicate_profile['profile_id']}_x_lps_r1_weight"
+    assert {row["pair_id"] for row in feature_rows} == {"B1__P1", "B1__P2"}
     assert any(float(row[pairwise_column]) == 0.6 for row in feature_rows if row["pair_id"] == "B1__P1")
     assert any(row["agreement_has_rbp"] == "1" for row in sanity_rows)
     manifest = json.loads((output_dir / "mechanistic_rbp_receptor_manifest_v1.json").read_text(encoding="utf-8"))
     assert manifest["provenance"]["excluded_holdout_bacteria_ids"] == ["B2"]
     assert manifest["provenance"]["split_assignments"]["path"] == str(split_path)
+    assert manifest["holdout_exclusion"]["excluded_pair_rows"] == 1
     assert manifest["outputs"]["feature_csv_sha256"] == _sha256(output_dir / "mechanistic_rbp_receptor_features_v1.csv")

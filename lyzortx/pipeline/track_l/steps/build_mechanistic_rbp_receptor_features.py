@@ -453,16 +453,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ensure_default_label_path(args.label_path)
     ensure_default_tl02_outputs(args.label_path, args.omp_enrichment_path, args.lps_enrichment_path)
-
-    label_rows = read_delimited_rows(args.label_path)
-    pair_rows = build_pair_rows(label_rows)
-    bacteria = sorted({row["bacteria"] for row in pair_rows})
-    phages = sorted({row["phage"] for row in pair_rows})
     provenance = load_tl02_holdout_clean_provenance(
         args.omp_enrichment_path,
         args.lps_enrichment_path,
         args.st03_split_assignments_path,
     )
+
+    label_rows = read_delimited_rows(args.label_path)
+    all_pair_rows = build_pair_rows(label_rows)
+    pair_rows = [row for row in all_pair_rows if row["bacteria"] not in set(provenance["holdout_bacteria_ids"])]
+    bacteria = sorted({row["bacteria"] for row in pair_rows})
+    phages = sorted({row["phage"] for row in pair_rows})
 
     rbp_matrix, rbp_phrog_names, _, _ = load_pharokka_phrog_matrices(args.cached_annotations_dir, phages)
     rbp_feature_names = [f"RBP_PHROG_{phrog}" for phrog in rbp_phrog_names]
@@ -566,6 +567,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "excluded_holdout_bacteria_ids": provenance["holdout_bacteria_ids"],
             "excluded_holdout_bacteria_count": len(provenance["holdout_bacteria_ids"]),
             "enrichment_inputs": provenance["enrichment_inputs"],
+        },
+        "holdout_exclusion": {
+            "excluded_pair_rows": len(all_pair_rows) - len(feature_rows),
         },
         "inputs": {
             "label_set_v1_pairs": {"path": str(args.label_path), "sha256": _sha256(args.label_path)},

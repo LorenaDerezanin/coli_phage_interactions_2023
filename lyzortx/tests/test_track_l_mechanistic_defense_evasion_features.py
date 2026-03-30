@@ -174,7 +174,11 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
     cached_dir.mkdir()
 
     label_path.write_text(
-        "bacteria,phage\nB1,P1\nB2,P1\nB3,P1\nB4,P1\nB5,P1\nB6,P1\nB1,P2\nB2,P2\nB3,P2\nB4,P2\nB5,P2\nB6,P2\n",
+        (
+            "bacteria,phage\n"
+            "B1,P1\nB2,P1\nB3,P1\nB4,P1\nB5,P1\nB6,P1\nB7,P1\nB8,P1\n"
+            "B1,P2\nB2,P2\nB3,P2\nB4,P2\nB5,P2\nB6,P2\nB7,P2\nB8,P2\n"
+        ),
         encoding="utf-8",
     )
     (cached_dir / "P1_cds_final_merged_output.tsv").write_text(
@@ -212,7 +216,7 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     defense_path.write_text(
-        "bacteria;BREX_I;RM_Type_I\nB1;1;0\nB2;1;0\nB3;1;0\nB4;1;0\nB5;1;0\nB6;0;1\n",
+        "bacteria;BREX_I;RM_Type_I\nB1;1;0\nB2;1;0\nB3;1;0\nB4;1;0\nB5;1;0\nB6;0;1\nB7;1;0\nB8;0;1\n",
         encoding="utf-8",
     )
     antidef_enrichment_path.write_text(
@@ -225,16 +229,20 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
         "pair_id,bacteria,split_holdout,split_cv5_fold\n"
         "B1__P1,B1,train_non_holdout,0\n"
         "B2__P1,B2,train_non_holdout,1\n"
-        "B3__P1,B3,holdout_test,-1\n"
-        "B4__P1,B4,holdout_test,-1\n"
+        "B3__P1,B3,train_non_holdout,2\n"
+        "B4__P1,B4,train_non_holdout,3\n"
         "B5__P1,B5,train_non_holdout,2\n"
-        "B6__P1,B6,train_non_holdout,3\n"
+        "B6__P1,B6,train_non_holdout,4\n"
+        "B7__P1,B7,holdout_test,-1\n"
+        "B8__P1,B8,holdout_test,-1\n"
         "B1__P2,B1,train_non_holdout,0\n"
         "B2__P2,B2,train_non_holdout,1\n"
-        "B3__P2,B3,holdout_test,-1\n"
-        "B4__P2,B4,holdout_test,-1\n"
+        "B3__P2,B3,train_non_holdout,2\n"
+        "B4__P2,B4,train_non_holdout,3\n"
         "B5__P2,B5,train_non_holdout,2\n"
-        "B6__P2,B6,train_non_holdout,3\n",
+        "B6__P2,B6,train_non_holdout,4\n"
+        "B7__P2,B7,holdout_test,-1\n"
+        "B8__P2,B8,holdout_test,-1\n",
         encoding="utf-8",
     )
     (tmp_path / "manifest.json").write_text(
@@ -243,7 +251,7 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
                 "step": "TL02_enrichment_analysis",
                 "holdout_exclusion": {
                     "split_assignments": {"path": str(split_path), "sha256": _sha256(split_path)},
-                    "excluded_holdout_bacteria_ids": ["B3", "B4"],
+                    "excluded_holdout_bacteria_ids": ["B7", "B8"],
                     "excluded_holdout_bacteria_count": 2,
                 },
                 "outputs": {
@@ -292,13 +300,18 @@ def test_main_writes_mechanistic_defense_outputs(tmp_path: Path) -> None:
     )
     pairwise_column = f"tl04_pair_{duplicate_profile['profile_id']}_x_defense_brex_i_weight"
     feature_rows_by_pair = {row["pair_id"]: row for row in feature_rows}
+    assert "B7__P1" not in feature_rows_by_pair
+    assert "B8__P1" not in feature_rows_by_pair
+    assert "B7__P2" not in feature_rows_by_pair
+    assert "B8__P2" not in feature_rows_by_pair
     assert float(feature_rows_by_pair["B1__P1"][pairwise_column]) == 0.4
     assert float(feature_rows_by_pair["B6__P1"][pairwise_column]) == 0.0
     assert {row["experimental_status"] for row in profile_rows} == {EXPERIMENTAL_STATUS}
     assert {row["experimental_status"] for row in metadata_rows} == {EXPERIMENTAL_STATUS}
     manifest = json.loads((output_dir / "mechanistic_defense_evasion_manifest_v1.json").read_text(encoding="utf-8"))
-    assert manifest["provenance"]["excluded_holdout_bacteria_ids"] == ["B3", "B4"]
+    assert manifest["provenance"]["excluded_holdout_bacteria_ids"] == ["B7", "B8"]
     assert manifest["provenance"]["split_assignments"]["path"] == str(split_path)
+    assert manifest["holdout_exclusion"]["excluded_pair_rows"] == 4
     assert manifest["outputs"]["feature_csv_sha256"] == _sha256(
         output_dir / "mechanistic_defense_evasion_features_v1.csv"
     )
