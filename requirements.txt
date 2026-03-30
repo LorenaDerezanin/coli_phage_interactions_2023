@@ -4,6 +4,7 @@ joblib==1.5.3
 jupyter==1.1.1
 lightgbm==4.6.0
 matplotlib==3.10.8
+mdmparis-defense-finder==2.0.1
 notebook==7.5.5
 numpy==2.4.2
 pandas==3.0.1

@@ -409,3 +409,87 @@ length, and 79 retained defense-subtype indicators plus 3 derived defense summar
   inference time instead of being stranded in CSV-only outputs.
 - Keeping the saved mask and SVD artifact next to their source tables preserves provenance and makes TL07 a straight
   projection step rather than a re-fit.
+
+### 2026-03-30: TL07 Build Defense Finder runner for novel E. coli genomes
+
+#### Executive summary
+
+Implemented a Track L runner that takes a novel E. coli assembly FASTA, predicts CDS with Pyrodigal, runs Defense
+Finder, and projects the result into the locked host-defense feature space used by the model. The runner also rebuilds
+the TL06 defense mask from the committed panel subtype CSV when the generated joblib is absent, which is necessary in
+fresh CI checkouts because generated artifacts are gitignored. A live smoke test on the public MG1655 reference genome
+ (`NC_000913.3`) detected 9 defense systems and produced the expected 82-column projected feature row: 79 retained
+ subtype indicators plus 3 derived defense summary features.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_l/steps/run_novel_host_defense_finder.py`.
+  - Accepts one assembly FASTA and writes:
+    - predicted proteins (`*.prt`)
+    - raw retained-subtype counts (`defense_finder_subtype_counts.csv`)
+    - projected model-ready host-defense features (`novel_host_defense_features.csv`)
+    - a provenance manifest (`novel_host_defense_manifest.json`)
+  - Uses explicit Pyrodigal preprocessing before Defense Finder instead of Defense Finder's nucleotide-input shortcut.
+  - Rebuilds `defense_subtype_column_mask.joblib` from
+    `data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv` when the TL06 artifact is missing.
+- Added `lyzortx/tests/test_track_l_run_novel_host_defense_finder.py`.
+  - Covers subtype aggregation from Defense Finder system rows.
+  - Verifies mask regeneration when TL06 generated outputs are absent.
+  - Confirms the end-to-end projected row has the exact training column names.
+- Updated environment setup so the pipeline is runnable in `phage_env`.
+  - `requirements.txt`: pinned `mdmparis-defense-finder==2.0.1`
+  - `environment.yml`: added `hmmer=3.4`
+
+#### Live smoke test
+
+- Downloaded the public MG1655 reference FASTA from NCBI to `.scratch/tl07/NC_000913.3.fna`.
+- Ran:
+  `conda run -n phage_env python -m lyzortx.pipeline.track_l.steps.run_novel_host_defense_finder .scratch/tl07/NC_000913.3.fna --bacteria-id ecoli_k12_mg1655 --output-dir lyzortx/generated_outputs/track_l/novel_host_defense_finder/ecoli_k12_mg1655 --models-dir .scratch/defense_finder_models --force-run`
+- Output paths:
+  - `lyzortx/generated_outputs/track_l/novel_host_defense_finder/ecoli_k12_mg1655/NC_000913.3_defense_finder_systems.tsv`
+  - `lyzortx/generated_outputs/track_l/novel_host_defense_finder/ecoli_k12_mg1655/novel_host_defense_features.csv`
+  - `lyzortx/generated_outputs/track_l/novel_host_defense_finder/ecoli_k12_mg1655/novel_host_defense_manifest.json`
+
+#### Observed counts
+
+- Assembly length: `4,641,652` nt
+- Pyrodigal CDS predictions: `4,319`
+- Defense Finder systems detected: `9`
+- Detected retained training subtypes: `6`
+  - `CAS_Class1-Subtype-I-E`
+  - `Hachiman`
+  - `MazEF` (2 systems)
+  - `RM_Type_I`
+  - `RM_Type_IV` (2 systems)
+  - `RnlAB`
+- Detected but not projected because absent from the retained TL06 mask: `Lit`
+- Final projected host-defense width: `82` columns (`79` retained subtype indicators + `3` derived features)
+- Nonzero projected features for MG1655: `8`
+
+#### External references used for the implementation
+
+- Defense Finder PyPI documentation:
+  `https://pypi.org/project/mdmparis-defense-finder/`
+  Quote: "If input is a nucleotide fasta, DefenseFinder uses Pyrodigal to annotate the CDS."
+- In this environment, `mdmparis-defense-finder==2.0.1` crashed on the documented nucleotide-input path with
+  `AttributeError: 'str' object has no attribute 'decode'` while reading the FASTA headers. TL07 therefore runs
+  Pyrodigal explicitly and passes the generated protein FASTA to Defense Finder instead of relying on the broken
+  shortcut.
+- CasFinder model-definition compatibility check:
+  `https://raw.githubusercontent.com/macsy-models/CasFinder/3.1.0/definitions/CAS_Class2-Subtype-II-B.xml`
+  Quote: `<model ... vers="2.0">`
+- Newer CasFinder release for comparison:
+  `https://raw.githubusercontent.com/macsy-models/CasFinder/3.1.1/definitions/CAS_Class2-Subtype-II-B.xml`
+  Quote: `<model ... vers="2.1">`
+- Defense Finder 2.0.1 rejected CasFinder 3.1.1 at runtime with:
+  `The model definition CAS_Class2-Subtype-II-B.xml has not the right version. version supported is '2.0'.`
+  TL07 therefore pins the installed models to `defense-finder-models==2.0.2` and `CasFinder==3.1.0`.
+
+#### Interpretation
+
+- The new runner closes the host side of the generalized inference path: a novel assembly can now be converted into the
+  same defense-feature contract used during training without requiring the original 404-strain pair table.
+- Rebuilding the TL06 mask from committed panel inputs keeps the pipeline fail-fast but CI-compatible: missing
+  generated artifacts are regenerated explicitly rather than silently treated as empty data.
+- The MG1655 smoke test confirms the workflow is biologically nontrivial on a real E. coli genome and that the output
+  width matches the training schema exactly.
