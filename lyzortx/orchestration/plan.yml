@@ -749,7 +749,7 @@ tracks:
     - id: TL12
       title: Re-run mechanistic lift evaluation with holdout-clean features and explicit
         lock rules
-      status: pending
+      status: done
       model: gpt-5.4-mini
       acceptance_criteria:
       - Recompute the baseline, +TL03, +TL04, and +TL03+TL04 arms from the same code

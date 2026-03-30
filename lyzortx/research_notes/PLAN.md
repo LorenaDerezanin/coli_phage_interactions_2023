@@ -473,7 +473,7 @@ graph LR
   - Add at least one fixture where the target host lacks the relevant receptor or defense feature and assert the emitted
     pairwise mechanistic weight is exactly zero rather than silently inherited from another row
   - Document the rebuilt output statistics and the most important changed associations in the Track L lab notebook
-- [ ] **TL12** Re-run mechanistic lift evaluation with holdout-clean features and explicit lock rules. Model:
+- [x] **TL12** Re-run mechanistic lift evaluation with holdout-clean features and explicit lock rules. Model:
       `gpt-5.4-mini`.
   - Recompute the baseline, +TL03, +TL04, and +TL03+TL04 arms from the same code path and same label set using the
     rebuilt TL11 features; comparing against stale saved metrics is a failure
