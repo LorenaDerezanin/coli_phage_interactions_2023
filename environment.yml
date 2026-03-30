@@ -7,6 +7,7 @@ dependencies:
   - pip=26.0.1
   - aragorn=1.2.41
   - dnaapler=1.3.0
+  - hmmer=3.4
   - mash=2.3
   - minced=0.4.2
   - mmseqs2=18.8cc5c
