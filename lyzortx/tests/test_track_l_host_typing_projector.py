@@ -5,6 +5,30 @@ import pandas as pd
 from lyzortx.pipeline.track_l.steps import build_host_typing_projector as tl16
 
 
+def test_load_panel_metadata_requires_capsule_binary_columns(tmp_path: Path) -> None:
+    panel_path = tmp_path / "panel.csv"
+    panel_path.write_text(
+        (
+            "bacteria;Gembase;Clermont_Phylo;ST_Warwick;O-type;H-type;ABC_serotype;Klebs_capsule_type\n"
+            "B1;G1;B2;95;O8;H9;K1;\n"
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        tl16.load_panel_metadata(panel_path)
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected load_panel_metadata to reject missing capsule columns")
+
+    assert "Capsule_ABC" in message
+    assert "Capsule_GroupIV_e" in message
+    assert "Capsule_GroupIV_e_stricte" in message
+    assert "Capsule_GroupIV_s" in message
+    assert "Capsule_Wzy_stricte" in message
+
+
 def test_build_projected_feature_rows_joins_gembase_and_bacteria_keyed_inputs() -> None:
     panel_metadata = pd.DataFrame(
         [

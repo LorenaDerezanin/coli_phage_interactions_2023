@@ -193,6 +193,11 @@ def load_panel_metadata(path: Path) -> pd.DataFrame:
             "H-type",
             "ABC_serotype",
             "Klebs_capsule_type",
+            "Capsule_ABC",
+            "Capsule_GroupIV_e",
+            "Capsule_GroupIV_e_stricte",
+            "Capsule_GroupIV_s",
+            "Capsule_Wzy_stricte",
         ),
     )
     if frame.empty:
@@ -633,6 +638,7 @@ def build_validation_rows(
         ),
         (
             "serotype",
+            # "Serotype" is a display label here; source_transform derives the legacy value from O/H columns.
             "Serotype",
             "host_serotype",
             "host_serotype_status",

@@ -1239,11 +1239,11 @@ Capsule typing remains explicitly split:
 
 #### Design decision
 
-This repo still does **not** ship the panel host FASTA assemblies themselves, so TL16 does not pretend to rerun
-ClermonTyper/MLST/ECTyper/Kaptive from raw bytes in CI. Instead it builds the deployable schema from the committed
-assembly-derived typing outputs already tracked under `data/genomics/bacteria/`. That is the honest contract available
-in this checkout. The projection-status table makes that boundary explicit instead of treating the whole old metadata
-block as generically "not deployable."
+A fresh CI checkout still does **not** contain panel host `*.fa`/`*.fna`/`*.fasta` assemblies, so TL16 cannot honestly
+claim to rerun ClermonTyper/MLST/ECTyper/Kaptive from raw bytes in GitHub Actions. Instead it builds the deployable
+schema from the committed assembly-derived typing outputs already tracked under `data/genomics/bacteria/`. That is the
+honest contract available in this checkout. The projection-status table makes that boundary explicit instead of
+treating the whole old metadata block as generically "not deployable."
 
 #### Interpretation
 
