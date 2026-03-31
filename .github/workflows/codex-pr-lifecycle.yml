@@ -64,6 +64,8 @@ jobs:
           fi
           LABEL=$(echo "$LABELS" | jq -r '.[0]')
           PROFILE="${LABEL#ci-image:}"
+          # Keep this allowlist in sync with
+          # lyzortx/orchestration/ci_image_profiles.py::VALID_CI_IMAGE_PROFILES.
           case "$PROFILE" in
             base|host-typing|full-bio) ;;
             *)

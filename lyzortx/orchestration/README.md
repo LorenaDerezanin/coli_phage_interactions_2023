@@ -216,6 +216,17 @@ and then onto PRs. The current image profiles are:
 Each job still executes env refreshes on startup, but only for the envs that belong to the selected profile, so repo
 dependency changes can land without waiting for a new image publish.
 
+## Cutover Policy
+
+This CI-image routing is an intentional cutover, not a backward-compatible migration layer.
+
+- Only post-cutover orchestrator issues and PRs are supported. They must carry exactly one `ci-image:*` label and the
+  matching env manifests expected by the selected profile.
+- Pre-cutover issues/PRs created before this contract existed are intentionally unsupported by the new Codex workflows.
+  Re-dispatch or rebase them onto a branch that contains the CI-image manifests instead of expecting fallback behavior.
+- Missing labels or missing env manifests are treated as hard configuration errors. The workflows do not silently fall
+  back to older bootstrap paths or prebaked env contents.
+
 ## Agent Instructions in Dispatched Issues
 
 Each dispatched issue includes:

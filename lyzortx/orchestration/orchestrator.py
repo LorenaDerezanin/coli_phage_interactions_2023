@@ -118,7 +118,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             plan_checkbox_text=pt.title,
             track=pt.track,
             model=pt.model or "",
-            ci_image_profile=normalize_ci_image_profile(pt.ci_image_profile or ""),
+            ci_image_profile=normalize_ci_image_profile(pt.ci_image_profile),
         )
         for pt in graph.tasks
         if pt.status != "done"

@@ -51,6 +51,8 @@ COPY environment.phylogroup-caller.yml /tmp/build/environment.phylogroup-caller.
 COPY environment.serotype-caller.yml /tmp/build/environment.serotype-caller.yml
 COPY environment.sequence-type-caller.yml /tmp/build/environment.sequence-type-caller.yml
 
+# Keep this profile allowlist in sync with
+# lyzortx/orchestration/ci_image_profiles.py::VALID_CI_IMAGE_PROFILES.
 RUN case "${CI_IMAGE_PROFILE}" in \
       base|host-typing|full-bio) ;; \
       *) echo "Unsupported CI_IMAGE_PROFILE=${CI_IMAGE_PROFILE}" >&2; exit 1 ;; \
@@ -66,6 +68,8 @@ RUN case "${CI_IMAGE_PROFILE}" in \
        fi \
     && micromamba clean --all --yes
 
+# pharokka.py is only baked into the full-bio amd64 image for now; see the
+# publish workflow's amd64-only note before broadening platform support.
 RUN micromamba run -n phage_env python --version \
     && if [[ "${CI_IMAGE_PROFILE}" == "host-typing" || "${CI_IMAGE_PROFILE}" == "full-bio" ]]; then \
          micromamba run -n phylogroup_caller python --version \

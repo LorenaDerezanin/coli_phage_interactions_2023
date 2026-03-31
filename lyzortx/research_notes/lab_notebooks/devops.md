@@ -875,3 +875,23 @@ and matches the repo policy that checked-in env manifests remain the source of t
 **4. Keep transient workflow files under `.scratch/ci/`.** Prompt and feedback files moved out of `/tmp` so the
 containerized jobs and action steps share workspace-visible paths and the repo stays consistent with its own scratch
 space policy.
+
+**5. Treat the rollout as a cutover, not a compatibility promise.** The new Codex workflows require explicit
+`ci-image:*` labels and the checked-in env manifests that match the selected profile. Older orchestrator issues/PRs
+created before that contract are intentionally unsupported; they must be re-dispatched or rebased rather than routed
+through fallback behavior.
+
+**6. Keep specialized manifests at repo root.** The split caller/toolchain env manifests were moved alongside
+`environment.yml` instead of living under `.github/` so local developers can create the same envs on bare metal. They
+are CI inputs, but they are not CI-only.
+
+#### Validation
+
+- Verified GHCR package tags for the branch cutover images using the package API and a token with `read:packages`:
+  - `base-branch-worktree-ci-image-cutover`
+  - `host-typing-branch-worktree-ci-image-cutover`
+  - `full-bio-branch-worktree-ci-image-cutover`
+- Verified the corresponding SHA tags from the initial branch image line also exist:
+  - `base-sha-7231a81bb21eddd0e34095e4613506220774fde7`
+  - `host-typing-sha-7231a81bb21eddd0e34095e4613506220774fde7`
+  - `full-bio-sha-7231a81bb21eddd0e34095e4613506220774fde7`
