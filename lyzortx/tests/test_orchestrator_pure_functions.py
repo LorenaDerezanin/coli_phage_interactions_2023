@@ -213,6 +213,123 @@ def test_load_pending_tasks_works_on_real_plan() -> None:
         assert t.acceptance_criteria, f"Task {t.task_id} missing acceptance_criteria"
 
 
+def test_load_pending_tasks_preserves_explicit_task_dependencies(tmp_path: Path) -> None:
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    plan_path = tmp_path / "plan.yml"
+    plan_path.write_text(
+        """
+tracks:
+  L:
+    name: Mechanistic Features and Generalized Inference
+    stage: 1
+    depends_on: []
+    tasks:
+      - id: TL15
+        title: Build raw-host surface projector
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Surface projector exists
+        depends_on_tasks: []
+      - id: TL16
+        title: Build host typing projector
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Host typing projector exists
+        depends_on_tasks: []
+      - id: TL17
+        title: Build phage compatibility projector
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Phage compatibility projector exists
+        depends_on_tasks: []
+      - id: TL18
+        title: Rebuild deployable bundle
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Bundle rebuild completes
+        depends_on_tasks: [TL15, TL16, TL17]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    tasks = {task.task_id: task for task in load_pending_tasks(plan_path)}
+    assert tasks["TL15"].dependencies == []
+    assert tasks["TL16"].dependencies == []
+    assert tasks["TL17"].dependencies == []
+    assert tasks["TL18"].dependencies == ["TL15", "TL16", "TL17"]
+
+
+def test_run_once_dispatches_tl15_tl17_in_parallel_before_tl18(tmp_path: Path) -> None:
+    from lyzortx.orchestration.orchestrator import initialize_state
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+    from lyzortx.orchestration.orchestrator import run_once
+
+    plan_path = tmp_path / "plan.yml"
+    plan_path.write_text(
+        """
+tracks:
+  L:
+    name: Mechanistic Features and Generalized Inference
+    stage: 1
+    depends_on: []
+    tasks:
+      - id: TL15
+        title: Build raw-host surface projector
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Surface projector exists
+        depends_on_tasks: []
+      - id: TL16
+        title: Build host typing projector
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Host typing projector exists
+        depends_on_tasks: []
+      - id: TL17
+        title: Build phage compatibility projector
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Phage compatibility projector exists
+        depends_on_tasks: []
+      - id: TL18
+        title: Rebuild deployable bundle
+        status: pending
+        model: gpt-5.4
+        acceptance_criteria:
+          - Bundle rebuild completes
+        depends_on_tasks: [TL15, TL16, TL17]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    tasks = load_pending_tasks(plan_path)
+    state = initialize_state(tasks, tmp_path / "runtime_state.json")
+
+    result = run_once(
+        tasks=tasks,
+        state=state,
+        issues_by_task={},
+        github_client=None,
+        max_active_tasks=4,
+        plan_path=plan_path,
+    )
+
+    assert result["action"] == "tasks_waiting_for_agent"
+    assert result["task_ids"] == ["TL15", "TL16", "TL17"]
+    assert state["task_status"]["TL15"] == "in_progress"
+    assert state["task_status"]["TL16"] == "in_progress"
+    assert state["task_status"]["TL17"] == "in_progress"
+    assert state["task_status"]["TL18"] == "pending"
+
+
 # --- sync_status_from_issues: state_reason handling ---
 
 

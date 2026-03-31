@@ -1,3 +1,27 @@
+### 2026-03-31: Orchestrator now supports explicit task-level dependencies
+
+#### Executive summary
+
+The plan orchestrator used to assume every task within a track was strictly sequential. That was too rigid for the next
+Track L replan, where `TL15`, `TL16`, and `TL17` should dispatch in parallel while `TL18` stays blocked on all three.
+The orchestrator now accepts optional per-task `depends_on_tasks` entries in `plan.yml` and uses them for readiness
+when present.
+
+#### Design decision
+
+Keep the old behavior as the default. If a task does not declare `depends_on_tasks`, earlier tasks in the same track
+still block it. If a task does declare `depends_on_tasks`, those explicit task IDs replace the default same-track
+serialization for that task only, while cross-track `depends_on` rules still apply. This keeps existing tracks stable
+and makes parallelism opt-in rather than globally reinterpreting the plan.
+
+#### Verification
+
+- Added parser tests showing `TL15`, `TL16`, and `TL17` are ready together while `TL18` remains blocked until all three
+  are done.
+- Added an orchestrator `run_once` test proving the next tick would mark `TL15`/`TL16`/`TL17` in progress together and
+  leave `TL18` pending.
+- Re-rendered `PLAN.md` support so explicit task dependencies appear in the human-readable plan output.
+
 ### 2026-03-30: Claude review auto-merge was too permissive for commented approvals
 
 #### Executive summary

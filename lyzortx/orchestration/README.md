@@ -85,8 +85,8 @@ stateDiagram-v2
 ## Components
 
 - `plan.yml` — task definitions (source of truth).
-- `plan_parser.py` — pure functions: `load_plan`, `is_task_ready`, `select_ready_tasks`, `mark_task_done`. Parses
-  `model` field from task entries.
+- `plan_parser.py` — pure functions: `load_plan`, `is_task_ready`, `resolve_task_dependencies`,
+  `select_ready_tasks`, `mark_task_done`. Parses `model` and optional `depends_on_tasks` fields from task entries.
 - `parse_model_directive.py` — extracts model ID from `<!-- model: ... -->` HTML comments in issue bodies. Used by CI
   workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
@@ -106,8 +106,11 @@ stateDiagram-v2
 
 A task is ready when:
 
-1. All prior tasks in the same track are `done` (sequential within track).
-2. All tasks in all prerequisite tracks (from `depends_on`) are `done`.
+1. If the task does not declare `depends_on_tasks`, all prior tasks in the same track are `done` (sequential by
+   default within track).
+2. If the task does declare `depends_on_tasks`, only those explicit task IDs block it within the track. This is how
+   the plan expresses intra-track parallelism such as "TL15/TL16/TL17 can start together, TL18 waits on all three."
+3. All tasks in all prerequisite tracks (from `depends_on`) are `done`.
 
 Task IDs are derived from track letter + ordinal (e.g., `TB03`, `TF01`). Gates use `GNG` prefix.
 

@@ -20,6 +20,7 @@ class PlanTask:
     title: str
     status: str  # "done" | "pending"
     ordinal: int  # 1-based position within track
+    task_dependencies: list[str] | None = None
     implemented_in: str | None = None
     baseline: str | None = None
     model: str | None = None
@@ -38,6 +39,12 @@ class PlanGraph:
         for t in self.tasks:
             seen.setdefault(t.track, None)
         return list(seen)
+
+    def task_by_id(self, task_id: str) -> PlanTask:
+        for task in self.tasks:
+            if task.task_id == task_id:
+                return task
+        raise KeyError(f"Unknown task id: {task_id}")
 
 
 def load_plan(plan_path: Path) -> PlanGraph:
@@ -60,31 +67,44 @@ def load_plan(plan_path: Path) -> PlanGraph:
                     title=raw["title"],
                     status=raw.get("status", "pending"),
                     ordinal=i + 1,
+                    task_dependencies=(list(raw["depends_on_tasks"]) if "depends_on_tasks" in raw else None),
                     implemented_in=raw.get("implemented_in"),
                     baseline=raw.get("baseline"),
                     model=raw.get("model"),
                 )
             )
 
-    return PlanGraph(tasks=all_tasks, track_deps=track_deps)
+    graph = PlanGraph(tasks=all_tasks, track_deps=track_deps)
+    _validate_task_dependencies(graph, plan_path)
+    return graph
 
 
 def is_track_complete(graph: PlanGraph, track: str) -> bool:
     return all(t.status == "done" for t in graph.tasks_for_track(track))
 
 
+def resolve_task_dependencies(task: PlanTask, graph: PlanGraph) -> list[str]:
+    dependency_ids: list[str] = []
+    if task.task_dependencies is None:
+        dependency_ids.extend(t.task_id for t in graph.tasks_for_track(task.track) if t.ordinal < task.ordinal)
+    else:
+        dependency_ids.extend(task.task_dependencies)
+
+    for dep_track in graph.track_deps.get(task.track, []):
+        dependency_ids.extend(t.task_id for t in graph.tasks_for_track(dep_track))
+
+    seen: dict[str, None] = {}
+    for dependency_id in dependency_ids:
+        seen.setdefault(dependency_id, None)
+    return list(seen)
+
+
 def is_task_ready(task: PlanTask, graph: PlanGraph) -> bool:
     if task.status == "done":
         return False
 
-    # Within-track: all prior items must be done.
-    for t in graph.tasks_for_track(task.track):
-        if t.ordinal < task.ordinal and t.status != "done":
-            return False
-
-    # Cross-track: all items in all prerequisite tracks must be done.
-    for dep_track in graph.track_deps.get(task.track, []):
-        if not is_track_complete(graph, dep_track):
+    for dependency_id in resolve_task_dependencies(task, graph):
+        if graph.task_by_id(dependency_id).status != "done":
             return False
 
     return True
@@ -118,3 +138,15 @@ def _write_plan_yaml(plan_path: Path, data: dict[str, Any]) -> None:
         yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
+
+
+def _validate_task_dependencies(graph: PlanGraph, plan_path: Path) -> None:
+    known_task_ids = {task.task_id for task in graph.tasks}
+    for task in graph.tasks:
+        if task.task_dependencies is None:
+            continue
+        for dependency_id in task.task_dependencies:
+            if dependency_id == task.task_id:
+                raise ValueError(f"Task {task.task_id!r} cannot depend on itself in {plan_path}")
+            if dependency_id not in known_task_ids:
+                raise ValueError(f"Task {task.task_id!r} depends on unknown task {dependency_id!r} in {plan_path}")

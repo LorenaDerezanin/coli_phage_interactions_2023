@@ -12,6 +12,7 @@ from lyzortx.orchestration.plan_parser import (
     is_track_complete,
     load_plan,
     mark_task_done,
+    resolve_task_dependencies,
     select_ready_tasks,
 )
 from lyzortx.orchestration.render_plan import load_plan_yaml, render_plan, write_rendered_plan
@@ -40,6 +41,35 @@ MINIMAL_PLAN = textwrap.dedent("""\
           - id: TB02
             title: Also depends on A
             status: pending
+""")
+
+TASK_DEP_PLAN = textwrap.dedent("""\
+    tracks:
+      L:
+        name: Mechanistic Features and Generalized Inference
+        stage: 1
+        depends_on: []
+        tasks:
+          - id: TL15
+            title: Build raw-host surface projector
+            status: pending
+            model: gpt-5.4
+            depends_on_tasks: []
+          - id: TL16
+            title: Build host typing projector
+            status: pending
+            model: gpt-5.4
+            depends_on_tasks: []
+          - id: TL17
+            title: Build phage compatibility projector
+            status: pending
+            model: gpt-5.4
+            depends_on_tasks: []
+          - id: TL18
+            title: Rebuild deployable bundle
+            status: pending
+            model: gpt-5.4
+            depends_on_tasks: [TL15, TL16, TL17]
 """)
 
 
@@ -224,3 +254,85 @@ def test_load_plan_model_defaults_to_none(tmp_path: Path) -> None:
     graph = load_plan(_write_plan(tmp_path))
     ta01 = next(t for t in graph.tasks if t.task_id == "TA01")
     assert ta01.model is None
+
+
+def test_task_level_dependencies_allow_parallel_open_tasks(tmp_path: Path) -> None:
+    graph = load_plan(_write_plan(tmp_path, TASK_DEP_PLAN))
+    ready = select_ready_tasks(graph)
+    assert [task.task_id for task in ready] == ["TL15", "TL16", "TL17"]
+
+
+def test_task_level_dependencies_block_tl18_until_all_prereqs_done(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          L:
+            name: Mechanistic Features and Generalized Inference
+            stage: 1
+            depends_on: []
+            tasks:
+              - id: TL15
+                title: Build raw-host surface projector
+                status: done
+                model: gpt-5.4
+                depends_on_tasks: []
+              - id: TL16
+                title: Build host typing projector
+                status: done
+                model: gpt-5.4
+                depends_on_tasks: []
+              - id: TL17
+                title: Build phage compatibility projector
+                status: pending
+                model: gpt-5.4
+                depends_on_tasks: []
+              - id: TL18
+                title: Rebuild deployable bundle
+                status: pending
+                model: gpt-5.4
+                depends_on_tasks: [TL15, TL16, TL17]
+    """)
+    graph = load_plan(_write_plan(tmp_path, content))
+
+    tl18 = next(task for task in graph.tasks if task.task_id == "TL18")
+    assert resolve_task_dependencies(tl18, graph) == ["TL15", "TL16", "TL17"]
+    assert not is_task_ready(tl18, graph)
+
+
+def test_task_level_dependencies_unblock_tl18_after_all_prereqs_done(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          L:
+            name: Mechanistic Features and Generalized Inference
+            stage: 1
+            depends_on: []
+            tasks:
+              - id: TL15
+                title: Build raw-host surface projector
+                status: done
+                model: gpt-5.4
+                depends_on_tasks: []
+              - id: TL16
+                title: Build host typing projector
+                status: done
+                model: gpt-5.4
+                depends_on_tasks: []
+              - id: TL17
+                title: Build phage compatibility projector
+                status: done
+                model: gpt-5.4
+                depends_on_tasks: []
+              - id: TL18
+                title: Rebuild deployable bundle
+                status: pending
+                model: gpt-5.4
+                depends_on_tasks: [TL15, TL16, TL17]
+    """)
+    graph = load_plan(_write_plan(tmp_path, content))
+    tl18 = next(task for task in graph.tasks if task.task_id == "TL18")
+    assert is_task_ready(tl18, graph)
+
+
+def test_render_plan_shows_explicit_task_dependencies(tmp_path: Path) -> None:
+    plan = load_plan_yaml(_write_plan(tmp_path, TASK_DEP_PLAN))
+    md = render_plan(plan)
+    assert "Depends on tasks: `TL15`, `TL16`, `TL17`." in md

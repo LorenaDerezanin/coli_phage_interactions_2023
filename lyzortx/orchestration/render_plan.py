@@ -93,7 +93,9 @@ def _render_task_line(task: dict[str, Any]) -> str:
     task_id = task.get("id", "")
     title = task["title"]
     prefix = f"**{task_id}** " if task_id else ""
-    has_metadata = task.get("implemented_in") or task.get("baseline") or task.get("model")
+    has_metadata = (
+        task.get("implemented_in") or task.get("baseline") or task.get("model") or task.get("depends_on_tasks")
+    )
     parts = [f"{prefix}{title}." if has_metadata else f"{prefix}{title}"]
     impl = task.get("implemented_in")
     if impl and task.get("status") == "done":
@@ -104,6 +106,10 @@ def _render_task_line(task: dict[str, Any]) -> str:
     model = task.get("model")
     if model:
         parts.append(f"Model: `{model}`.")
+    task_dependencies = task.get("depends_on_tasks")
+    if task_dependencies:
+        rendered_dependencies = ", ".join(f"`{dependency_id}`" for dependency_id in task_dependencies)
+        parts.append(f"Depends on tasks: {rendered_dependencies}.")
 
     lines = [
         textwrap.fill(

@@ -93,7 +93,7 @@ def _load_acceptance_criteria(plan_path: Path, task_id: str) -> list[str]:
 
 def load_pending_tasks(plan_path: Path) -> list[Task]:
     """Load all pending tasks from plan.yml as Task objects."""
-    from lyzortx.orchestration.plan_parser import load_plan
+    from lyzortx.orchestration.plan_parser import load_plan, resolve_task_dependencies
 
     graph = load_plan(plan_path)
     tasks = [
@@ -101,7 +101,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             task_id=pt.task_id,
             title=pt.title,
             description=f"Track {pt.track} task. {pt.title}",
-            dependencies=[],
+            dependencies=resolve_task_dependencies(pt, graph),
             executor="agent",
             command=None,
             expected_paths=[],
@@ -493,7 +493,7 @@ def run_once(
         return {"action": "skipped", "reason": "max_active_tasks_reached"}
 
     # Get all ready tasks from the plan graph.
-    from lyzortx.orchestration.plan_parser import load_plan, select_ready_tasks
+    from lyzortx.orchestration.plan_parser import load_plan, resolve_task_dependencies, select_ready_tasks
 
     effective_plan_path = plan_path or DEFAULT_PLAN_PATH
     graph = load_plan(effective_plan_path)
@@ -541,7 +541,7 @@ def run_once(
             task_id=pt.task_id,
             title=pt.title,
             description=f"Track {pt.track} task. {pt.title}",
-            dependencies=[],
+            dependencies=resolve_task_dependencies(pt, graph),
             executor="agent",
             command=None,
             expected_paths=[],
