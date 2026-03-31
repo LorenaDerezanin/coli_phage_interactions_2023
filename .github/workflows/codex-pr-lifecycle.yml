@@ -261,6 +261,7 @@ jobs:
           model: ${{ steps.model.outputs.model }}
           allow-bots: true
           sandbox: danger-full-access
+          safety-strategy: none
           prompt-file: .scratch/ci/codex_feedback.txt
 
       # Thread resolution is handled by Claude during re-review, not here.
