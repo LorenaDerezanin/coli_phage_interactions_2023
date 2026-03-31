@@ -1146,6 +1146,19 @@ The updated plan also records one negative lesson explicitly: do not treat fitte
 deployable shortcut. If continuous host-similarity signal is still needed, it should come from a stable runtime
 distance or projection contract, not from reusing a fragile embedding fit.
 
+### 2026-04-01: Project-level implication of the Track L raw-validation subset
+
+The Track L replan is now stricter in one important way: "deployable" work can no longer hide behind the excuse that
+the repo lacks raw-input fixtures or declared tool environments. We now have both:
+
+- a committed host FASTA validation subset with provenance and checksums
+- checked-in split env manifests for the host-typing and heavier bioinformatics toolchains
+
+That does not finish generalized inference by itself, but it does change what counts as an honest intermediate result.
+From this point on, `TL15`-`TL18` should be expected to validate at least part of their contract from raw FASTA inputs
+available in a clean checkout, not only from precomputed intermediate tables. The project-level benefit is clarity:
+future "deployable bundle" claims are now easier to falsify early if they still depend on hidden local state.
+
 ### 2026-03-31: TL14 implementation hardened the external-validation stop conditions
 
 TL14 is now implemented as a strict gatekeeper instead of a permissive rerun of TL09. The code now reads the saved TL13

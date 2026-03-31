@@ -527,30 +527,35 @@ graph LR
     deployable bundle failed, or validation inconclusive because the cohort contract could not be satisfied
 - [ ] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `gpt-5.4`. CI image
       profile: `full-bio`.
-  - Build an inference-time projector from raw host assemblies into the training-time host-surface feature schema needed
-    for downstream deployable compatibility work, including the existing receptor-style surface calls the bundle can
-    realistically consume from raw genomes
+  - Build an inference-time projector that accepts raw host assembly FASTA input and emits the training-time
+    host-surface feature schema needed for downstream deployable compatibility work, including the existing
+    receptor-style surface calls the bundle can realistically consume from raw genomes
   - Reuse or explicitly version the reference assets and clustering contract so novel hosts land in the same feature
     space as panel hosts
-  - For panel hosts with assemblies, compare projected calls against the existing Track C surface annotations and report
-    the agreement plus any systematic mismatches
+  - Validate the projector on the committed host FASTA subset under data/genomics/bacteria/validation_subset/ and, for
+    panel hosts with assemblies, compare projected calls against the existing Track C surface annotations with agreement
+    and systematic mismatches reported explicitly
   - Output must distinguish "feature absent" from "not callable from the input genome"; silently coercing missing calls
     to ordinary negatives is a failure
   - The task must end with an explicit table of which training-time host-surface features are reproduced directly,
     approximated by a deployable proxy, or still unsupported, with a one-sentence rationale for each unsupported family
-  - Runtime assets and emitted metadata must resolve relative to saved outputs rather than hidden repo-root paths or
-    stale gitignored artifacts
+  - Runtime assets, emitted metadata, and validation instructions must resolve relative to checked-in manifests or saved
+    outputs rather than hidden repo-root paths, stale gitignored artifacts, or ad hoc local installs
 - [ ] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `gpt-5.4`. CI image
       profile: `host-typing`.
   - Derive the host-typing subset of the old panel metadata block from raw host assemblies wherever the information is
     extractable with reasonable preprocessing effort, including phylogroup, serotype, and callable capsule-related
-    features
+    features, and run that raw-input path on the committed FASTA subset under data/genomics/bacteria/validation_subset/
   - Emit the projected features in a stable schema that can be joined into deployable inference without depending on the
     static pair table
+  - Write raw-validation outputs that make the FASTA inputs auditable, including the file inventory/checksums used and
+    the resulting host-typing calls
   - Explicitly separate replicated genome-derived features from truly non-derivable assay/collection metadata in both
     code outputs and notebook text; calling something "not deployable" without that separation is a failure
-  - Validate the projector on panel hosts with assemblies and report which feature families reproduce cleanly versus
-    which remain noisy or unsupported
+  - Validate the projector on panel hosts with assemblies and report, per feature family, which calls reproduce
+    directly, which require a deployable proxy, and which remain noisy or unsupported
+  - The implementation must run from checked-in env manifests rather than assuming undeclared local bioinformatics
+    installs
 - [ ] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `gpt-5.4`. CI image profile:
       `full-bio`.
   - Start from the phage-side feature-parity gap and justify which deployable raw-genome-derived compatibility block is
@@ -559,12 +564,15 @@ graph LR
   - The chosen block must plausibly encode host-compatibility signal rather than merely adding generic phage annotation
     or taxonomy detail with no defensible connection to adsorption, host range, or host-defense interaction
   - The implementation may use taxonomy-aware lookup, sequence-similarity assignment, or another defensible raw-genome
-    contract, but it must justify the choice and persist the runtime assets needed to reproduce it
+    contract, but it must justify the choice, persist the runtime assets needed to reproduce it, and derive the block
+    from raw phage FASTA inputs available in a clean checkout
   - The block must avoid panel-only metadata and label-derived quantities; if it depends on training-set artifacts,
     those artifacts must be frozen and shipped as part of the deployable runtime contract
   - Demonstrate on panel phages that the chosen block is non-degenerate, measurably changes the inference surface on
     real examples, and is documented as either deployable for arbitrary raw-genome inputs or intentionally bounded in
     scope
+  - Validation must make clear which phage FASTAs were used, what runtime assets were frozen, and why the resulting
+    block is a compatibility feature rather than generic annotation enrichment
 - [ ] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `gpt-5.4`. CI
       image profile: `full-bio`. Depends on tasks: `TL15`, `TL16`, `TL17`.
   - Start with a feature-parity table for the training-time model that labels every feature block as included directly,
@@ -574,7 +582,9 @@ graph LR
   - Do not use fitted UMAP coordinates as the deployable host projection. If continuous host similarity is needed, use a
     stable distance or projector whose runtime contract is explicit
   - Save every runtime dependency bundle-relatively and prove the rebuilt bundle works without hidden dependence on
-    repo-root caches or stale generated outputs
+    repo-root caches, stale generated outputs, or undeclared local tool installs
+  - Demonstrate an end-to-end raw-input path using the committed host validation subset together with in-repo phage
+    FASTAs, rather than only rebuilding from previously derived intermediate tables
   - Regenerate round-trip reference predictions for at least 3 panel hosts with available assemblies and require the
     richer bundle to improve at least one predeclared round-trip metric versus the current deployable baseline without
     materially degrading all the others

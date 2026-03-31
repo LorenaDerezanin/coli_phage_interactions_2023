@@ -29,6 +29,10 @@
 - **GitHub Actions workflows:** direnv is not available in CI. Bootstrap `phage_env` with
   `conda env create -f environment.yml -n phage_env`, then run repo commands via `conda run -n phage_env ...`, unless
   the workflow explicitly opts into a prebaked container image with additional specialized envs.
+- **Prebaked CI images are a starting point, not an excuse to skip required tools.** If a Codex workflow running in a
+  prebaked container is missing a required CLI/library, fix that by adding the dependency to the appropriate checked-in
+  `environment.*.yml` manifest and rebuilding/refreshing the image-managed env. Do not weaken validation, silently skip
+  the step, or perform ad hoc installs inside the job.
 - **`conda run` flag:** When `conda run` is needed (CI only), always use `-n phage_env`, never `-p <path>`. The `-n`
   flag resolves the environment by name regardless of install location; `-p` hard-codes an absolute path that differs
   across machines.
@@ -55,6 +59,8 @@
 - If a required library or CLI tool is missing, do not work around that absence by weakening validation, skipping the
   step, or hand-waving the requirement. Add the dependency to the appropriate declared environment manifest and make the
   missing-tool fix part of the change.
+- In CI-image workflows specifically, choose the narrowest appropriate manifest (`environment.yml` for `phage_env`, or
+  the relevant specialized `environment.*.yml`) rather than shoving every tool into the default env.
 
 # Fail-Fast on Missing Data
 

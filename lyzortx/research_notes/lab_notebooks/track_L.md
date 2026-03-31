@@ -1182,3 +1182,30 @@ bundle clears its round-trip gate first.
 Do not treat fitted UMAP host coordinates as the next deployable step. If continuous host-similarity signal is still
 needed after `TL15`-`TL17`, it should come from a stable runtime projector or distance contract rather than from
 reusing a fragile low-dimensional embedding fit.
+
+### 2026-04-01: Replan follow-up — raw-input validation is now mandatory for TL15-TL18
+
+The plan was tightened again after two infrastructure pieces became real instead of hypothetical:
+
+- the committed host FASTA validation subset under `data/genomics/bacteria/validation_subset/`
+- the split checked-in env manifests for host typing and heavier bioinformatics toolchains
+
+That changes the acceptance-criteria bar. `TL15` and `TL16` should no longer be allowed to stop at "project from
+committed derived tables" when the repo now contains a small raw-host validation cohort and declared environments for
+the necessary tool families. `TL17` likewise should not get away with generic annotation parsing if the point is
+deployable raw-genome compatibility signal. `TL18` now has enough infrastructure to require at least one honest
+end-to-end raw-input path instead of only a bundle rebuild from intermediate artifacts.
+
+So the plan now requires:
+
+- `TL15`: validate the raw-host surface projector on the committed FASTA subset and emit a reproduced/proxy/unsupported
+  table for the host-surface schema.
+- `TL16`: run the host-typing path on the committed FASTA subset, emit auditable raw-validation outputs, and report
+  per-family direct/proxy/unsupported status.
+- `TL17`: derive the chosen phage-side block from raw phage FASTAs available in a clean checkout, not only from stale
+  annotation tables.
+- `TL18`: demonstrate at least one end-to-end raw-input bundle path using committed host FASTAs plus in-repo phage
+  FASTAs.
+
+This is still not a claim that the whole deployable stack is finished. It is a stricter honesty contract: now that the
+repo has the raw validation subset and the env boundaries, the plan should require them to be used.
