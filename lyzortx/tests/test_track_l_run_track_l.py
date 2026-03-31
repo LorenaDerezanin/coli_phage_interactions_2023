@@ -24,6 +24,11 @@ def _stub_all_steps(monkeypatch, calls):
         lambda argv: calls.append("generalized-inference-bundle"),
     )
     monkeypatch.setattr(
+        run_track_l.build_tl13_generalized_inference_bundle,
+        "main",
+        lambda argv: calls.append("deployable-generalized-inference-bundle"),
+    )
+    monkeypatch.setattr(
         run_track_l.validate_vhdb_generalized_inference,
         "main",
         lambda argv: calls.append("validate-vhdb-generalized-inference"),
@@ -48,7 +53,11 @@ def test_inference_group_dispatch(monkeypatch) -> None:
     calls: list[str] = []
     _stub_all_steps(monkeypatch, calls)
     run_track_l.main(["--step", "inference"])
-    assert calls == ["generalized-inference-bundle", "validate-vhdb-generalized-inference"]
+    assert calls == [
+        "generalized-inference-bundle",
+        "deployable-generalized-inference-bundle",
+        "validate-vhdb-generalized-inference",
+    ]
 
 
 def test_all_runs_every_step_in_order(monkeypatch) -> None:
@@ -65,5 +74,6 @@ def test_all_runs_every_step_in_order(monkeypatch) -> None:
         "defense-features",
         "retrain-mechanistic-v1",
         "generalized-inference-bundle",
+        "deployable-generalized-inference-bundle",
         "validate-vhdb-generalized-inference",
     ]

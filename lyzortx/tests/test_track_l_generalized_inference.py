@@ -14,8 +14,10 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
 )
 from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import build_genome_kmer_feature_block
 from lyzortx.pipeline.track_d.steps.build_phage_protein_sets import read_panel_phages
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import sha256_file
 from lyzortx.pipeline.track_l.steps import build_generalized_inference_bundle as tl08_bundle
 from lyzortx.pipeline.track_l.steps import generalized_inference as tl08_infer
+from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import Tl04ProfileRuntime
 from lyzortx.pipeline.track_l.steps.novel_organism_feature_projection import project_novel_host
 
 LOCKED_LIGHTGBM_PARAMS = {
@@ -117,6 +119,33 @@ def test_build_training_rows_merges_host_and_phage_blocks() -> None:
     ]
 
 
+def test_augment_rows_with_pair_features_raises_for_missing_non_holdout_pair() -> None:
+    with pytest.raises(KeyError, match="Missing deployable pair feature row for pair_id B1__P1"):
+        tl08_bundle.augment_rows_with_pair_features(
+            rows=[{"pair_id": "B1__P1", "split_holdout": "train_non_holdout"}],
+            pair_feature_rows=[],
+            pair_feature_columns=["tl04_pair_signal"],
+        )
+
+
+def test_augment_rows_with_pair_features_zero_fills_missing_holdout_pair() -> None:
+    rows = tl08_bundle.augment_rows_with_pair_features(
+        rows=[{"pair_id": "B2__P1", "split_holdout": "holdout_test", "existing_value": 7}],
+        pair_feature_rows=[],
+        pair_feature_columns=["tl04_pair_signal", "tl04_pair_support"],
+    )
+
+    assert rows == [
+        {
+            "pair_id": "B2__P1",
+            "split_holdout": "holdout_test",
+            "existing_value": 7,
+            "tl04_pair_signal": 0.0,
+            "tl04_pair_support": 0.0,
+        }
+    ]
+
+
 def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path, monkeypatch) -> None:
     st02_path, st03_path = _build_panel_foundation(tmp_path)
     phage_feature_path, phage_svd_path = _build_phage_kmer_outputs(tmp_path)
@@ -203,3 +232,70 @@ def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path
     assert list(observed["phage"]) == list(expected["phage"])
     assert list(observed["rank"]) == list(expected["rank"])
     assert observed["p_lysis"].tolist() == pytest.approx(expected["p_lysis"].tolist(), abs=1e-6)
+
+
+def test_project_phage_features_parses_tl04_runtime_payload_once_per_batch(tmp_path: Path, monkeypatch) -> None:
+    phage_paths = []
+    annotation_paths = {}
+    for phage_name in ("phage_a", "phage_b"):
+        phage_path = tmp_path / f"{phage_name}.fna"
+        phage_path.write_text(f">{phage_name}\nATGCATGC\n", encoding="utf-8")
+        phage_paths.append(phage_path)
+        annotation_paths[phage_name] = tmp_path / f"{phage_name}.tsv"
+
+    parse_call_count = 0
+    profiles = [
+        Tl04ProfileRuntime(
+            profile_id="profile_001",
+            direct_column="tl04_phage_antidef_profile_001_present",
+            member_features=("ANTIDEF_PHROG_11",),
+        )
+    ]
+
+    def fake_parse_tl04_runtime_payload(payload: dict[str, object]) -> tuple[list[Tl04ProfileRuntime], list[object]]:
+        nonlocal parse_call_count
+        parse_call_count += 1
+        assert payload == {"profiles": ["payload"]}
+        return profiles, []
+
+    monkeypatch.setattr(tl08_infer, "parse_tl04_runtime_payload", fake_parse_tl04_runtime_payload)
+    monkeypatch.setattr(
+        tl08_infer,
+        "project_novel_phage",
+        lambda phage_path, _: {"phage": Path(phage_path).stem},
+    )
+    monkeypatch.setattr(
+        tl08_infer,
+        "extract_antidef_feature_names",
+        lambda _: {"ANTIDEF_PHROG_11"},
+    )
+
+    runtime = tl08_infer.InferenceRuntime(
+        bundle_path=tmp_path / "bundle.joblib",
+        bundle={},
+        feature_space_payload={},
+        defense_mask_path=tmp_path / "mask.joblib",
+        phage_svd_path=tmp_path / "svd.joblib",
+        panel_defense_subtypes_path=tmp_path / "panel.csv",
+        models_dir=tmp_path / "models",
+        tl04_runtime_payload={"profiles": ["payload"]},
+    )
+
+    projected_rows = tl08_infer.project_phage_features(
+        phage_paths,
+        runtime=runtime,
+        annotation_tsv_paths=annotation_paths,
+    )
+
+    assert parse_call_count == 1
+    assert projected_rows == [
+        {"phage": "phage_a", "tl04_phage_antidef_profile_001_present": 1},
+        {"phage": "phage_b", "tl04_phage_antidef_profile_001_present": 1},
+    ]
+
+
+def test_sha256_file_matches_previous_private_helper_contract(tmp_path: Path) -> None:
+    payload_path = tmp_path / "payload.txt"
+    payload_path.write_text("bundle payload\n", encoding="utf-8")
+
+    assert sha256_file(payload_path) == tl08_bundle._sha256(payload_path)

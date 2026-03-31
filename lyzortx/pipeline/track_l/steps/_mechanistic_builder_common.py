@@ -39,6 +39,10 @@ class CollapsedAssociation:
 
 
 def _sha256(path: Path) -> str:
+    return sha256_file(path)
+
+
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(65536), b""):

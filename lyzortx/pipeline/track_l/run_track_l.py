@@ -5,7 +5,7 @@ Individual steps and groups (run individually or with 'all'):
   annotate                — Run pharokka on phage genomes and cache key TSVs.
   features (group)        — parse → enrich → rbp-features → defense-features.
   retrain-mechanistic-v1  — Retrain the v1 model with mechanistic features.
-  inference (group)       — generalized-inference-bundle → validate-vhdb.
+  inference (group)       — generalized-inference-bundle → deployable-generalized-inference-bundle → validate-vhdb.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ if __package__ in {None, ""}:
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_l.steps import (
     build_generalized_inference_bundle,
+    build_tl13_generalized_inference_bundle,
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
     parse_annotations,
@@ -95,6 +96,7 @@ FEATURE_STEPS: list[tuple[str, StepFn]] = [
 
 INFERENCE_STEPS: list[tuple[str, StepFn]] = [
     ("generalized-inference-bundle", lambda _args: build_generalized_inference_bundle.main([])),
+    ("deployable-generalized-inference-bundle", lambda _args: build_tl13_generalized_inference_bundle.main([])),
     ("validate-vhdb-generalized-inference", lambda _args: validate_vhdb_generalized_inference.main([])),
 ]
 
