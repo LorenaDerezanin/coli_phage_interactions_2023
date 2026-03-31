@@ -17,6 +17,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  packages: read
 
 # Only one lifecycle run per PR at a time. New runs cancel in-progress ones
 # to prevent race conditions on the review round cap label.
