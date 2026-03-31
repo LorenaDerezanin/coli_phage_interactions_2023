@@ -6,6 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from lyzortx.orchestration.ci_image_profiles import ci_image_for_profile
+from lyzortx.orchestration.ci_image_profiles import ci_image_profile_from_labels
+from lyzortx.orchestration.ci_image_profiles import ci_image_profile_label
 from lyzortx.orchestration.orchestrator import IssueRef
 from lyzortx.orchestration.orchestrator import Task
 from lyzortx.orchestration.orchestrator import choose_preferred_issue
@@ -101,6 +104,7 @@ def _make_task(track: str, task_id: str = "TX01") -> Task:
         plan_checkbox_text=None,
         track=track,
         model="gpt-5.4-mini",
+        ci_image_profile="host-typing",
     )
 
 
@@ -159,6 +163,23 @@ def test_extract_model_whitespace_tolerance() -> None:
     assert extract_model(body) == "gpt-5.4-mini"
 
 
+def test_ci_image_profile_from_labels_prefers_prefixed_label() -> None:
+    labels = ["orchestrator-task", "ci-image:host-typing", "model-gpt-5.4"]
+    assert ci_image_profile_from_labels(labels) == "host-typing"
+
+
+def test_ci_image_profile_from_labels_requires_explicit_label() -> None:
+    with pytest.raises(ValueError, match="Missing required ci-image:\\* label"):
+        ci_image_profile_from_labels(["orchestrator-task"])
+
+
+def test_ci_image_profile_label_and_image_ref() -> None:
+    assert ci_image_profile_label("full-bio") == "ci-image:full-bio"
+    assert ci_image_for_profile("host-typing") == (
+        "ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:host-typing-main"
+    )
+
+
 def _write_pending_task_plan(tmp_path: Path, **task_fields: str | list[str]) -> Path:
     """Write a minimal plan.yml with one pending task. Override fields via kwargs."""
     import yaml
@@ -178,7 +199,11 @@ def test_load_pending_tasks_raises_on_missing_model(tmp_path: Path) -> None:
     """Pending tasks without a model field must cause a ValueError."""
     from lyzortx.orchestration.orchestrator import load_pending_tasks
 
-    plan_path = _write_pending_task_plan(tmp_path, acceptance_criteria=["Some criterion"])
+    plan_path = _write_pending_task_plan(
+        tmp_path,
+        acceptance_criteria=["Some criterion"],
+        ci_image_profile="base",
+    )
     with pytest.raises(ValueError, match="missing required 'model' field"):
         load_pending_tasks(plan_path)
 
@@ -187,7 +212,7 @@ def test_load_pending_tasks_raises_on_missing_acceptance_criteria(tmp_path: Path
     """Pending tasks without acceptance_criteria must cause a ValueError."""
     from lyzortx.orchestration.orchestrator import load_pending_tasks
 
-    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini")
+    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini", ci_image_profile="base")
     with pytest.raises(ValueError, match="missing required 'acceptance_criteria'"):
         load_pending_tasks(plan_path)
 
@@ -196,11 +221,38 @@ def test_load_pending_tasks_accepts_complete_task(tmp_path: Path) -> None:
     """Pending tasks with model and acceptance_criteria should load without error."""
     from lyzortx.orchestration.orchestrator import load_pending_tasks
 
-    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini", acceptance_criteria=["Output exists"])
+    plan_path = _write_pending_task_plan(
+        tmp_path,
+        model="gpt-5.4-mini",
+        acceptance_criteria=["Output exists"],
+        ci_image_profile="base",
+    )
     tasks = load_pending_tasks(plan_path)
     assert len(tasks) == 1
     assert tasks[0].model == "gpt-5.4-mini"
     assert tasks[0].acceptance_criteria == ["Output exists"]
+    assert tasks[0].ci_image_profile == "base"
+
+
+def test_load_pending_tasks_raises_on_missing_ci_image_profile(tmp_path: Path) -> None:
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini", acceptance_criteria=["Output exists"])
+    with pytest.raises(ValueError, match="missing required 'ci_image_profile' field"):
+        load_pending_tasks(plan_path)
+
+
+def test_load_pending_tasks_parses_ci_image_profile(tmp_path: Path) -> None:
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    plan_path = _write_pending_task_plan(
+        tmp_path,
+        model="gpt-5.4-mini",
+        acceptance_criteria=["Output exists"],
+        ci_image_profile="host-typing",
+    )
+    tasks = load_pending_tasks(plan_path)
+    assert tasks[0].ci_image_profile == "host-typing"
 
 
 def test_load_pending_tasks_works_on_real_plan() -> None:
@@ -229,6 +281,7 @@ tracks:
         title: Build raw-host surface projector
         status: pending
         model: gpt-5.4
+        ci_image_profile: full-bio
         acceptance_criteria:
           - Surface projector exists
         depends_on_tasks: []
@@ -236,6 +289,7 @@ tracks:
         title: Build host typing projector
         status: pending
         model: gpt-5.4
+        ci_image_profile: host-typing
         acceptance_criteria:
           - Host typing projector exists
         depends_on_tasks: []
@@ -243,6 +297,7 @@ tracks:
         title: Build phage compatibility projector
         status: pending
         model: gpt-5.4
+        ci_image_profile: full-bio
         acceptance_criteria:
           - Phage compatibility projector exists
         depends_on_tasks: []
@@ -250,6 +305,7 @@ tracks:
         title: Rebuild deployable bundle
         status: pending
         model: gpt-5.4
+        ci_image_profile: full-bio
         acceptance_criteria:
           - Bundle rebuild completes
         depends_on_tasks: [TL15, TL16, TL17]
@@ -282,6 +338,7 @@ tracks:
         title: Build raw-host surface projector
         status: pending
         model: gpt-5.4
+        ci_image_profile: full-bio
         acceptance_criteria:
           - Surface projector exists
         depends_on_tasks: []
@@ -289,6 +346,7 @@ tracks:
         title: Build host typing projector
         status: pending
         model: gpt-5.4
+        ci_image_profile: host-typing
         acceptance_criteria:
           - Host typing projector exists
         depends_on_tasks: []
@@ -296,6 +354,7 @@ tracks:
         title: Build phage compatibility projector
         status: pending
         model: gpt-5.4
+        ci_image_profile: full-bio
         acceptance_criteria:
           - Phage compatibility projector exists
         depends_on_tasks: []
@@ -303,6 +362,7 @@ tracks:
         title: Rebuild deployable bundle
         status: pending
         model: gpt-5.4
+        ci_image_profile: full-bio
         acceptance_criteria:
           - Bundle rebuild completes
         depends_on_tasks: [TL15, TL16, TL17]

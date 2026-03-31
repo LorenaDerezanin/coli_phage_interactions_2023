@@ -1,3 +1,33 @@
+### 2026-03-31: Codex CI image routing now follows task-level image profiles
+
+#### Executive summary
+
+The first cut of the prebaked Codex CI image put every environment into one default container image. That worked
+mechanically but over-baked the default path, especially once `serotype_caller` pulled ECTyper's large species-ID
+database during image build. The workflows now route tasks through a small set of named image profiles driven by
+`ci_image_profile` in `lyzortx/orchestration/plan.yml`, mirrored as `ci-image:*` labels on orchestrator issues and
+PRs.
+
+#### Design decision
+
+Keep `plan.yml` as the source of truth and GitHub labels as a derived routing surface. Tasks can now declare one of
+three image profiles:
+
+- `base`: `phage_env` only
+- `host-typing`: `phage_env` plus `phylogroup_caller`, `serotype_caller`, and `sequence_type_caller`
+- `full-bio`: `host-typing` plus `phage_annotation_tools`
+
+The orchestrator mirrors that choice into a `ci-image:{profile}` label when it opens the task issue. The implement
+workflow copies the same label onto the PR after Codex creates it. Both Codex workflows now fail loudly if the required
+label is missing or duplicated instead of silently falling back to a default image.
+
+#### Why this is better
+
+This keeps `phage_env` lightweight and solver-friendly while still allowing specialized tasks to opt into heavier tool
+stacks. It also avoids baking the heaviest bioinformatics and host-typing assets into every single Codex job by
+default. The GHCR publish workflow now builds one image per profile instead of one universal image, and the Codex
+workflows only refresh the envs that exist in the selected profile.
+
 ### 2026-03-31: Unit-test workflow now emits slow-test timings and runs pytest in parallel
 
 #### Executive summary
@@ -817,3 +847,31 @@ workflow list in isolation.
 GitHub Actions run `23767069559`, job `69250897074` failed inside `anthropics/claude-code-action@v1` with:
 "Workflow initiated by non-human actor: czarphage (type: Bot). Add bot to allowed_bots list or use '*' to allow all
 bots."
+
+### 2026-03-31: Prebake a Codex CI image for the implement/fix loop
+
+#### Executive summary
+
+Started replacing per-run Conda bootstrap in `codex-implement.yml` and `codex-pr-lifecycle.yml` with a prebaked GitHub
+Container Registry image. The image is built from `.github/ci/Dockerfile` and includes a lightweight Python/helper
+`phage_env`, a dedicated `phage_annotation_tools` env for heavy Pharokka/MMseqs2/OpenJDK-style CLIs, and three split
+typing caller envs (`phylogroup_caller`, `serotype_caller`, `sequence_type_caller`).
+
+#### Design decisions
+
+**1. Cut over the Codex workflows first.** These two jobs were paying the biggest repeated `conda env create` cost and
+are not pull-request-triggered, so they can move to a prebaked image without introducing a PR bootstrap dependency on a
+new image publish.
+
+**2. Keep `phage_env` small and move heavy CLIs out.** The default env for Codex workflows only needs Python, tests,
+pre-commit, and repo helper modules. The Pharokka/MMseqs2/OpenJDK toolchain now lives in a dedicated
+`phage_annotation_tools` env, and the raw typing tools live in their own caller envs. This avoids dragging the whole
+bioinformatics stack into every helper solve.
+
+**3. Refresh env manifests on job start.** Even though the image is prebaked, each run executes env refreshes from the
+checked-in `environment.yml` and dedicated env manifests. That keeps dependency changes from waiting on an image rebuild
+and matches the repo policy that checked-in env manifests remain the source of truth.
+
+**4. Keep transient workflow files under `.scratch/ci/`.** Prompt and feedback files moved out of `/tmp` so the
+containerized jobs and action steps share workspace-visible paths and the repo stays consistent with its own scratch
+space policy.

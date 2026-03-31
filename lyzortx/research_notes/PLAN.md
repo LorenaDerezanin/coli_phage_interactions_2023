@@ -525,7 +525,8 @@ graph LR
     note explicitly label the result as failed external validation and make no supportive claim about generalization
   - End with one of three explicit conclusions recorded in code outputs and notebooks: deployable bundle validated,
     deployable bundle failed, or validation inconclusive because the cohort contract could not be satisfied
-- [ ] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `gpt-5.4`.
+- [ ] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `gpt-5.4`. CI image
+      profile: `full-bio`.
   - Build an inference-time projector from raw host assemblies into the training-time host-surface feature schema needed
     for downstream deployable compatibility work, including the existing receptor-style surface calls the bundle can
     realistically consume from raw genomes
@@ -539,7 +540,8 @@ graph LR
     approximated by a deployable proxy, or still unsupported, with a one-sentence rationale for each unsupported family
   - Runtime assets and emitted metadata must resolve relative to saved outputs rather than hidden repo-root paths or
     stale gitignored artifacts
-- [ ] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `gpt-5.4`.
+- [ ] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `gpt-5.4`. CI image
+      profile: `host-typing`.
   - Derive the host-typing subset of the old panel metadata block from raw host assemblies wherever the information is
     extractable with reasonable preprocessing effort, including phylogroup, serotype, and callable capsule-related
     features
@@ -549,7 +551,8 @@ graph LR
     code outputs and notebook text; calling something "not deployable" without that separation is a failure
   - Validate the projector on panel hosts with assemblies and report which feature families reproduce cleanly versus
     which remain noisy or unsupported
-- [ ] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `gpt-5.4`.
+- [ ] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `gpt-5.4`. CI image profile:
+      `full-bio`.
   - Start from the phage-side feature-parity gap and justify which deployable raw-genome-derived compatibility block is
     the strongest next candidate beyond tetranucleotide SVD alone; the task fails if it adds a block without making that
     case explicitly
@@ -562,8 +565,8 @@ graph LR
   - Demonstrate on panel phages that the chosen block is non-degenerate, measurably changes the inference surface on
     real examples, and is documented as either deployable for arbitrary raw-genome inputs or intentionally bounded in
     scope
-- [ ] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `gpt-5.4`.
-      Depends on tasks: `TL15`, `TL16`, `TL17`.
+- [ ] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `gpt-5.4`. CI
+      image profile: `full-bio`. Depends on tasks: `TL15`, `TL16`, `TL17`.
   - Start with a feature-parity table for the training-time model that labels every feature block as included directly,
     replaced by a deployable proxy, or explicitly excluded with rationale
   - Rebuild the deployable bundle using defense plus phage k-mer features together with the new TL15/TL16/TL17

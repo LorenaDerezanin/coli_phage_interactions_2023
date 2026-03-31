@@ -1,0 +1,6 @@
+name: sequence_type_caller
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - mlst=2.32.2

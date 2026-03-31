@@ -16,13 +16,17 @@ permissions:
   issues: write
 
 jobs:
-  implement:
-    name: Implement Task
+  resolve-ci-image:
+    name: Resolve CI image
     if: >-
       github.event_name == 'workflow_dispatch'
       || contains(join(github.event.issue.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    outputs:
+      issue_number: ${{ steps.issue.outputs.number }}
+      ci_image_profile: ${{ steps.profile.outputs.profile }}
+      ci_image_label: ${{ steps.profile.outputs.label }}
+      ci_image: ${{ steps.profile.outputs.image }}
     steps:
       - name: Generate Czarphage token
         id: czarphage
@@ -40,32 +44,94 @@ jobs:
             echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve CI image profile from issue labels
+        id: profile
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
+        run: |
+          ISSUE_NUM="${{ steps.issue.outputs.number }}"
+          LABELS=$(gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" \
+            --json labels --jq '[.labels[].name | select(startswith("ci-image:"))]')
+          COUNT=$(echo "$LABELS" | jq 'length')
+          if [ "$COUNT" -ne 1 ]; then
+            echo "::error::Issue #${ISSUE_NUM} must have exactly one ci-image:* label; found ${COUNT}."
+            echo "$LABELS"
+            exit 1
+          fi
+          LABEL=$(echo "$LABELS" | jq -r '.[0]')
+          PROFILE="${LABEL#ci-image:}"
+          case "$PROFILE" in
+            base|host-typing|full-bio) ;;
+            *)
+              echo "::error::Unsupported CI image profile '${PROFILE}' on issue #${ISSUE_NUM}."
+              exit 1
+              ;;
+          esac
+          IMAGE="ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:${PROFILE}-main"
+          echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
+          echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+  implement:
+    name: Implement Task
+    needs: resolve-ci-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: ${{ needs.resolve-ci-image.outputs.ci_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Generate Czarphage token
+        id: czarphage
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CZARPHAGE_APP_ID }}
+          private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           token: ${{ steps.czarphage.outputs.token }}
           fetch-depth: 0
 
-      - name: Create phage_env with conda
+      - name: Create CI scratch directory
+        run: mkdir -p .scratch/ci
+
+      - name: Refresh prebaked envs from repo manifests
         shell: bash
         run: |
-          if ! command -v conda >/dev/null 2>&1; then
-            echo "::error::conda not found on runner."
+          if ! command -v micromamba >/dev/null 2>&1; then
+            echo "::error::micromamba not found in workflow container."
             exit 1
           fi
 
-          conda env create --file environment.yml --name phage_env
-          conda run -n phage_env python --version
-          conda run -n phage_env pip --version
+          PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
+          micromamba env update -f environment.yml -n phage_env --prune
+          if [ "$PROFILE" = "host-typing" ] || [ "$PROFILE" = "full-bio" ]; then
+            micromamba env update -f environment.phylogroup-caller.yml -n phylogroup_caller --prune
+            micromamba env update -f environment.serotype-caller.yml -n serotype_caller --prune
+            micromamba env update -f environment.sequence-type-caller.yml -n sequence_type_caller --prune
+          fi
+          if [ "$PROFILE" = "full-bio" ]; then
+            micromamba env update -f environment.phage-annotation-tools.yml -n phage_annotation_tools --prune
+          fi
+          micromamba run -n phage_env python --version
+          micromamba run -n phage_env pip --version
 
       - name: Extract model from issue
         id: model
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
-          ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          gh issue view "$ISSUE_NUM" --json body --jq '.body' > /tmp/issue_body.txt
-          MODEL=$(conda run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('/tmp/issue_body.txt').read_text()) or '')")
+          ISSUE_NUM="${{ needs.resolve-ci-image.outputs.issue_number }}"
+          ISSUE_BODY=.scratch/ci/issue_body.txt
+          gh issue view "$ISSUE_NUM" --json body --jq '.body' > "$ISSUE_BODY"
+          MODEL=$(micromamba run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('.scratch/ci/issue_body.txt').read_text()) or '')")
           if [ -z "$MODEL" ]; then
             echo "::error::No model directive found in issue #${ISSUE_NUM} body. Add <!-- model: <id> --> to the issue."
             exit 1
@@ -77,7 +143,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
-          ISSUE_NUM="${{ steps.issue.outputs.number }}"
+          ISSUE_NUM="${{ needs.resolve-ci-image.outputs.issue_number }}"
+          PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
+          IMAGE_LABEL="${{ needs.resolve-ci-image.outputs.ci_image_label }}"
           {
             echo "# Task"
             echo ""
@@ -87,39 +155,40 @@ jobs:
             echo ""
             echo "Implement the task described above. This is issue #${ISSUE_NUM}."
             echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
-            echo "In this GitHub Actions environment, use 'conda run -n phage_env ...' for Python, pytest, and pre-commit commands."
+            echo "This task is assigned CI image profile '${PROFILE}' via GitHub label '${IMAGE_LABEL}'."
+            echo "In this GitHub Actions environment, use 'micromamba run -n phage_env ...' for Python, pytest, and pre-commit commands."
+            if [ "$PROFILE" = "host-typing" ] || [ "$PROFILE" = "full-bio" ]; then
+              echo "Dedicated caller envs are also available via 'micromamba run -n phylogroup_caller ...',"
+              echo "'micromamba run -n serotype_caller ...', and 'micromamba run -n sequence_type_caller ...'."
+            fi
+            if [ "$PROFILE" = "full-bio" ]; then
+              echo "Heavy bioinformatics CLIs live in 'micromamba run -n phage_annotation_tools ...'."
+            fi
             echo ""
             echo "Steps:"
             echo "1. Implement the task as described."
-            echo "2. Run tests: conda run -n phage_env pytest -q lyzortx/tests/"
+            echo "2. Run tests: micromamba run -n phage_env pytest -q lyzortx/tests/"
             echo "3. Commit your changes with detailed, descriptive commit messages."
             echo "4. Push your branch and create a PR with gh pr create."
             echo "   The PR title must follow the pattern: [ORCH][TASK_ID] Brief description"
             echo "   The PR body must include a detailed description of changes AND 'Closes #${ISSUE_NUM}' at the end."
-            echo "   Add --label orchestrator-task to the gh pr create command."
+            echo "   Add --label orchestrator-task --label ${IMAGE_LABEL} to the gh pr create command."
             echo ""
             echo "When posting any GitHub comment (issue comments, PR comments, review replies),"
             echo "end every comment with a signature line: 'Posted by Codex <model>'"
             echo "where <model> is the model you are running as (e.g., gpt-5.4)."
             echo "This is required for transparency about which agent produced the comment."
-          } > /tmp/codex_prompt.txt
+          } > .scratch/ci/codex_prompt.txt
 
       - name: Install pre-commit hooks
         run: |
-          conda run -n phage_env pre-commit install
-          conda run -n phage_env pre-commit install --hook-type pre-push
+          micromamba run -n phage_env pre-commit install
+          micromamba run -n phage_env pre-commit install --hook-type pre-push
 
       - name: Configure git identity for Codex agent
         run: |
           git config user.name "czarphage[bot]"
           git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
-
-      # Workaround for https://github.com/openai/codex/issues/12572
-      # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
-      - name: Fix sandbox compatibility with Ubuntu 24.04 AppArmor
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Implement task with Codex
         env:
@@ -130,15 +199,16 @@ jobs:
           model: ${{ steps.model.outputs.model }}
           allow-bots: true
           sandbox: danger-full-access
-          prompt-file: /tmp/codex_prompt.txt
+          prompt-file: .scratch/ci/codex_prompt.txt
 
       - name: Verify Codex created a PR
+        id: pr
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
-          ISSUE_NUM="${{ steps.issue.outputs.number }}"
+          ISSUE_NUM="${{ needs.resolve-ci-image.outputs.issue_number }}"
           # Use Python instead of gh pr list --search to avoid GitHub search index lag.
-          PR_JSON=$(conda run -n phage_env python -m lyzortx.orchestration.find_pr_for_issue "$ISSUE_NUM")
+          PR_JSON=$(micromamba run -n phage_env python -m lyzortx.orchestration.find_pr_for_issue "$ISSUE_NUM")
           if [ $? -ne 0 ] || [ -z "$PR_JSON" ]; then
             echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
             exit 1
@@ -150,4 +220,13 @@ jobs:
             echo "::error::PR #${PR_NUM} references branch '${BRANCH}' but it was not pushed."
             exit 1
           fi
+          echo "number=${PR_NUM}" >> "$GITHUB_OUTPUT"
           echo "PR #${PR_NUM} created on branch '${BRANCH}' for issue #${ISSUE_NUM}."
+
+      - name: Mirror CI image profile label onto PR
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" \
+            --add-label "${{ needs.resolve-ci-image.outputs.ci_image_label }}"

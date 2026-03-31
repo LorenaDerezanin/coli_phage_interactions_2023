@@ -1,0 +1,15 @@
+name: phage_annotation_tools
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12.12
+  - aragorn=1.2.41
+  - dnaapler=1.3.0
+  - hmmer=3.4
+  - mash=2.3
+  - minced=0.4.2
+  - mmseqs2=18.8cc5c
+  - openjdk=24.0.2
+  - pharokka=1.9.1
+  - trnascan-se=2.0.12

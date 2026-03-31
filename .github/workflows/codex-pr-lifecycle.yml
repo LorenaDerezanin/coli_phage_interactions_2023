@@ -25,12 +25,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve-ci-image:
+    name: Resolve CI image
+    runs-on: ubuntu-24.04
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      ci_image_profile: ${{ steps.profile.outputs.profile }}
+      ci_image_label: ${{ steps.profile.outputs.label }}
+      ci_image: ${{ steps.profile.outputs.image }}
+    steps:
+      - name: Generate Czarphage token
+        id: czarphage
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CZARPHAGE_APP_ID }}
+          private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+
+      - name: Resolve PR number
+        id: pr
+        run: |
+          echo "number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve CI image profile from PR or linked issue labels
+        # PR label is required; do not silently fall back to another source.
+        id: profile
+        env:
+          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          LABELS=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
+            --json labels --jq '[.labels[].name | select(startswith("ci-image:"))]')
+          COUNT=$(echo "$LABELS" | jq 'length')
+          if [ "$COUNT" -ne 1 ]; then
+            echo "::error::PR #${PR_NUM} must have exactly one ci-image:* label; found ${COUNT}."
+            echo "$LABELS"
+            exit 1
+          fi
+          LABEL=$(echo "$LABELS" | jq -r '.[0]')
+          PROFILE="${LABEL#ci-image:}"
+          case "$PROFILE" in
+            base|host-typing|full-bio) ;;
+            *)
+              echo "::error::Unsupported CI image profile '${PROFILE}' on PR #${PR_NUM}."
+              exit 1
+              ;;
+          esac
+          IMAGE="ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:${PROFILE}-main"
+          echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
+          echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
   # ── Address feedback from Claude review on orchestrator PRs ──────────
   # The 3-round cap (codex-review-round-N labels) prevents infinite loops.
   address-feedback:
     name: Address Review Feedback
+    needs: resolve-ci-image
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    container:
+      image: ${{ needs.resolve-ci-image.outputs.ci_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Generate Czarphage token
         id: czarphage
@@ -56,17 +115,29 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.czarphage.outputs.token }}
 
-      - name: Create phage_env with conda
+      - name: Create CI scratch directory
+        run: mkdir -p .scratch/ci
+
+      - name: Refresh prebaked envs from repo manifests
         shell: bash
         run: |
-          if ! command -v conda >/dev/null 2>&1; then
-            echo "::error::conda not found on runner."
+          if ! command -v micromamba >/dev/null 2>&1; then
+            echo "::error::micromamba not found in workflow container."
             exit 1
           fi
 
-          conda env create --file environment.yml --name phage_env
-          conda run -n phage_env python --version
-          conda run -n phage_env pip --version
+          PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
+          micromamba env update -f environment.yml -n phage_env --prune
+          if [ "$PROFILE" = "host-typing" ] || [ "$PROFILE" = "full-bio" ]; then
+            micromamba env update -f environment.phylogroup-caller.yml -n phylogroup_caller --prune
+            micromamba env update -f environment.serotype-caller.yml -n serotype_caller --prune
+            micromamba env update -f environment.sequence-type-caller.yml -n sequence_type_caller --prune
+          fi
+          if [ "$PROFILE" = "full-bio" ]; then
+            micromamba env update -f environment.phage-annotation-tools.yml -n phage_annotation_tools --prune
+          fi
+          micromamba run -n phage_env python --version
+          micromamba run -n phage_env pip --version
 
       - name: Check for unresolved review threads
         id: comments
@@ -76,7 +147,7 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-          UNRESOLVED_COUNT=$(conda run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" /dev/null --count-only)
+          UNRESOLVED_COUNT=$(micromamba run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" /dev/null --count-only)
           echo "has_feedback=$([[ $UNRESOLVED_COUNT -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "Unresolved threads: ${UNRESOLVED_COUNT}"
 
@@ -115,13 +186,23 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-          RAW_FEEDBACK=/tmp/codex_feedback_raw.txt
-          conda run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" "$RAW_FEEDBACK"
+          PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
+          IMAGE_LABEL="${{ needs.resolve-ci-image.outputs.ci_image_label }}"
+          RAW_FEEDBACK=.scratch/ci/codex_feedback_raw.txt
+          micromamba run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" "$RAW_FEEDBACK"
           {
-            echo "In this GitHub Actions environment, use 'conda run -n phage_env ...' for Python, pytest, and pre-commit commands."
+            echo "In this GitHub Actions environment, use 'micromamba run -n phage_env ...' for Python, pytest, and pre-commit commands."
+            echo "This PR is assigned CI image profile '${PROFILE}' via GitHub label '${IMAGE_LABEL}'."
+            if [ "$PROFILE" = "host-typing" ] || [ "$PROFILE" = "full-bio" ]; then
+              echo "Dedicated caller envs are also available via 'micromamba run -n phylogroup_caller ...',"
+              echo "'micromamba run -n serotype_caller ...', and 'micromamba run -n sequence_type_caller ...'."
+            fi
+            if [ "$PROFILE" = "full-bio" ]; then
+              echo "Heavy bioinformatics CLIs live in 'micromamba run -n phage_annotation_tools ...'."
+            fi
             echo ""
             cat "$RAW_FEEDBACK"
-          } > /tmp/codex_feedback.txt
+          } > .scratch/ci/codex_feedback.txt
 
       - name: Configure git identity for Codex agent
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
@@ -132,16 +213,8 @@ jobs:
       - name: Install pre-commit hooks
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         run: |
-          conda run -n phage_env pre-commit install
-          conda run -n phage_env pre-commit install --hook-type pre-push
-
-      # Workaround for https://github.com/openai/codex/issues/12572
-      # Remove once codex-action fixes bwrap sandbox on Ubuntu 24.04
-      - name: Fix sandbox compatibility with Ubuntu 24.04 AppArmor
-        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          micromamba run -n phage_env pre-commit install
+          micromamba run -n phage_env pre-commit install --hook-type pre-push
 
       - name: Extract model from linked issue
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
@@ -156,8 +229,8 @@ jobs:
             echo "::error::No linked issue found in PR #${PR_NUM} body."
             exit 1
           fi
-          gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body' > /tmp/issue_body.txt
-          MODEL=$(conda run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('/tmp/issue_body.txt').read_text()) or '')")
+          gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body' > .scratch/ci/issue_body.txt
+          MODEL=$(micromamba run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('.scratch/ci/issue_body.txt').read_text()) or '')")
           if [ -z "$MODEL" ]; then
             echo "::error::No model directive in issue #${ISSUE_NUM}."
             exit 1
@@ -175,7 +248,7 @@ jobs:
           model: ${{ steps.model.outputs.model }}
           allow-bots: true
           sandbox: danger-full-access
-          prompt-file: /tmp/codex_feedback.txt
+          prompt-file: .scratch/ci/codex_feedback.txt
 
       # Thread resolution is handled by Claude during re-review, not here.
       # Codex pushes fixes → Claude re-reviews → resolves threads it's satisfied with.

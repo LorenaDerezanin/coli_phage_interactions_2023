@@ -833,6 +833,7 @@ tracks:
       title: Build raw-host surface projector for deployable compatibility features
       status: pending
       model: gpt-5.4
+      ci_image_profile: full-bio
       depends_on_tasks: []
       acceptance_criteria:
       - Build an inference-time projector from raw host assemblies into the training-time
@@ -854,6 +855,7 @@ tracks:
       title: Build genome-derived host typing projector for deployable bundle parity
       status: pending
       model: gpt-5.4
+      ci_image_profile: host-typing
       depends_on_tasks: []
       acceptance_criteria:
       - Derive the host-typing subset of the old panel metadata block from raw host
@@ -870,6 +872,7 @@ tracks:
       title: Build deployable phage compatibility preprocessor beyond k-mer SVD
       status: pending
       model: gpt-5.4
+      ci_image_profile: full-bio
       depends_on_tasks: []
       acceptance_criteria:
       - Start from the phage-side feature-parity gap and justify which deployable
@@ -892,6 +895,7 @@ tracks:
       title: Rebuild the deployable generalized inference bundle with the richer preprocessors
       status: pending
       model: gpt-5.4
+      ci_image_profile: full-bio
       depends_on_tasks:
       - TL15
       - TL16

@@ -20,9 +20,11 @@
 
 - **Local development:** Use the `phage_env` conda environment. The repo has a `.envrc` that activates `phage_env` via
   direnv, so locally `python`, `pip`, `pytest`, etc. already resolve to the phage_env binaries — no `conda run` or
-  `conda activate` prefix needed.
+  `conda activate` prefix needed. `phage_env` is the default Python/helper environment; specialized bioinformatics CLI
+  stacks may live in dedicated manifests rather than the default env.
 - **GitHub Actions workflows:** direnv is not available in CI. Bootstrap `phage_env` with
-  `conda env create -f environment.yml -n phage_env`, then run repo commands via `conda run -n phage_env ...`.
+  `conda env create -f environment.yml -n phage_env`, then run repo commands via `conda run -n phage_env ...`, unless
+  the workflow explicitly opts into a prebaked container image with additional specialized envs.
 - **`conda run` flag:** When `conda run` is needed (CI only), always use `-n phage_env`, never `-p <path>`. The `-n`
   flag resolves the environment by name regardless of install location; `-p` hard-codes an absolute path that differs
   across machines.
@@ -42,8 +44,9 @@
 # Dependency Installation Policy
 
 - **Never run `pip install`, `conda install`, or other manual dependency installation commands.** Instead, add the
-  dependency to `requirements.txt` (for pip packages) or `environment.yml` (for conda packages), then run
-  `conda env update -n phage_env -f environment.yml` to apply the change.
+  dependency to `requirements.txt` (for pip packages), `environment.yml` (for the default `phage_env`), or a checked-in
+  specialized environment manifest such as `environment.*.yml`, then apply the change by updating the
+  corresponding declared env.
 - This ensures the environment is always reproducible from the checked-in config files.
 
 # Fail-Fast on Missing Data
