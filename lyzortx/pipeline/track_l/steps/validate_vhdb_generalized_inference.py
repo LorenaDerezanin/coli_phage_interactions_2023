@@ -117,6 +117,16 @@ class Tl13GateAssessment:
     failure_reasons: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class SavedRoundtripContract:
+    gate_assessment: Tl13GateAssessment
+    roundtrip_reference_path: Path | None
+    roundtrip_reference_hosts: set[str]
+    roundtrip_cohort_path: Path | None
+    roundtrip_cohort_hosts: set[str]
+    contract_issues: list[str]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -634,7 +644,7 @@ def assess_tl13_gate(bundle: Mapping[str, object]) -> Tl13GateAssessment:
 
 def load_saved_roundtrip_contract(
     bundle_path: Path,
-) -> tuple[Tl13GateAssessment, Path | None, set[str], Path | None, set[str], list[str]]:
+) -> SavedRoundtripContract:
     bundle = joblib.load(bundle_path)
     gate_assessment = assess_tl13_gate(bundle)
     artifacts = bundle.get("artifacts", {})
@@ -681,13 +691,13 @@ def load_saved_roundtrip_contract(
 
     if roundtrip_reference_hosts and roundtrip_cohort_hosts and roundtrip_reference_hosts != roundtrip_cohort_hosts:
         contract_issues.append("saved_roundtrip_reference_hosts_did_not_match_saved_roundtrip_cohort_hosts")
-    return (
-        gate_assessment,
-        roundtrip_reference_path,
-        roundtrip_reference_hosts,
-        roundtrip_cohort_path,
-        roundtrip_cohort_hosts,
-        contract_issues,
+    return SavedRoundtripContract(
+        gate_assessment=gate_assessment,
+        roundtrip_reference_path=roundtrip_reference_path,
+        roundtrip_reference_hosts=roundtrip_reference_hosts,
+        roundtrip_cohort_path=roundtrip_cohort_path,
+        roundtrip_cohort_hosts=roundtrip_cohort_hosts,
+        contract_issues=contract_issues,
     )
 
 
@@ -850,19 +860,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         min_positive_phages_per_host=args.min_positive_phages_per_host,
     )
     bundle_path = require_bundle(args.bundle_path)
-    (
-        gate_assessment,
-        roundtrip_reference_path,
-        roundtrip_reference_hosts,
-        roundtrip_cohort_path,
-        roundtrip_cohort_hosts,
-        contract_issues,
-    ) = load_saved_roundtrip_contract(bundle_path)
-    saved_roundtrip_panel_matches = roundtrip_reference_hosts & roundtrip_cohort_hosts
+    saved_roundtrip_contract = load_saved_roundtrip_contract(bundle_path)
+    saved_roundtrip_panel_matches = (
+        saved_roundtrip_contract.roundtrip_reference_hosts & saved_roundtrip_contract.roundtrip_cohort_hosts
+    )
     roundtrip_hosts = [
         host for host in roundtrip_hosts if host.panel_match and host.panel_match in saved_roundtrip_panel_matches
     ]
     selected_hosts = [*novel_hosts, *roundtrip_hosts]
+    if not selected_hosts:
+        raise ValueError(
+            "Validation cohort selection produced zero hosts after applying the saved TL13 round-trip contract."
+        )
     host_metadata = {host.host_tax_id: host for host in selected_hosts}
     phages_by_taxid = collect_phages_for_hosts(positive_pairs, selected_hosts)
     panel_phages = read_panel_phages(args.panel_phage_metadata_path, expected_panel_count=96)
@@ -873,6 +882,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         panel_phage_count=len(panel_phages),
         roundtrip_panel_matches={host.panel_match for host in roundtrip_hosts if host.panel_match},
     )
+    if not validation_pair_rows:
+        raise ValueError("Validation cohort selection produced zero positive pairs for the selected hosts.")
     write_csv(
         args.output_dir / VALIDATION_HOST_COHORT_FILENAME,
         list(validation_host_rows[0].keys()),
@@ -888,14 +899,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         compute_panel_base_rate(args.st02_pair_table_path) if args.st02_pair_table_path.exists() else DEFAULT_BASE_RATE
     )
 
-    should_score = gate_assessment.passed and not contract_issues and len(roundtrip_hosts) >= args.min_roundtrip_hosts
+    should_score = (
+        saved_roundtrip_contract.gate_assessment.passed
+        and not saved_roundtrip_contract.contract_issues
+        and len(roundtrip_hosts) >= args.min_roundtrip_hosts
+    )
     overall_metrics: dict[str, float] = {}
     if should_score:
         LOGGER.info("TL14 gate cleared; proceeding to score %d selected hosts", len(selected_hosts))
     else:
         conclusion, decision_rows = determine_validation_conclusion(
-            gate_passed=gate_assessment.passed,
-            contract_issues=contract_issues,
+            gate_passed=saved_roundtrip_contract.gate_assessment.passed,
+            contract_issues=saved_roundtrip_contract.contract_issues,
             qualified_roundtrip_host_count=len(roundtrip_hosts),
             min_roundtrip_hosts=args.min_roundtrip_hosts,
         )
@@ -915,8 +930,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "panel_phage_dir": str(args.panel_phage_dir),
                 "bundle_path": str(bundle_path),
                 "st02_pair_table_path": str(args.st02_pair_table_path),
-                "saved_roundtrip_reference_path": str(roundtrip_reference_path) if roundtrip_reference_path else "",
-                "saved_roundtrip_host_cohort_path": str(roundtrip_cohort_path) if roundtrip_cohort_path else "",
+                "saved_roundtrip_reference_path": (
+                    str(saved_roundtrip_contract.roundtrip_reference_path)
+                    if saved_roundtrip_contract.roundtrip_reference_path
+                    else ""
+                ),
+                "saved_roundtrip_host_cohort_path": (
+                    str(saved_roundtrip_contract.roundtrip_cohort_path)
+                    if saved_roundtrip_contract.roundtrip_cohort_path
+                    else ""
+                ),
             },
             "cohort_summary": cohort_summary,
             "validation_cohort_summary": validation_cohort_summary,
@@ -927,11 +950,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "min_positive_phages_per_host": args.min_positive_phages_per_host,
                 "min_roundtrip_hosts_required": args.min_roundtrip_hosts,
                 "panel_roundtrip_hosts_requested": list(ROUNDTRIP_PANEL_HOSTS),
-                "saved_roundtrip_reference_hosts": sorted(roundtrip_reference_hosts),
-                "saved_roundtrip_cohort_hosts": sorted(roundtrip_cohort_hosts),
+                "saved_roundtrip_reference_hosts": sorted(saved_roundtrip_contract.roundtrip_reference_hosts),
+                "saved_roundtrip_cohort_hosts": sorted(saved_roundtrip_contract.roundtrip_cohort_hosts),
             },
-            "gate_assessment": asdict(gate_assessment),
-            "contract_issues": contract_issues,
+            "gate_assessment": asdict(saved_roundtrip_contract.gate_assessment),
+            "contract_issues": saved_roundtrip_contract.contract_issues,
             "decision_rows": decision_rows,
             "metrics": overall_metrics,
             "conclusion": conclusion,
@@ -1008,8 +1031,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         random_seed=args.random_seed,
     )
     conclusion, decision_rows = determine_validation_conclusion(
-        gate_passed=gate_assessment.passed,
-        contract_issues=contract_issues,
+        gate_passed=saved_roundtrip_contract.gate_assessment.passed,
+        contract_issues=saved_roundtrip_contract.contract_issues,
         qualified_roundtrip_host_count=len(roundtrip_hosts),
         min_roundtrip_hosts=args.min_roundtrip_hosts,
         overall_metrics=overall_metrics,
@@ -1017,7 +1040,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     roundtrip_df = build_roundtrip_comparison(
         prediction_frames=roundtrip_panel_prediction_frames,
         host_metadata=host_metadata,
-        panel_predictions_path=roundtrip_reference_path,
+        panel_predictions_path=saved_roundtrip_contract.roundtrip_reference_path,
     )
 
     all_predictions_df = pd.concat(prediction_frames, ignore_index=True)
@@ -1060,8 +1083,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "panel_phage_dir": str(args.panel_phage_dir),
             "bundle_path": str(bundle_path),
             "st02_pair_table_path": str(args.st02_pair_table_path),
-            "saved_roundtrip_reference_path": str(roundtrip_reference_path),
-            "saved_roundtrip_host_cohort_path": str(roundtrip_cohort_path),
+            "saved_roundtrip_reference_path": str(saved_roundtrip_contract.roundtrip_reference_path),
+            "saved_roundtrip_host_cohort_path": str(saved_roundtrip_contract.roundtrip_cohort_path),
         },
         "cohort_summary": cohort_summary,
         "validation_cohort_summary": validation_cohort_summary,
@@ -1072,11 +1095,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "min_positive_phages_per_host": args.min_positive_phages_per_host,
             "min_roundtrip_hosts_required": args.min_roundtrip_hosts,
             "panel_roundtrip_hosts_requested": list(ROUNDTRIP_PANEL_HOSTS),
-            "saved_roundtrip_reference_hosts": sorted(roundtrip_reference_hosts),
-            "saved_roundtrip_cohort_hosts": sorted(roundtrip_cohort_hosts),
+            "saved_roundtrip_reference_hosts": sorted(saved_roundtrip_contract.roundtrip_reference_hosts),
+            "saved_roundtrip_cohort_hosts": sorted(saved_roundtrip_contract.roundtrip_cohort_hosts),
         },
-        "gate_assessment": asdict(gate_assessment),
-        "contract_issues": contract_issues,
+        "gate_assessment": asdict(saved_roundtrip_contract.gate_assessment),
+        "contract_issues": saved_roundtrip_contract.contract_issues,
         "decision_rows": decision_rows,
         "metrics": overall_metrics,
         "conclusion": conclusion,

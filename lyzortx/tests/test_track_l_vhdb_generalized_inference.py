@@ -240,6 +240,41 @@ def test_assess_tl13_gate_requires_extra_block_and_roundtrip_improvement() -> No
     )
 
 
+def test_load_saved_roundtrip_contract_returns_named_fields(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    reference_path = bundle_dir / "roundtrip_reference_predictions.csv"
+    reference_path.write_text("bacteria\nEDL933\nLF82\n", encoding="utf-8")
+    cohort_path = bundle_dir / "roundtrip_host_cohort.csv"
+    cohort_path.write_text("panel_match\nEDL933\nLF82\n", encoding="utf-8")
+    bundle_path = bundle_dir / "bundle.joblib"
+    joblib_payload = {
+        "task_id": "TL13",
+        "format_version": "tl13_bundle_v1",
+        "deployable_feature_blocks": [
+            {"block_id": "track_c_defense"},
+            {"block_id": "track_d_phage_genomic_kmers"},
+            {"block_id": "tl04_antidef_defense_evasion"},
+        ],
+        "roundtrip_gate": {"improved_metrics": ["max_abs_probability_delta_max"]},
+        "artifacts": {
+            "roundtrip_reference_predictions_filename": reference_path.name,
+            "roundtrip_host_cohort_filename": cohort_path.name,
+        },
+    }
+    tl09.joblib.dump(joblib_payload, bundle_path)
+
+    contract = tl09.load_saved_roundtrip_contract(bundle_path)
+
+    assert isinstance(contract, tl09.SavedRoundtripContract)
+    assert contract.gate_assessment.passed is True
+    assert contract.roundtrip_reference_path == reference_path
+    assert contract.roundtrip_cohort_path == cohort_path
+    assert contract.roundtrip_reference_hosts == {"EDL933", "LF82"}
+    assert contract.roundtrip_cohort_hosts == {"EDL933", "LF82"}
+    assert contract.contract_issues == []
+
+
 def test_build_validation_cohort_rows_keeps_counts_and_candidate_set_sizes_separate() -> None:
     hosts = [
         tl09.HostCandidate(
@@ -426,3 +461,88 @@ def test_score_projected_features_uses_supplied_runtime_without_reloading(monkey
         {"phage": "PhageA", "p_lysis": 0.8, "rank": 1},
         {"phage": "PhageB", "p_lysis": 0.6, "rank": 2},
     ]
+
+
+def test_main_fails_fast_when_contract_filters_validation_cohort_to_zero_hosts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    output_dir = tmp_path / "outputs"
+    panel_hosts_path = tmp_path / "panel_hosts.csv"
+    panel_hosts_path.write_text("bacteria\nEDL933\n", encoding="utf-8")
+    panel_phage_metadata_path = tmp_path / "panel_phages.csv"
+    panel_phage_metadata_path.write_text("phage\nPANEL_1\n", encoding="utf-8")
+    bundle_path = tmp_path / "bundle.joblib"
+    bundle_path.write_text("placeholder", encoding="utf-8")
+
+    roundtrip_host = tl09.HostCandidate(
+        host_tax_id="H1",
+        host_name="Host one",
+        positive_pair_count=5,
+        unique_phage_count=5,
+        panel_match="EDL933",
+        is_panel_host=True,
+        assembly_accession="GCF_1",
+        assembly_level="Complete Genome",
+        assembly_organism_name="Host one",
+        assembly_ftp_path="ftp://example/1",
+    )
+
+    monkeypatch.setattr(tl09, "_download_text", lambda url: "placeholder")
+    monkeypatch.setattr(tl09, "load_panel_hosts", lambda path: ({"EDL933"}, {"edl933": "EDL933"}))
+    monkeypatch.setattr(
+        tl09,
+        "parse_vhdb_positive_pairs",
+        lambda text: [tl09.PositivePair("H1", "Host one", "P1", "virus-one")],
+    )
+    monkeypatch.setattr(
+        tl09,
+        "summarize_positive_pairs",
+        lambda pairs: {"host_count": 1, "phage_accession_count": 1, "positive_pair_count": 1},
+    )
+    monkeypatch.setattr(tl09, "parse_assembly_summary", lambda text: {"H1": []})
+    monkeypatch.setattr(
+        tl09,
+        "build_host_candidates",
+        lambda positive_pairs, assemblies_by_taxid, panel_lookup: [roundtrip_host],
+    )
+    monkeypatch.setattr(
+        tl09,
+        "select_validation_hosts",
+        lambda host_candidates, novel_host_count, min_positive_phages_per_host: ([], [roundtrip_host]),
+    )
+    monkeypatch.setattr(tl09, "require_bundle", lambda path: bundle_path)
+    monkeypatch.setattr(
+        tl09,
+        "load_saved_roundtrip_contract",
+        lambda path: tl09.SavedRoundtripContract(
+            gate_assessment=tl09.Tl13GateAssessment(
+                bundle_task_id="TL13",
+                bundle_format_version="tl13_bundle_v1",
+                extra_deployable_block_ids=("tl04_antidef_defense_evasion",),
+                improved_roundtrip_metrics=("max_abs_probability_delta_max",),
+                passed=True,
+                failure_reasons=(),
+            ),
+            roundtrip_reference_path=tmp_path / "saved_roundtrip_reference.csv",
+            roundtrip_reference_hosts=set(),
+            roundtrip_cohort_path=tmp_path / "saved_roundtrip_cohort.csv",
+            roundtrip_cohort_hosts=set(),
+            contract_issues=[],
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Validation cohort selection produced zero hosts"):
+        tl09.main(
+            [
+                "--output-dir",
+                str(output_dir),
+                "--panel-hosts-path",
+                str(panel_hosts_path),
+                "--panel-phage-metadata-path",
+                str(panel_phage_metadata_path),
+                "--bundle-path",
+                str(bundle_path),
+                "--st02-pair-table-path",
+                str(tmp_path / "missing_st02_pair_table.csv"),
+            ]
+        )
