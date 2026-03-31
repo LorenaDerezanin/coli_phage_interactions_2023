@@ -16,6 +16,9 @@ def _stub_all_steps(monkeypatch, calls):
         run_track_l.build_mechanistic_defense_evasion_features, "main", lambda argv: calls.append("defense-features")
     )
     monkeypatch.setattr(
+        run_track_l.build_raw_host_surface_projector, "main", lambda argv: calls.append("raw-host-surface-projector")
+    )
+    monkeypatch.setattr(
         run_track_l.retrain_mechanistic_v1_model, "main", lambda argv: calls.append("retrain-mechanistic-v1")
     )
     monkeypatch.setattr(
@@ -60,6 +63,13 @@ def test_inference_group_dispatch(monkeypatch) -> None:
     ]
 
 
+def test_deployable_preprocessors_group_dispatch(monkeypatch) -> None:
+    calls: list[str] = []
+    _stub_all_steps(monkeypatch, calls)
+    run_track_l.main(["--step", "deployable-preprocessors"])
+    assert calls == ["raw-host-surface-projector"]
+
+
 def test_all_runs_every_step_in_order(monkeypatch) -> None:
     calls: list[str] = []
     _stub_all_steps(monkeypatch, calls)
@@ -72,6 +82,7 @@ def test_all_runs_every_step_in_order(monkeypatch) -> None:
         "enrich",
         "rbp-features",
         "defense-features",
+        "raw-host-surface-projector",
         "retrain-mechanistic-v1",
         "generalized-inference-bundle",
         "deployable-generalized-inference-bundle",

@@ -4,6 +4,8 @@
 Individual steps and groups (run individually or with 'all'):
   annotate                — Run pharokka on phage genomes and cache key TSVs.
   features (group)        — parse → enrich → rbp-features → defense-features.
+  deployable-preprocessors (group)
+                          — raw-host-surface-projector.
   retrain-mechanistic-v1  — Retrain the v1 model with mechanistic features.
   inference (group)       — generalized-inference-bundle → deployable-generalized-inference-bundle → validate-vhdb.
 """
@@ -24,6 +26,7 @@ if __package__ in {None, ""}:
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_l.steps import (
     build_generalized_inference_bundle,
+    build_raw_host_surface_projector,
     build_tl13_generalized_inference_bundle,
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
@@ -94,6 +97,10 @@ FEATURE_STEPS: list[tuple[str, StepFn]] = [
     ("defense-features", lambda _args: build_mechanistic_defense_evasion_features.main([])),
 ]
 
+DEPLOYABLE_PREPROCESSOR_STEPS: list[tuple[str, StepFn]] = [
+    ("raw-host-surface-projector", lambda _args: build_raw_host_surface_projector.main([])),
+]
+
 INFERENCE_STEPS: list[tuple[str, StepFn]] = [
     ("generalized-inference-bundle", lambda _args: build_generalized_inference_bundle.main([])),
     ("deployable-generalized-inference-bundle", lambda _args: build_tl13_generalized_inference_bundle.main([])),
@@ -105,6 +112,7 @@ INFERENCE_STEPS: list[tuple[str, StepFn]] = [
 # don't need a group wrapper.
 GROUPS: list[tuple[str, list[tuple[str, StepFn]]]] = [
     ("features", FEATURE_STEPS),
+    ("deployable-preprocessors", DEPLOYABLE_PREPROCESSOR_STEPS),
     ("inference", INFERENCE_STEPS),
 ]
 
@@ -113,6 +121,7 @@ GROUPS: list[tuple[str, list[tuple[str, StepFn]]]] = [
 ALL_STEPS: list[tuple[str, StepFn]] = [
     ("annotate", _run_annotate),
     *FEATURE_STEPS,
+    *DEPLOYABLE_PREPROCESSOR_STEPS,
     ("retrain-mechanistic-v1", lambda _args: retrain_mechanistic_v1_model.main([])),
     *INFERENCE_STEPS,
 ]

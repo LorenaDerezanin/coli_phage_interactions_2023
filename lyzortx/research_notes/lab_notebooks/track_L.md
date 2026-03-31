@@ -1182,3 +1182,134 @@ bundle clears its round-trip gate first.
 Do not treat fitted UMAP host coordinates as the next deployable step. If continuous host-similarity signal is still
 needed after `TL15`-`TL17`, it should come from a stable runtime projector or distance contract rather than from
 reusing a fragile low-dimensional embedding fit.
+
+### 2026-03-31: TL15 Raw-host surface projector for deployable compatibility features
+
+#### Executive summary
+
+Built `build_raw_host_surface_projector.py`, a Track L step that turns a raw host assembly FASTA into the
+training-time Track C host-surface schema for the subset that can be grounded in saved runtime assets. The step now:
+
+- resolves the assembly-backed host subset from RefSeq,
+- downloads matched assemblies into the TL15 output directory,
+- predicts host proteins with Pyrodigal,
+- builds saved receptor-family reference FASTAs relative to the TL15 output root, and
+- projects matched panel hosts back into Track C-style receptor fields with explicit `call_status` columns so "absent"
+  and "not callable" do not collapse into the same value.
+
+The current honest outcome is mixed. TL15 recovered deployable proxy assets for **12 receptor families** and matched
+**21/34** host-collection strains to RefSeq assemblies, but it failed to recover a stable `lps_core` proxy and the
+exact agreement against the old Track C receptor cluster labels is weak (**15%-26% exact match on callable rows**,
+depending on family). That is still useful: the task now has a saved runtime contract, an explicit unsupported table,
+and a concrete mismatch report instead of an implicit "not deployable" shrug.
+
+#### What was implemented
+
+- `lyzortx/pipeline/track_l/steps/build_raw_host_surface_projector.py`
+  - Downloads `assembly_summary_refseq.txt` into the TL15 output directory.
+  - Resolves the `Collection=Host` subset from `picard_collection.csv` to matched RefSeq assemblies when possible.
+  - Downloads matched assemblies under `raw/assemblies/`.
+  - Predicts proteins with Pyrodigal under `raw/predicted_proteins/`.
+  - Fetches one canonical UniProt seed sequence per receptor/LPS family into `runtime_assets/seed_sequences/`.
+  - Uses `mmseqs easy-search` to build panel-derived receptor representative FASTAs under `runtime_assets/`.
+  - Projects matched panel assemblies back into Track C-style surface columns plus per-family `call_status` and best-hit
+    metadata.
+  - Writes:
+    - `panel_host_assembly_catalog_v1.csv`
+    - `projected_host_surface_features_v1.csv`
+    - `projected_host_surface_agreement_v1.csv`
+    - `projected_host_surface_mismatches_v1.csv`
+    - `training_host_surface_feature_support_v1.csv`
+    - `raw_host_surface_projector_manifest_v1.json`
+- `lyzortx/pipeline/track_l/run_track_l.py`
+  - Added the `raw-host-surface-projector` step and a `deployable-preprocessors` group.
+- `lyzortx/tests/test_track_l_raw_host_surface_projector.py`
+  - Covers best-hit selection, absent-vs-not-callable behavior, agreement summarization, and relative-path manifests.
+- `lyzortx/tests/test_track_l_run_track_l.py`
+  - Covers the new Track L dispatcher entry.
+
+#### Panel coverage and runtime assets
+
+- **Host collection size**: 34 strains.
+- **RefSeq assembly matches**: 21 strains.
+- **Unmatched host-collection strains**: `BCH953`, `BDX03`, `BDX09`, `DIJ06`, `DIJ07`, `LF110`, `LF7074`, `NAN33`,
+  `NIC06`, `NRG807C`, `PDP110`, `PDP21`, `PDP351`.
+- **Recovered runtime receptor reference bundles**: `BTUB`, `FADL`, `FHUA`, `LAMB`, `LPTD`, `NFRA`, `OMPA`, `OMPC`,
+  `OMPF`, `TOLC`, `TSX`, `YNCD`.
+- **Failed runtime bundle**: `lps_core` did not recover any assembly-backed representative sequence in this v1 build, so
+  it remains unsupported.
+
+The manifest records runtime asset paths relative to the saved TL15 output directory rather than pointing at hidden
+repo-root state. That makes the projector reproducible and portable for downstream bundle work.
+
+#### Agreement against existing Track C-style annotations
+
+Comparison was run on the **21 matched host-collection assemblies**. For this subset, the expected LPS labels came from
+the host-specific `LPS_type_waaL_host.txt` table because the 370-host LPS file used in Track C does not cover the host
+collection (`LF110` is missing even there and was excluded from the comparison cohort).
+
+| Feature family | Callable rows | Exact matches | Exact agreement |
+| --- | ---: | ---: | ---: |
+| `lps_core` | 21 | 0 | 0.000 |
+| `receptor_btub` | 19 | 4 | 0.211 |
+| `receptor_fadL` | 18 | 3 | 0.167 |
+| `receptor_fhua` | 19 | 4 | 0.211 |
+| `receptor_lamB` | 20 | 4 | 0.200 |
+| `receptor_lptD` | 20 | 4 | 0.200 |
+| `receptor_nfrA` | 21 | 4 | 0.190 |
+| `receptor_ompA` | 18 | 3 | 0.167 |
+| `receptor_ompC` | 20 | 5 | 0.250 |
+| `receptor_ompF` | 19 | 4 | 0.211 |
+| `receptor_tolC` | 19 | 5 | 0.263 |
+| `receptor_tsx` | 19 | 4 | 0.211 |
+| `receptor_yncD` | 20 | 3 | 0.150 |
+
+#### Systematic mismatches
+
+- `lps_core` is a complete miss in this version: all **21/21** matched hosts were projected as `called_absent` against
+  non-empty expected labels. That is why TL15 leaves `lps_core` unsupported in the saved support table.
+- For the receptor families, the dominant mismatch is **projected absence** rather than ambiguous positive calls. Most
+  families show **14-16** `called_absent` mismatches out of 21 matched hosts.
+- `OmpA` also shows **3** `family_detected_variant_ambiguous` calls, which suggests that even when the family is found,
+  the current representative bundle is too coarse to recover a unique old cluster ID reliably.
+- The mismatch pattern likely reflects two real limitations at once:
+  - the nearest public RefSeq assembly is not always strain-identical to the internal host-collection genome; and
+  - a single representative per old cluster is not enough to recreate the historical cluster assignment with high
+    fidelity.
+
+#### Training-time host-surface support table
+
+The generated CSV `training_host_surface_feature_support_v1.csv` is the canonical machine-readable table. The current
+high-level classification is:
+
+| Training feature family | Status | Rationale |
+| --- | --- | --- |
+| `lps_core` | Unsupported | TL15 did not recover any assembly-backed `waaL` representative sequence cleanly enough to support a saved runtime proxy. |
+| `receptor_btub` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived BtuB representatives. |
+| `receptor_fadL` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived FadL representatives. |
+| `receptor_fhua` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived FhuA representatives. |
+| `receptor_lamB` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived LamB representatives. |
+| `receptor_lptD` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived LptD representatives. |
+| `receptor_nfrA` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived NfrA representatives. |
+| `receptor_ompA` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived OmpA representatives. |
+| `receptor_ompC` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived OmpC representatives. |
+| `receptor_ompF` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived OmpF representatives. |
+| `receptor_tolC` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived TolC representatives. |
+| `receptor_tsx` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived Tsx representatives. |
+| `receptor_yncD` | Approximated by deployable proxy | Uses Pyrodigal protein calls plus `mmseqs` matching against saved panel-derived YncD representatives. |
+| `o_antigen` | Unsupported | The repo has historical O-typing outputs, but TL15 does not yet package a runtime serotyping projector for raw assemblies. |
+| `k_antigen` | Unsupported | Typed K-antigen calls still depend on external capsule typing workflows that are not packaged as a runtime projector here. |
+| `k_antigen_proxy_capsule` | Unsupported | The capsule proxy block was copied from historical metadata and has no saved raw-assembly caller or reference asset yet. |
+| `receptor_tonB` | Unsupported | Track C itself had no TonB source table, so TL15 cannot honestly project it. |
+
+#### Interpretation
+
+1. TL15 clears the minimum bar for a real preprocessing task: it produces saved runtime assets, projects real assemblies,
+   distinguishes `called_absent` from `family_detected_variant_unresolved`, and emits a machine-readable support table
+   instead of silently dropping unsupported biology.
+2. TL15 does **not** validate the old Track C receptor cluster labels as a high-fidelity runtime target. The agreement
+   numbers are too low to treat the historical cluster IDs as faithfully recreated from these downloaded assemblies.
+3. The useful output is narrower but still valuable: downstream deployable bundle work can now consume a saved receptor
+   family projector with explicit uncertainty and a documented unsupported set.
+4. `lps_core` should remain out of any deployable bundle until a better `waaL`/LPS typing contract is built. The current
+   v1 projector calls all matched hosts absent, which is not salvageable by threshold tweaking alone.
