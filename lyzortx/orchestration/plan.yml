@@ -804,7 +804,7 @@ tracks:
         is not limited by missing reference artifacts
     - id: TL14
       title: Run external validation only if TL13 clears the round-trip gate
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - TL14 is only justified if TL13 produced both a materially richer deployable

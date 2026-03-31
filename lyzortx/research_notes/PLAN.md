@@ -509,7 +509,7 @@ graph LR
     not satisfy the task
   - Regenerate round-trip reference predictions for a predeclared panel-host cohort with available assemblies and save
     them inside the bundle so downstream validation is not limited by missing reference artifacts
-- [ ] **TL14** Run external validation only if TL13 clears the round-trip gate. Model: `gpt-5.4`.
+- [x] **TL14** Run external validation only if TL13 clears the round-trip gate. Model: `gpt-5.4`.
   - TL14 is only justified if TL13 produced both a materially richer deployable feature set and an improved round-trip
     result on the saved panel-host cohort; if TL13 fails that gate, do not run broad positive-only validation by inertia
   - Materialize and save the exact validation cohort before scoring: host IDs, host assembly accessions, phage
