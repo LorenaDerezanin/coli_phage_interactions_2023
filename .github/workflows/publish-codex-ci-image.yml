@@ -1,0 +1,70 @@
+name: Publish Codex CI Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/ci/Dockerfile"
+      - "environment.yml"
+      - "environment.*.yml"
+      - "requirements.txt"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CI_IMAGE_BASE: ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci
+
+jobs:
+  publish:
+    name: Build and Publish CI Image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    # Intentionally amd64-only for now. The heavy bioinformatics toolchain was
+    # validated and branch-tested against GitHub's ubuntu-24.04 x64 runners,
+    # which is the only platform these Codex workflows currently use.
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [base, host-typing, full-bio]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Compute image tags
+        id: tags
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            BRANCH_TAG="${{ matrix.profile }}-main"
+          else
+            SAFE_REF=$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/_' '--')
+            BRANCH_TAG="${{ matrix.profile }}-branch-${SAFE_REF}"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "${CI_IMAGE_BASE}:${BRANCH_TAG}"
+            echo "${CI_IMAGE_BASE}:${{ matrix.profile }}-sha-${GITHUB_SHA}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/ci/Dockerfile
+          push: true
+          build-args: |
+            CI_IMAGE_PROFILE=${{ matrix.profile }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.profile }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.profile }}

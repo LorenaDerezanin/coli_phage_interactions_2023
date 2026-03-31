@@ -86,7 +86,10 @@ stateDiagram-v2
 
 - `plan.yml` — task definitions (source of truth).
 - `plan_parser.py` — pure functions: `load_plan`, `is_task_ready`, `resolve_task_dependencies`,
-  `select_ready_tasks`, `mark_task_done`. Parses `model` and optional `depends_on_tasks` fields from task entries.
+  `select_ready_tasks`, `mark_task_done`. Parses `model`, optional `depends_on_tasks`, and optional
+  `ci_image_profile` fields from task entries.
+- `ci_image_profiles.py` — shared enum/mapping helpers for `ci_image_profile`, `ci-image:*` labels, and GHCR image
+  refs used by the orchestrator and workflows.
 - `parse_model_directive.py` — extracts model ID from `<!-- model: ... -->` HTML comments in issue bodies. Used by CI
   workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
@@ -161,16 +164,18 @@ On each tick the workflow commits `plan.yml` and `PLAN.md` changes back to the r
 
 Default `max_active_tasks` is `1` (CLI) or `50` (CI workflow). The `orchestrator-task` label is created automatically on
 first dispatch. Dispatched issues also receive a `model-{id}` label (e.g., `model-gpt-5.4-mini`) for at-a-glance model
-visibility.
+visibility plus a mirrored `ci-image:{profile}` label so workflows can route the task to the matching prebaked
+container image. Missing profile labels are treated as configuration errors, not as permission to fall back.
 
 ### codex-implement.yml
 
 - `issues.opened` / `issues.reopened`: triggers when an issue with the `orchestrator-task` label is created.
 - `workflow_dispatch`: manual trigger with an issue number.
 
-Builds a prompt from the issue body and acceptance criteria, extracts the model directive (`<!-- model: ... -->`) from
-the issue body, then runs Codex with the specified model to implement the task and create a PR. The model directive is
-required — the workflow fails if it is missing.
+Resolves the CI image profile from the issue's `ci-image:*` label, then runs Codex inside the matching prebaked GHCR
+image. Builds a prompt from the issue body and acceptance criteria, extracts the model directive (`<!-- model: ... -->`)
+from the issue body, refreshes only the envs that belong to that image profile, then runs Codex with the specified
+model to implement the task and create a PR. The model directive is required — the workflow fails if it is missing.
 
 ### claude-pr-review.yml
 
@@ -201,6 +206,27 @@ labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled `nee
 the model from the linked issue (via the PR body's `Closes #N` reference) to use the same model as the original
 implementation.
 
+Both Codex workflows now resolve their container image from `ci-image:*` labels mirrored from `plan.yml` into issues
+and then onto PRs. The current image profiles are:
+
+- `base` — `phage_env` only
+- `host-typing` — `phage_env` plus `phylogroup_caller`, `serotype_caller`, and `sequence_type_caller`
+- `full-bio` — `host-typing` plus `phage_annotation_tools`
+
+Each job still executes env refreshes on startup, but only for the envs that belong to the selected profile, so repo
+dependency changes can land without waiting for a new image publish.
+
+## Cutover Policy
+
+This CI-image routing is an intentional cutover, not a backward-compatible migration layer.
+
+- Only post-cutover orchestrator issues and PRs are supported. They must carry exactly one `ci-image:*` label and the
+  matching env manifests expected by the selected profile.
+- Pre-cutover issues/PRs created before this contract existed are intentionally unsupported by the new Codex workflows.
+  Re-dispatch or rebase them onto a branch that contains the CI-image manifests instead of expecting fallback behavior.
+- Missing labels or missing env manifests are treated as hard configuration errors. The workflows do not silently fall
+  back to older bootstrap paths or prebaked env contents.
+
 ## Agent Instructions in Dispatched Issues
 
 Each dispatched issue includes:
@@ -210,5 +236,8 @@ Each dispatched issue includes:
   emitted by `orchestrator.py` when creating the issue. Both `codex-implement.yml` and `codex-pr-lifecycle.yml` extract
   this directive and pass it to the Codex action. Both `model` and `acceptance_criteria` are required for all pending
   tasks — the orchestrator raises `ValueError` if either is missing.
+- CI image profile directive as an HTML comment and mirrored GitHub label. The profile is set per-task in `plan.yml`
+  via `ci_image_profile` and mirrored into `ci-image:{profile}` labels for issue/PR routing. Pending tasks must declare
+  this explicitly; missing labels fail the workflow rather than silently falling back.
 - Instruction to write findings to `lyzortx/research_notes/lab_notebooks/track_<track>.md`.
 - PR creation instructions using `gh pr create` with `Closes #<issue>`.

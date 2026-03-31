@@ -1,9 +1,7 @@
-name: phage_env
+name: phylogroup_caller
 channels:
   - conda-forge
   - bioconda
 dependencies:
   - python=3.12.12
-  - pip=26.0.1
-  - pip:
-      - -r requirements.txt
+  - clermontyping=24.02

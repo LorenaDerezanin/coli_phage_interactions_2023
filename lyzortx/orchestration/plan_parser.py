@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from lyzortx.orchestration.ci_image_profiles import normalize_ci_image_profile
+
 try:
     import yaml
 except ImportError:
@@ -24,6 +26,7 @@ class PlanTask:
     implemented_in: str | None = None
     baseline: str | None = None
     model: str | None = None
+    ci_image_profile: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,7 @@ def load_plan(plan_path: Path) -> PlanGraph:
                     implemented_in=raw.get("implemented_in"),
                     baseline=raw.get("baseline"),
                     model=raw.get("model"),
+                    ci_image_profile=raw.get("ci_image_profile"),
                 )
             )
 
@@ -143,6 +147,8 @@ def _write_plan_yaml(plan_path: Path, data: dict[str, Any]) -> None:
 def _validate_task_dependencies(graph: PlanGraph, plan_path: Path) -> None:
     known_task_ids = {task.task_id for task in graph.tasks}
     for task in graph.tasks:
+        if task.ci_image_profile is not None:
+            normalize_ci_image_profile(task.ci_image_profile)
         if task.task_dependencies is None:
             continue
         for dependency_id in task.task_dependencies:

@@ -221,6 +221,49 @@ def test_load_plan_parses_model_field(tmp_path: Path) -> None:
     assert ta01.model == "gpt-5.4-mini"
 
 
+def test_load_plan_ci_image_profile_defaults_to_none(tmp_path: Path) -> None:
+    graph = load_plan(_write_plan(tmp_path))
+    ta01 = next(t for t in graph.tasks if t.task_id == "TA01")
+    assert ta01.ci_image_profile is None
+
+
+def test_load_plan_parses_ci_image_profile(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: Task with CI image profile
+                status: pending
+                model: gpt-5.4-mini
+                ci_image_profile: host-typing
+    """)
+    graph = load_plan(_write_plan(tmp_path, content))
+    ta01 = next(t for t in graph.tasks if t.task_id == "TA01")
+    assert ta01.ci_image_profile == "host-typing"
+
+
+def test_load_plan_rejects_unknown_ci_image_profile(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: Task with invalid CI image profile
+                status: pending
+                model: gpt-5.4-mini
+                ci_image_profile: mystery-box
+    """)
+    with pytest.raises(ValueError, match="Unknown ci_image_profile"):
+        load_plan(_write_plan(tmp_path, content))
+
+
 def test_render_plan_shows_model_on_all_tasks(tmp_path: Path) -> None:
     content = textwrap.dedent("""\
         tracks:
@@ -336,3 +379,22 @@ def test_render_plan_shows_explicit_task_dependencies(tmp_path: Path) -> None:
     plan = load_plan_yaml(_write_plan(tmp_path, TASK_DEP_PLAN))
     md = render_plan(plan)
     assert "Depends on tasks: `TL15`, `TL16`, `TL17`." in md
+
+
+def test_render_plan_shows_ci_image_profile(tmp_path: Path) -> None:
+    content = textwrap.dedent("""\
+        tracks:
+          A:
+            name: Foundation
+            stage: 0
+            depends_on: []
+            tasks:
+              - id: TA01
+                title: CI image specific task
+                status: pending
+                model: gpt-5.4-mini
+                ci_image_profile: full-bio
+    """)
+    plan = load_plan_yaml(_write_plan(tmp_path, content))
+    md = render_plan(plan)
+    assert "CI image profile: `full-bio`." in md

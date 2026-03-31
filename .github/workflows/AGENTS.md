@@ -13,6 +13,9 @@
   infinite loops. A concurrency group ensures only one lifecycle run per PR at a time. The `workflow_dispatch`-only
   trigger prevents a self-cancellation loop where Codex thread replies would fire `pull_request_review` events that
   cancel the in-progress run.
+- `publish-codex-ci-image.yml` builds and publishes the prebaked GitHub Container Registry image used by the Codex
+  workflows. The image is rebuilt from `.github/ci/Dockerfile` whenever its inputs change on `main`, and it can also be
+  triggered manually.
 
 # Concurrency and Thread Safety
 
@@ -23,6 +26,9 @@
   orchestrator ticks that mark tasks done or create issues).
 - Workflows triggered by multiple event types (e.g., `issues.closed` + `workflow_dispatch`) are especially prone to
   parallel runs — a single merge can fire both triggers simultaneously.
+- For workflows that run inside Docker or other containers, write long-running command logs to a host/workspace-visible
+  path while the job is still running (for example, a mounted workspace file under `.scratch/`). Do not put the only
+  useful progress log in an ephemeral container-only path like `/tmp`.
 
 # Workflow Logic Encapsulation
 

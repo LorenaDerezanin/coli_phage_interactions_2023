@@ -16,6 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from lyzortx.orchestration.ci_image_profiles import ci_image_profile_label
+from lyzortx.orchestration.ci_image_profiles import normalize_ci_image_profile
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PLAN_PATH = REPO_ROOT / "lyzortx/orchestration/plan.yml"
 DEFAULT_PLAN_MD_PATH = REPO_ROOT / "lyzortx/research_notes/PLAN.md"
@@ -43,6 +46,7 @@ class Task:
     plan_checkbox_text: str | None
     track: str
     model: str
+    ci_image_profile: str
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,11 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
     from lyzortx.orchestration.plan_parser import load_plan, resolve_task_dependencies
 
     graph = load_plan(plan_path)
+    missing_ci_image_profile = [pt.task_id for pt in graph.tasks if pt.status != "done" and not pt.ci_image_profile]
+    if missing_ci_image_profile:
+        raise ValueError(
+            f"Pending tasks missing required 'ci_image_profile' field in plan.yml: {missing_ci_image_profile}"
+        )
     tasks = [
         Task(
             task_id=pt.task_id,
@@ -109,6 +118,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             plan_checkbox_text=pt.title,
             track=pt.track,
             model=pt.model or "",
+            ci_image_profile=normalize_ci_image_profile(pt.ci_image_profile),
         )
         for pt in graph.tasks
         if pt.status != "done"
@@ -298,14 +308,17 @@ class GitHubClient:
 
     def create_agent_task_issue(self, task: Task) -> IssueRef:
         title = f"[ORCH][{task.task_id}] {task.title}"
+        image_label = ci_image_profile_label(task.ci_image_profile)
 
         acceptance = "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Define in implementation PR"
         body_parts = [
             f"<!-- {TASK_ID_MARKER}: {task.task_id} -->",
             f"<!-- model: {task.model} -->",
+            f"<!-- ci-image-profile: {task.ci_image_profile} -->",
             "## Orchestrator Task",
             f"- Task ID: `{task.task_id}`",
             f"- Executor: `{task.executor}`",
+            f"- CI image profile: `{task.ci_image_profile}`",
             "- Plan Source: `lyzortx/orchestration/plan.yml`",
             "",
             "## Description",
@@ -321,7 +334,7 @@ class GitHubClient:
             " following the existing entry format (ordered by task code, earliest first).",
             "3. Create the PR using `gh pr create` (NOT any built-in PR tool).",
             "4. PR body MUST include `Closes #<this-issue-number>` for auto-close on merge.",
-            "5. Add `--label orchestrator-task` to the `gh pr create` command.",
+            f"5. Add `--label orchestrator-task --label {image_label}` to the `gh pr create` command.",
             "",
             "## Completion",
             "This issue closes automatically when the linked PR merges.",
@@ -329,6 +342,8 @@ class GitHubClient:
         body = "\n".join(body_parts)
 
         labels = [ISSUE_LABEL]
+        self.ensure_label_exists(image_label, "5319E7", f"Codex CI image profile: {task.ci_image_profile}")
+        labels.append(image_label)
         if task.model:
             model_label = f"model-{task.model}"
             self.ensure_label_exists(model_label, "C5DEF5", f"Codex model: {task.model}")
@@ -549,6 +564,7 @@ def run_once(
             plan_checkbox_text=pt.title,
             track=pt.track,
             model=pt.model or "",
+            ci_image_profile=normalize_ci_image_profile(pt.ci_image_profile or ""),
         )
         result = _dispatch_one_agent_task(task, state, issues_by_task, github_client)
         dispatched.append(result)
