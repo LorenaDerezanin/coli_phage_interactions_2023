@@ -27,6 +27,13 @@ RUN echo 'Defaults env_keep += "PATH"' > /etc/sudoers.d/keep-path \
     && echo 'Defaults !secure_path' >> /etc/sudoers.d/keep-path \
     && chmod 0440 /etc/sudoers.d/keep-path
 
+# Create a "runner" user with passwordless sudo, matching what the
+# codex-action drop-sudo safety strategy expects inside the container.
+RUN groupadd -g 1001 sudo-runner \
+    && useradd -m -u 1001 -g sudo-runner -G sudo -s /bin/bash runner \
+    && echo 'runner ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/runner \
+    && chmod 0440 /etc/sudoers.d/runner
+
 RUN case "${TARGETARCH}" in \
       amd64) MICROMAMBA_ARCH=64 ;; \
       arm64) MICROMAMBA_ARCH=aarch64 ;; \
