@@ -25,6 +25,7 @@ def test_build_candidate_audit_rows_marks_rbp_profiles_as_selected() -> None:
             )
         ],
         anti_def_profile_count=3,
+        anti_def_phage_coverage=2,
         rbp_feature_rows=[
             {
                 "phage": "P1",
@@ -46,6 +47,8 @@ def test_build_candidate_audit_rows_marks_rbp_profiles_as_selected() -> None:
     chosen = next(row for row in rows if row["candidate_block_id"] == "tl17_rbp_phrog_profiles")
     assert chosen["chosen_for_tl17"] == 1
     assert chosen["panel_phage_coverage"] == 1
+    anti_def = next(row for row in rows if row["candidate_block_id"] == "tl04_antidef_defense_evasion")
+    assert anti_def["panel_phage_coverage"] == 2
 
 
 def test_build_panel_feature_rows_and_projection_validation_round_trip(tmp_path: Path) -> None:

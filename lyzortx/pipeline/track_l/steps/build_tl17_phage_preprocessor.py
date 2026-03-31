@@ -26,10 +26,13 @@ from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import (
 from lyzortx.pipeline.track_l.steps.build_mechanistic_rbp_receptor_features import load_pharokka_rbp_gene_summary
 from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import (
     TL17_DIRECT_BLOCK_ID,
+    Tl17ProfileRuntime,
+    Tl17SummaryRuntime,
     build_direct_feature_values,
     build_profile_presence,
     build_tl17_runtime_payload,
     extract_rbp_runtime_inputs,
+    parse_tl17_runtime_payload,
 )
 from lyzortx.pipeline.track_l.steps.run_enrichment_analysis import CACHED_ANNOTATIONS_DIR, load_pharokka_phrog_matrices
 
@@ -174,9 +177,7 @@ def build_panel_feature_rows(
     return feature_rows
 
 
-def tl17_profile_from_collapsed(profile: CollapsedProfile):
-    from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import Tl17ProfileRuntime
-
+def tl17_profile_from_collapsed(profile: CollapsedProfile) -> Tl17ProfileRuntime:
     return Tl17ProfileRuntime(
         profile_id=profile.profile_id,
         direct_column=profile.direct_column,
@@ -184,9 +185,7 @@ def tl17_profile_from_collapsed(profile: CollapsedProfile):
     )
 
 
-def tl17_summary_runtime():
-    from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import Tl17SummaryRuntime
-
+def tl17_summary_runtime() -> Tl17SummaryRuntime:
     return Tl17SummaryRuntime(**SUMMARY_COLUMNS)
 
 
@@ -195,6 +194,7 @@ def build_candidate_audit_rows(
     kmer_feature_columns: Sequence[str],
     rbp_profiles: Sequence[CollapsedProfile],
     anti_def_profile_count: int,
+    anti_def_phage_coverage: int,
     rbp_feature_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     rbp_coverage = sum(int(row[SUMMARY_COLUMNS["profile_count_column"]]) > 0 for row in rbp_feature_rows)
@@ -225,7 +225,7 @@ def build_candidate_audit_rows(
             "candidate_block_id": BLOCK_ID_ANTIDEF,
             "mechanistic_link": "host_defense_evasion",
             "panel_feature_width": anti_def_profile_count,
-            "panel_phage_coverage": 66,
+            "panel_phage_coverage": anti_def_phage_coverage,
             "chosen_for_tl17": 0,
             "rationale": (
                 "Deployable but weaker as the next phage-side candidate: Track L already showed the anti-defense path "
@@ -241,8 +241,6 @@ def build_projection_validation_rows(
     runtime_payload: Mapping[str, object],
     cached_annotations_dir: Path,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import parse_tl17_runtime_payload
-
     feature_by_phage = {str(row["phage"]): dict(row) for row in phage_feature_rows}
     profiles, summary = parse_tl17_runtime_payload(runtime_payload)
     validation_rows: list[dict[str, object]] = []
@@ -461,6 +459,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         anti_def_matrix,
         direct_column_prefix="tl17_antidef_reference",
     )
+    anti_def_phage_coverage = int((anti_def_matrix.sum(axis=1) > 0).sum())
 
     phage_feature_rows = build_panel_feature_rows(
         phages=phages,
@@ -477,6 +476,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         kmer_feature_columns=kmer_feature_columns,
         rbp_profiles=rbp_profiles,
         anti_def_profile_count=len(anti_def_profiles),
+        anti_def_phage_coverage=anti_def_phage_coverage,
         rbp_feature_rows=phage_feature_rows,
     )
     projection_validation_rows, projection_validation_summary_rows = build_projection_validation_rows(
