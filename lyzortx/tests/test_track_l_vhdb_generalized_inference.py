@@ -204,6 +204,130 @@ def test_select_validation_hosts_separates_novel_and_roundtrip_hosts() -> None:
     assert [host.panel_match for host in roundtrip_hosts] == ["LF82", "EDL933"]
 
 
+def test_assess_tl13_gate_requires_extra_block_and_roundtrip_improvement() -> None:
+    passed = tl09.assess_tl13_gate(
+        {
+            "task_id": "TL13",
+            "format_version": "tl13_bundle_v1",
+            "deployable_feature_blocks": [
+                {"block_id": "track_c_defense"},
+                {"block_id": "track_d_phage_genomic_kmers"},
+                {"block_id": "tl04_antidef_defense_evasion"},
+            ],
+            "roundtrip_gate": {"improved_metrics": ["max_abs_probability_delta_max"]},
+        }
+    )
+    failed = tl09.assess_tl13_gate(
+        {
+            "task_id": "TL08",
+            "format_version": "tl08_bundle_v2",
+            "deployable_feature_blocks": [
+                {"block_id": "track_c_defense"},
+                {"block_id": "track_d_phage_genomic_kmers"},
+            ],
+            "roundtrip_gate": {"improved_metrics": []},
+        }
+    )
+
+    assert passed.passed is True
+    assert passed.extra_deployable_block_ids == ("tl04_antidef_defense_evasion",)
+    assert passed.improved_roundtrip_metrics == ("max_abs_probability_delta_max",)
+    assert failed.passed is False
+    assert failed.failure_reasons == (
+        "bundle_task_id_was_not_tl13",
+        "bundle_did_not_add_any_deployable_feature_block_beyond_defense_and_kmers",
+        "bundle_did_not_record_any_improved_roundtrip_metric",
+    )
+
+
+def test_build_validation_cohort_rows_keeps_counts_and_candidate_set_sizes_separate() -> None:
+    hosts = [
+        tl09.HostCandidate(
+            host_tax_id="H1",
+            host_name="Host one",
+            positive_pair_count=3,
+            unique_phage_count=2,
+            panel_match="EDL933",
+            is_panel_host=True,
+            assembly_accession="GCF_1",
+            assembly_level="Complete Genome",
+            assembly_organism_name="Host one",
+            assembly_ftp_path="ftp://example/1",
+        ),
+        tl09.HostCandidate(
+            host_tax_id="H2",
+            host_name="Host two",
+            positive_pair_count=1,
+            unique_phage_count=1,
+            panel_match="",
+            is_panel_host=False,
+            assembly_accession="GCF_2",
+            assembly_level="Scaffold",
+            assembly_organism_name="Host two",
+            assembly_ftp_path="ftp://example/2",
+        ),
+    ]
+    positive_pairs = [
+        tl09.PositivePair("H1", "Host one", "P1", "virus-a"),
+        tl09.PositivePair("H1", "Host one", "P1", "virus-a-repeat"),
+        tl09.PositivePair("H1", "Host one", "P2", "virus-b"),
+        tl09.PositivePair("H2", "Host two", "P3", "virus-c"),
+    ]
+
+    host_rows, pair_rows, summary = tl09.build_validation_cohort_rows(
+        hosts=hosts,
+        positive_pairs=positive_pairs,
+        known_phages_by_taxid={"H1": ["P1", "P2"], "H2": ["P3"]},
+        panel_phage_count=96,
+        roundtrip_panel_matches={"EDL933"},
+    )
+
+    assert summary == {
+        "host_count": 2,
+        "positive_pair_count": 4,
+        "unique_phage_count": 3,
+        "roundtrip_host_count": 1,
+    }
+    assert [row["candidate_set_size"] for row in host_rows] == [98, 97]
+    assert [row["qualifies_for_panel_roundtrip"] for row in host_rows] == [1, 0]
+    assert [row["positive_pair_count"] for row in pair_rows if row["host_tax_id"] == "H1"] == [3, 3, 3]
+    assert [row["unique_phage_count"] for row in pair_rows if row["host_tax_id"] == "H1"] == [2, 2, 2]
+
+
+def test_determine_validation_conclusion_distinguishes_failed_and_inconclusive() -> None:
+    failed_conclusion, failed_rows = tl09.determine_validation_conclusion(
+        gate_passed=False,
+        contract_issues=[],
+        qualified_roundtrip_host_count=5,
+        min_roundtrip_hosts=3,
+    )
+    inconclusive_conclusion, inconclusive_rows = tl09.determine_validation_conclusion(
+        gate_passed=True,
+        contract_issues=["saved_roundtrip_reference_predictions_file_was_missing"],
+        qualified_roundtrip_host_count=1,
+        min_roundtrip_hosts=3,
+    )
+    validated_conclusion, validated_rows = tl09.determine_validation_conclusion(
+        gate_passed=True,
+        contract_issues=[],
+        qualified_roundtrip_host_count=3,
+        min_roundtrip_hosts=3,
+        overall_metrics={
+            "base_rate": 0.2,
+            "positive_median_p_lysis": 0.8,
+            "random_median_p_lysis": 0.3,
+            "host_median_positive_rank_percentile": 0.7,
+        },
+    )
+
+    assert failed_conclusion == tl09.CONCLUSION_FAILED
+    assert failed_rows[0]["passed"] == 0
+    assert inconclusive_conclusion == tl09.CONCLUSION_INCONCLUSIVE
+    assert inconclusive_rows[1]["passed"] == 0
+    assert validated_conclusion == tl09.CONCLUSION_VALIDATED
+    assert all(row["passed"] == 1 for row in validated_rows)
+
+
 def test_evaluate_positive_only_metrics_builds_rank_and_random_summaries() -> None:
     host_metadata = {
         "T1": tl09.HostCandidate(

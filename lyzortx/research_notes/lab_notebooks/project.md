@@ -1122,3 +1122,15 @@ So the plan now separates two stories that had been mixed together:
 Concretely, TL13 is now framed as a feature-parity audit plus deployable compatibility experiment, and TL14 is now
 gated on TL13 proving that the richer bundle actually improves round-trip behavior on panel hosts. If TL13 cannot
 clear that gate, the right next step is another replan, not external validation by inertia.
+
+### 2026-03-31: TL14 implementation hardened the external-validation stop conditions
+
+TL14 is now implemented as a strict gatekeeper instead of a permissive rerun of TL09. The code now reads the saved TL13
+bundle contract, writes the exact validation cohort before any scoring, and records one of three explicit outcomes:
+`deployable bundle validated`, `deployable bundle failed`, or `validation inconclusive because the cohort contract could
+not be satisfied`.
+
+This matters immediately because the saved TL13 round-trip artifacts recorded on `2026-03-30` still cover only
+`EDL933`. That means the current repo state does **not** support a broad external-validation claim for the richer
+deployable bundle. Until TL13's saved reference-backed panel cohort is rebuilt to at least 3 hosts, the honest project-
+level reading is: **validation inconclusive because the cohort contract could not be satisfied**.

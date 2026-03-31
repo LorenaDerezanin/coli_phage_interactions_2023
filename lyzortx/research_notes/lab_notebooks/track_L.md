@@ -1099,3 +1099,51 @@ That audit makes the current state explicit:
 4. Because the saved reference-backed round-trip cohort collapsed to `EDL933` only, TL13 establishes bundle-relative
    runtime completeness and a real changed inference surface, but not broad evidence that the richer bundle generalizes
    across multiple external panel hosts yet.
+
+### 2026-03-31: TL14 Run external validation only if TL13 clears the round-trip gate
+
+#### Executive summary
+
+TL14 no longer treats external validation as the automatic next step after TL13. The validation code now reads the saved
+TL13 bundle contract, writes the exact host/phage validation cohort before scoring, and exits with one of three explicit
+conclusions:
+
+- `deployable bundle validated`
+- `deployable bundle failed`
+- `validation inconclusive because the cohort contract could not be satisfied`
+
+The important current-state implication is straightforward: the saved TL13 round-trip artifacts recorded on
+`2026-03-30` still contain only `EDL933`, so the present bundle state should be treated as **inconclusive**, not as
+support for broad external generalization, until the saved reference-backed panel cohort is rebuilt to at least 3 hosts.
+
+#### What changed
+
+- Hardened `validate_vhdb_generalized_inference.py` into TL14 behavior instead of the old TL09 "always score if you
+  can" flow.
+- Changed the default bundle input to the saved TL13 deployable bundle, not the older TL08 genome-only bundle.
+- Added an explicit TL13 gate check that requires both:
+  - at least one deployable feature block beyond defense + phage k-mers; and
+  - at least one recorded round-trip metric improvement in the saved TL13 bundle metadata.
+- Added saved-contract checks for the TL13 round-trip reference predictions and saved round-trip host cohort.
+- Added a pre-scoring validation cohort materialization step that writes:
+  - `validation_host_cohort.csv`
+  - `validation_positive_pairs.csv`
+  - host IDs, assembly accessions, positive-pair counts, unique-phage counts, candidate-set sizes, and the
+    round-trip-qualified host flag
+- Added an explicit decision artifact (`validation_decision.csv`) plus a TL14 manifest that records the final
+  conclusion string.
+- Added regression tests covering:
+  - TL13 gate assessment
+  - separation of `positive_pair_count`, `unique_phage_count`, `host_count`, and `candidate_set_size`
+  - distinction between failed and inconclusive outcomes
+
+#### Interpretation
+
+1. TL14 now encodes the review lesson that a one-host saved round-trip cohort is not enough to justify broad
+   positive-only validation.
+2. The current saved TL13 artifact state remains a **contract problem first**, not a "run the validation harder"
+   problem. Until at least 3 saved round-trip hosts qualify, the honest output is `validation inconclusive because the
+   cohort contract could not be satisfied`.
+3. If TL13 later clears the richer-feature and multi-host round-trip contract cleanly, TL14 will still refuse to call
+   the bundle validated unless known positives beat matched random candidates, beat the panel base rate, and rank above
+   the candidate-set midpoint at the host-median level.
