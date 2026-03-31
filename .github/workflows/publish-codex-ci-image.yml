@@ -14,6 +14,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: publish-codex-ci-image-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   CI_IMAGE_BASE: ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci
 
