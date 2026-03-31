@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TL09: Validate generalized inference on Virus-Host DB positive pairs."""
+"""TL14: Run gated external validation for generalized inference on Virus-Host DB."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from pathlib import Path
 from random import Random
 from typing import Mapping, Sequence
 
+import joblib
 import pandas as pd
 
 from lyzortx.log_config import setup_logging
@@ -32,7 +33,7 @@ from lyzortx.pipeline.track_l.steps import generalized_inference
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/vhdb_generalized_inference_validation")
+DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/tl14_external_validation")
 DEFAULT_RAW_DIRNAME = "raw_downloads"
 DEFAULT_HOST_ASSEMBLY_DIRNAME = "host_assemblies"
 DEFAULT_PHAGE_DIRNAME = "vhdb_phage_fastas"
@@ -40,18 +41,20 @@ DEFAULT_PANEL_HOSTS_PATH = Path("data/metadata/370+host_cross_validation_groups_
 DEFAULT_PANEL_PHAGE_DIR = Path("data/genomics/phages/FNA")
 DEFAULT_PANEL_PHAGE_METADATA_PATH = Path("data/genomics/phages/guelin_collection.csv")
 DEFAULT_ST02_PAIR_TABLE_PATH = Path("lyzortx/generated_outputs/steel_thread_v0/intermediate/st02_pair_table.csv")
-DEFAULT_BUNDLE_DIR = Path("lyzortx/generated_outputs/track_l/generalized_inference_bundle")
+DEFAULT_BUNDLE_DIR = Path("lyzortx/generated_outputs/track_l/generalized_inference_bundle_tl13")
 DEFAULT_BUNDLE_PATH = DEFAULT_BUNDLE_DIR / build_generalized_inference_bundle.BUNDLE_FILENAME
 DEFAULT_VHDB_URL = "https://www.genome.jp/ftp/db/virushostdb/virushostdb.tsv"
 DEFAULT_ASSEMBLY_SUMMARY_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt"
 ENTREZ_FASTA_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 DEFAULT_NOVEL_HOST_COUNT = 10
 DEFAULT_MIN_POSITIVE_PHAGES_PER_HOST = 5
+DEFAULT_MIN_ROUNDTRIP_HOSTS = 3
 DEFAULT_RANDOM_SEED = 42
 DEFAULT_BASE_RATE = 0.30
 ENTREZ_MIN_REQUEST_INTERVAL_SECONDS = 0.4
 ENTREZ_MAX_RETRIES = 5
 ROUNDTRIP_PANEL_HOSTS = ("LF82", "EDL933", "55989", "536", "BL21")
+BASELINE_DEPLOYABLE_BLOCK_IDS = frozenset({"track_c_defense", "track_d_phage_genomic_kmers"})
 ASSEMBLY_LEVEL_PRIORITY = {
     "Complete Genome": 0,
     "Chromosome": 1,
@@ -59,6 +62,13 @@ ASSEMBLY_LEVEL_PRIORITY = {
     "Contig": 3,
 }
 SUMMARY_FIELDNAMES = ("metric", "value")
+VALIDATION_HOST_COHORT_FILENAME = "validation_host_cohort.csv"
+VALIDATION_POSITIVE_PAIRS_FILENAME = "validation_positive_pairs.csv"
+VALIDATION_DECISION_FILENAME = "validation_decision.csv"
+VALIDATION_MANIFEST_FILENAME = "tl14_validation_manifest.json"
+CONCLUSION_VALIDATED = "deployable bundle validated"
+CONCLUSION_FAILED = "deployable bundle failed"
+CONCLUSION_INCONCLUSIVE = "validation inconclusive because the cohort contract could not be satisfied"
 _LAST_ENTREZ_REQUEST_TIME = 0.0
 
 
@@ -97,6 +107,26 @@ class HostCandidate:
     assembly_ftp_path: str
 
 
+@dataclass(frozen=True)
+class Tl13GateAssessment:
+    bundle_task_id: str
+    bundle_format_version: str
+    extra_deployable_block_ids: tuple[str, ...]
+    improved_roundtrip_metrics: tuple[str, ...]
+    passed: bool
+    failure_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SavedRoundtripContract:
+    gate_assessment: Tl13GateAssessment
+    roundtrip_reference_path: Path | None
+    roundtrip_reference_hosts: set[str]
+    roundtrip_cohort_path: Path | None
+    roundtrip_cohort_hosts: set[str]
+    contract_issues: list[str]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -109,6 +139,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bundle-path", type=Path, default=DEFAULT_BUNDLE_PATH)
     parser.add_argument("--novel-host-count", type=int, default=DEFAULT_NOVEL_HOST_COUNT)
     parser.add_argument("--min-positive-phages-per-host", type=int, default=DEFAULT_MIN_POSITIVE_PHAGES_PER_HOST)
+    parser.add_argument("--min-roundtrip-hosts", type=int, default=DEFAULT_MIN_ROUNDTRIP_HOSTS)
     parser.add_argument("--random-seed", type=int, default=DEFAULT_RANDOM_SEED)
     return parser.parse_args(argv)
 
@@ -148,7 +179,7 @@ def _maybe_rate_limit_entrez(url: str) -> None:
 
 
 def _download_with_retry(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "Codex TL09 generalized inference validation/1.0"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Codex TL14 generalized inference validation/1.0"})
     last_error: Exception | None = None
     for attempt in range(ENTREZ_MAX_RETRIES):
         try:
@@ -417,28 +448,12 @@ def collect_phages_for_hosts(pairs: Sequence[PositivePair], hosts: Sequence[Host
     return {taxid: sorted(accessions) for taxid, accessions in phages_by_taxid.items()}
 
 
-def ensure_bundle(bundle_path: Path) -> Path:
+def require_bundle(bundle_path: Path) -> Path:
     if bundle_path.exists():
         return bundle_path
-    LOGGER.info("TL08 bundle missing at %s; rebuilding prerequisites and bundle", bundle_path)
-    ensure_directory(bundle_path.parent)
-    args = build_generalized_inference_bundle.parse_args(["--output-dir", str(bundle_path.parent)])
-    build_generalized_inference_bundle.ensure_prerequisite_outputs(args)
-    lightgbm_params = build_generalized_inference_bundle.load_locked_lightgbm_params(args.tg01_summary_path)
-    build_generalized_inference_bundle.build_model_bundle(
-        st02_pair_table_path=args.st02_pair_table_path,
-        st03_split_assignments_path=args.st03_split_assignments_path,
-        defense_subtypes_path=args.defense_subtypes_path,
-        phage_kmer_feature_path=args.phage_kmer_feature_path,
-        phage_kmer_svd_path=args.phage_kmer_svd_path,
-        output_dir=args.output_dir,
-        lightgbm_params=lightgbm_params,
-        random_state=args.random_state,
-        calibration_fold=args.calibration_fold,
+    raise FileNotFoundError(
+        f"Expected TL13 bundle at {bundle_path}. Run the TL13 deployable bundle step before TL14 validation."
     )
-    if not bundle_path.exists():
-        raise FileNotFoundError(f"Expected TL08 bundle at {bundle_path} after rebuild, but it was not created.")
-    return bundle_path
 
 
 def compute_panel_base_rate(st02_pair_table_path: Path) -> float:
@@ -599,11 +614,213 @@ def filter_roundtrip_hosts_for_reference(
     return filtered
 
 
+def assess_tl13_gate(bundle: Mapping[str, object]) -> Tl13GateAssessment:
+    deployable_feature_blocks = bundle.get("deployable_feature_blocks", [])
+    extra_block_ids = tuple(
+        sorted(
+            str(block.get("block_id"))
+            for block in deployable_feature_blocks
+            if str(block.get("block_id")) not in BASELINE_DEPLOYABLE_BLOCK_IDS
+        )
+    )
+    roundtrip_gate = bundle.get("roundtrip_gate", {})
+    improved_metrics = tuple(str(metric) for metric in roundtrip_gate.get("improved_metrics", []))
+    failure_reasons: list[str] = []
+    if str(bundle.get("task_id", "")) != "TL13":
+        failure_reasons.append("bundle_task_id_was_not_tl13")
+    if not extra_block_ids:
+        failure_reasons.append("bundle_did_not_add_any_deployable_feature_block_beyond_defense_and_kmers")
+    if not improved_metrics:
+        failure_reasons.append("bundle_did_not_record_any_improved_roundtrip_metric")
+    return Tl13GateAssessment(
+        bundle_task_id=str(bundle.get("task_id", "")),
+        bundle_format_version=str(bundle.get("format_version", "")),
+        extra_deployable_block_ids=extra_block_ids,
+        improved_roundtrip_metrics=improved_metrics,
+        passed=not failure_reasons,
+        failure_reasons=tuple(failure_reasons),
+    )
+
+
+def load_saved_roundtrip_contract(
+    bundle_path: Path,
+) -> SavedRoundtripContract:
+    bundle = joblib.load(bundle_path)
+    gate_assessment = assess_tl13_gate(bundle)
+    artifacts = bundle.get("artifacts", {})
+    bundle_dir = bundle_path.parent
+    contract_issues: list[str] = []
+
+    roundtrip_reference_path: Path | None = None
+    roundtrip_reference_hosts: set[str] = set()
+    roundtrip_reference_filename = artifacts.get("roundtrip_reference_predictions_filename")
+    if roundtrip_reference_filename:
+        candidate_path = bundle_dir / str(roundtrip_reference_filename)
+        if candidate_path.exists():
+            rows = read_csv_rows(candidate_path)
+            if rows:
+                roundtrip_reference_path = candidate_path
+                roundtrip_reference_hosts = {
+                    str(row["bacteria"]).strip() for row in rows if str(row["bacteria"]).strip()
+                }
+            else:
+                contract_issues.append("saved_roundtrip_reference_predictions_were_empty")
+        else:
+            contract_issues.append("saved_roundtrip_reference_predictions_file_was_missing")
+    else:
+        contract_issues.append("bundle_missing_saved_roundtrip_reference_predictions_filename")
+
+    roundtrip_cohort_path: Path | None = None
+    roundtrip_cohort_hosts: set[str] = set()
+    roundtrip_cohort_filename = artifacts.get("roundtrip_host_cohort_filename")
+    if roundtrip_cohort_filename:
+        candidate_path = bundle_dir / str(roundtrip_cohort_filename)
+        if candidate_path.exists():
+            rows = read_csv_rows(candidate_path)
+            if rows:
+                roundtrip_cohort_path = candidate_path
+                roundtrip_cohort_hosts = {
+                    str(row["panel_match"]).strip() for row in rows if str(row.get("panel_match", "")).strip()
+                }
+            else:
+                contract_issues.append("saved_roundtrip_host_cohort_was_empty")
+        else:
+            contract_issues.append("saved_roundtrip_host_cohort_file_was_missing")
+    else:
+        contract_issues.append("bundle_missing_saved_roundtrip_host_cohort_filename")
+
+    if roundtrip_reference_hosts and roundtrip_cohort_hosts and roundtrip_reference_hosts != roundtrip_cohort_hosts:
+        contract_issues.append("saved_roundtrip_reference_hosts_did_not_match_saved_roundtrip_cohort_hosts")
+    return SavedRoundtripContract(
+        gate_assessment=gate_assessment,
+        roundtrip_reference_path=roundtrip_reference_path,
+        roundtrip_reference_hosts=roundtrip_reference_hosts,
+        roundtrip_cohort_path=roundtrip_cohort_path,
+        roundtrip_cohort_hosts=roundtrip_cohort_hosts,
+        contract_issues=contract_issues,
+    )
+
+
+def build_validation_cohort_rows(
+    *,
+    hosts: Sequence[HostCandidate],
+    positive_pairs: Sequence[PositivePair],
+    known_phages_by_taxid: Mapping[str, Sequence[str]],
+    panel_phage_count: int,
+    roundtrip_panel_matches: set[str],
+) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, int]]:
+    host_rows: list[dict[str, object]] = []
+    host_lookup = {host.host_tax_id: host for host in hosts}
+    selected_taxids = set(host_lookup)
+    unique_positive_phages: set[tuple[str, str]] = set()
+    positive_pair_rows: list[dict[str, object]] = []
+
+    for host in sorted(hosts, key=lambda value: (value.panel_match or "~", value.host_name)):
+        candidate_set_size = panel_phage_count + len(known_phages_by_taxid[host.host_tax_id])
+        host_rows.append(
+            {
+                **asdict(host),
+                "candidate_set_size": candidate_set_size,
+                "qualifies_for_panel_roundtrip": int(host.panel_match in roundtrip_panel_matches),
+            }
+        )
+
+    for pair in positive_pairs:
+        if pair.host_tax_id not in selected_taxids:
+            continue
+        host = host_lookup[pair.host_tax_id]
+        candidate_set_size = panel_phage_count + len(known_phages_by_taxid[host.host_tax_id])
+        unique_positive_phages.add((pair.host_tax_id, pair.phage_accession))
+        positive_pair_rows.append(
+            {
+                "host_tax_id": host.host_tax_id,
+                "host_name": host.host_name,
+                "panel_match": host.panel_match,
+                "assembly_accession": host.assembly_accession,
+                "positive_pair_count": host.positive_pair_count,
+                "unique_phage_count": host.unique_phage_count,
+                "candidate_set_size": candidate_set_size,
+                "qualifies_for_panel_roundtrip": int(host.panel_match in roundtrip_panel_matches),
+                "phage_accession": pair.phage_accession,
+                "source_virus_name": pair.source_virus_name,
+            }
+        )
+
+    summary = {
+        "host_count": len(host_rows),
+        "positive_pair_count": len(positive_pair_rows),
+        "unique_phage_count": len(unique_positive_phages),
+        "roundtrip_host_count": sum(int(row["qualifies_for_panel_roundtrip"]) for row in host_rows),
+    }
+    return host_rows, positive_pair_rows, summary
+
+
+def determine_validation_conclusion(
+    *,
+    gate_passed: bool,
+    contract_issues: Sequence[str],
+    qualified_roundtrip_host_count: int,
+    min_roundtrip_hosts: int,
+    overall_metrics: Mapping[str, float] | None = None,
+) -> tuple[str, list[dict[str, object]]]:
+    decision_rows: list[dict[str, object]] = [
+        {
+            "check": "tl13_roundtrip_gate_passed",
+            "passed": int(gate_passed),
+            "actual": int(gate_passed),
+            "expected": 1,
+        },
+        {
+            "check": "saved_roundtrip_contract_issue_count",
+            "passed": int(len(contract_issues) == 0),
+            "actual": len(contract_issues),
+            "expected": 0,
+        },
+        {
+            "check": "qualified_roundtrip_host_count",
+            "passed": int(qualified_roundtrip_host_count >= min_roundtrip_hosts),
+            "actual": qualified_roundtrip_host_count,
+            "expected": min_roundtrip_hosts,
+        },
+    ]
+    if not gate_passed:
+        return CONCLUSION_FAILED, decision_rows
+    if contract_issues or qualified_roundtrip_host_count < min_roundtrip_hosts:
+        return CONCLUSION_INCONCLUSIVE, decision_rows
+    if overall_metrics is None:
+        raise ValueError("overall_metrics are required once TL14 passes the gate and cohort contract.")
+
+    threshold_rows = [
+        {
+            "check": "positive_median_p_lysis_above_random_median",
+            "passed": int(overall_metrics["positive_median_p_lysis"] > overall_metrics["random_median_p_lysis"]),
+            "actual": overall_metrics["positive_median_p_lysis"],
+            "expected": overall_metrics["random_median_p_lysis"],
+        },
+        {
+            "check": "positive_median_p_lysis_above_panel_base_rate",
+            "passed": int(overall_metrics["positive_median_p_lysis"] > overall_metrics["base_rate"]),
+            "actual": overall_metrics["positive_median_p_lysis"],
+            "expected": overall_metrics["base_rate"],
+        },
+        {
+            "check": "host_median_positive_rank_percentile_above_midpoint",
+            "passed": int(overall_metrics["host_median_positive_rank_percentile"] > 0.5),
+            "actual": overall_metrics["host_median_positive_rank_percentile"],
+            "expected": 0.5,
+        },
+    ]
+    decision_rows.extend(threshold_rows)
+    if all(row["passed"] for row in threshold_rows):
+        return CONCLUSION_VALIDATED, decision_rows
+    return CONCLUSION_FAILED, decision_rows
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     setup_logging()
     args = parse_args(argv)
     ensure_directory(args.output_dir)
-    LOGGER.info("Starting TL09 Virus-Host DB generalized inference validation")
+    LOGGER.info("Starting TL14 Virus-Host DB generalized inference validation")
 
     raw_dir = args.output_dir / DEFAULT_RAW_DIRNAME
     host_dir = args.output_dir / DEFAULT_HOST_ASSEMBLY_DIRNAME
@@ -642,27 +859,121 @@ def main(argv: Sequence[str] | None = None) -> int:
         novel_host_count=args.novel_host_count,
         min_positive_phages_per_host=args.min_positive_phages_per_host,
     )
-    bundle_path = ensure_bundle(args.bundle_path)
-    runtime = generalized_inference.load_runtime(bundle_path)
-    panel_predictions_path = runtime.bundle_path.parent / str(runtime.bundle["artifacts"]["panel_predictions_filename"])
-    roundtrip_hosts = filter_roundtrip_hosts_for_reference(roundtrip_hosts, panel_predictions_path)
+    bundle_path = require_bundle(args.bundle_path)
+    saved_roundtrip_contract = load_saved_roundtrip_contract(bundle_path)
+    saved_roundtrip_panel_matches = (
+        saved_roundtrip_contract.roundtrip_reference_hosts & saved_roundtrip_contract.roundtrip_cohort_hosts
+    )
+    roundtrip_hosts = [
+        host for host in roundtrip_hosts if host.panel_match and host.panel_match in saved_roundtrip_panel_matches
+    ]
     selected_hosts = [*novel_hosts, *roundtrip_hosts]
+    if not selected_hosts:
+        raise ValueError(
+            "Validation cohort selection produced zero hosts after applying the saved TL13 round-trip contract."
+        )
     host_metadata = {host.host_tax_id: host for host in selected_hosts}
     phages_by_taxid = collect_phages_for_hosts(positive_pairs, selected_hosts)
+    panel_phages = read_panel_phages(args.panel_phage_metadata_path, expected_panel_count=96)
+    validation_host_rows, validation_pair_rows, validation_cohort_summary = build_validation_cohort_rows(
+        hosts=selected_hosts,
+        positive_pairs=positive_pairs,
+        known_phages_by_taxid=phages_by_taxid,
+        panel_phage_count=len(panel_phages),
+        roundtrip_panel_matches={host.panel_match for host in roundtrip_hosts if host.panel_match},
+    )
+    if not validation_pair_rows:
+        raise ValueError("Validation cohort selection produced zero positive pairs for the selected hosts.")
+    write_csv(
+        args.output_dir / VALIDATION_HOST_COHORT_FILENAME,
+        list(validation_host_rows[0].keys()),
+        validation_host_rows,
+    )
+    write_csv(
+        args.output_dir / VALIDATION_POSITIVE_PAIRS_FILENAME,
+        list(validation_pair_rows[0].keys()),
+        validation_pair_rows,
+    )
 
     panel_base_rate = (
         compute_panel_base_rate(args.st02_pair_table_path) if args.st02_pair_table_path.exists() else DEFAULT_BASE_RATE
     )
 
+    should_score = (
+        saved_roundtrip_contract.gate_assessment.passed
+        and not saved_roundtrip_contract.contract_issues
+        and len(roundtrip_hosts) >= args.min_roundtrip_hosts
+    )
+    overall_metrics: dict[str, float] = {}
+    if should_score:
+        LOGGER.info("TL14 gate cleared; proceeding to score %d selected hosts", len(selected_hosts))
+    else:
+        conclusion, decision_rows = determine_validation_conclusion(
+            gate_passed=saved_roundtrip_contract.gate_assessment.passed,
+            contract_issues=saved_roundtrip_contract.contract_issues,
+            qualified_roundtrip_host_count=len(roundtrip_hosts),
+            min_roundtrip_hosts=args.min_roundtrip_hosts,
+        )
+        LOGGER.warning("TL14 will not run broad scoring because conclusion is already %s", conclusion)
+        write_csv(
+            args.output_dir / VALIDATION_DECISION_FILENAME,
+            ["check", "passed", "actual", "expected"],
+            decision_rows,
+        )
+        manifest = {
+            "task_id": "TL14",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "inputs": {
+                "vhdb_url": args.vhdb_url,
+                "assembly_summary_url": args.assembly_summary_url,
+                "panel_hosts_path": str(args.panel_hosts_path),
+                "panel_phage_dir": str(args.panel_phage_dir),
+                "bundle_path": str(bundle_path),
+                "st02_pair_table_path": str(args.st02_pair_table_path),
+                "saved_roundtrip_reference_path": (
+                    str(saved_roundtrip_contract.roundtrip_reference_path)
+                    if saved_roundtrip_contract.roundtrip_reference_path
+                    else ""
+                ),
+                "saved_roundtrip_host_cohort_path": (
+                    str(saved_roundtrip_contract.roundtrip_cohort_path)
+                    if saved_roundtrip_contract.roundtrip_cohort_path
+                    else ""
+                ),
+            },
+            "cohort_summary": cohort_summary,
+            "validation_cohort_summary": validation_cohort_summary,
+            "selection": {
+                "novel_host_count_requested": args.novel_host_count,
+                "novel_host_count_selected": len(novel_hosts),
+                "roundtrip_host_count_selected": len(roundtrip_hosts),
+                "min_positive_phages_per_host": args.min_positive_phages_per_host,
+                "min_roundtrip_hosts_required": args.min_roundtrip_hosts,
+                "panel_roundtrip_hosts_requested": list(ROUNDTRIP_PANEL_HOSTS),
+                "saved_roundtrip_reference_hosts": sorted(saved_roundtrip_contract.roundtrip_reference_hosts),
+                "saved_roundtrip_cohort_hosts": sorted(saved_roundtrip_contract.roundtrip_cohort_hosts),
+            },
+            "gate_assessment": asdict(saved_roundtrip_contract.gate_assessment),
+            "contract_issues": saved_roundtrip_contract.contract_issues,
+            "decision_rows": decision_rows,
+            "metrics": overall_metrics,
+            "conclusion": conclusion,
+            "selected_novel_hosts": [asdict(host) for host in novel_hosts],
+            "selected_roundtrip_hosts": [asdict(host) for host in roundtrip_hosts],
+        }
+        write_json(args.output_dir / VALIDATION_MANIFEST_FILENAME, manifest)
+        LOGGER.info("Completed TL14 Virus-Host DB generalized inference validation with conclusion: %s", conclusion)
+        return 0
+
     host_fasta_paths = {host.host_tax_id: download_host_assembly(host, host_dir) for host in selected_hosts}
 
-    panel_phages = read_panel_phages(args.panel_phage_metadata_path, expected_panel_count=96)
     panel_phage_paths = [args.panel_phage_dir / f"{phage}.fna" for phage in panel_phages]
     missing_panel_fastas = [str(path) for path in panel_phage_paths if not path.exists()]
     if missing_panel_fastas:
         raise FileNotFoundError(
             f"Missing panel phage FASTAs for {len(missing_panel_fastas)} phages; first missing: {missing_panel_fastas[0]}"
         )
+    runtime = generalized_inference.load_runtime(bundle_path)
     panel_phage_feature_rows = generalized_inference.project_phage_features(panel_phage_paths, runtime=runtime)
     unique_external_accessions = sorted(
         {accession for accessions in phages_by_taxid.values() for accession in accessions}
@@ -681,7 +992,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     prediction_frames: list[pd.DataFrame] = []
     roundtrip_panel_prediction_frames: list[pd.DataFrame] = []
     for host in selected_hosts:
-        LOGGER.info("Starting TL09 inference for %s", host.host_name)
+        LOGGER.info("Starting TL14 inference for %s", host.host_name)
         host_row = generalized_inference.project_host_features(
             host_fasta_paths[host.host_tax_id],
             bacteria_id=host.panel_match or host.host_name,
@@ -706,7 +1017,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             roundtrip_predictions["panel_match"] = host.panel_match
             roundtrip_panel_prediction_frames.append(roundtrip_predictions)
         LOGGER.info(
-            "Completed TL09 inference for %s (%d candidates, %d known positives)",
+            "Completed TL14 inference for %s (%d candidates, %d known positives)",
             host.host_name,
             len(predictions),
             len(phages_by_taxid[host.host_tax_id]),
@@ -719,10 +1030,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         base_rate=panel_base_rate,
         random_seed=args.random_seed,
     )
+    conclusion, decision_rows = determine_validation_conclusion(
+        gate_passed=saved_roundtrip_contract.gate_assessment.passed,
+        contract_issues=saved_roundtrip_contract.contract_issues,
+        qualified_roundtrip_host_count=len(roundtrip_hosts),
+        min_roundtrip_hosts=args.min_roundtrip_hosts,
+        overall_metrics=overall_metrics,
+    )
     roundtrip_df = build_roundtrip_comparison(
         prediction_frames=roundtrip_panel_prediction_frames,
         host_metadata=host_metadata,
-        panel_predictions_path=panel_predictions_path,
+        panel_predictions_path=saved_roundtrip_contract.roundtrip_reference_path,
     )
 
     all_predictions_df = pd.concat(prediction_frames, ignore_index=True)
@@ -749,9 +1067,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         list(SUMMARY_FIELDNAMES),
         [{"metric": key, "value": value} for key, value in overall_metrics.items()],
     )
+    write_csv(
+        args.output_dir / VALIDATION_DECISION_FILENAME,
+        ["check", "passed", "actual", "expected"],
+        decision_rows,
+    )
 
     manifest = {
-        "task_id": "TL09",
+        "task_id": "TL14",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "inputs": {
             "vhdb_url": args.vhdb_url,
@@ -760,21 +1083,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             "panel_phage_dir": str(args.panel_phage_dir),
             "bundle_path": str(bundle_path),
             "st02_pair_table_path": str(args.st02_pair_table_path),
+            "saved_roundtrip_reference_path": str(saved_roundtrip_contract.roundtrip_reference_path),
+            "saved_roundtrip_host_cohort_path": str(saved_roundtrip_contract.roundtrip_cohort_path),
         },
         "cohort_summary": cohort_summary,
+        "validation_cohort_summary": validation_cohort_summary,
         "selection": {
             "novel_host_count_requested": args.novel_host_count,
             "novel_host_count_selected": len(novel_hosts),
             "roundtrip_host_count_selected": len(roundtrip_hosts),
             "min_positive_phages_per_host": args.min_positive_phages_per_host,
+            "min_roundtrip_hosts_required": args.min_roundtrip_hosts,
             "panel_roundtrip_hosts_requested": list(ROUNDTRIP_PANEL_HOSTS),
+            "saved_roundtrip_reference_hosts": sorted(saved_roundtrip_contract.roundtrip_reference_hosts),
+            "saved_roundtrip_cohort_hosts": sorted(saved_roundtrip_contract.roundtrip_cohort_hosts),
         },
+        "gate_assessment": asdict(saved_roundtrip_contract.gate_assessment),
+        "contract_issues": saved_roundtrip_contract.contract_issues,
+        "decision_rows": decision_rows,
         "metrics": overall_metrics,
+        "conclusion": conclusion,
         "selected_novel_hosts": [asdict(host) for host in novel_hosts],
         "selected_roundtrip_hosts": [asdict(host) for host in roundtrip_hosts],
     }
-    write_json(args.output_dir / "tl09_validation_manifest.json", manifest)
-    LOGGER.info("Completed TL09 Virus-Host DB generalized inference validation")
+    write_json(args.output_dir / VALIDATION_MANIFEST_FILENAME, manifest)
+    LOGGER.info("Completed TL14 Virus-Host DB generalized inference validation with conclusion: %s", conclusion)
     return 0
 
 
