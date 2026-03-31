@@ -31,14 +31,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Check for existing Claude approval
+      - name: Check for existing Claude review on current head
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APPROVED=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
-            --jq '[.[] | select(.user.login == "claude[bot]" and .state == "APPROVED")] | length')
-          echo "skip=$([[ $APPROVED -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          CURRENT_HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          CURRENT_REVIEW_STATE=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+            --jq '[.[] | select(.user.login == "claude[bot]" and .commit_id == "'"${CURRENT_HEAD_SHA}"'")] | last | .state // ""')
+          echo "skip=$([[ -n "$CURRENT_REVIEW_STATE" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Select model
         if: steps.check.outputs.skip != 'true'
@@ -91,10 +92,13 @@ jobs:
                - Unresolve inadequately resolved threads:
                  gh api graphql -f query='mutation($id:ID!){unresolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
             6. Submit a formal review:
-               - mcp__github__create_pending_pull_request_review to start.
-               - mcp__github__add_comment_to_pending_review for inline comments.
-               - mcp__github__submit_pending_pull_request_review to submit:
-                 "APPROVE" if no substantive issues remain. "COMMENT" if there are suggestions.
+                - mcp__github__create_pending_pull_request_review to start.
+                - mcp__github__add_comment_to_pending_review for inline comments.
+                - mcp__github__submit_pending_pull_request_review to submit:
+                 "APPROVE" only if you would merge the current head as-is right now:
+                 no substantive issues, no merge-blocking nits or follow-up fixes requested from Codex,
+                 and no unresolved review threads.
+                 If you identify anything that should delay merge, use "COMMENT" instead of "APPROVE".
                  NEVER use "REQUEST_CHANGES".
 
       # After Claude reviews, check the outcome and trigger downstream actions.
@@ -113,8 +117,9 @@ jobs:
           GH_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ github.event.pull_request.number }}"
+          CURRENT_HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
-            --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state')
+            --jq '[.[] | select(.user.login == "claude[bot]" and .commit_id == "'"${CURRENT_HEAD_SHA}"'")] | last | .state // ""')
           UNRESOLVED_REVIEW_THREADS=$(python -m lyzortx.orchestration.review_threads \
             "${{ github.repository_owner }}" \
             "${{ github.event.repository.name }}" \
@@ -122,8 +127,16 @@ jobs:
             /dev/null \
             --count-only)
           UNRESOLVED_REVIEW_THREADS=${UNRESOLVED_REVIEW_THREADS:-}
+          if [ -z "$LATEST_REVIEW" ]; then
+            echo "::error::Claude did not submit a review for head ${CURRENT_HEAD_SHA}."
+            exit 1
+          fi
           if ! [[ "$UNRESOLVED_REVIEW_THREADS" =~ ^[0-9]+$ ]]; then
             echo "::error::Failed to fetch unresolved review thread count: '${UNRESOLVED_REVIEW_THREADS}'"
+            exit 1
+          fi
+          if [ "$LATEST_REVIEW" = "APPROVED" ] && [ "$UNRESOLVED_REVIEW_THREADS" -gt 0 ]; then
+            echo "::error::Claude approved head ${CURRENT_HEAD_SHA} with ${UNRESOLVED_REVIEW_THREADS} unresolved review thread(s)."
             exit 1
           fi
 
