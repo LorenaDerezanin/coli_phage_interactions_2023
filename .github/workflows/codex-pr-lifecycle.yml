@@ -71,6 +71,10 @@ jobs:
               exit 1
               ;;
           esac
+          # Under normal triggers (workflow_dispatch from claude-pr-review)
+          # github.ref_name is "main", so the branch-tag path only fires
+          # during manual dispatch against a feature branch — used for testing
+          # in-flight image changes before they land on main.
           if [ "${{ github.ref_name }}" = "main" ]; then
             IMAGE_TAG="${PROFILE}-main"
           else
