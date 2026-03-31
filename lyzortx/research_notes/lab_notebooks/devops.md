@@ -1,12 +1,27 @@
-### 2026-03-31: Codex CI image routing now follows task-level image profiles
+### 2026-03-31: Claude PR review reruns must resume post-review handling on the same SHA
 
 #### Executive summary
 
-The first cut of the prebaked Codex CI image put every environment into one default container image. That worked
-mechanically but over-baked the default path, especially once `serotype_caller` pulled ECTyper's large species-ID
-database during image build. The workflows now route tasks through a small set of named image profiles driven by
-`ci_image_profile` in `lyzortx/orchestration/plan.yml`, mirrored as `ci-image:*` labels on orchestrator issues and
-PRs.
+`.github/workflows/claude-pr-review.yml` briefly regressed into a stuck-rerun state: once Claude had left any review on
+the current head SHA, the workflow skipped the whole job. If the original run failed after posting a `COMMENTED` review
+but before dispatching `claude-pr-lifecycle.yml`, rerunning the workflow on the same commit did nothing and left the PR
+stalled. The workflow now skips only the duplicate-review action step while still running the post-review
+merge-or-dispatch logic.
+
+#### Design decision
+
+Keep the current-head review guard because duplicate formal reviews on rerun are noisy, but scope it narrowly. The
+checkout, `phage_env` bootstrap, helper commands, and downstream review-state handling still run on rerun so the
+workflow can recover from transient failures after review submission.
+
+### 2026-03-31: CI image routing now follows task-level image profiles
+
+#### Executive summary
+
+The first cut of the prebaked CI image put every environment into one default container image. That worked mechanically
+but over-baked the default path, especially once `serotype_caller` pulled ECTyper's large species-ID database during
+image build. The workflows now route tasks through a small set of named image profiles driven by `ci_image_profile` in
+`lyzortx/orchestration/plan.yml`, mirrored as `ci-image:*` labels on orchestrator issues and PRs.
 
 #### Design decision
 
@@ -18,15 +33,15 @@ three image profiles:
 - `full-bio`: `host-typing` plus `phage_annotation_tools`
 
 The orchestrator mirrors that choice into a `ci-image:{profile}` label when it opens the task issue. The implement
-workflow copies the same label onto the PR after Codex creates it. Both Codex workflows now fail loudly if the required
-label is missing or duplicated instead of silently falling back to a default image.
+workflow copies the same label onto the PR after Claude creates it. Both Claude workflows now fail loudly if the
+required label is missing or duplicated instead of silently falling back to a default image.
 
 #### Why this is better
 
 This keeps `phage_env` lightweight and solver-friendly while still allowing specialized tasks to opt into heavier tool
-stacks. It also avoids baking the heaviest bioinformatics and host-typing assets into every single Codex job by
-default. The GHCR publish workflow now builds one image per profile instead of one universal image, and the Codex
-workflows only refresh the envs that exist in the selected profile.
+stacks. It also avoids baking the heaviest bioinformatics and host-typing assets into every single CI job by default.
+The GHCR publish workflow now builds one image per profile instead of one universal image, and the workflows only
+refresh the envs that exist in the selected profile.
 
 ### 2026-03-31: Unit-test workflow now emits slow-test timings and runs pytest in parallel
 

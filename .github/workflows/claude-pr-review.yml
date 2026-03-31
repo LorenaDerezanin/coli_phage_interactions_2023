@@ -53,19 +53,16 @@ jobs:
           fi
 
       - uses: actions/checkout@v6
-        if: steps.check.outputs.skip != 'true'
         with:
           fetch-depth: 1
 
       - name: Set up Miniconda
-        if: steps.check.outputs.skip != 'true'
         uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: "3.12"
           auto-activate-base: false
 
       - name: Bootstrap phage_env
-        if: steps.check.outputs.skip != 'true'
         shell: bash -el {0}
         run: conda env create -f environment.yml -n phage_env
 
@@ -124,7 +121,6 @@ jobs:
       # After Claude reviews, check the outcome and trigger downstream actions.
       # Auto-merge on approval; dispatch Claude lifecycle on commented reviews.
       - name: Generate Czarphage token
-        if: steps.check.outputs.skip != 'true'
         id: czarphage
         uses: actions/create-github-app-token@v2
         with:
@@ -132,7 +128,6 @@ jobs:
           private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
 
       - name: Check review outcome and dispatch
-        if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
@@ -150,6 +145,9 @@ jobs:
           if [ -z "$LATEST_REVIEW" ]; then
             echo "::warning::Claude completed but did not submit a formal review for head ${CURRENT_HEAD_SHA}. Treating as COMMENTED to dispatch lifecycle."
             LATEST_REVIEW="COMMENTED"
+          fi
+          if [ "${{ steps.check.outputs.skip }}" = "true" ]; then
+            echo "Claude already reviewed head ${CURRENT_HEAD_SHA}; skipping duplicate review and resuming post-review handling."
           fi
           if ! [[ "$UNRESOLVED_REVIEW_THREADS" =~ ^[0-9]+$ ]]; then
             echo "::error::Failed to fetch unresolved review thread count: '${UNRESOLVED_REVIEW_THREADS}'"
