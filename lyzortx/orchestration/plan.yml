@@ -532,11 +532,11 @@ tracks:
     name: Mechanistic Features and Generalized Inference
     description: 'Original two-goal track: (1) test annotation-derived mechanistic
       pairwise features as replacements for deleted label-derived pairwise blocks,
-      and (2) build a generalized inference pipeline for arbitrary genomes. TL12
-      dead-ended goal (1) for the current v1 lock: the enrichment-derived pairwise
-      path did not produce an honest lift. The remaining Track L question is whether
-      a materially richer, fully deployable bundle with genome-derivable compatibility
-      signal can improve round-trip behavior enough to justify broader external validation.'
+      and (2) build a generalized inference pipeline for arbitrary genomes. TL12 dead-ended
+      goal (1) for the current v1 lock: the enrichment-derived pairwise path did not
+      produce an honest lift. The remaining Track L question is whether a materially
+      richer, fully deployable bundle with genome-derivable compatibility signal can
+      improve round-trip behavior enough to justify broader external validation.'
     stage: 1
     depends_on:
     - C
@@ -773,16 +773,16 @@ tracks:
     - id: TL13
       title: Audit and rebuild the generalized inference bundle only if deployable
         compatibility signal is available
-      status: pending
+      status: done
       model: gpt-5.4
       acceptance_criteria:
       - 'Start by producing a feature-parity audit table for the panel model: every
         training-time feature block must be labeled as deployable now, deployable
         in this task, or not deployable, with a one-sentence rationale for each'
-      - 'The parity audit must explicitly classify the TL11/TL12 mechanistic pairwise
+      - The parity audit must explicitly classify the TL11/TL12 mechanistic pairwise
         path as dead-ended for the current v1 lock, then state whether any subset
         of that biology is still deployable and worth testing for generalized inference.
-        Do not frame TL13 as another attempt to win the panel lock.'
+        Do not frame TL13 as another attempt to win the panel lock.
       - The task fails if any feature block used by the rebuilt deployable bundle
         is dropped or substituted without being listed explicitly in the parity audit
         and in the bundle metadata

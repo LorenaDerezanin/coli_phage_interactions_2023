@@ -488,7 +488,7 @@ graph LR
     pairwise path as a dead end for the current v1 lock instead of proposing a new configuration
   - Document the decision, including the rejected arms and why they were rejected, in the Track L and project lab
     notebooks
-- [ ] **TL13** Audit and rebuild the generalized inference bundle only if deployable compatibility signal is available.
+- [x] **TL13** Audit and rebuild the generalized inference bundle only if deployable compatibility signal is available.
       Model: `gpt-5.4`.
   - Start by producing a feature-parity audit table for the panel model: every training-time feature block must be
     labeled as deployable now, deployable in this task, or not deployable, with a one-sentence rationale for each
