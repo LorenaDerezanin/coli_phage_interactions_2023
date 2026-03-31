@@ -243,6 +243,36 @@ substance.
 - If the implementation changes the effective analysis population, denominators, or comparison group, require the
   notebook/report text to be updated in the same PR.
 
+### Feature engineering and evaluation integrity
+
+- **Train/test boundary applies to feature construction, not just model fitting.** Any statistic derived from
+  interaction outcomes — enrichment weights, collaborative filtering scores, frequency counts, association strengths —
+  that becomes a feature value must be computed on training data only. This applies even when the statistic is not
+  itself a label. If it was computed from outcomes that include test-set pairs, it is leakage regardless of how indirect
+  the path is. Acceptance criteria for feature-engineering tasks must explicitly state which data partition the
+  computation uses.
+- **Results from flawed pipelines are not evidence.** When a pipeline step is discovered to be flawed (leaked features,
+  wrong holdout boundary, circular statistics), all downstream results that depend on it are invalidated — not just the
+  step itself. Do not cite metrics, SHAP rankings, feature importances, or ablation conclusions from a flawed pipeline
+  to justify decisions in the corrected pipeline. The flawed results may point in the right direction by coincidence,
+  but they carry zero evidential weight. Re-derive conclusions from the clean pipeline or do not make the claim.
+- **Deployability means "derivable from inputs," not "currently wired."** When assessing whether a feature is available
+  for novel inputs at inference time, distinguish "not currently implemented" from "not possible to compute." If the
+  information is extractable from the available inputs with reasonable preprocessing effort, it is deployable — it needs
+  a preprocessing step, not a redesign. Feature-parity audits must separate architectural limitations from
+  implementation gaps.
+- **Small holdouts require uncertainty quantification.** On holdouts smaller than ~100 units (strains, patients,
+  samples), require bootstrap confidence intervals for any claimed metric delta. A point estimate that changes sign
+  across reruns is not a finding — it is noise. Do not select model configurations, lock feature sets, or report
+  improvements based on unquantified point estimates from small holdouts.
+- **Acceptance criteria define goals, not solutions.** When writing criteria, state what the task must achieve and what
+  constraints it must respect — not which specific tools, steps, or code paths to use. When interpreting criteria, treat
+  named tools or steps as suggestions, not as an exhaustive allowlist. If a better approach exists that satisfies the
+  stated goal, pursue it. If the criteria are silent about something important (e.g., which features to include in a
+  deployment bundle), investigate the gap rather than defaulting to whatever is easiest. A task that follows its
+  instructions literally but answers the wrong question has failed in substance even if it passes every stated
+  criterion.
+
 ## Review focus areas
 
 1. **Correctness** — bugs, logic errors, off-by-one, wrong variable usage.
