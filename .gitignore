@@ -10,6 +10,7 @@ dev/predictions/results/predictions/
 .idea/
 .scratch/
 .claude/worktrees/
+.worktrees/
 
 # lyzortx generated artifacts
 lyzortx/generated_outputs/
