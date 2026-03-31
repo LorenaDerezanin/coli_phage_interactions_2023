@@ -18,6 +18,7 @@ from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import sha256_fi
 from lyzortx.pipeline.track_l.steps import build_generalized_inference_bundle as tl08_bundle
 from lyzortx.pipeline.track_l.steps import generalized_inference as tl08_infer
 from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import Tl04ProfileRuntime
+from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import Tl17ProfileRuntime, Tl17SummaryRuntime
 from lyzortx.pipeline.track_l.steps.novel_organism_feature_projection import project_novel_host
 
 LOCKED_LIGHTGBM_PARAMS = {
@@ -291,6 +292,85 @@ def test_project_phage_features_parses_tl04_runtime_payload_once_per_batch(tmp_p
     assert projected_rows == [
         {"phage": "phage_a", "tl04_phage_antidef_profile_001_present": 1},
         {"phage": "phage_b", "tl04_phage_antidef_profile_001_present": 1},
+    ]
+
+
+def test_project_phage_features_parses_tl17_runtime_payload_once_per_batch(tmp_path: Path, monkeypatch) -> None:
+    phage_paths = []
+    annotation_paths = {}
+    for phage_name in ("phage_a", "phage_b"):
+        phage_path = tmp_path / f"{phage_name}.fna"
+        phage_path.write_text(f">{phage_name}\nATGCATGC\n", encoding="utf-8")
+        phage_paths.append(phage_path)
+        annotation_paths[phage_name] = tmp_path / f"{phage_name}.tsv"
+
+    parse_call_count = 0
+    profiles = [
+        Tl17ProfileRuntime(
+            profile_id="profile_001",
+            direct_column="tl17_phage_rbp_profile_001_present",
+            member_features=("RBP_PHROG_11",),
+        )
+    ]
+    summary = Tl17SummaryRuntime(
+        profile_count_column="tl17_phage_rbp_profile_count",
+        gene_count_column="tl17_phage_rbp_gene_count",
+        unique_phrog_count_column="tl17_phage_rbp_unique_phrog_count",
+    )
+
+    def fake_parse_tl17_runtime_payload(
+        payload: dict[str, object],
+    ) -> tuple[list[Tl17ProfileRuntime], Tl17SummaryRuntime]:
+        nonlocal parse_call_count
+        parse_call_count += 1
+        assert payload == {"profiles": ["payload"], "summary_columns": {"profile_count_column": "a"}}
+        return profiles, summary
+
+    monkeypatch.setattr(tl08_infer, "parse_tl17_runtime_payload", fake_parse_tl17_runtime_payload)
+    monkeypatch.setattr(
+        tl08_infer,
+        "project_novel_phage",
+        lambda phage_path, _: {"phage": Path(phage_path).stem},
+    )
+    monkeypatch.setattr(
+        tl08_infer,
+        "extract_rbp_runtime_inputs",
+        lambda _: ({"RBP_PHROG_11"}, 2),
+    )
+
+    runtime = tl08_infer.InferenceRuntime(
+        bundle_path=tmp_path / "bundle.joblib",
+        bundle={},
+        feature_space_payload={},
+        defense_mask_path=tmp_path / "mask.joblib",
+        phage_svd_path=tmp_path / "svd.joblib",
+        panel_defense_subtypes_path=tmp_path / "panel.csv",
+        models_dir=tmp_path / "models",
+        tl17_runtime_payload={"profiles": ["payload"], "summary_columns": {"profile_count_column": "a"}},
+    )
+
+    projected_rows = tl08_infer.project_phage_features(
+        phage_paths,
+        runtime=runtime,
+        annotation_tsv_paths=annotation_paths,
+    )
+
+    assert parse_call_count == 1
+    assert projected_rows == [
+        {
+            "phage": "phage_a",
+            "tl17_phage_rbp_profile_001_present": 1,
+            "tl17_phage_rbp_profile_count": 1,
+            "tl17_phage_rbp_gene_count": 2,
+            "tl17_phage_rbp_unique_phrog_count": 1,
+        },
+        {
+            "phage": "phage_b",
+            "tl17_phage_rbp_profile_001_present": 1,
+            "tl17_phage_rbp_profile_count": 1,
+            "tl17_phage_rbp_gene_count": 2,
+            "tl17_phage_rbp_unique_phrog_count": 1,
+        },
     ]
 
 

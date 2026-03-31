@@ -29,6 +29,11 @@ def _stub_all_steps(monkeypatch, calls):
         lambda argv: calls.append("deployable-generalized-inference-bundle"),
     )
     monkeypatch.setattr(
+        run_track_l.build_tl17_phage_preprocessor,
+        "main",
+        lambda argv: calls.append("tl17-phage-preprocessor"),
+    )
+    monkeypatch.setattr(
         run_track_l.validate_vhdb_generalized_inference,
         "main",
         lambda argv: calls.append("validate-vhdb-generalized-inference"),
@@ -56,6 +61,7 @@ def test_inference_group_dispatch(monkeypatch) -> None:
     assert calls == [
         "generalized-inference-bundle",
         "deployable-generalized-inference-bundle",
+        "tl17-phage-preprocessor",
         "validate-vhdb-generalized-inference",
     ]
 
@@ -75,5 +81,6 @@ def test_all_runs_every_step_in_order(monkeypatch) -> None:
         "retrain-mechanistic-v1",
         "generalized-inference-bundle",
         "deployable-generalized-inference-bundle",
+        "tl17-phage-preprocessor",
         "validate-vhdb-generalized-inference",
     ]

@@ -20,6 +20,15 @@ from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import (
     extract_antidef_feature_names,
     parse_tl04_runtime_payload,
 )
+from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import (
+    TL17_DIRECT_BLOCK_ID,
+    Tl17ProfileRuntime,
+    Tl17SummaryRuntime,
+    build_direct_feature_values as build_tl17_direct_feature_values,
+    build_profile_presence as build_tl17_profile_presence,
+    extract_rbp_runtime_inputs,
+    parse_tl17_runtime_payload,
+)
 from lyzortx.pipeline.track_l.steps import run_novel_host_defense_finder
 from lyzortx.pipeline.track_l.steps.novel_organism_feature_projection import project_novel_phage
 from lyzortx.pipeline.track_l.steps.run_pharokka import run_pharokka_on_file, verify_annotations
@@ -37,6 +46,7 @@ class InferenceRuntime:
     panel_defense_subtypes_path: Path
     models_dir: Path
     tl04_runtime_payload: dict[str, Any] | None = None
+    tl17_runtime_payload: dict[str, Any] | None = None
     panel_annotation_cache_dir: Path | None = None
 
 
@@ -98,9 +108,11 @@ def load_runtime(model_path: str | Path) -> InferenceRuntime:
     )
     models_dir = bundle_path.parent / str(bundle["runtime"]["defense_finder_models_dirname"])
     tl04_runtime_payload = dict(bundle.get("deployable_runtime", {}).get(TL04_DIRECT_BLOCK_ID, {}))
+    tl17_runtime_payload = dict(bundle.get("deployable_runtime", {}).get(TL17_DIRECT_BLOCK_ID, {}))
     panel_annotation_cache_dir = None
-    if tl04_runtime_payload:
-        cache_dirname = str(tl04_runtime_payload.get("panel_annotation_cache_dirname", "")).strip()
+    if tl04_runtime_payload or tl17_runtime_payload:
+        cache_source = tl17_runtime_payload or tl04_runtime_payload
+        cache_dirname = str(cache_source.get("panel_annotation_cache_dirname", "")).strip()
         if cache_dirname:
             panel_annotation_cache_dir = bundle_path.parent / cache_dirname
     return InferenceRuntime(
@@ -112,6 +124,7 @@ def load_runtime(model_path: str | Path) -> InferenceRuntime:
         panel_defense_subtypes_path=panel_defense_subtypes_path,
         models_dir=models_dir,
         tl04_runtime_payload=tl04_runtime_payload,
+        tl17_runtime_payload=tl17_runtime_payload,
         panel_annotation_cache_dir=panel_annotation_cache_dir,
     )
 
@@ -172,6 +185,26 @@ def _augment_phage_row_with_tl04_features(
     phage_row.update(build_direct_feature_values(profile_presence, tl04_profiles))
 
 
+def _augment_phage_row_with_tl17_features(
+    phage_row: dict[str, object],
+    *,
+    annotation_tsv_path: Path,
+    tl17_profiles: Sequence[Tl17ProfileRuntime],
+    tl17_summary: Tl17SummaryRuntime,
+) -> None:
+    present_features, rbp_gene_count = extract_rbp_runtime_inputs(annotation_tsv_path)
+    profile_presence = build_tl17_profile_presence(present_features, tl17_profiles)
+    phage_row.update(
+        build_tl17_direct_feature_values(
+            present_features=present_features,
+            rbp_gene_count=rbp_gene_count,
+            profile_presence=profile_presence,
+            profiles=tl17_profiles,
+            summary=tl17_summary,
+        )
+    )
+
+
 def project_host_features(
     host_genome_path: str | Path,
     model_path: str | Path | None = None,
@@ -228,22 +261,36 @@ def project_phage_features(
         tl04_profiles, _ = parse_tl04_runtime_payload(runtime.tl04_runtime_payload)
     else:
         tl04_profiles = []
+    if runtime.tl17_runtime_payload:
+        tl17_profiles, tl17_summary = parse_tl17_runtime_payload(runtime.tl17_runtime_payload)
+    else:
+        tl17_profiles, tl17_summary = [], None
     projected_rows: list[dict[str, object]] = []
     for phage_path in phage_paths:
         if not phage_path.exists():
             raise FileNotFoundError(f"Phage genome FASTA not found: {phage_path}")
         projected_row = project_novel_phage(phage_path, runtime.phage_svd_path)
-        if runtime.tl04_runtime_payload:
+        if runtime.tl04_runtime_payload or runtime.tl17_runtime_payload:
             annotation_tsv_path = _resolve_annotation_tsv_path(
                 phage_path,
                 runtime=runtime,
                 annotation_tsv_paths=resolved_annotation_paths,
                 pharokka_database_dir=resolved_pharokka_database_dir,
             )
+        else:
+            annotation_tsv_path = None
+        if runtime.tl04_runtime_payload and annotation_tsv_path is not None:
             _augment_phage_row_with_tl04_features(
                 projected_row,
                 annotation_tsv_path=annotation_tsv_path,
                 tl04_profiles=tl04_profiles,
+            )
+        if runtime.tl17_runtime_payload and annotation_tsv_path is not None and tl17_summary is not None:
+            _augment_phage_row_with_tl17_features(
+                projected_row,
+                annotation_tsv_path=annotation_tsv_path,
+                tl17_profiles=tl17_profiles,
+                tl17_summary=tl17_summary,
             )
         projected_rows.append(projected_row)
     return projected_rows

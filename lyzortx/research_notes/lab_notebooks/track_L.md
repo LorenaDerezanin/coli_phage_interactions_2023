@@ -1182,3 +1182,106 @@ bundle clears its round-trip gate first.
 Do not treat fitted UMAP host coordinates as the next deployable step. If continuous host-similarity signal is still
 needed after `TL15`-`TL17`, it should come from a stable runtime projector or distance contract rather than from
 reusing a fragile low-dimensional embedding fit.
+
+### 2026-03-31: TL17 Build deployable phage compatibility preprocessor beyond k-mer SVD
+
+#### Executive summary
+
+TL17 closes the phage-side deployable-parity gap with a raw-genome-derived **RBP PHROG profile preprocessor** rather
+than another generic annotation or taxonomy block. The explicit selection table written by this task chose collapsed RBP
+profiles over both k-mer SVD alone and the already-deployable anti-defense direct block because the RBP path is the
+strongest adsorption-linked candidate still missing from deployable inference:
+
+- `track_d_phage_genomic_kmers` stays useful but is still only an indirect sequence-composition proxy.
+- `tl04_antidef_defense_evasion` is deployable, but its phage-side signal is sparser and more generic.
+- `tl17_rbp_phrog_profiles` is the strongest next candidate because receptor-binding proteins are the phage-side feature
+  family most directly tied to adsorption and host range, and TL02's earlier screening already showed substantially
+  stronger RBP-linked compatibility structure than the anti-defense path.
+
+The implementation projects a raw phage genome into a frozen 28-column deployable block:
+
+- `25` collapsed binary RBP profile indicators derived from Pharokka PHROG annotations.
+- `3` deployable summary features: profile count, RBP gene count, and unique RBP PHROG count.
+
+The runtime contract is bundle-relative and self-contained: the saved TL17 bundle stores the profile membership mapping
+plus a local copy of the panel Pharokka TSV cache, and inference can also rebuild the same features for novel phages
+from a supplied Pharokka annotation path or raw genome + Pharokka database.
+
+#### What was implemented
+
+- Added `lyzortx/pipeline/track_l/steps/deployable_tl17_runtime.py`.
+  - Extracts deployable RBP PHROG features from a Pharokka merged TSV.
+  - Applies the frozen collapsed-profile mapping at inference time.
+  - Emits the direct binary profile columns plus the three summary columns.
+- Added `lyzortx/pipeline/track_l/steps/build_tl17_phage_preprocessor.py`.
+  - Builds the explicit phage-side candidate audit table.
+  - Builds the panel TL17 feature matrix and profile metadata.
+  - Verifies exact panel round-trip projection from cached Pharokka TSVs.
+  - Trains a baseline defense + k-mer bundle and a candidate defense + k-mer + TL17 bundle.
+  - Measures how much the TL17 block changes the saved panel inference surface.
+  - Stores the deployable runtime payload and bundle-local Pharokka cache next to the saved TL17 bundle.
+- Updated `lyzortx/pipeline/track_l/steps/generalized_inference.py` so bundle inference can project the TL17 phage
+  block at runtime alongside the existing deployable blocks.
+- Updated `lyzortx/pipeline/track_l/run_track_l.py` with a `tl17-phage-preprocessor` step.
+- Added tests:
+  - `lyzortx/tests/test_track_l_deployable_tl17_runtime.py`
+  - `lyzortx/tests/test_track_l_build_tl17_phage_preprocessor.py`
+  - TL17 runtime coverage in `lyzortx/tests/test_track_l_generalized_inference.py`
+  - runner dispatch update in `lyzortx/tests/test_track_l_run_track_l.py`
+
+#### Why RBP profiles were the right next block
+
+The task required an explicit case rather than silently adding a block. The generated audit table says:
+
+- **k-mer SVD**: deployable now, but still only generic composition signal.
+- **RBP PHROG profiles**: chosen. These are the strongest phage-side deployable compatibility features because they are
+  genome-derived and directly connected to adsorption/receptor recognition.
+- **anti-defense direct profiles**: deployable but weaker. Track L already showed this path is sparser and more generic,
+  with methyltransferase-heavy annotations and weaker downstream behavior.
+
+This is also the technically honest scope boundary:
+
+- **Deployable now**: the phage-only RBP profile projector itself.
+- **Still blocked on TL15/TL18 for pairwise adsorption features**: host receptor/LPS projection for novel hosts.
+- **Not used here**: panel-only metadata or label-derived weights. TL17 keeps the phage block purely genome-derived.
+
+#### Panel validation and surface-change results
+
+- **Panel feature width**: `28` columns total (`25` direct collapsed RBP profiles + `3` summary columns).
+- **Panel phage coverage**: `78 / 96` phages have at least one non-zero TL17 RBP profile.
+- **Max profile count on one phage**: `5`
+- **Max Pharokka RBP gene count on one phage**: `9`
+- **Projection round-trip from cached Pharokka TSVs**: `96 / 96` exact matches to the saved panel TL17 feature rows.
+
+The TL17 block measurably changes the deployable inference surface on real panel examples even before TL15/TL16/TL18:
+
+- **Panel prediction rows changed vs defense + k-mers baseline**: `35,423 / 35,424`
+- **Median absolute probability delta across all panel pairs**: `0.022267`
+- **Maximum absolute probability delta across all panel pairs**: `0.240113`
+- **Median absolute rank delta across all panel pairs**: `4`
+- **Maximum absolute rank delta across all panel pairs**: `64`
+
+Examples of hosts where all `96` panel phage predictions moved:
+
+- `ECOR-35`: median absolute delta `0.080568`, max absolute delta `0.240113`
+- `IAI58`: median absolute delta `0.084882`, max absolute delta `0.226159`
+- `ROAR205`: median absolute delta `0.044355`, max absolute delta `0.221817`
+
+#### Holdout metrics and interpretation
+
+The TL17 block clearly changes the deployable surface, but this task was **not** treated as evidence that the panel
+model should lock a new feature set:
+
+- ROC-AUC: `0.791999` -> `0.787049` (`-0.00495` in favor of baseline)
+- Average precision: `0.546026` -> `0.549605` (`+0.003579` in favor of TL17)
+- Brier score: `0.150194` -> `0.151459`
+- Log loss: `0.460427` -> `0.463885`
+
+Interpretation:
+
+1. TL17 succeeds as a **deployable preprocessor task**, not as a new panel-lock recommendation.
+2. The chosen RBP block is non-degenerate, exactly reproducible from phage annotations, and materially changes the
+   model's inference surface on real panel phages.
+3. The current phage-only TL17 bundle does **not** by itself justify changing the locked deployable model. That is
+   expected: adsorption-style signal should become much more informative once TL15 provides the missing deployable host
+   surface projector and TL18 can evaluate the richer combined contract honestly.

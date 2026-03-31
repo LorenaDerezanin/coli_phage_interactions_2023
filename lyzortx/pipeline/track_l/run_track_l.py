@@ -24,6 +24,7 @@ if __package__ in {None, ""}:
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_l.steps import (
     build_generalized_inference_bundle,
+    build_tl17_phage_preprocessor,
     build_tl13_generalized_inference_bundle,
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
@@ -97,6 +98,7 @@ FEATURE_STEPS: list[tuple[str, StepFn]] = [
 INFERENCE_STEPS: list[tuple[str, StepFn]] = [
     ("generalized-inference-bundle", lambda _args: build_generalized_inference_bundle.main([])),
     ("deployable-generalized-inference-bundle", lambda _args: build_tl13_generalized_inference_bundle.main([])),
+    ("tl17-phage-preprocessor", lambda _args: build_tl17_phage_preprocessor.main([])),
     ("validate-vhdb-generalized-inference", lambda _args: validate_vhdb_generalized_inference.main([])),
 ]
 
