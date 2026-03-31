@@ -1147,3 +1147,38 @@ support for broad external generalization, until the saved reference-backed pane
 3. If TL13 later clears the richer-feature and multi-host round-trip contract cleanly, TL14 will still refuse to call
    the bundle validated unless known positives beat matched random candidates, beat the panel base rate, and rank above
    the candidate-set midpoint at the host-median level.
+
+### 2026-03-31: Replan follow-up after TL13/TL14 — add the missing preprocessors before another bundle rebuild
+
+#### Executive summary
+
+The latest Track L review changed the interpretation of TL13's feature-parity audit. Several blocks marked "not
+deployable" were not actually impossible to derive for novel inputs; they were simply missing preprocessing steps. The
+plan now reflects that distinction explicitly:
+
+- `TL15`: build a raw-host surface projector for OMP/LPS-style deployable compatibility features;
+- `TL16`: build a genome-derived host typing projector for the reproducible subset of the old metadata block;
+- `TL17`: build a phage-side deployable compatibility preprocessor richer than k-mer SVD alone; and
+- `TL18`: rebuild the deployable generalized-inference bundle only after those three preprocessors exist.
+
+`TL15`, `TL16`, and `TL17` are intended to run in parallel. `TL18` is intentionally blocked on all three. The plan
+does not add a new external-validation task yet; another broad validation step would be premature until the richer
+bundle clears its round-trip gate first.
+
+#### Why the plan changed again
+
+1. TL12 still stands: the enrichment-derived pairwise path is dead-ended for the current v1 lock.
+2. TL13/TL14 also still stand as honest statements about the code that existed at the time, but the audit language was
+   too pessimistic in places. "Not currently wired" was treated as "not deployable" for blocks that are plausibly
+   recoverable from raw inputs with new preprocessing work.
+3. The most important missing examples are:
+   - a raw-host surface projector so deployable receptor-style compatibility can be tested honestly;
+   - a genome-derived host typing projector instead of writing off the full host-metadata block wholesale; and
+   - a phage-side compatibility projector that can use a defensible raw-genome contract rather than relying on panel-only
+     metadata.
+
+#### Additional constraint recorded in the new plan
+
+Do not treat fitted UMAP host coordinates as the next deployable step. If continuous host-similarity signal is still
+needed after `TL15`-`TL17`, it should come from a stable runtime projector or distance contract rather than from
+reusing a fragile low-dimensional embedding fit.

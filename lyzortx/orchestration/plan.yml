@@ -829,6 +829,92 @@ tracks:
       - 'End with one of three explicit conclusions recorded in code outputs and notebooks:
         deployable bundle validated, deployable bundle failed, or validation inconclusive
         because the cohort contract could not be satisfied'
+    - id: TL15
+      title: Build raw-host surface projector for deployable compatibility features
+      status: pending
+      model: gpt-5.4
+      depends_on_tasks: []
+      acceptance_criteria:
+      - Build an inference-time projector from raw host assemblies into the training-time
+        host-surface feature schema needed for downstream deployable compatibility
+        work, including the existing receptor-style surface calls the bundle can
+        realistically consume from raw genomes
+      - Reuse or explicitly version the reference assets and clustering contract so
+        novel hosts land in the same feature space as panel hosts
+      - For panel hosts with assemblies, compare projected calls against the existing
+        Track C surface annotations and report the agreement plus any systematic mismatches
+      - Output must distinguish "feature absent" from "not callable from the input
+        genome"; silently coercing missing calls to ordinary negatives is a failure
+      - The task must end with an explicit table of which training-time host-surface
+        features are reproduced directly, approximated by a deployable proxy, or
+        still unsupported, with a one-sentence rationale for each unsupported family
+      - Runtime assets and emitted metadata must resolve relative to saved outputs
+        rather than hidden repo-root paths or stale gitignored artifacts
+    - id: TL16
+      title: Build genome-derived host typing projector for deployable bundle parity
+      status: pending
+      model: gpt-5.4
+      depends_on_tasks: []
+      acceptance_criteria:
+      - Derive the host-typing subset of the old panel metadata block from raw host
+        assemblies wherever the information is extractable with reasonable preprocessing
+        effort, including phylogroup, serotype, and callable capsule-related features
+      - Emit the projected features in a stable schema that can be joined into deployable
+        inference without depending on the static pair table
+      - Explicitly separate replicated genome-derived features from truly non-derivable
+        assay/collection metadata in both code outputs and notebook text; calling
+        something "not deployable" without that separation is a failure
+      - Validate the projector on panel hosts with assemblies and report which feature
+        families reproduce cleanly versus which remain noisy or unsupported
+    - id: TL17
+      title: Build deployable phage compatibility preprocessor beyond k-mer SVD
+      status: pending
+      model: gpt-5.4
+      depends_on_tasks: []
+      acceptance_criteria:
+      - Start from the phage-side feature-parity gap and justify which deployable
+        raw-genome-derived compatibility block is the strongest next candidate beyond
+        tetranucleotide SVD alone; the task fails if it adds a block without making
+        that case explicitly
+      - The chosen block must plausibly encode host-compatibility signal rather than
+        merely adding generic phage annotation or taxonomy detail with no defensible
+        connection to adsorption, host range, or host-defense interaction
+      - The implementation may use taxonomy-aware lookup, sequence-similarity assignment,
+        or another defensible raw-genome contract, but it must justify the choice
+        and persist the runtime assets needed to reproduce it
+      - The block must avoid panel-only metadata and label-derived quantities; if
+        it depends on training-set artifacts, those artifacts must be frozen and shipped
+        as part of the deployable runtime contract
+      - Demonstrate on panel phages that the chosen block is non-degenerate, measurably
+        changes the inference surface on real examples, and is documented as either
+        deployable for arbitrary raw-genome inputs or intentionally bounded in scope
+    - id: TL18
+      title: Rebuild the deployable generalized inference bundle with the richer preprocessors
+      status: pending
+      model: gpt-5.4
+      depends_on_tasks:
+      - TL15
+      - TL16
+      - TL17
+      acceptance_criteria:
+      - Start with a feature-parity table for the training-time model that labels
+        every feature block as included directly, replaced by a deployable proxy,
+        or explicitly excluded with rationale
+      - Rebuild the deployable bundle using defense plus phage k-mer features together
+        with the new TL15/TL16/TL17 preprocessors; silently dropping one of those
+        newly built blocks is a failure
+      - Do not use fitted UMAP coordinates as the deployable host projection. If
+        continuous host similarity is needed, use a stable distance or projector
+        whose runtime contract is explicit
+      - Save every runtime dependency bundle-relatively and prove the rebuilt bundle
+        works without hidden dependence on repo-root caches or stale generated outputs
+      - Regenerate round-trip reference predictions for at least 3 panel hosts with
+        available assemblies and require the richer bundle to improve at least one
+        predeclared round-trip metric versus the current deployable baseline without
+        materially degrading all the others
+      - If the richer bundle cannot clear that round-trip gate, conclude that generalized
+        inference is still blocked and stop rather than auto-adding another validation
+        ticket by inertia
   J:
     name: Reproducibility and Release Quality
     description: One-command regeneration and environment freezing for v1 pipeline.

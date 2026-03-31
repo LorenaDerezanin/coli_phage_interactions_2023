@@ -1123,6 +1123,29 @@ Concretely, TL13 is now framed as a feature-parity audit plus deployable compati
 gated on TL13 proving that the richer bundle actually improves round-trip behavior on panel hosts. If TL13 cannot
 clear that gate, the right next step is another replan, not external validation by inertia.
 
+### 2026-03-31: Track L replan follow-up — new preprocessing tasks before any further deployable-bundle claims
+
+The next Track L change is a planning correction, not a new scientific result. Review of TL13/TL14 concluded that the
+feature-parity audit was too absolute about deployability: several blocks were labeled "not deployable" when the more
+honest statement was "not currently implemented as a preprocessing step."
+
+The plan now adds four new tasks:
+
+- `TL15`: raw-host surface projector for OMP/LPS-style compatibility features;
+- `TL16`: genome-derived host typing projector for the reproducible subset of the old metadata block;
+- `TL17`: phage-side deployable compatibility preprocessor beyond k-mer SVD; and
+- `TL18`: rebuild the deployable generalized-inference bundle only after `TL15`-`TL17` are all available.
+
+Two strategic decisions matter here:
+
+1. `TL15`-`TL17` are parallel preprocessing tasks, not another serial chain hidden inside one track.
+2. The plan deliberately does **not** add a new external-validation ticket yet. Another validation pass is only worth
+   discussing after `TL18` proves that the richer deployable bundle improves round-trip behavior on panel hosts.
+
+The updated plan also records one negative lesson explicitly: do not treat fitted UMAP host coordinates as the next
+deployable shortcut. If continuous host-similarity signal is still needed, it should come from a stable runtime
+distance or projection contract, not from reusing a fragile embedding fit.
+
 ### 2026-03-31: TL14 implementation hardened the external-validation stop conditions
 
 TL14 is now implemented as a strict gatekeeper instead of a permissive rerun of TL09. The code now reads the saved TL13
