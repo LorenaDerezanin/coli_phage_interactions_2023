@@ -67,9 +67,15 @@ jobs:
               exit 1
               ;;
           esac
-          IMAGE="ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:${PROFILE}-main"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            IMAGE_TAG="${PROFILE}-main"
+          else
+            IMAGE_TAG="${PROFILE}-sha-${GITHUB_SHA}"
+          fi
+          IMAGE="ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:${IMAGE_TAG}"
           echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
           echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
   implement:
