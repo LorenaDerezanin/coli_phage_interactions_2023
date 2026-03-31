@@ -16,9 +16,16 @@ RUN apt-get update \
         git \
         gh \
         jq \
+        nodejs \
         sudo \
         wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Let sudo inherit PATH so tools installed by GitHub Actions (e.g., setup-node
+# placing node at /__t/node/.../bin) are visible to "sudo -n node ...".
+RUN echo 'Defaults env_keep += "PATH"' > /etc/sudoers.d/keep-path \
+    && echo 'Defaults !secure_path' >> /etc/sudoers.d/keep-path \
+    && chmod 0440 /etc/sudoers.d/keep-path
 
 RUN case "${TARGETARCH}" in \
       amd64) MICROMAMBA_ARCH=64 ;; \
