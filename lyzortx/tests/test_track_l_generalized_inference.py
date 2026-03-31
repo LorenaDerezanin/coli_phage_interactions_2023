@@ -119,6 +119,33 @@ def test_build_training_rows_merges_host_and_phage_blocks() -> None:
     ]
 
 
+def test_augment_rows_with_pair_features_raises_for_missing_non_holdout_pair() -> None:
+    with pytest.raises(KeyError, match="Missing deployable pair feature row for pair_id B1__P1"):
+        tl08_bundle.augment_rows_with_pair_features(
+            rows=[{"pair_id": "B1__P1", "split_holdout": "train_non_holdout"}],
+            pair_feature_rows=[],
+            pair_feature_columns=["tl04_pair_signal"],
+        )
+
+
+def test_augment_rows_with_pair_features_zero_fills_missing_holdout_pair() -> None:
+    rows = tl08_bundle.augment_rows_with_pair_features(
+        rows=[{"pair_id": "B2__P1", "split_holdout": "holdout_test", "existing_value": 7}],
+        pair_feature_rows=[],
+        pair_feature_columns=["tl04_pair_signal", "tl04_pair_support"],
+    )
+
+    assert rows == [
+        {
+            "pair_id": "B2__P1",
+            "split_holdout": "holdout_test",
+            "existing_value": 7,
+            "tl04_pair_signal": 0.0,
+            "tl04_pair_support": 0.0,
+        }
+    ]
+
+
 def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path, monkeypatch) -> None:
     st02_path, st03_path = _build_panel_foundation(tmp_path)
     phage_feature_path, phage_svd_path = _build_phage_kmer_outputs(tmp_path)

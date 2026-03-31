@@ -581,6 +581,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         bundle_task_id="TL13",
         bundle_format_version=DEPLOYABLE_BUNDLE_FORMAT_VERSION,
     )
+    # Pre-write the TL04 runtime block so round-trip inference can load the candidate bundle
+    # before the final manifest/bundle update below rewrites the same deployable_runtime payload.
     persist_candidate_runtime_contract(
         bundle_path=candidate_result["bundle_path"],
         tl04_runtime_payload=tl04_contract["runtime_payload"],
