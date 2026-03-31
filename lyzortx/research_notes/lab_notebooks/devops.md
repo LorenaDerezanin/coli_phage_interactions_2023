@@ -1,3 +1,36 @@
+### 2026-03-31: Unit-test workflow now emits slow-test timings and runs pytest in parallel
+
+#### Executive summary
+
+The `Unit Tests` workflow was running `pytest -q`, which kept CI logs too quiet to diagnose where the 5-minute wall
+time was going. Step timings showed the bottleneck was the pytest step itself, not checkout or dependency install. The
+workflow now drops `-q`, adds `--durations=25` to surface the slowest tests directly in GitHub Actions logs, and runs
+the suite with `pytest-xdist` using `-n auto --dist loadfile`.
+
+#### Why this change was needed
+
+For recent PRs, the `Run pytest with coverage` step was taking about 4 minutes on its own, while install and
+pre-commit together were under a minute. With `-q`, the log only showed the final `[100%]` line, which made it
+impossible to tell whether the time was coming from one pathological test, a small set of heavyweight integration
+tests, or broad suite-wide slowdown on the runner.
+
+#### Design decision
+
+Prefer observability first, then parallelize with a conservative sharding mode. `--durations=25` gives actionable
+timing data from CI, and removing `-q` restores visible progress output. For parallel execution, the workflow uses
+`-n auto --dist loadfile` rather than per-test sharding so tests from the same file stay together, which reduces the
+risk of fixture and file-system interference.
+
+#### Local verification
+
+After adding `pytest-xdist` to `requirements.txt`, ran the full suite locally with the exact workflow-style command:
+
+`pytest -n auto --dist loadfile --durations=25 --cov=lyzortx --cov-report=xml:coverage.xml lyzortx/tests`
+
+It passed cleanly (`382 passed`) and reduced local wall-clock time from the matching serial coverage run
+(`pytest -q --cov=lyzortx --cov-report=xml:coverage.xml lyzortx/tests`, ~116s) to ~74s on this machine, so enabling
+the same mode in CI is justified.
+
 ### 2026-03-31: Orchestrator now supports explicit task-level dependencies
 
 #### Executive summary
