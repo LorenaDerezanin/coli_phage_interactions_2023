@@ -34,11 +34,15 @@ jobs:
         id: tags
         shell: bash
         run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            BRANCH_TAG="${{ matrix.profile }}-main"
+          else
+            SAFE_REF=$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/_' '--')
+            BRANCH_TAG="${{ matrix.profile }}-branch-${SAFE_REF}"
+          fi
           {
             echo "tags<<EOF"
-            if [ "${GITHUB_REF_NAME}" = "main" ]; then
-              echo "${CI_IMAGE_BASE}:${{ matrix.profile }}-main"
-            fi
+            echo "${CI_IMAGE_BASE}:${BRANCH_TAG}"
             echo "${CI_IMAGE_BASE}:${{ matrix.profile }}-sha-${GITHUB_SHA}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"

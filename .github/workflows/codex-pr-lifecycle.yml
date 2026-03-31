@@ -74,7 +74,8 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then
             IMAGE_TAG="${PROFILE}-main"
           else
-            IMAGE_TAG="${PROFILE}-sha-${GITHUB_SHA}"
+            SAFE_REF=$(printf '%s' "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | tr '/_' '--')
+            IMAGE_TAG="${PROFILE}-branch-${SAFE_REF}"
           fi
           IMAGE="ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:${IMAGE_TAG}"
           echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
