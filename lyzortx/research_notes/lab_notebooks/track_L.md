@@ -1259,6 +1259,104 @@ non-genome metadata.
 3. The capsule family remains the main gap. The vendored HMM assets are enough to produce an auditable deployable proxy,
    but not enough to claim parity with `ABC_serotype` or the legacy Group IV / Wzy flags on this subset.
 
+### 2026-03-31: TL17 Build deployable phage compatibility preprocessor beyond k-mer SVD
+
+#### Executive summary
+
+TL17 started from the phage-side feature-parity gap instead of adding another arbitrary phage annotation block. The
+candidate audit written to
+`lyzortx/generated_outputs/track_l/tl17_phage_compatibility_preprocessor/tl17_candidate_audit.csv` made the choice
+explicit:
+
+- keep `track_d_phage_genomic_kmers` as the deployable baseline, but do not pretend tetranucleotide composition is a
+  compatibility mechanism;
+- do **not** choose `track_d_viridic_distance_embedding`, because a phylogenetic/tree embedding is generic phage
+  relatedness and the repo still lacks a raw-genome projector for arbitrary new phages;
+- do **not** choose the direct TL04 anti-defense phage block as the next step, because defense evasion is biologically
+  relevant but still downstream of adsorption; and
+- choose `tl17_rbp_family_projection`, because receptor-binding proteins are the phage-side molecules most directly
+  tied to adsorption and host-range gating.
+
+The implemented runtime freezes a panel RBP reference bank and projects raw phage FASTAs into that family space with
+`pyrodigal` plus `mmseqs`, without using panel-only host metadata or label-derived feature weights.
+
+#### What changed
+
+- Added `deployable_tl17_runtime.py`, which:
+  - builds a frozen panel RBP reference bank from raw phage FNA files under `data/genomics/phages/FNA/`;
+  - resolves panel RBP annotations back onto raw-FASTA-derived proteins by genomic coordinates and strand rather than
+    trusting the annotation suffix alone;
+  - writes a bundle-like runtime payload containing:
+    - retained family metadata;
+    - reference protein metadata and FASTA;
+    - the explicit matching policy (`micromamba run -n phage_annotation_tools mmseqs`, `>=30%` identity, `>=0.70`
+      query coverage).
+- Added `build_tl17_phage_compatibility_preprocessor.py`, which:
+  - writes the candidate audit and the `tl17_panel_fasta_inventory.csv` checksum inventory for the 96 committed panel
+    phage FASTAs;
+  - projects all 96 panel phages from raw FASTA through the frozen runtime and writes
+    `tl17_panel_projected_phage_features.csv`;
+  - trains a baseline deployable bundle and a TL17 candidate bundle using the same TL08/TL13 training utilities, then
+    writes `tl17_surface_delta.csv` / `tl17_surface_summary.csv` for a real-example surface probe on the committed host
+    validation subset names that overlap the panel predictions.
+- Added tests for:
+  - coordinate-based reference resolution when pharokka CDS numbering does not match `pyrodigal` protein numbering;
+  - mmseqs hit parsing and thresholding;
+  - TL17 candidate-audit selection and surface-delta summarization;
+  - Track L runner dispatch for the new TL17 step.
+
+#### Frozen runtime assets and raw-input contract
+
+The TL17 output directory is:
+`lyzortx/generated_outputs/track_l/tl17_phage_compatibility_preprocessor/`
+
+Frozen runtime assets:
+
+- `tl17_rbp_runtime.joblib`
+- `tl17_rbp_reference_bank.faa`
+- `tl17_rbp_reference_metadata.csv`
+- `tl17_rbp_family_metadata.csv`
+- `tl17_panel_fasta_inventory.csv`
+
+The panel projection used the 96 committed phage FASTAs from `data/genomics/phages/FNA/`, inventoried with hashes in
+`tl17_panel_fasta_inventory.csv`. The retained family space contains **32** RBP families backed by **232** reference
+proteins.
+
+#### Validation and findings
+
+- The projected TL17 block is non-degenerate on the real panel:
+  - `96` panel phages projected from raw FASTA;
+  - `32` family columns retained after requiring support in at least `2` panel phages;
+  - all `32` family columns are non-zero on at least one panel phage;
+  - `83/96` panel phages have at least one TL17 family hit;
+  - among those non-zero phages, the median TL17 family count is `2`, and the maximum is `10`.
+- The strongest retained families are exactly the kinds of adsorption modules expected from the earlier Track L RBP
+  work, for example `RBP_PHROG_14895` and `RBP_PHROG_2097` each supported by `14` panel phages, and
+  `RBP_PHROG_1002` / `RBP_PHROG_1154` each supported by `11`.
+- The real-example surface probe used the committed validation-subset host names under
+  `data/genomics/bacteria/validation_subset/fastas/`. Only `EDL933` currently overlaps the saved panel-prediction
+  cohort, so the probe remains one-host evidence rather than a broad validation set.
+- On that `EDL933` surface, adding TL17 changed the inference surface for **all 96 panel phages**:
+  - changed prediction count: `96`
+  - median absolute probability delta: `0.0088575`
+  - maximum absolute probability delta: `0.105067`
+  - identical rank count: `16`
+
+#### Interpretation
+
+1. TL17 clears its stated bar as a **deployable phage-side compatibility preprocessor**: the new block is grounded in
+   adsorption biology, derived from raw phage FASTAs, ships its runtime assets explicitly, and is non-degenerate on the
+   panel.
+2. The new block should be interpreted as a **bounded deployable family projector**, not as proof that all future phage
+   adsorption diversity is now covered. Novel phages with unseen RBP families project to zeros rather than inventing a
+   family assignment.
+3. The surface probe proves the block is not dead weight, but it does **not** by itself prove a performance lift. In
+   the current TL17 probe bundle, the holdout metrics moved slightly in the wrong direction versus the baseline
+   deployable bundle, so the honest conclusion is “real compatibility-surface change exists” rather than “lift is
+   established.”
+4. TL18 should integrate TL17 together with TL15/TL16 and then judge the richer bundle on the stricter round-trip gate,
+   not treat TL17 alone as sufficient evidence that generalized inference is solved.
+
 ### 2026-04-01: Replan follow-up — raw-input validation is now mandatory for TL15-TL18
 
 The plan was tightened again after two infrastructure pieces became real instead of hypothetical:
