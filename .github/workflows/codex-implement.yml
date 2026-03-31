@@ -212,7 +212,7 @@ jobs:
           model: ${{ steps.model.outputs.model }}
           allow-bots: true
           sandbox: danger-full-access
-          safety-strategy: none
+          safety-strategy: unsafe
           prompt-file: .scratch/ci/codex_prompt.txt
 
       - name: Verify Codex created a PR
