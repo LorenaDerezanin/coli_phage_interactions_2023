@@ -25,6 +25,7 @@ from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import (
     TL04_DIRECT_BLOCK_ID,
     build_tl04_runtime_payload,
 )
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import sha256_file
 from lyzortx.pipeline.track_l.steps.run_enrichment_analysis import CACHED_ANNOTATIONS_DIR
 from lyzortx.pipeline.track_l.steps.retrain_mechanistic_v1_model import load_tl11_feature_provenance
 
@@ -104,10 +105,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--skip-prerequisites", action="store_true")
     return parser.parse_args(argv)
-
-
-def _sha256(path: Path) -> str:
-    return build_generalized_inference_bundle._sha256(path)
 
 
 def ensure_tl04_artifacts(
@@ -487,7 +484,7 @@ def update_bundle_and_manifest(
 
     manifest = _load_json(manifest_path)
     manifest.update({key: value for key, value in bundle_updates.items() if key != "deployable_runtime"})
-    manifest["artifact_hashes"]["bundle"] = _sha256(bundle_path)
+    manifest["artifact_hashes"]["bundle"] = sha256_file(bundle_path)
     write_json(manifest_path, manifest)
 
 
@@ -704,7 +701,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ],
             "parity_audit": {
                 "path": str(parity_audit_path),
-                "sha256": _sha256(parity_audit_path),
+                "sha256": sha256_file(parity_audit_path),
             },
             "roundtrip_gate": {
                 "predeclared_metrics": PREDECLARED_ROUNDTRIP_METRICS,

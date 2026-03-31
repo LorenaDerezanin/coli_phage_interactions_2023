@@ -13,6 +13,7 @@ import pandas as pd
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
 from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import (
     TL04_DIRECT_BLOCK_ID,
+    Tl04ProfileRuntime,
     build_direct_feature_values,
     build_pairwise_feature_values,
     build_profile_presence,
@@ -164,12 +165,11 @@ def _augment_phage_row_with_tl04_features(
     phage_row: dict[str, object],
     *,
     annotation_tsv_path: Path,
-    runtime: InferenceRuntime,
+    tl04_profiles: Sequence[Tl04ProfileRuntime],
 ) -> None:
-    profiles, _ = parse_tl04_runtime_payload(runtime.tl04_runtime_payload)
     antidef_features = extract_antidef_feature_names(annotation_tsv_path)
-    profile_presence = build_profile_presence(antidef_features, profiles)
-    phage_row.update(build_direct_feature_values(profile_presence, profiles))
+    profile_presence = build_profile_presence(antidef_features, tl04_profiles)
+    phage_row.update(build_direct_feature_values(profile_presence, tl04_profiles))
 
 
 def project_host_features(
@@ -224,6 +224,10 @@ def project_phage_features(
         {name: Path(path) for name, path in annotation_tsv_paths.items()} if annotation_tsv_paths is not None else None
     )
     resolved_pharokka_database_dir = Path(pharokka_database_dir) if pharokka_database_dir is not None else None
+    if runtime.tl04_runtime_payload:
+        tl04_profiles, _ = parse_tl04_runtime_payload(runtime.tl04_runtime_payload)
+    else:
+        tl04_profiles = []
     projected_rows: list[dict[str, object]] = []
     for phage_path in phage_paths:
         if not phage_path.exists():
@@ -239,7 +243,7 @@ def project_phage_features(
             _augment_phage_row_with_tl04_features(
                 projected_row,
                 annotation_tsv_path=annotation_tsv_path,
-                runtime=runtime,
+                tl04_profiles=tl04_profiles,
             )
         projected_rows.append(projected_row)
     return projected_rows

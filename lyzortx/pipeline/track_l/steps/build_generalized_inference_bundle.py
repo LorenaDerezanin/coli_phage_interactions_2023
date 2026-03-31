@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import logging
 import shutil
@@ -26,6 +25,7 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
     st02_build_pair_table,
     st03_build_splits,
 )
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import sha256_file
 from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import (
     build_defense_column_mask,
     build_defense_feature_rows,
@@ -126,11 +126,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return sha256_file(path)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
