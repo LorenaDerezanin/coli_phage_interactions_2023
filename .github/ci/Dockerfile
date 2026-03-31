@@ -16,6 +16,7 @@ RUN apt-get update \
         git \
         gh \
         jq \
+        sudo \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
