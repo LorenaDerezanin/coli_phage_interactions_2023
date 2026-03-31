@@ -16,3 +16,4 @@ dev/predictions/results/predictions/
 
 # lyzortx generated artifacts
 lyzortx/generated_outputs/
+.env

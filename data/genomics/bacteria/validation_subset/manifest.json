@@ -1,0 +1,40 @@
+{
+  "source_dataset": {
+    "title": "Genome assembly of the Escherichia Picard collection",
+    "author": "Florian Tesson",
+    "doi": "10.6084/m9.figshare.25941691.v1",
+    "landing_page": "https://figshare.com/articles/dataset/Genome_assembly_of_the_Escherichia_Picard_collection/25941691",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "retrieved_at": "2026-03-31"
+  },
+  "files": [
+    {
+      "bacteria": "EDL933",
+      "filename": "EDL933.fasta",
+      "figshare_file_id": 46741837,
+      "download_url": "https://ndownloader.figshare.com/files/46741837",
+      "source_md5": "5e6d9caf8ae0a3b09079a6aa7d36bcdd",
+      "sha256": "7e7e387ba85da46420ca5e11708c9f8529f84f30b9de90d04416cb58db4c4b09",
+      "bytes": 5620671
+    },
+    {
+      "bacteria": "LF82",
+      "filename": "LF82.fasta",
+      "figshare_file_id": 46742440,
+      "download_url": "https://ndownloader.figshare.com/files/46742440",
+      "source_md5": "b592e89e6ff00c076b39928fc7d8e527",
+      "sha256": "dec085844a2ae394720ecae96ecbda41a3d4524b9537a80f9ac9a724567167d8",
+      "bytes": 4930302
+    },
+    {
+      "bacteria": "55989",
+      "filename": "55989.fasta",
+      "figshare_file_id": 46741492,
+      "download_url": "https://ndownloader.figshare.com/files/46741492",
+      "source_md5": "73a42bc3eb21cb2cd057c83c6137d2df",
+      "sha256": "4bf3ef72e32caceaf4aeb0afd80844c595efc026c68bd27a2b5f3d127f0701e1",
+      "bytes": 5197767
+    }
+  ]
+}

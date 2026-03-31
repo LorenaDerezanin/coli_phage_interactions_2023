@@ -22,6 +22,10 @@
   direnv, so locally `python`, `pip`, `pytest`, etc. already resolve to the phage_env binaries — no `conda run` or
   `conda activate` prefix needed. `phage_env` is the default Python/helper environment; specialized bioinformatics CLI
   stacks may live in dedicated manifests rather than the default env.
+- **Codex local-shell caveat:** Codex shells do not reliably inherit the user's direnv/conda initialization. If
+  `python`/`pytest` are not from `phage_env`, or `conda` is missing from `PATH`, initialize conda explicitly first
+  (for example by sourcing the user's miniconda `conda.sh` in a Bash shell), then use `conda activate phage_env` or
+  `conda run -n phage_env ...` as needed. Do not assume the Claude-local shell behavior carries over to Codex.
 - **GitHub Actions workflows:** direnv is not available in CI. Bootstrap `phage_env` with
   `conda env create -f environment.yml -n phage_env`, then run repo commands via `conda run -n phage_env ...`, unless
   the workflow explicitly opts into a prebaked container image with additional specialized envs.
@@ -48,6 +52,9 @@
   specialized environment manifest such as `environment.*.yml`, then apply the change by updating the
   corresponding declared env.
 - This ensures the environment is always reproducible from the checked-in config files.
+- If a required library or CLI tool is missing, do not work around that absence by weakening validation, skipping the
+  step, or hand-waving the requirement. Add the dependency to the appropriate declared environment manifest and make the
+  missing-tool fix part of the change.
 
 # Fail-Fast on Missing Data
 
