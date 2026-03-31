@@ -1,19 +1,27 @@
 # CI Workflows Directory
 
 - When modifying workflows in this directory, update `lyzortx/orchestration/README.md` to reflect the changes.
-- The README documents the trigger model, actors, and automation lifecycle for all orchestrator and Codex workflows.
+- The README documents the trigger model, actors, and automation lifecycle for all orchestrator and Claude workflows.
 - `ci-duplicate-check.yml` runs pylint `symilar` on PRs and pushes to main to detect duplicate code blocks in
   `lyzortx/`. This is informational only (`continue-on-error: true`) and does not block merges.
+- `claude-implement.yml` uses `anthropics/claude-code-action@v1` to implement orchestrator-dispatched tasks. Triggered
+  on `orchestrator-task`-labeled issues (opened/reopened) and via `workflow_dispatch`. Resolves the CI image profile
+  from the issue's `ci-image:*` label and runs Claude inside the matching prebaked GHCR container. Resolves the
+  semantic model tier (`smart`/`simple`) from the issue's `<!-- model: ... -->` directive to a concrete Claude model ID
+  via `parse_model_directive.py --provider claude`. Passes the Czarphage GitHub App token into the Claude action so git
+  pushes and PR creation stay under `czarphage[bot]`. Requires `ANTHROPIC_API_KEY` and Czarphage app credentials.
 - `claude-pr-review.yml` uses `anthropics/claude-code-action@v1` to auto-review `orchestrator-task`-labeled PRs on
   open/push, and supports interactive `@claude` mentions on any PR. Requires the `ANTHROPIC_API_KEY` repository secret.
-  Claude posts reviews as `claude[bot]` (the action's own OIDC app identity). After reviewing, it dispatches downstream
-  actions: auto-merge on approval, or `codex-pr-lifecycle.yml` on commented reviews.
-- `codex-pr-lifecycle.yml` is triggered exclusively via `workflow_dispatch` (from `claude-pr-review.yml` or manually).
-  It runs the Codex fix loop for unresolved review threads. The 3-round cap (`codex-review-round-N` labels) prevents
-  infinite loops. A concurrency group ensures only one lifecycle run per PR at a time. The `workflow_dispatch`-only
-  trigger prevents a self-cancellation loop where Codex thread replies would fire `pull_request_review` events that
-  cancel the in-progress run.
-- `publish-codex-ci-image.yml` builds and publishes the prebaked GitHub Container Registry image used by the Codex
+  Claude posts reviews as `claude[bot]` (the action's own default app identity). Do not override the action's
+  `github_token` here unless the downstream `claude[bot]` review-state checks are updated too. After reviewing, it
+  dispatches downstream actions: auto-merge on approval, or `claude-pr-lifecycle.yml` on commented reviews.
+- `claude-pr-lifecycle.yml` is triggered exclusively via `workflow_dispatch` (from `claude-pr-review.yml` or manually).
+  It runs the Claude fix loop for unresolved review threads. Like `claude-implement.yml`, it passes the Czarphage token
+  into the Claude action so branch updates stay under `czarphage[bot]`. The 3-round cap (`claude-review-round-N`
+  labels) prevents infinite loops. A concurrency group ensures only one lifecycle run per PR at a time. The
+  `workflow_dispatch`-only trigger prevents a self-cancellation loop where agent thread replies would fire
+  `pull_request_review` events that cancel the in-progress run.
+- `publish-codex-ci-image.yml` builds and publishes the prebaked GitHub Container Registry image used by the CI
   workflows. The image is rebuilt from `.github/ci/Dockerfile` whenever its inputs change on `main`, and it can also be
   triggered manually.
 

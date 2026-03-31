@@ -1,4 +1,4 @@
-name: Codex Implement Task
+name: Claude Implement Task
 
 on:
   issues:
@@ -15,6 +15,7 @@ permissions:
   pull-requests: write
   issues: write
   packages: read
+  id-token: write
 
 jobs:
   resolve-ci-image:
@@ -142,95 +143,71 @@ jobs:
           micromamba run -n phage_env python --version
           micromamba run -n phage_env pip --version
 
-      - name: Extract model from issue
+      - name: Extract and resolve model from issue
         id: model
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           ISSUE_NUM="${{ needs.resolve-ci-image.outputs.issue_number }}"
-          ISSUE_BODY=.scratch/ci/issue_body.txt
-          gh issue view "$ISSUE_NUM" --json body --jq '.body' > "$ISSUE_BODY"
-          MODEL=$(micromamba run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('.scratch/ci/issue_body.txt').read_text()) or '')")
+          MODEL=$(gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body' \
+            | micromamba run -n phage_env python -m lyzortx.orchestration.parse_model_directive --provider claude)
           if [ -z "$MODEL" ]; then
-            echo "::error::No model directive found in issue #${ISSUE_NUM} body. Add <!-- model: <id> --> to the issue."
+            echo "::error::No model directive found in issue #${ISSUE_NUM} body. Add <!-- model: smart --> or <!-- model: simple --> to the issue."
             exit 1
           fi
           echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
           echo "Using model: ${MODEL}"
-
-      - name: Build prompt
-        env:
-          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
-        run: |
-          ISSUE_NUM="${{ needs.resolve-ci-image.outputs.issue_number }}"
-          PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
-          IMAGE_LABEL="${{ needs.resolve-ci-image.outputs.ci_image_label }}"
-          RUN_ID="${{ github.run_id }}"
-          RUN_ATTEMPT="${{ github.run_attempt }}"
-          {
-            echo "# Task"
-            echo ""
-            gh issue view "$ISSUE_NUM" --json title,body --jq '"## " + .title + "\n\n" + .body'
-            echo ""
-            echo "# Instructions"
-            echo ""
-            echo "Implement the task described above. This is issue #${ISSUE_NUM}."
-            echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
-            echo "This task is assigned CI image profile '${PROFILE}' via GitHub label '${IMAGE_LABEL}'."
-            echo "GitHub Actions run ID: ${RUN_ID}. Current run attempt: ${RUN_ATTEMPT}."
-            if [ "$RUN_ATTEMPT" -gt 1 ]; then
-              echo "This is a rerun. Pick up from prior run state instead of restarting from scratch."
-              echo "Use the 'gh-actions-logs' skill to check earlier attempts."
-            fi
-            echo "In this GitHub Actions environment, use 'micromamba run -n phage_env ...' for Python, pytest, and pre-commit commands."
-            if [ "$PROFILE" = "host-typing" ] || [ "$PROFILE" = "full-bio" ]; then
-              echo "Dedicated caller envs are also available via 'micromamba run -n phylogroup_caller ...',"
-              echo "'micromamba run -n serotype_caller ...', and 'micromamba run -n sequence_type_caller ...'."
-            fi
-            if [ "$PROFILE" = "full-bio" ]; then
-              echo "Heavy bioinformatics CLIs live in 'micromamba run -n phage_annotation_tools ...'."
-            fi
-            echo ""
-            echo "Steps:"
-            echo "1. Create your working branch and open a draft PR as the very first step, before writing any code."
-            echo "   The PR title must follow the pattern: [ORCH][${TASK_ID}] Brief description"
-            echo "   The PR body must include a description of the planned changes AND 'Closes #${ISSUE_NUM}'."
-            echo "   Add --label orchestrator-task --label ${IMAGE_LABEL} to the PR."
-            echo "2. Implement the task. Commit early and often with detailed, descriptive messages."
-            echo "   Push after every meaningful commit so work is preserved if the run fails, times out, or exceeds quota."
-            echo "3. Run tests: micromamba run -n phage_env pytest -q lyzortx/tests/"
-            echo "4. When implementation is complete and tests pass, mark the PR as ready for review."
-            echo "   Update the PR title and body to accurately describe the final state of the changes."
-            echo ""
-            echo "When posting any GitHub comment (issue comments, PR comments, review replies),"
-            echo "end every comment with a signature line: 'Posted by Codex <model>'"
-            echo "where <model> is the model you are running as (e.g., gpt-5.4)."
-            echo "This is required for transparency about which agent produced the comment."
-          } > .scratch/ci/codex_prompt.txt
 
       - name: Install pre-commit hooks
         run: |
           micromamba run -n phage_env pre-commit install
           micromamba run -n phage_env pre-commit install --hook-type pre-push
 
-      - name: Configure git identity for Codex agent
+      - name: Configure git identity
         run: |
           git config user.name "czarphage[bot]"
           git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
 
-      - name: Implement task with Codex
-        env:
-          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
-        uses: openai/codex-action@v1
+      - name: Implement task with Claude
+        uses: anthropics/claude-code-action@v1
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: ${{ steps.model.outputs.model }}
-          allow-bots: true
-          sandbox: danger-full-access
-          safety-strategy: unsafe
-          prompt-file: .scratch/ci/codex_prompt.txt
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.czarphage.outputs.token }}
+          allowed_bots: "czarphage,czarphage[bot]"
+          track_progress: true
+          prompt: |
+            Implement the task described in issue #${{ needs.resolve-ci-image.outputs.issue_number }}.
 
-      - name: Verify Codex created a PR
+            Read the issue with: gh issue view ${{ needs.resolve-ci-image.outputs.issue_number }} --json title,body
+            Follow the policies in AGENTS.md and lyzortx/AGENTS.md.
+            This task is assigned CI image profile '${{ needs.resolve-ci-image.outputs.ci_image_profile }}' via GitHub label '${{ needs.resolve-ci-image.outputs.ci_image_label }}'.
+            GitHub Actions run ID: ${{ github.run_id }}. Current run attempt: ${{ github.run_attempt }}.
+            ${{ github.run_attempt > 1 && 'This is a rerun. Pick up from prior run state instead of restarting from scratch. Use the gh-actions-logs skill to check earlier attempts.' || '' }}
+            In this GitHub Actions environment, use 'micromamba run -n phage_env ...' for Python, pytest, and pre-commit commands.
+            ${{ needs.resolve-ci-image.outputs.ci_image_profile == 'host-typing' || needs.resolve-ci-image.outputs.ci_image_profile == 'full-bio' && 'Dedicated caller envs are also available via micromamba run -n phylogroup_caller, serotype_caller, sequence_type_caller.' || '' }}
+            ${{ needs.resolve-ci-image.outputs.ci_image_profile == 'full-bio' && 'Heavy bioinformatics CLIs live in micromamba run -n phage_annotation_tools.' || '' }}
+
+            Steps:
+            1. Create your working branch and open a draft PR as the very first step, before writing any code.
+               The PR title must follow the pattern: [ORCH][TASK_ID] Brief description
+               The PR body must include a description of the planned changes AND 'Closes #${{ needs.resolve-ci-image.outputs.issue_number }}'.
+               Add --label orchestrator-task --label ${{ needs.resolve-ci-image.outputs.ci_image_label }} to the PR.
+            2. Implement the task. Commit early and often with detailed, descriptive messages.
+               Push after every meaningful commit so work is preserved if the run fails, times out, or exceeds quota.
+            3. Run tests: micromamba run -n phage_env pytest -q lyzortx/tests/
+            4. When implementation is complete and tests pass, mark the PR as ready for review.
+               Update the PR title and body to accurately describe the final state of the changes.
+
+            When posting any GitHub comment (issue comments, PR comments, review replies),
+            end every comment with a signature line: 'Posted by Claude <model>'
+            where <model> is the model you are running as.
+            This is required for transparency about which agent produced the comment.
+          claude_args: >-
+            --model ${{ steps.model.outputs.model }}
+            --allowedTools
+            "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(micromamba:*),Bash(pre-commit:*),Bash(ruff:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(find:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*)"
+
+      - name: Verify Claude created a PR
         id: pr
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
@@ -239,7 +216,7 @@ jobs:
           # Use Python instead of gh pr list --search to avoid GitHub search index lag.
           PR_JSON=$(micromamba run -n phage_env python -m lyzortx.orchestration.find_pr_for_issue "$ISSUE_NUM")
           if [ $? -ne 0 ] || [ -z "$PR_JSON" ]; then
-            echo "::error::Codex did not create a PR for issue #${ISSUE_NUM}."
+            echo "::error::Claude did not create a PR for issue #${ISSUE_NUM}."
             exit 1
           fi
           PR_NUM=$(echo "$PR_JSON" | jq -r '.number')

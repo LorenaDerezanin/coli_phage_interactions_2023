@@ -85,6 +85,41 @@ and makes parallelism opt-in rather than globally reinterpreting the plan.
   leave `TL18` pending.
 - Re-rendered `PLAN.md` support so explicit task dependencies appear in the human-readable plan output.
 
+### 2026-03-31: Switch implementation workflows from Codex to Claude Code
+
+#### Executive summary
+
+Replaced `openai/codex-action@v1` with `anthropics/claude-code-action@v1` in both the task implementation and PR
+lifecycle workflows. Introduced semantic model tiers (`smart`/`simple`) in `plan.yml` to decouple the plan from any
+specific LLM provider. A resolver in `parse_model_directive.py` maps tiers to concrete model IDs per provider
+(`smart` → `gpt-5.4` or `claude-opus-4-6`, `simple` → `gpt-5.4-mini` or `claude-sonnet-4-6`), making future provider
+switches a small config change instead of a plan rewrite.
+
+#### Motivation
+
+Consolidating on a single LLM provider (Claude) for the implementation and fix loop simplifies secrets management and
+lets the automation share the same `AGENTS.md`-aware tooling already used in review. The Codex sandbox workaround
+(AppArmor sysctl on Ubuntu 24.04) is no longer needed.
+
+#### Design decisions
+
+**Semantic model tiers over concrete IDs:** Rather than replacing `gpt-5.4` with provider-specific IDs throughout
+`plan.yml`, the plan now uses provider-agnostic tier names. This means switching providers requires changing only the
+`PROVIDER_MODELS` dict in `parse_model_directive.py`, not 30+ lines in `plan.yml`.
+
+**Keep CI on `phage_env`:** The repo policy for GitHub Actions still applies. The new Claude implement/lifecycle
+workflows bootstrap `phage_env` from `environment.yml` and run repo Python/pytest commands via
+`conda run -n phage_env ...`, just like the previous Codex workflow family.
+
+**Prompt delivery:** Codex used a `prompt-file` input. Claude Code action uses inline `prompt:` with a `gh issue view`
+instruction, letting Claude read the issue directly. This avoids shell quoting issues with large issue bodies.
+
+**Tool allowlist:** Replaced Codex's `sandbox: danger-full-access` with a fine-grained `--allowedTools` list covering
+`Read`, `Write`, `Edit`, `Glob`, `Grep`, and specific Bash patterns (`git:*`, `gh:*`, `python:*`, `pytest:*`, etc.).
+
+**Workflow file rename:** `codex-implement.yml` → `claude-implement.yml`, `codex-pr-lifecycle.yml` →
+`claude-pr-lifecycle.yml`. The dispatch target in `claude-pr-review.yml` was updated accordingly.
+
 ### 2026-03-30: Claude review auto-merge was too permissive for commented approvals
 
 #### Executive summary

@@ -118,7 +118,7 @@ tracks:
     - id: TA11
       title: Fix label policy for borderline matrix_score=0 pairs
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Identify the 2557 pairs where aux_matrix_score_0_to_4=0 but label_hard_any_lysis=1
         (single-replicate noise positives)
@@ -274,7 +274,7 @@ tracks:
     - id: TF01
       title: Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Existing ST03 split locked as the canonical v1 evaluation protocol
       - Bootstrap CIs (1000 resamples of holdout strains) for top-3 hit rate, AUC,
@@ -283,7 +283,7 @@ tracks:
     - id: TF02
       title: Before/after comparison of v0 vs v1 with error bucket analysis
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Side-by-side metrics table for v0 (metadata logreg) vs v1 (genomic GBM)
       - Error bucket analysis showing which v0 holdout misses v1 fixed and why
@@ -324,7 +324,7 @@ tracks:
     - id: TG04
       title: Compute SHAP explanations for per-pair and global feature importance
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - TreeExplainer SHAP values for GBM model
       - Per-pair explanations answering why each phage was recommended for each strain
@@ -335,7 +335,7 @@ tracks:
     - id: TG05
       title: Run feature-subset sweep to find best block combination for top-3 ranking
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Train models on all 2-block and 3-block combinations of the 4 new feature
         blocks (defense, OMP, phage-genomic, pairwise)
@@ -355,7 +355,7 @@ tracks:
     - id: TG06
       title: Delete label-leaked features from the feature pipeline
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - 'Remove legacy_label_breadth_count: delete the (n_infections, legacy_label_breadth_count)
         rename in st02_build_pair_table.py and drop the column from ST02 output'
@@ -373,7 +373,7 @@ tracks:
       title: Retrain, recalibrate, and re-run SHAP and ablation on the clean feature
         set
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
       - Recalibrate (isotonic + Platt) and report AUC, top-3, Brier, ECE
@@ -383,7 +383,7 @@ tracks:
     - id: TG08
       title: Re-run downstream tracks and verify end-to-end pipeline
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Re-run explained recommendations (Track H) against clean model outputs
       - Re-run v0-vs-v1 evaluation (Track F) against clean model metrics
@@ -393,7 +393,7 @@ tracks:
     - id: TG09
       title: Fix LightGBM determinism and lock defense + phage_genomic as v1 winner
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Add deterministic=True to make_lightgbm_estimator in train_v1_binary_classifier.py
       - Remove n_jobs=1 from make_lightgbm_estimator (deterministic=True handles thread
@@ -407,7 +407,7 @@ tracks:
     - id: TG10
       title: Re-run downstream tracks on the stable 2-block lock
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Re-run Track H explained recommendations against the 2-block model outputs
       - Re-run Track F v0-vs-v1 evaluation against the 2-block model metrics
@@ -418,7 +418,7 @@ tracks:
     - id: TG11
       title: Investigate non-leaky features that close the calibration gap
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - 'Pairwise soft leakage context: TE02 defense_evasion_* features (4) and TE01
         receptor_variant_seen_in_training_positives (1) are training-label-derived
@@ -435,7 +435,7 @@ tracks:
     - id: TG12
       title: Delete soft-leaky training-label-derived features from Track E code
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Delete the legacy soft-leaky pairwise block from Track E code
       - Remove the exact-variant training-positive flag from the RBP-receptor compatibility
@@ -460,7 +460,7 @@ tracks:
       title: Add explained recommendations with calibrated P(lysis), CI, and SHAP
         features
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Each top-3 recommendation includes calibrated P(lysis), 95% CI, and top-3
         SHAP features
@@ -488,7 +488,7 @@ tracks:
     - id: TI03
       title: Download and ingest VHRdb pairs with source-fidelity fields
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
       - Output CSV contains >0 real bacteria-phage pairs
@@ -501,7 +501,7 @@ tracks:
     - id: TI04
       title: 'Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB'
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/,
         GPB from https://phagebank.org/
@@ -511,7 +511,7 @@ tracks:
     - id: TI05
       title: Harmonize Tier A datasets to internal schema
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Map external bacteria and phage names to canonical IDs via Track A alias resolution
       - Report how many external pairs overlap with the internal 404x96 panel vs are
@@ -521,7 +521,7 @@ tracks:
     - id: TI06
       title: 'Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata'
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Download Virus-Host DB associations from https://www.genome.jp/virushostdb/
       - Download NCBI Virus/BioSample metadata via Entrez API
@@ -545,7 +545,7 @@ tracks:
     - id: TL01
       title: Annotate all 97 phage genomes with Pharokka
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn,
         mash, dnaapler) to environment.yml and verify pharokka runs in CI
@@ -560,7 +560,7 @@ tracks:
       title: Build annotation-interaction enrichment module and run PHROG x receptor/defense
         analysis
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Build a reusable enrichment module (annotation_interaction_enrichment.py)
         that takes any (phage binary feature matrix, host binary feature matrix, interaction
@@ -579,7 +579,7 @@ tracks:
     - id: TL03
       title: Build mechanistic RBP-receptor compatibility features from annotations
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Collapse duplicate PHROG carrier profiles before feature construction (32
         PHROGs reduce to ~25 unique profiles due to co-occurrence groups like 136/15437/4465/9017
@@ -596,7 +596,7 @@ tracks:
     - id: TL04
       title: Build mechanistic defense-evasion features from annotations
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Use TL02 enrichment results to build pairwise features for each phage-host
         pair — does the phage encode anti-defense genes whose PHROG families are significantly
@@ -611,7 +611,7 @@ tracks:
     - id: TL05
       title: Retrain v1 model with mechanistic pairwise features and measure lift
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Evaluate TL03 (RBP-receptor) and TL04 (defense-evasion) features separately,
         not as a bundle — TL04 signal is weaker and may hurt rather than help
@@ -624,7 +624,7 @@ tracks:
     - id: TL06
       title: Persist fitted transforms for novel-organism feature projection
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature
         CSV so novel phage FNAs can be projected into the existing 24-dim embedding
@@ -641,7 +641,7 @@ tracks:
     - id: TL07
       title: Build Defense Finder runner for novel E. coli genomes
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Input is a genome assembly FASTA file for a novel E. coli strain
       - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense
@@ -656,7 +656,7 @@ tracks:
     - id: TL08
       title: Build generalized inference function for arbitrary genomes
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - 'Function signature: infer(host_genome_path, phage_fna_paths, model_path)
         returning DataFrame with columns phage, p_lysis, rank'
@@ -670,7 +670,7 @@ tracks:
     - id: TL09
       title: Validate generalized inference on Virus-Host DB positive pairs
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage
         genome accessions on NCBI — expect ~70 strains, ~900 phage genomes, ~500 positive
@@ -696,7 +696,7 @@ tracks:
       title: Fix enrichment holdout leak — TL02 uses full interaction matrix including
         ST03 holdout strains
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - 'Bug: TL02 (PR #259) computes PHROG x receptor/defense enrichment on the full
         369x96 interaction matrix including ST03 holdout strains. The enrichment weights
@@ -732,7 +732,7 @@ tracks:
     - id: TL11
       title: Rebuild TL03/TL04 mechanistic feature blocks from holdout-clean enrichment
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Rebuild the TL03 and TL04 outputs using only the TL10 holdout-excluded enrichment
         CSVs; using any pre-TL10 enrichment artifact is a failure
@@ -752,7 +752,7 @@ tracks:
       title: Re-run mechanistic lift evaluation with holdout-clean features and explicit
         lock rules
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Recompute the baseline, +TL03, +TL04, and +TL03+TL04 arms from the same code
         path and same label set using the rebuilt TL11 features; comparing against
@@ -774,7 +774,7 @@ tracks:
       title: Audit and rebuild the generalized inference bundle only if deployable
         compatibility signal is available
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - 'Start by producing a feature-parity audit table for the panel model: every
         training-time feature block must be labeled as deployable now, deployable
@@ -805,7 +805,7 @@ tracks:
     - id: TL14
       title: Run external validation only if TL13 clears the round-trip gate
       status: done
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - TL14 is only justified if TL13 produced both a materially richer deployable
         feature set and an improved round-trip result on the saved panel-host cohort;
@@ -832,7 +832,7 @@ tracks:
     - id: TL15
       title: Build raw-host surface projector for deployable compatibility features
       status: done
-      model: gpt-5.4
+      model: smart
       ci_image_profile: full-bio
       depends_on_tasks: []
       acceptance_criteria:
@@ -857,7 +857,7 @@ tracks:
     - id: TL16
       title: Build genome-derived host typing projector for deployable bundle parity
       status: done
-      model: gpt-5.4
+      model: smart
       ci_image_profile: host-typing
       depends_on_tasks: []
       acceptance_criteria:
@@ -880,7 +880,7 @@ tracks:
     - id: TL17
       title: Build deployable phage compatibility preprocessor beyond k-mer SVD
       status: done
-      model: gpt-5.4
+      model: smart
       ci_image_profile: full-bio
       depends_on_tasks: []
       acceptance_criteria:
@@ -907,7 +907,7 @@ tracks:
     - id: TL18
       title: Rebuild the deployable generalized inference bundle with the richer preprocessors
       status: done
-      model: gpt-5.4
+      model: smart
       ci_image_profile: full-bio
       depends_on_tasks:
       - TL15
@@ -947,7 +947,7 @@ tracks:
     - id: TJ01
       title: One command to regenerate all v1 outputs from raw data
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - Single entry point regenerates feature blocks, model, calibration, recommendations,
         and report
@@ -955,7 +955,7 @@ tracks:
     - id: TJ02
       title: Freeze environment specs and seeds for v1 benchmark run
       status: done
-      model: gpt-5.4-mini
+      model: simple
       acceptance_criteria:
       - requirements.txt and phage_env environment spec locked for exact versions
         used
@@ -1103,7 +1103,7 @@ tracks:
       - DEPLOY06
       - DEPLOY04
       - DEPLOY05
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Download the 403 assemblies using the DEPLOY01 function if not already present
       - Load the pre-computed 403-host defense gene counts from the checked-in CSV at
@@ -1147,7 +1147,7 @@ tracks:
       ci_image_profile: full-bio
       depends_on_tasks:
       - DEPLOY07
-      model: gpt-5.4
+      model: smart
       acceptance_criteria:
       - Update generalized_inference.py so that training and inference call the exact
         same feature derivation functions — not analogous functions that produce columns

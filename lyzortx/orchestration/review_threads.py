@@ -65,7 +65,7 @@ def filter_unresolved(threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def format_thread(thread: dict[str, Any]) -> str:
-    """Format a single thread as markdown for the Codex prompt."""
+    """Format a single thread as markdown for the agent prompt."""
     path = thread.get("path", "unknown")
     line = thread.get("line") or 0
     comments = thread.get("comments", {}).get("nodes", [])
@@ -78,7 +78,7 @@ def format_thread(thread: dict[str, Any]) -> str:
 
 
 def format_prompt(pr_number: int, threads: list[dict[str, Any]]) -> str:
-    """Build the full Codex feedback prompt from unresolved threads."""
+    """Build the full feedback prompt from unresolved threads."""
     parts = [
         f"# Review feedback to address for PR #{pr_number}",
         "",
@@ -96,8 +96,8 @@ def format_prompt(pr_number: int, threads: list[dict[str, Any]]) -> str:
             "You MUST reply to every review comment using gh api to post a reply.",
             "For each comment: either fix the issue and explain what you changed,",
             "or push back explaining why the feedback is wrong or unnecessary.",
-            "End every reply with a signature line: 'Posted by Codex <model>'",
-            "where <model> is the model you are running as (e.g., gpt-5.4).",
+            "End every reply with a signature line: 'Posted by Claude <model>'.",
+            "Replace <model> with the concrete model you are running (for example, claude-opus-4-6).",
             "Run tests: pytest -q lyzortx/tests/",
             "Commit and push fixes to the current branch.",
         ]

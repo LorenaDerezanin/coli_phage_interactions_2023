@@ -57,37 +57,41 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Python
+      - name: Set up Miniconda
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-python@v6
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: "3.12"
+          auto-activate-base: false
 
-      - name: Install pip dependencies
+      - name: Bootstrap phage_env
         if: steps.check.outputs.skip != 'true'
-        run: pip install -r requirements.txt
+        shell: bash -el {0}
+        run: conda env create -f environment.yml -n phage_env
 
       - uses: anthropics/claude-code-action@v1
         if: steps.check.outputs.skip != 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Keep review authorship on claude[bot]. Overriding github_token here would
+          # make downstream review-state checks ambiguous because they key on that actor.
           allowed_bots: "czarphage,czarphage[bot]"
           use_sticky_comment: true
           track_progress: true
           claude_args: >-
             --model ${{ steps.model.outputs.name }}
             --allowedTools
-            "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(gh pr view:*),Bash(gh api:*),Bash(python:*),Read,Glob,Grep"
+            "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__get_pull_request_diff,Bash(gh pr view:*),Bash(gh api:*),Bash(conda:*),Read,Glob,Grep"
           prompt: |
             Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
 
             1. Read AGENTS.md and lyzortx/AGENTS.md for review guidelines and project policies.
             2. Get the diff with mcp__github__get_pull_request_diff.
             3. Read relevant source files for context.
-            4. In this GitHub Actions environment, run Python helper commands directly via `python ...`.
+            4. In this GitHub Actions environment, run Python helper commands via `conda run -n phage_env python ...`.
             5. Manage review threads (you are the sole judge of thread resolution):
                - List all threads with resolution state:
-                 python -m lyzortx.orchestration.review_threads ${{ github.repository_owner }} ${{ github.event.repository.name }} ${{ github.event.pull_request.number }} /dev/null --json
+                 conda run -n phage_env python -m lyzortx.orchestration.review_threads ${{ github.repository_owner }} ${{ github.event.repository.name }} ${{ github.event.pull_request.number }} /dev/null --json
                - Resolve adequately addressed threads:
                  gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
                - Unresolve inadequately resolved threads:
@@ -118,7 +122,7 @@ jobs:
                  If this returns empty or null, your review was NOT posted. Retry with the gh api fallback.
 
       # After Claude reviews, check the outcome and trigger downstream actions.
-      # Auto-merge on approval; dispatch Codex lifecycle on commented reviews.
+      # Auto-merge on approval; dispatch Claude lifecycle on commented reviews.
       - name: Generate Czarphage token
         if: steps.check.outputs.skip != 'true'
         id: czarphage
@@ -136,7 +140,7 @@ jobs:
           CURRENT_HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           LATEST_REVIEW=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUM}/reviews" \
             --jq '[.[] | select(.user.login == "claude[bot]" and .commit_id == "'"${CURRENT_HEAD_SHA}"'")] | last | .state // ""')
-          UNRESOLVED_REVIEW_THREADS=$(python -m lyzortx.orchestration.review_threads \
+          UNRESOLVED_REVIEW_THREADS=$(conda run -n phage_env python -m lyzortx.orchestration.review_threads \
             "${{ github.repository_owner }}" \
             "${{ github.event.repository.name }}" \
             "$PR_NUM" \
@@ -169,9 +173,9 @@ jobs:
               echo "::error::Auto-merge failed after 3 attempts"
               exit 1
             fi
-          else
-            echo "Review not clean (state=${LATEST_REVIEW}, unresolved=${UNRESOLVED_REVIEW_THREADS}) — dispatching Codex lifecycle."
-            gh workflow run codex-pr-lifecycle.yml \
+          elif [ "$LATEST_REVIEW" = "COMMENTED" ] || [ "$UNRESOLVED_REVIEW_THREADS" -gt 0 ]; then
+            echo "Review feedback remains (${UNRESOLVED_REVIEW_THREADS} unresolved thread(s)) — dispatching Claude lifecycle."
+            gh workflow run claude-pr-lifecycle.yml \
               --repo "${{ github.repository }}" \
               --field pr_number="$PR_NUM"
           fi
@@ -189,16 +193,19 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: "3.12"
+          auto-activate-base: false
 
-      - name: Install pip dependencies
-        run: pip install -r requirements.txt
+      - name: Bootstrap phage_env
+        shell: bash -el {0}
+        run: conda env create -f environment.yml -n phage_env
 
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Keep interactive @claude replies on claude[bot] for the same reason as auto-review.
           trigger_phrase: "@claude"
           track_progress: true

@@ -1,9 +1,9 @@
-name: Codex PR Lifecycle
+name: Claude PR Lifecycle
 
 # Triggered exclusively by workflow_dispatch — either from the Claude PR
 # Review workflow (after it posts a COMMENTED review) or manually.
-# This eliminates the self-trigger loop where Codex thread replies fired
-# pull_request_review events that cancelled the in-progress Codex run via
+# This eliminates the self-trigger loop where agent thread replies fired
+# pull_request_review events that cancelled the in-progress run via
 # the concurrency group.
 on:
   workflow_dispatch:
@@ -18,11 +18,12 @@ permissions:
   pull-requests: write
   issues: write
   packages: read
+  id-token: write
 
 # Only one lifecycle run per PR at a time. New runs cancel in-progress ones
 # to prevent race conditions on the review round cap label.
 concurrency:
-  group: codex-lifecycle-pr-${{ inputs.pr_number }}
+  group: claude-lifecycle-pr-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
@@ -90,7 +91,7 @@ jobs:
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
   # ── Address feedback from Claude review on orchestrator PRs ──────────
-  # The 3-round cap (codex-review-round-N labels) prevents infinite loops.
+  # The 3-round cap (claude-review-round-N labels) prevents infinite loops.
   address-feedback:
     name: Address Review Feedback
     needs: resolve-ci-image
@@ -203,7 +204,7 @@ jobs:
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           ROUND=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" \
-            --json labels --jq '[.labels[].name | select(startswith("codex-review-round-"))] | length')
+            --json labels --jq '[.labels[].name | select(startswith("claude-review-round-"))] | length')
           echo "round=${ROUND:-0}" >> "$GITHUB_OUTPUT"
 
           if [ "${ROUND:-0}" -ge 3 ]; then
@@ -215,6 +216,7 @@ jobs:
 
       - name: Collect unresolved review feedback
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        id: feedback
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
@@ -223,7 +225,7 @@ jobs:
           REPO="${{ github.event.repository.name }}"
           PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
           IMAGE_LABEL="${{ needs.resolve-ci-image.outputs.ci_image_label }}"
-          RAW_FEEDBACK=.scratch/ci/codex_feedback_raw.txt
+          RAW_FEEDBACK=.scratch/ci/claude_feedback_raw.txt
           micromamba run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" "$RAW_FEEDBACK"
 
           # If no review threads but Claude posted feedback in a top-level comment,
@@ -251,13 +253,7 @@ jobs:
             fi
             echo ""
             cat "$RAW_FEEDBACK"
-          } > .scratch/ci/codex_feedback.txt
-
-      - name: Configure git identity for Codex agent
-        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        run: |
-          git config user.name "czarphage[bot]"
-          git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
+          } > .scratch/ci/claude_feedback.txt
 
       - name: Install pre-commit hooks
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
@@ -278,8 +274,8 @@ jobs:
             echo "::error::No linked issue found in PR #${PR_NUM} body."
             exit 1
           fi
-          gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body' > .scratch/ci/issue_body.txt
-          MODEL=$(micromamba run -n phage_env python -c "from pathlib import Path; from lyzortx.orchestration.parse_model_directive import extract_model; print(extract_model(Path('.scratch/ci/issue_body.txt').read_text()) or '')")
+          MODEL=$(gh issue view "$ISSUE_NUM" --repo "${{ github.repository }}" --json body --jq '.body' \
+            | micromamba run -n phage_env python -m lyzortx.orchestration.parse_model_directive --provider claude)
           if [ -z "$MODEL" ]; then
             echo "::error::No model directive in issue #${ISSUE_NUM}."
             exit 1
@@ -287,21 +283,39 @@ jobs:
           echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
           echo "Using model: ${MODEL} (from issue #${ISSUE_NUM})"
 
-      - name: Fix with Codex
+      - name: Configure git identity
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
-        env:
-          GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
-        uses: openai/codex-action@v1
+        run: |
+          git config user.name "czarphage[bot]"
+          git config user.email "3227910+czarphage[bot]@users.noreply.github.com"
+
+      - name: Fix with Claude
+        if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
+        uses: anthropics/claude-code-action@v1
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: ${{ steps.model.outputs.model }}
-          allow-bots: true
-          sandbox: danger-full-access
-          safety-strategy: unsafe
-          prompt-file: .scratch/ci/codex_feedback.txt
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.czarphage.outputs.token }}
+          allowed_bots: "czarphage,czarphage[bot]"
+          track_progress: true
+          prompt: |
+            Address the unresolved review feedback on PR #${{ steps.pr.outputs.number }}.
+
+            The feedback file at .scratch/ci/claude_feedback.txt contains the unresolved review threads.
+            Read it with: cat .scratch/ci/claude_feedback.txt
+
+            Follow the policies in AGENTS.md and lyzortx/AGENTS.md.
+            Apply the Requirement Challenge Policy: push back on comments that are wrong,
+            overcomplicated, or low-value rather than blindly implementing every suggestion.
+            In this GitHub Actions environment, use 'micromamba run -n phage_env ...' for Python, pytest, and pre-commit commands.
+
+            After fixing, commit and push your changes to the existing branch.
+          claude_args: >-
+            --model ${{ steps.model.outputs.model }}
+            --allowedTools
+            "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(micromamba:*),Bash(pre-commit:*),Bash(ruff:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(find:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*)"
 
       # Thread resolution is handled by Claude during re-review, not here.
-      # Codex pushes fixes → Claude re-reviews → resolves threads it's satisfied with.
+      # Claude pushes fixes → Claude re-reviews → resolves threads it's satisfied with.
 
       - name: Bump review round
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
@@ -310,5 +324,4 @@ jobs:
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))
-          gh issue edit "$PR_NUM" --repo "${{ github.repository }}" \
-            --add-label "codex-review-round-${NEXT_ROUND}"
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "claude-review-round-${NEXT_ROUND}"

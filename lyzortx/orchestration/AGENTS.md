@@ -19,15 +19,15 @@
 
 # Model Tier Selection for Plan Tasks
 
-- Do not choose `gpt-5.4-mini` by surface appearance alone. Some tasks look mechanical but are actually fragile
+- Do not choose `simple` by surface appearance alone. Some tasks look mechanical but are actually fragile
   artifact-boundary work.
-- Escalate to `gpt-5.4` when a task does any of the following:
+- Escalate to `smart` when a task does any of the following:
   - consumes outputs from an upstream task whose schema, provenance, or exclusion rules recently changed
   - changes evaluation, locking, sweep-selection, or model-comparison logic
   - depends on gitignored generated outputs that may exist locally in stale pre-replan form
   - introduces a permissive fallback such as zero-fill, cache reuse, or auto-regeneration
   - requires interpreting notebook or PR postmortem findings rather than just applying explicit edits
-- Reserve `gpt-5.4-mini` for truly bounded mechanical work where the main risks are local code edits rather than
+- Reserve `simple` for truly bounded mechanical work where the main risks are local code edits rather than
   cross-artifact contract mismatches.
 
 # Acceptance Criteria for Artifact-Boundary Tasks
@@ -47,9 +47,9 @@
 
 - Treat the `replan` skill as guidance that must work for the weakest model tier named in the resulting tasks.
 - If a task would require extra judgment, tighter sequencing, or more explicit artifact-handling instructions for
-  `gpt-5.4-mini` to succeed, either:
+  the `simple` tier to succeed, either:
   - add that low-freedom guidance directly to the acceptance criteria, or
-  - assign the task to `gpt-5.4` instead
+  - assign the task to `smart` instead
 
 # Task Status Management
 

@@ -81,25 +81,25 @@ SHAP + ablation + downstream verification into one task. If you're unsure whethe
 similar past runs:
 
 ```bash
-gh run list --workflow=codex-implement.yml --limit=10 \
+gh run list --workflow=claude-implement.yml --limit=10 \
   --json displayTitle,startedAt,updatedAt \
   --jq '.[] | "\(.displayTitle) started=\(.startedAt) ended=\(.updatedAt)"'
 ```
 
 ### Match model tier to task complexity
 
-Use cheaper/faster models (`gpt-5.4-mini`) for mechanical tasks: deletions, re-running existing code, schema updates,
-downstream verification. Reserve expensive models (`gpt-5.4`) for tasks requiring research judgment: investigating
-alternatives, proposing new features, analyzing failure modes.
+Use the `simple` tier for mechanical tasks: deletions, re-running existing code, schema updates, downstream
+verification. Reserve the `smart` tier for tasks requiring research judgment: investigating alternatives, proposing
+new features, analyzing failure modes.
 
-Ask: "Could a junior engineer do this by following explicit instructions?" If yes, it's a mini task.
+Ask: "Could a junior engineer do this by following explicit instructions?" If yes, it's usually a `simple` task.
 
 ### Artifact-boundary tasks are not mini by default
 
 Some tasks look mechanical but are actually fragile because they sit at the boundary between old and new artifacts.
-These should usually be `gpt-5.4`, not `gpt-5.4-mini`.
+These should usually be `smart`, not `simple`.
 
-Escalate to `gpt-5.4` when a task does any of the following:
+Escalate to `smart` when a task does any of the following:
 - consumes outputs from an upstream task whose schema, provenance, exclusion, or holdout rules recently changed
 - re-runs a downstream evaluation after fixing leakage, reproducibility, or artifact validity upstream
 - changes lock rules, sweep selection, or any "winner" decision logic
@@ -112,7 +112,7 @@ Why: mini models often miss the boundary failures rather than the main logic:
 - trusting stale generated outputs because the filenames match
 - failing one step later because the upstream artifact bootstrap chain was not restated in the task
 
-If you still assign such a task to `gpt-5.4-mini`, the acceptance criteria must compensate by being much more specific.
+If you still assign such a task to `simple`, the acceptance criteria must compensate by being much more specific.
 
 ### Set low freedom for fragile replan tasks
 
@@ -169,14 +169,14 @@ include a URL to the official docs and a direct quote. Don't assert from memory.
 Anthropic's skill guidance also says to test a skill with all model tiers you plan to use. Apply the same idea to task
 authoring: acceptance criteria must be written for the weakest model you intend to assign.
 
-Before assigning `gpt-5.4-mini`, ask:
+Before assigning `simple`, ask:
 - Would a smaller model know which artifact boundary is dangerous here?
 - Does the task text explicitly name the stale-artifact, path-provenance, and fallback-scope risks?
 - If the model followed the acceptance criteria literally, could it still "complete" the task while being wrong?
 
 If the answer to any of these is yes, either:
 - tighten the acceptance criteria until the unsafe path is ruled out, or
-- assign `gpt-5.4` instead
+- assign `smart` instead
 
 ## Phase 5: Update all artifacts
 

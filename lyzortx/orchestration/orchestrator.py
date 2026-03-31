@@ -95,6 +95,13 @@ def _load_acceptance_criteria(plan_path: Path, task_id: str) -> list[str]:
     return []
 
 
+def _invalid_model_tiers(task_models: list[tuple[str, str]]) -> list[str]:
+    """Return formatted task IDs whose model field is not a supported semantic tier."""
+    from lyzortx.orchestration.parse_model_directive import VALID_TIERS
+
+    return [f"{task_id} ({model})" for task_id, model in task_models if model not in VALID_TIERS]
+
+
 def load_pending_tasks(plan_path: Path) -> list[Task]:
     """Load all pending tasks from plan.yml as Task objects."""
     from lyzortx.orchestration.plan_parser import load_plan, resolve_task_dependencies
@@ -126,6 +133,12 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
     missing_model = [t.task_id for t in tasks if not t.model]
     if missing_model:
         raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+    invalid_model_tiers = _invalid_model_tiers([(t.task_id, t.model) for t in tasks])
+    if invalid_model_tiers:
+        raise ValueError(
+            "Pending tasks have unsupported 'model' tiers in plan.yml: "
+            f"{invalid_model_tiers}. Use only 'smart' or 'simple'."
+        )
     missing_criteria = [t.task_id for t in tasks if not t.acceptance_criteria]
     if missing_criteria:
         raise ValueError(f"Pending tasks missing required 'acceptance_criteria' in plan.yml: {missing_criteria}")
@@ -346,7 +359,7 @@ class GitHubClient:
         labels.append(image_label)
         if task.model:
             model_label = f"model-{task.model}"
-            self.ensure_label_exists(model_label, "C5DEF5", f"Codex model: {task.model}")
+            self.ensure_label_exists(model_label, "C5DEF5", f"Model tier: {task.model}")
             labels.append(model_label)
         payload = {
             "title": title,
@@ -548,6 +561,12 @@ def run_once(
     missing_model = [pt.task_id for pt in candidates if not pt.model]
     if missing_model:
         raise ValueError(f"Pending tasks missing required 'model' field in plan.yml: {missing_model}")
+    invalid_model_tiers = _invalid_model_tiers([(pt.task_id, pt.model or "") for pt in candidates])
+    if invalid_model_tiers:
+        raise ValueError(
+            "Pending tasks have unsupported 'model' tiers in plan.yml: "
+            f"{invalid_model_tiers}. Use only 'smart' or 'simple'."
+        )
 
     dispatched: list[dict[str, Any]] = []
     for pt in candidates:
