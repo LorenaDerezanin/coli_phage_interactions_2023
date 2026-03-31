@@ -4,6 +4,7 @@
 Individual steps and groups (run individually or with 'all'):
   annotate                — Run pharokka on phage genomes and cache key TSVs.
   features (group)        — parse → enrich → rbp-features → defense-features.
+  host-typing-projector   — Build the TL16 genome-derived host typing projector.
   retrain-mechanistic-v1  — Retrain the v1 model with mechanistic features.
   inference (group)       — generalized-inference-bundle → deployable-generalized-inference-bundle → validate-vhdb.
 """
@@ -24,6 +25,7 @@ if __package__ in {None, ""}:
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.track_l.steps import (
     build_generalized_inference_bundle,
+    build_host_typing_projector,
     build_tl13_generalized_inference_bundle,
     build_mechanistic_defense_evasion_features,
     build_mechanistic_rbp_receptor_features,
@@ -113,6 +115,7 @@ GROUPS: list[tuple[str, list[tuple[str, StepFn]]]] = [
 ALL_STEPS: list[tuple[str, StepFn]] = [
     ("annotate", _run_annotate),
     *FEATURE_STEPS,
+    ("host-typing-projector", lambda _args: build_host_typing_projector.main([])),
     ("retrain-mechanistic-v1", lambda _args: retrain_mechanistic_v1_model.main([])),
     *INFERENCE_STEPS,
 ]

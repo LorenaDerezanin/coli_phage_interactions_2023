@@ -1182,3 +1182,79 @@ bundle clears its round-trip gate first.
 Do not treat fitted UMAP host coordinates as the next deployable step. If continuous host-similarity signal is still
 needed after `TL15`-`TL17`, it should come from a stable runtime projector or distance contract rather than from
 reusing a fragile low-dimensional embedding fit.
+
+### 2026-03-31: TL16 Build genome-derived host typing projector for deployable bundle parity
+
+#### Executive summary
+
+Built `build_host_typing_projector.py`, a Track L step that converts the repo's committed assembly-derived host-typing
+outputs into one stable deployable schema keyed by `bacteria`. The projector reads:
+
+- Clermont phylogroup calls from `host_phylogroup.tsv`
+- Achtman MLST calls from `host_ST.tsv`
+- ECTyper O/H serotype calls from `data/genomics/bacteria/o_type/output.tsv`
+- Kaptive capsule calls from the curated high-hit table plus the full raw-results table
+
+It writes projected features, a schema JSON, a projection-status table that separates exact replicas from proxies and
+truly non-derivable metadata, plus validation tables against the old panel metadata block under
+`lyzortx/generated_outputs/track_l/host_typing_projector/`.
+
+The clean reproductions are narrow but real:
+
+- `Clermont_Phylo`: `33/33` exact on the assembly-covered subset.
+- `ST_Warwick`: `33/33` exact on the same subset.
+- `Klebs_capsule_type`: `22/22` exact on the sparse high-hit Kaptive subset.
+
+The serotype family is callable almost everywhere but noisier:
+
+- serotype callable on `402/403` panel hosts (`LF110` is the one missing projected call),
+- `O-type`: `300/351` exact (`85.5%`), `337/351` loose agreement (`96.0%`) when ECTyper slash-ambiguous O calls such as
+  `O2/O50` are counted as containing the legacy label,
+- `H-type`: `368/380` exact (`96.8%`),
+- full `host_serotype`: `279/402` exact (`69.4%`), `315/402` loose agreement (`78.4%`).
+
+Capsule typing remains explicitly split:
+
+- a callable deployable capsule family exists (`23` hosts with any Kaptive call, `22` with stable high-hit K types);
+- the legacy `ABC_serotype` field does **not** reproduce honestly from the committed capsule assets in this panel slice
+  (`144` legacy non-empty rows, `22` projected K-type proxy rows, `0` comparable overlaps);
+- the old binary capsule flags (`Capsule_ABC`, `Capsule_GroupIV_*`, `Capsule_Wzy_stricte`) remain unsupported as exact
+  replicas because the original caller outputs are not present in the repo.
+
+#### What changed
+
+- Added `lyzortx/pipeline/track_l/steps/build_host_typing_projector.py`.
+  - Emits `tl16_host_typing_projected_features.csv` with ordered columns such as `host_clermont_phylo`,
+    `host_st_warwick`, `host_o_type`, `host_h_type`, `host_serotype`, capsule-type fields, and explicit `*_status`
+    columns so "not callable" is not silently collapsed into an empty negative.
+  - Emits `tl16_metadata_projection_status.csv` classifying each legacy metadata field as:
+    - reproduced exactly,
+    - reproduced only as a proxy,
+    - handled by a different projector (`LPS_type` -> `TL15`), or
+    - truly non-derivable metadata (`Host`, `Origin`, `Pathotype`, `Collection`, `Mouse_killed_10`).
+  - Emits `tl16_validation_summary.csv` and `tl16_validation_details.csv` so exact and loose agreement can be audited by
+    feature family.
+- Updated `lyzortx/pipeline/track_l/run_track_l.py` with a `host-typing-projector` step.
+- Added `lyzortx/tests/test_track_l_host_typing_projector.py`.
+
+#### Design decision
+
+This repo still does **not** ship the panel host FASTA assemblies themselves, so TL16 does not pretend to rerun
+ClermonTyper/MLST/ECTyper/Kaptive from raw bytes in CI. Instead it builds the deployable schema from the committed
+assembly-derived typing outputs already tracked under `data/genomics/bacteria/`. That is the honest contract available
+in this checkout. The projection-status table makes that boundary explicit instead of treating the whole old metadata
+block as generically "not deployable."
+
+#### Interpretation
+
+1. The old host-metadata block should no longer be treated as monolithic. Its typing subset cleanly decomposes into:
+   - exact genome-derived replicas (`Clermont_Phylo`, `ST_Warwick`, sparse high-hit `Klebs_capsule_type`);
+   - callable but noisy genome-derived fields (`O-type`, `H-type`, combined serotype); and
+   - unsupported exact replicas that need either a different caller output or a consciously different proxy
+     (`ABC_serotype`, `Capsule_ABC`, `Capsule_GroupIV_*`, `Capsule_Wzy_stricte`).
+2. The main serotype mismatch mode is ambiguity, not random drift. Many O-type misses are ECTyper multi-calls that still
+   contain the legacy label (`O2` vs `O2/O50`, `O17` vs `O77/O17/O44/O106`, etc.), which is why loose agreement is much
+   better than exact-string agreement.
+3. Non-genome metadata is now separated cleanly in code and notebook text. `Host`, `Origin`, `Pathotype`,
+   `Collection`, and `Mouse_killed_10` are not deployability failures in the same sense as missing preprocessors; they
+   are genuinely different kinds of metadata and should stay out of the deployable host projector.
