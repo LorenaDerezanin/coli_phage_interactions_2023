@@ -472,17 +472,82 @@ def project_panel_feature_rows(
     scratch_root: Path,
 ) -> list[dict[str, object]]:
     phages = read_panel_phages(phage_metadata_path, expected_panel_count=expected_panel_count)
-    feature_rows = [
-        project_phage_feature_row(
-            fna_dir / f"{phage}.fna",
-            runtime_payload=runtime_payload,
-            reference_fasta_path=reference_fasta_path,
-            scratch_root=scratch_root,
-        )
-        for phage in phages
-    ]
+    feature_rows = project_phage_feature_rows_batched(
+        phage_paths=[fna_dir / f"{phage}.fna" for phage in phages],
+        runtime_payload=runtime_payload,
+        reference_fasta_path=reference_fasta_path,
+        scratch_root=scratch_root,
+    )
     if not feature_rows:
         raise ValueError("TL17 panel projection produced zero rows.")
+    return feature_rows
+
+
+def project_phage_feature_rows_batched(
+    phage_paths: Sequence[Path],
+    *,
+    runtime_payload: Mapping[str, object],
+    reference_fasta_path: Path,
+    scratch_root: Path,
+) -> list[dict[str, object]]:
+    """Project multiple phages in a single batched mmseqs search instead of one per phage."""
+    family_rows, reference_rows, matching_policy = parse_runtime_payload(runtime_payload)
+    target_to_family = {row.reference_id: row.family_id for row in reference_rows}
+    min_percent_identity = float(matching_policy["min_percent_identity"])
+    min_query_coverage = float(matching_policy["min_query_coverage"])
+    mmseqs_command = tuple(str(token) for token in matching_policy["mmseqs_command"])
+
+    batch_scratch_dir = scratch_root / "_batched"
+    if batch_scratch_dir.exists():
+        shutil.rmtree(batch_scratch_dir)
+    ensure_directory(batch_scratch_dir)
+
+    LOGGER.info("Starting batched pyrodigal gene calling for %d phages", len(phage_paths))
+    combined_query_path = batch_scratch_dir / "combined_queries.faa"
+    phage_names: list[str] = []
+    with combined_query_path.open("w", encoding="utf-8") as handle:
+        for phage_path in phage_paths:
+            phage = phage_path.stem
+            phage_names.append(phage)
+            genome_records = read_fasta_records(phage_path, protein=False)
+            proteins, _ = call_proteins_with_pyrodigal(phage, genome_records)
+            for index, protein in enumerate(proteins, 1):
+                handle.write(f">{phage}|query_prot_{index:04d}\n{protein.sequence}\n")
+    LOGGER.info("Completed batched pyrodigal gene calling; %d phages written to combined query", len(phage_names))
+
+    match_tsv_path = batch_scratch_dir / "mmseqs_hits.tsv"
+    run_mmseqs_search(
+        query_fasta_path=combined_query_path,
+        reference_fasta_path=reference_fasta_path,
+        output_tsv_path=match_tsv_path,
+        scratch_dir=batch_scratch_dir,
+        mmseqs_command=mmseqs_command,
+    )
+
+    accepted_families_by_phage: dict[str, set[str]] = {phage: set() for phage in phage_names}
+    accepted_hits_by_phage: dict[str, int] = {phage: 0 for phage in phage_names}
+    for match in read_mmseqs_matches(match_tsv_path):
+        phage = match.query_id.split("|", 1)[0]
+        family_id = target_to_family.get(match.target_id)
+        if family_id is None:
+            continue
+        if match.percent_identity < min_percent_identity:
+            continue
+        if match.query_coverage < min_query_coverage:
+            continue
+        if phage in accepted_families_by_phage:
+            accepted_families_by_phage[phage].add(family_id)
+            accepted_hits_by_phage[phage] += 1
+
+    feature_rows: list[dict[str, object]] = []
+    for phage in phage_names:
+        accepted_families = accepted_families_by_phage[phage]
+        row: dict[str, object] = {"phage": phage}
+        for family_row in family_rows:
+            row[family_row.column_name] = int(family_row.family_id in accepted_families)
+        row[SUMMARY_HIT_COUNT_COLUMN] = accepted_hits_by_phage[phage]
+        row[SUMMARY_FAMILY_COUNT_COLUMN] = len(accepted_families)
+        feature_rows.append(row)
     return feature_rows
 
 

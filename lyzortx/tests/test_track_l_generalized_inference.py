@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+from types import SimpleNamespace
 
 import joblib
 import pandas as pd
@@ -26,6 +27,11 @@ LOCKED_LIGHTGBM_PARAMS = {
     "n_estimators": 300,
     "num_leaves": 31,
 }
+
+
+class _IdentityCalibrator:
+    def predict(self, probabilities: list[float]) -> list[float]:
+        return list(probabilities)
 
 
 def _read_semicolon_rows(path: Path) -> list[dict[str, str]]:
@@ -144,6 +150,172 @@ def test_augment_rows_with_pair_features_zero_fills_missing_holdout_pair() -> No
             "tl04_pair_support": 0.0,
         }
     ]
+
+
+def test_augment_host_rows_with_features_raises_for_missing_bacteria() -> None:
+    with pytest.raises(KeyError, match="Missing deployable host feature row for bacteria B1"):
+        tl08_bundle.augment_host_rows_with_features(
+            host_rows=[{"bacteria": "B1", "host_defense_diversity": 1}],
+            extra_host_feature_rows=[],
+            extra_host_feature_columns=["host_o_type"],
+        )
+
+
+def test_augment_host_rows_with_features_adds_requested_columns() -> None:
+    rows = tl08_bundle.augment_host_rows_with_features(
+        host_rows=[{"bacteria": "B1", "host_defense_diversity": 1}],
+        extra_host_feature_rows=[{"bacteria": "B1", "host_o_type": "O1", "host_capsule_abc_proxy_present": 1}],
+        extra_host_feature_columns=["host_o_type", "host_capsule_abc_proxy_present"],
+    )
+
+    assert rows == [
+        {
+            "bacteria": "B1",
+            "host_defense_diversity": 1,
+            "host_o_type": "O1",
+            "host_capsule_abc_proxy_present": 1,
+        }
+    ]
+
+
+def test_build_model_bundle_filters_host_rows_to_st02_bacteria(tmp_path: Path, monkeypatch) -> None:
+    st02_path = tmp_path / "st02.csv"
+    st03_path = tmp_path / "st03.csv"
+    defense_subtypes_path = tmp_path / "defense.csv"
+    phage_feature_path = tmp_path / "phage.csv"
+    phage_svd_path = tmp_path / "phage_svd.joblib"
+    output_dir = tmp_path / "bundle"
+
+    for path in (st02_path, st03_path, defense_subtypes_path, phage_feature_path):
+        path.write_text("placeholder\n", encoding="utf-8")
+    phage_svd_path.write_bytes(b"svd")
+
+    monkeypatch.setattr(
+        tl08_bundle,
+        "read_defense_rows",
+        lambda _: [{"bacteria": "B1"}, {"bacteria": "B2"}],
+    )
+    monkeypatch.setattr(
+        tl08_bundle,
+        "build_defense_feature_rows",
+        lambda _: (
+            [
+                {"bacteria": "B1", "host_defense_diversity": 1},
+                {"bacteria": "B2", "host_defense_diversity": 2},
+            ],
+            ["host_defense_diversity"],
+            {},
+        ),
+    )
+    monkeypatch.setattr(tl08_bundle, "build_defense_column_mask", lambda _: {"ordered_feature_columns": []})
+
+    def fake_read_csv_rows(path: Path) -> list[dict[str, object]]:
+        if path == st02_path:
+            return [
+                {
+                    "pair_id": "B1__P1",
+                    "bacteria": "B1",
+                    "phage": "P1",
+                    "label_hard_any_lysis": "1",
+                    "training_weight_v3": "1.0",
+                }
+            ]
+        if path == st03_path:
+            return [
+                {
+                    "pair_id": "B1__P1",
+                    "split_holdout": "holdout_test",
+                    "split_cv5_fold": "0",
+                    "is_hard_trainable": "1",
+                }
+            ]
+        if path == phage_feature_path:
+            return [{"phage": "P1", "phage_signal": 0.5}]
+        raise AssertionError(f"Unexpected CSV path: {path}")
+
+    monkeypatch.setattr(tl08_bundle, "read_csv_rows", fake_read_csv_rows)
+    monkeypatch.setattr(
+        tl08_bundle,
+        "augment_host_rows_with_features",
+        lambda host_rows, **_: [dict(row) for row in host_rows],
+    )
+    monkeypatch.setattr(
+        tl08_bundle,
+        "augment_phage_rows_with_features",
+        lambda phage_rows, **_: [dict(row) for row in phage_rows],
+    )
+    monkeypatch.setattr(
+        tl08_bundle,
+        "build_training_rows",
+        lambda **_: [
+            {
+                "pair_id": "B1__P1",
+                "bacteria": "B1",
+                "phage": "P1",
+                "split_holdout": "holdout_test",
+                "split_cv5_fold": "0",
+                "is_hard_trainable": "1",
+                "label_hard_any_lysis": "1",
+                "training_weight_v3": "1.0",
+            }
+        ],
+    )
+    monkeypatch.setattr(tl08_bundle, "augment_rows_with_pair_features", lambda rows, **_: list(rows))
+    monkeypatch.setattr(
+        tl08_bundle,
+        "build_genome_only_feature_space",
+        lambda **_: SimpleNamespace(categorical_columns=(), numeric_columns=("host_defense_diversity", "phage_signal")),
+    )
+    monkeypatch.setattr(
+        tl08_bundle,
+        "fit_calibrator_from_cv_rows",
+        lambda *args, **kwargs: (_IdentityCalibrator(), 1),
+    )
+    monkeypatch.setattr(
+        tl08_bundle.train_v1_binary_classifier,
+        "fit_final_estimator",
+        lambda *args, **kwargs: (
+            {"estimator": "stub"},
+            {"vectorizer": "stub"},
+            None,
+            [{"label_hard_any_lysis": "1"}],
+            [0.8],
+        ),
+    )
+    monkeypatch.setattr(
+        tl08_bundle,
+        "build_reference_prediction_rows",
+        lambda *args, **kwargs: [
+            {
+                "pair_id": "B1__P1",
+                "bacteria": "B1",
+                "phage": "P1",
+                "split_holdout": "holdout_test",
+                "split_cv5_fold": "0",
+                "label_hard_any_lysis": "1",
+                "pred_lightgbm_raw": 0.8,
+                "pred_lightgbm_isotonic": 0.8,
+                "rank_lightgbm_isotonic": 1,
+            }
+        ],
+    )
+
+    result = tl08_bundle.build_model_bundle(
+        st02_pair_table_path=st02_path,
+        st03_split_assignments_path=st03_path,
+        defense_subtypes_path=defense_subtypes_path,
+        phage_kmer_feature_path=phage_feature_path,
+        phage_kmer_svd_path=phage_svd_path,
+        output_dir=output_dir,
+        lightgbm_params=LOCKED_LIGHTGBM_PARAMS,
+        random_state=42,
+        calibration_fold=0,
+    )
+
+    bundle_payload = joblib.load(result["bundle_path"])
+
+    assert bundle_payload["training"]["host_count"] == 1
+    assert bundle_payload["feature_space"]["host_feature_columns"] == ["host_defense_diversity"]
 
 
 def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path, monkeypatch) -> None:
@@ -292,6 +464,43 @@ def test_project_phage_features_parses_tl04_runtime_payload_once_per_batch(tmp_p
         {"phage": "phage_a", "tl04_phage_antidef_profile_001_present": 1},
         {"phage": "phage_b", "tl04_phage_antidef_profile_001_present": 1},
     ]
+
+
+def test_load_runtime_reads_tl15_tl16_and_tl17_payloads(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    bundle_path = bundle_dir / "bundle.joblib"
+    joblib.dump(
+        {
+            "lightgbm_estimator": object(),
+            "feature_vectorizer": object(),
+            "isotonic_calibrator": object(),
+            "feature_space": {},
+            "artifacts": {
+                "defense_mask_filename": "defense-mask.joblib",
+                "phage_svd_filename": "phage-svd.joblib",
+                "panel_defense_subtypes_filename": "panel-defense.csv",
+            },
+            "runtime": {"defense_finder_models_dirname": "defense-models"},
+            "deployable_runtime": {
+                "tl15_host_surface_projection": {"runtime_dirname": "runtime_tl15"},
+                "tl16_host_typing_projection": {"runtime_dirname": "runtime_tl16"},
+                "tl17_rbp_family_projection": {"reference_fasta_filename": "tl17.faa"},
+            },
+        },
+        bundle_path,
+    )
+    joblib.dump({}, bundle_dir / "defense-mask.joblib")
+    joblib.dump({}, bundle_dir / "phage-svd.joblib")
+    (bundle_dir / "panel-defense.csv").write_text("bacteria\nB1\n", encoding="utf-8")
+    (bundle_dir / "tl17.faa").write_text(">ref\nMA\n", encoding="utf-8")
+    (bundle_dir / "defense-models").mkdir()
+
+    runtime = tl08_infer.load_runtime(bundle_path)
+
+    assert runtime.tl15_runtime_payload == {"runtime_dirname": "runtime_tl15"}
+    assert runtime.tl16_runtime_payload == {"runtime_dirname": "runtime_tl16"}
+    assert runtime.tl17_runtime_payload == {"reference_fasta_filename": "tl17.faa"}
 
 
 def test_sha256_file_matches_previous_private_helper_contract(tmp_path: Path) -> None:

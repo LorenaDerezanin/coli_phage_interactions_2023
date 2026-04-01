@@ -20,6 +20,13 @@ from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import (
     extract_antidef_feature_names,
     parse_tl04_runtime_payload,
 )
+from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import TL17_BLOCK_ID, project_phage_feature_row
+from lyzortx.pipeline.track_l.steps.deployable_tl18_host_runtime import (
+    TL15_BLOCK_ID,
+    TL16_BLOCK_ID,
+    project_tl15_host_features,
+    project_tl16_host_features,
+)
 from lyzortx.pipeline.track_l.steps import run_novel_host_defense_finder
 from lyzortx.pipeline.track_l.steps.novel_organism_feature_projection import project_novel_phage
 from lyzortx.pipeline.track_l.steps.run_pharokka import run_pharokka_on_file, verify_annotations
@@ -37,6 +44,9 @@ class InferenceRuntime:
     panel_defense_subtypes_path: Path
     models_dir: Path
     tl04_runtime_payload: dict[str, Any] | None = None
+    tl15_runtime_payload: dict[str, Any] | None = None
+    tl16_runtime_payload: dict[str, Any] | None = None
+    tl17_runtime_payload: dict[str, Any] | None = None
     panel_annotation_cache_dir: Path | None = None
 
 
@@ -97,7 +107,11 @@ def load_runtime(model_path: str | Path) -> InferenceRuntime:
         str(bundle["artifacts"]["panel_defense_subtypes_filename"]),
     )
     models_dir = bundle_path.parent / str(bundle["runtime"]["defense_finder_models_dirname"])
-    tl04_runtime_payload = dict(bundle.get("deployable_runtime", {}).get(TL04_DIRECT_BLOCK_ID, {}))
+    deployable_runtime = dict(bundle.get("deployable_runtime", {}))
+    tl04_runtime_payload = dict(deployable_runtime.get(TL04_DIRECT_BLOCK_ID, {}))
+    tl15_runtime_payload = dict(deployable_runtime.get(TL15_BLOCK_ID, {}))
+    tl16_runtime_payload = dict(deployable_runtime.get(TL16_BLOCK_ID, {}))
+    tl17_runtime_payload = dict(deployable_runtime.get(TL17_BLOCK_ID, {}))
     panel_annotation_cache_dir = None
     if tl04_runtime_payload:
         cache_dirname = str(tl04_runtime_payload.get("panel_annotation_cache_dirname", "")).strip()
@@ -112,6 +126,9 @@ def load_runtime(model_path: str | Path) -> InferenceRuntime:
         panel_defense_subtypes_path=panel_defense_subtypes_path,
         models_dir=models_dir,
         tl04_runtime_payload=tl04_runtime_payload,
+        tl15_runtime_payload=tl15_runtime_payload,
+        tl16_runtime_payload=tl16_runtime_payload,
+        tl17_runtime_payload=tl17_runtime_payload,
         panel_annotation_cache_dir=panel_annotation_cache_dir,
     )
 
@@ -205,7 +222,28 @@ def project_host_features(
         **runner_kwargs,
     )
     host_feature_path = host_output_dir / "novel_host_defense_features.csv"
-    return pd.read_csv(host_feature_path).iloc[0].to_dict()
+    host_row = pd.read_csv(host_feature_path).iloc[0].to_dict()
+    if runtime.tl15_runtime_payload:
+        host_row.update(
+            project_tl15_host_features(
+                host_genome,
+                bacteria=str(host_row["bacteria"]),
+                bundle_dir=runtime.bundle_path.parent,
+                runtime_payload=runtime.tl15_runtime_payload,
+                output_dir=host_output_dir / "tl15_runtime",
+            )
+        )
+    if runtime.tl16_runtime_payload:
+        host_row.update(
+            project_tl16_host_features(
+                host_genome,
+                bacteria=str(host_row["bacteria"]),
+                bundle_dir=runtime.bundle_path.parent,
+                runtime_payload=runtime.tl16_runtime_payload,
+                output_dir=host_output_dir / "tl16_runtime",
+            )
+        )
+    return host_row
 
 
 def project_phage_features(
@@ -244,6 +282,18 @@ def project_phage_features(
                 projected_row,
                 annotation_tsv_path=annotation_tsv_path,
                 tl04_profiles=tl04_profiles,
+            )
+        if runtime.tl17_runtime_payload:
+            reference_fasta_filename = str(runtime.tl17_runtime_payload.get("reference_fasta_filename", "")).strip()
+            if not reference_fasta_filename:
+                raise KeyError("TL17 runtime payload is missing reference_fasta_filename")
+            projected_row.update(
+                project_phage_feature_row(
+                    phage_path,
+                    runtime_payload=runtime.tl17_runtime_payload,
+                    reference_fasta_path=runtime.bundle_path.parent / reference_fasta_filename,
+                    scratch_root=INFER_SCRATCH_ROOT / "tl17_runtime",
+                )
             )
         projected_rows.append(projected_row)
     return projected_rows
