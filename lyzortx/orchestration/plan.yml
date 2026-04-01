@@ -906,7 +906,7 @@ tracks:
         than generic annotation enrichment
     - id: TL18
       title: Rebuild the deployable generalized inference bundle with the richer preprocessors
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: full-bio
       depends_on_tasks:

@@ -573,7 +573,7 @@ graph LR
     scope
   - Validation must make clear which phage FASTAs were used, what runtime assets were frozen, and why the resulting
     block is a compatibility feature rather than generic annotation enrichment
-- [ ] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `gpt-5.4`. CI
+- [x] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `gpt-5.4`. CI
       image profile: `full-bio`. Depends on tasks: `TL15`, `TL16`, `TL17`.
   - Start with a feature-parity table for the training-time model that labels every feature block as included directly,
     replaced by a deployable proxy, or explicitly excluded with rationale
