@@ -1183,6 +1183,82 @@ Do not treat fitted UMAP host coordinates as the next deployable step. If contin
 needed after `TL15`-`TL17`, it should come from a stable runtime projector or distance contract rather than from
 reusing a fragile low-dimensional embedding fit.
 
+### 2026-03-31: TL16 Build genome-derived host typing projector for deployable bundle parity
+
+#### Executive summary
+
+TL16 now runs a raw-host typing path on the committed validation FASTAs under
+`data/genomics/bacteria/validation_subset/fastas/` and writes auditable outputs under
+`lyzortx/generated_outputs/track_l/host_typing_projector_tl16/`. The direct-vs-proxy split is now explicit instead of
+collapsing everything into a vague "not deployable" bucket:
+
+- direct and reproduced on the `3` committed panel hosts:
+  - phylogroup (`3 / 3`)
+  - O-type (`3 / 3`)
+  - H-type (`3 / 3`)
+  - combined serotype (`3 / 3`)
+- direct but incomplete:
+  - Achtman-4 MLST ST (`2 / 3`)
+- deployable proxy, currently noisy on the validation subset:
+  - capsule presence proxy (`0 / 1` resolved legacy match)
+  - ABC capsule serotype proxy (`0 / 1` resolved legacy match)
+- unsupported from the current checked-in raw-genome contract:
+  - `Capsule_GroupIV_e`
+  - `Capsule_GroupIV_e_stricte`
+  - `Capsule_GroupIV_s`
+  - `Capsule_Wzy_stricte`
+- truly non-derivable metadata, separated explicitly:
+  - `Origin`
+  - `Pathotype`
+  - `Collection`
+  - `Mouse_killed_10`
+
+That satisfies the main TL16 honesty requirement: the repo now has a stable host-typing projector schema plus an
+explicit parity table showing what is directly reproducible, what only has a proxy today, and what is genuinely
+non-genome metadata.
+
+#### What changed
+
+- Added `build_host_typing_projector.py`, a new TL16 step that:
+  - inventories the committed validation FASTAs and verifies their local SHA-256 values against `manifest.json`
+  - runs `clermonTyping`, `ectyper`, and `mlst` from the declared dedicated caller envs
+  - runs a repo-local capsule HMM proxy path using the vendored
+    `data/genomics/bacteria/capsules/ABC_capsules_types/` assets plus `pyrodigal` / `pyhmmer`
+  - writes:
+    - `tl16_validation_input_inventory.csv`
+    - `tl16_raw_host_typing_calls.csv`
+    - `tl16_projected_host_typing_features.csv`
+    - `tl16_legacy_field_status.csv`
+    - `tl16_feature_family_validation.csv`
+    - `tl16_host_typing_projector_manifest.json`
+- Added focused tests covering the raw-caller parsers, legacy normalization, direct-vs-proxy schema separation, and
+  family-level parity rollups.
+
+#### Raw validation results
+
+- Input integrity:
+  - all `3 / 3` committed FASTAs matched the recorded `manifest.json` SHA-256 checksums
+- Direct calls written by the projector:
+  - `55989`: phylogroup `B1`, ST `678`, serotype `O104:H4`
+  - `EDL933`: phylogroup `E`, ST unresolved by `mlst` (`ST=-`), serotype `O157:H7`
+  - `LF82`: phylogroup `B2`, ST `135`, serotype `O83:H1`
+- The ST mismatch is a real raw-caller limitation on this subset, not a notebook artifact:
+  - `mlst` returned `ST=-` for `EDL933` with a partial `recA` allele (`~2`) in the saved raw output
+- Capsule proxy behavior on the same hosts:
+  - every host triggered at least one capsule HMM model candidate, so the current proxy is clearly too permissive
+  - top candidates were `K4`-like or `class_1_*` models rather than matching the sparse legacy capsule annotations
+  - that is why the proxy families are recorded as `noisy_proxy` instead of being relabeled as legacy capsule fields
+
+#### Interpretation
+
+1. TL16 proves that the core host typing path is deployable now for raw genomes: phylogroup plus O/H serotype are
+   exact on the committed validation subset, and ST is available when the Achtman call is resolvable.
+2. The old metadata block should no longer be discussed as a single monolith. Some of it is directly reconstructable
+   from assemblies; some of it only has a noisy proxy today; some of it is genuinely non-derivable collection or assay
+   metadata.
+3. The capsule family remains the main gap. The vendored HMM assets are enough to produce an auditable deployable proxy,
+   but not enough to claim parity with `ABC_serotype` or the legacy Group IV / Wzy flags on this subset.
+
 ### 2026-04-01: Replan follow-up — raw-input validation is now mandatory for TL15-TL18
 
 The plan was tightened again after two infrastructure pieces became real instead of hypothetical:
