@@ -633,6 +633,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         bundle_format_version=DEPLOYABLE_BUNDLE_FORMAT_VERSION,
     )
 
+    # Persist runtime payloads into bundles before round-trip comparisons so the
+    # comparison code can load TL15/TL16/TL17 runtime assets from the bundle itself.
+    # update_bundle_and_manifest writes the same payloads again later — intentionally
+    # redundant because the round-trip code runs between these two writes.
     persist_runtime_payloads(
         baseline_result["bundle_path"],
         {

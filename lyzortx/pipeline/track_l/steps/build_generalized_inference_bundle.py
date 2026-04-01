@@ -424,6 +424,9 @@ def build_model_bundle(
 
     defense_rows = read_defense_rows(defense_subtypes_path)
     host_feature_rows, host_feature_columns, _ = build_defense_feature_rows(defense_rows)
+    # Filter host rows to bacteria that appear in the pair table. Defense subtypes
+    # cover 404 strains but only 369 appear in ST02. This filter is symmetric: both
+    # baseline and candidate bundles use the same st02_pair_table_path.
     st02_rows = read_csv_rows(st02_pair_table_path)
     # Filter host-side feature rows to the bacteria that actually appear in ST02 pairs so every
     # caller (including the TL13 baseline bundle built inside TL18) trains and reports counts on
