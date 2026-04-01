@@ -17,6 +17,14 @@
   domain, or finding new applications.
 - Don't wait for a dedicated "skill improvement" task. If you're using a skill and it's missing guidance that would have
   prevented a mistake, add that guidance now as part of the current work.
+- Skill authoring and refactors must follow Anthropic's agent-skill best practices:
+  https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+- In practice, that means:
+  - keep `SKILL.md` concise and focused on non-obvious guidance
+  - keep detailed reference material one level deep from `SKILL.md`
+  - avoid deep reference chains between reference files
+  - separate overview/navigation guidance from bulky examples or domain notes
+  - keep skill boundaries explicit so related skills do not accumulate overlapping responsibilities
 
 ## Directory Structure
 

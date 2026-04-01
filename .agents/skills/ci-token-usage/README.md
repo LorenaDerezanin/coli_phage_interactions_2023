@@ -14,6 +14,12 @@ The skill is a thin SKILL.md prompt that delegates all real work to the Python C
 standard pattern: pure functions for extraction/computation, side-effect boundary for `gh` CLI calls, and a
 `cmd_overview` / `cmd_ticket` / `cmd_waste` command layer.
 
+This skill intentionally does **not** own general GitHub Actions log browsing.
+Use:
+- `gh` to discover runs/jobs and download logs into `.scratch/gh-actions-logs/`
+- `gh-actions-logs` to inspect those saved logs manually
+- `ci-token-usage` only when the goal is spend, model, token, or waste analysis
+
 ## Covered workflows
 
 | Workflow | File | What it does | LLM data available |

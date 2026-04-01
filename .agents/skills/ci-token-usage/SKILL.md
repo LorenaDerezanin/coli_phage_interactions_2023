@@ -14,6 +14,11 @@ Analyze token consumption and estimated USD cost across Codex CI workflow runs
 and Claude PR review runs for the `LorenaDerezanin/coli_phage_interactions_2023`
 repository.
 
+This skill is for aggregate spend and waste analysis, not for general-purpose
+GitHub Actions log spelunking. For manual run/job discovery and log download,
+use the `gh` skill. For reading saved logs under `.scratch/gh-actions-logs/`,
+use the `gh-actions-logs` skill.
+
 - **Claude review runs** report exact `total_cost_usd` from the action logs.
 - **Codex runs** report only a total token count. Cost is estimated using
   cached per-model pricing with a 30% input / 70% output blended rate. The

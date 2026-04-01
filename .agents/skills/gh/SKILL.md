@@ -294,6 +294,55 @@ Posted by Claude Opus 4.6"
 - When a comment is addressed with a code fix, reply with a brief note ("Fixed" or "Fixed — made `--database-dir`
   optional") so the reviewer knows it was seen.
 
+## 12. Browsing GitHub Actions runs and downloading logs
+
+**The rule:** Use `gh` to discover runs and jobs, then save logs under
+`.scratch/gh-actions-logs/<run-id>/`. Do not stream giant logs directly into the
+conversation.
+
+**Why:** Actions logs are large, noisy, and expensive to reread. Saving them to
+`.scratch/gh-actions-logs/` gives you a stable local copy for `rg`, `sed`, and
+repeat inspection. It also keeps "fetching logs" separate from "reading logs."
+
+**Important:** `gh run download` is for workflow artifacts, not logs. Use
+`gh run view ... --log` or `--log-failed` for logs.
+
+**Workflow:**
+
+```bash
+RUN_ID=23835140180
+JOB_ID=69477209235
+RUN_DIR=".scratch/gh-actions-logs/$RUN_ID"
+
+mkdir -p "$RUN_DIR"
+
+# 1. Discover the jobs in the run
+gh run view "$RUN_ID" --json jobs \
+  --jq '.jobs[] | {databaseId, name, status, conclusion}'
+
+# 2. Save the full job log
+gh run view "$RUN_ID" --job "$JOB_ID" --log \
+  > "$RUN_DIR/${JOB_ID}.log"
+
+# 3. Save the failed-step subset when you only need the failure surface
+gh run view "$RUN_ID" --job "$JOB_ID" --log-failed \
+  > "$RUN_DIR/${JOB_ID}.failed.log"
+```
+
+**URL parsing:** GitHub Actions URLs of the form
+`.../actions/runs/<run-id>/job/<job-id>` already contain both IDs. If only the
+run ID is known, use `gh run view "$RUN_ID" --json jobs` to list job IDs.
+
+**What to expect from `gh run view --log`:**
+- Some lines may show `UNKNOWN STEP`. That is a `gh`/GitHub log-association
+  limitation, not automatically a workflow bug.
+- Job logs can include post-job cleanup and wrapper noise after the real failure.
+- `--log-failed` is useful for triage, but keep a full `--log` copy nearby when
+  you need surrounding context.
+
+After the logs are local, switch to the `gh-actions-logs` skill for structured
+reading, especially for `codex exec` jobs.
+
 ## Quick self-check before running
 
 Before executing any `gh` command that sets `--body`:
