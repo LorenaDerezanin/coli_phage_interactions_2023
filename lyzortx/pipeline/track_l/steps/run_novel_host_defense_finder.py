@@ -11,6 +11,7 @@ import subprocess
 import sys
 from collections import Counter
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence, Tuple
 
@@ -50,6 +51,7 @@ PINNED_MODEL_REQUIREMENTS: Tuple[Tuple[str, str, str], ...] = (
     ("mdmparis", "defense-finder-models", "2.0.2"),
     ("macsy-models", "CasFinder", "3.1.0"),
 )
+ANNOTATION_TOOLS_ENV_NAME = "phage_annotation_tools"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -124,7 +126,29 @@ def _tool_env() -> Dict[str, str]:
     env = dict(os.environ)
     bin_dir = str(Path(sys.executable).resolve().parent)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    annotation_bin_dir = _annotation_tools_bin_dir()
+    env["PATH"] = f"{annotation_bin_dir}{os.pathsep}{env['PATH']}"
     return env
+
+
+@lru_cache(maxsize=1)
+def _annotation_tools_bin_dir() -> str:
+    command = [
+        "micromamba",
+        "run",
+        "-n",
+        ANNOTATION_TOOLS_ENV_NAME,
+        "python",
+        "-c",
+        "import sys; from pathlib import Path; print(Path(sys.executable).resolve().parent)",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Failed to resolve phage_annotation_tools bin directory:\n"
+            f"stdout: {result.stdout[-4000:]}\nstderr: {result.stderr[-4000:]}"
+        )
+    return result.stdout.strip().splitlines()[-1]
 
 
 def _run_command(command: Sequence[str], *, env: Mapping[str, str], description: str) -> None:

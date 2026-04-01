@@ -146,6 +146,32 @@ def test_augment_rows_with_pair_features_zero_fills_missing_holdout_pair() -> No
     ]
 
 
+def test_augment_host_rows_with_features_raises_for_missing_bacteria() -> None:
+    with pytest.raises(KeyError, match="Missing deployable host feature row for bacteria B1"):
+        tl08_bundle.augment_host_rows_with_features(
+            host_rows=[{"bacteria": "B1", "host_defense_diversity": 1}],
+            extra_host_feature_rows=[],
+            extra_host_feature_columns=["host_o_type"],
+        )
+
+
+def test_augment_host_rows_with_features_adds_requested_columns() -> None:
+    rows = tl08_bundle.augment_host_rows_with_features(
+        host_rows=[{"bacteria": "B1", "host_defense_diversity": 1}],
+        extra_host_feature_rows=[{"bacteria": "B1", "host_o_type": "O1", "host_capsule_abc_proxy_present": 1}],
+        extra_host_feature_columns=["host_o_type", "host_capsule_abc_proxy_present"],
+    )
+
+    assert rows == [
+        {
+            "bacteria": "B1",
+            "host_defense_diversity": 1,
+            "host_o_type": "O1",
+            "host_capsule_abc_proxy_present": 1,
+        }
+    ]
+
+
 def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path, monkeypatch) -> None:
     st02_path, st03_path = _build_panel_foundation(tmp_path)
     phage_feature_path, phage_svd_path = _build_phage_kmer_outputs(tmp_path)
@@ -292,6 +318,43 @@ def test_project_phage_features_parses_tl04_runtime_payload_once_per_batch(tmp_p
         {"phage": "phage_a", "tl04_phage_antidef_profile_001_present": 1},
         {"phage": "phage_b", "tl04_phage_antidef_profile_001_present": 1},
     ]
+
+
+def test_load_runtime_reads_tl15_tl16_and_tl17_payloads(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    bundle_path = bundle_dir / "bundle.joblib"
+    joblib.dump(
+        {
+            "lightgbm_estimator": object(),
+            "feature_vectorizer": object(),
+            "isotonic_calibrator": object(),
+            "feature_space": {},
+            "artifacts": {
+                "defense_mask_filename": "defense-mask.joblib",
+                "phage_svd_filename": "phage-svd.joblib",
+                "panel_defense_subtypes_filename": "panel-defense.csv",
+            },
+            "runtime": {"defense_finder_models_dirname": "defense-models"},
+            "deployable_runtime": {
+                "tl15_host_surface_projection": {"runtime_dirname": "runtime_tl15"},
+                "tl16_host_typing_projection": {"runtime_dirname": "runtime_tl16"},
+                "tl17_rbp_family_projection": {"reference_fasta_filename": "tl17.faa"},
+            },
+        },
+        bundle_path,
+    )
+    joblib.dump({}, bundle_dir / "defense-mask.joblib")
+    joblib.dump({}, bundle_dir / "phage-svd.joblib")
+    (bundle_dir / "panel-defense.csv").write_text("bacteria\nB1\n", encoding="utf-8")
+    (bundle_dir / "tl17.faa").write_text(">ref\nMA\n", encoding="utf-8")
+    (bundle_dir / "defense-models").mkdir()
+
+    runtime = tl08_infer.load_runtime(bundle_path)
+
+    assert runtime.tl15_runtime_payload == {"runtime_dirname": "runtime_tl15"}
+    assert runtime.tl16_runtime_payload == {"runtime_dirname": "runtime_tl16"}
+    assert runtime.tl17_runtime_payload == {"reference_fasta_filename": "tl17.faa"}
 
 
 def test_sha256_file_matches_previous_private_helper_contract(tmp_path: Path) -> None:

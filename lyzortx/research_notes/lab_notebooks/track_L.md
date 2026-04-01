@@ -1384,6 +1384,116 @@ So the plan now requires:
 This is still not a claim that the whole deployable stack is finished. It is a stricter honesty contract: now that the
 repo has the raw validation subset and the env boundaries, the plan should require them to be used.
 
+### 2026-04-01: TL18 Rebuild the deployable generalized-inference bundle with richer preprocessors
+
+#### Executive summary
+
+TL18 rebuilt the deployable generalized-inference bundle under
+`lyzortx/generated_outputs/track_l/generalized_inference_bundle_tl18/` with the richer deployable blocks from TL15,
+TL16, and TL17 wired into the runtime instead of silently dropping them. The bundle now carries a feature-parity audit,
+bundle-relative runtime assets, a relocated-bundle probe, and an end-to-end raw-input round-trip path using the
+committed validation-subset host FASTAs plus the in-repo 96-phage FASTA panel. The richer bundle did **not** clear the
+predeclared round-trip gate: it improved the maximum absolute probability-delta metric, but materially worsened the
+median absolute delta and identical-rank-count metrics, so generalized inference remains blocked rather than promoted.
+
+#### What changed
+
+- Added a TL18 builder at
+  `lyzortx/pipeline/track_l/steps/build_tl18_generalized_inference_bundle.py` that:
+  - writes `tl18_feature_parity_audit.csv` before rebuilding the bundle;
+  - rebuilds the candidate bundle with:
+    - direct deployable blocks: host defense, phage k-mer SVD, TL04 anti-defense/defense pair features;
+    - deployable proxy blocks: TL15 host surface projection, TL16 host typing projection, TL17 phage RBP-family
+      projection;
+  - persists the runtime payloads bundle-relatively so the bundle can resolve its own TL15/TL16/TL17 assets without
+    reaching back into repo-root caches;
+  - regenerates round-trip reference predictions and raw-input round-trip comparisons for `55989`, `EDL933`, and
+    `LF82`;
+  - writes `tl18_relocated_bundle_probe_predictions.csv` after copying the bundle into `.scratch/tl18_relocation_probe/`
+    and rerunning inference from that relocated copy.
+- Extended the generalized-inference runtime so the deployed bundle now projects:
+  - TL15 host surface features from raw host assemblies;
+  - TL16 host typing features from raw host assemblies; and
+  - TL17 phage RBP-family features from raw phage FASTAs.
+- Extended the base bundle builder to preserve categorical deployable columns explicitly, because TL15/TL16 introduce
+  host categorical fields that are part of the feature contract.
+
+#### Feature parity decision
+
+The parity table at
+`lyzortx/generated_outputs/track_l/generalized_inference_bundle_tl18/tl18_feature_parity_audit.csv` forces every
+training-time block into one of three states:
+
+- included directly:
+  - `track_c_defense`
+  - `track_d_phage_genomic_kmers`
+  - `tl04_antidef_defense_pairwise`
+- replaced by deployable proxy:
+  - `st04_v0_host_typing_metadata` via `tl16_host_typing_projection`
+  - `track_c_surface_projectable_subset` via `tl15_host_surface_projection`
+  - `track_e_curated_rbp_receptor_compatibility` via `tl17_rbp_family_projection`
+- explicitly excluded:
+  - non-genome metadata such as pathotype/origin/collection
+  - fitted host UMAP coordinates
+  - OMP variant-cluster IDs
+  - phage viridic-distance embedding
+  - isolation-host distance
+  - the dead-ended TL03 pairwise block
+
+That matters because TL18 is no longer allowed to imply "deployable parity" by omission. The audit makes the contract
+explicit: the richer bundle keeps the blocks that have raw-input runtime paths, replaces panel-only but recoverable
+families with honest proxies, and leaves the truly non-deployable families out.
+
+#### Raw-input round-trip results
+
+The round-trip host cohort recorded in
+`lyzortx/generated_outputs/track_l/generalized_inference_bundle_tl18/tl18_roundtrip_panel_host_cohort.csv` contains
+the committed validation-subset FASTAs for `55989`, `EDL933`, and `LF82`, each with the recorded SHA-256 from
+`data/genomics/bacteria/validation_subset/manifest.json`. The phage side uses the in-repo panel FASTAs from
+`data/genomics/phages/FNA/`, projected through the frozen TL17 runtime during the actual candidate round-trip run.
+
+The predeclared round-trip metric comparison in
+`lyzortx/generated_outputs/track_l/generalized_inference_bundle_tl18/tl18_roundtrip_metric_comparison.csv` was:
+
+- `median_abs_probability_delta_median`:
+  - baseline `2.78e-17`
+  - candidate `0.0224043`
+  - materially degraded against the `0.01` tolerance
+- `max_abs_probability_delta_max`:
+  - baseline `0.286373`
+  - candidate `0.256463`
+  - improved
+- `identical_rank_count_total`:
+  - baseline `194`
+  - candidate `64`
+  - materially degraded against the `3`-rank tolerance
+
+Per-host round-trip comparisons show why the gate failed:
+
+- baseline:
+  - `55989` and `LF82` were effectively exact round trips (`96/96` identical ranks, near-zero probability deltas)
+  - `EDL933` already had substantial raw-vs-reference drift
+- candidate:
+  - `EDL933` improved substantially (`median_abs_probability_delta` fell from `0.16329` to `0.0224043`, and the max
+    delta fell from `0.286373` to `0.152605`)
+  - `55989` and especially `LF82` lost that round-trip stability
+  - all three surfaces changed for all `96` panel phages, with median per-host surface deltas of `0.0540`, `0.1663`,
+    and `0.0875` respectively in `tl18_roundtrip_surface_summary.csv`
+
+#### Interpretation
+
+1. TL18 satisfies the runtime-contract part of the task. The bundle now truly ships the richer deployable preprocessors
+   relative to itself, and the relocated-bundle probe proves it can execute from a copied bundle directory rather than
+   from hidden repo-root state.
+2. TL18 also satisfies the honesty part of the task. It does **not** auto-declare success just because the richer
+   bundle is more biologically complete. The recorded `roundtrip_gate` in the saved bundle explicitly concludes:
+   `generalized inference remains blocked by the round-trip gate`.
+3. The richer preprocessors are not useless. The candidate bundle clearly fixes the worst host (`EDL933`) on the
+   strongest absolute-delta metric. But the current proxy stack is still too destabilizing on the other two panel hosts
+   to claim generalized deployable inference is ready.
+4. The correct next state is blocked, not another automatic follow-up ticket by inertia. Any later work should start by
+   explaining why `LF82` and `55989` lose round-trip fidelity under the richer host/phage proxy blocks.
+
 ### 2026-03-31: TL15 Build raw-host surface projector for deployable compatibility features
 
 #### Executive summary

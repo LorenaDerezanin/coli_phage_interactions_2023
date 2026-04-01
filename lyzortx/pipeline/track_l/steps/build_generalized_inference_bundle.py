@@ -176,19 +176,25 @@ def read_defense_rows(path: Path) -> list[dict[str, str]]:
 
 def build_genome_only_feature_space(
     *,
+    host_categorical_columns: Sequence[str] = (),
     host_feature_columns: Sequence[str],
+    phage_categorical_columns: Sequence[str] = (),
     phage_feature_columns: Sequence[str],
+    pairwise_categorical_columns: Sequence[str] = (),
     pairwise_feature_columns: Sequence[str] = (),
 ) -> train_v1_binary_classifier.FeatureSpace:
+    categorical_columns = train_v1_binary_classifier.deduplicate_preserving_order(
+        [*host_categorical_columns, *phage_categorical_columns, *pairwise_categorical_columns]
+    )
     numeric_columns = train_v1_binary_classifier.deduplicate_preserving_order(
         [*host_feature_columns, *phage_feature_columns, *pairwise_feature_columns]
     )
     return train_v1_binary_classifier.FeatureSpace(
-        categorical_columns=(),
+        categorical_columns=tuple(categorical_columns),
         numeric_columns=numeric_columns,
-        track_c_additional_columns=tuple(host_feature_columns),
-        track_d_columns=tuple(phage_feature_columns),
-        track_e_columns=tuple(pairwise_feature_columns),
+        track_c_additional_columns=tuple([*host_categorical_columns, *host_feature_columns]),
+        track_d_columns=tuple([*phage_categorical_columns, *phage_feature_columns]),
+        track_e_columns=tuple([*pairwise_categorical_columns, *pairwise_feature_columns]),
     )
 
 
@@ -256,6 +262,30 @@ def augment_rows_with_pair_features(
             if column not in pair_row:
                 raise KeyError(f"Missing deployable pair feature column {column} for pair_id {row['pair_id']}")
             augmented[column] = pair_row[column]
+        augmented_rows.append(augmented)
+    return augmented_rows
+
+
+def augment_host_rows_with_features(
+    host_rows: Sequence[Mapping[str, object]],
+    *,
+    extra_host_feature_rows: Sequence[Mapping[str, object]],
+    extra_host_feature_columns: Sequence[str],
+) -> list[dict[str, object]]:
+    if not extra_host_feature_columns:
+        return [dict(row) for row in host_rows]
+    host_feature_index = {str(row["bacteria"]): dict(row) for row in extra_host_feature_rows}
+    augmented_rows: list[dict[str, object]] = []
+    for row in host_rows:
+        augmented = dict(row)
+        bacteria = str(row["bacteria"])
+        extra_row = host_feature_index.get(bacteria)
+        if extra_row is None:
+            raise KeyError(f"Missing deployable host feature row for bacteria {bacteria}")
+        for column in extra_host_feature_columns:
+            if column not in extra_row:
+                raise KeyError(f"Missing deployable host feature column {column} for bacteria {bacteria}")
+            augmented[column] = extra_row[column]
         augmented_rows.append(augmented)
     return augmented_rows
 
@@ -377,10 +407,15 @@ def build_model_bundle(
     lightgbm_params: Mapping[str, object],
     random_state: int,
     calibration_fold: int,
+    extra_host_feature_rows: Sequence[Mapping[str, object]] = (),
+    extra_host_feature_columns: Sequence[str] = (),
+    extra_host_categorical_columns: Sequence[str] = (),
     extra_phage_feature_rows: Sequence[Mapping[str, object]] = (),
     extra_phage_feature_columns: Sequence[str] = (),
+    extra_phage_categorical_columns: Sequence[str] = (),
     pair_feature_rows: Sequence[Mapping[str, object]] = (),
     pair_feature_columns: Sequence[str] = (),
+    pair_feature_categorical_columns: Sequence[str] = (),
     bundle_task_id: str = "TL08",
     bundle_format_version: str = "tl08_genome_only_inference_bundle_v2",
 ) -> dict[str, Any]:
@@ -388,10 +423,17 @@ def build_model_bundle(
     ensure_directory(output_dir)
 
     defense_rows = read_defense_rows(defense_subtypes_path)
-    host_feature_rows, host_feature_columns, host_manifest = build_defense_feature_rows(defense_rows)
+    host_feature_rows, host_feature_columns, _ = build_defense_feature_rows(defense_rows)
+    st02_rows = read_csv_rows(st02_pair_table_path)
+    target_bacteria = {str(row["bacteria"]) for row in st02_rows}
+    host_feature_rows = [row for row in host_feature_rows if str(row["bacteria"]) in target_bacteria]
+    host_feature_rows = augment_host_rows_with_features(
+        host_feature_rows,
+        extra_host_feature_rows=extra_host_feature_rows,
+        extra_host_feature_columns=[*extra_host_categorical_columns, *extra_host_feature_columns],
+    )
     defense_mask = build_defense_column_mask(defense_rows)
 
-    st02_rows = read_csv_rows(st02_pair_table_path)
     split_rows = read_csv_rows(st03_split_assignments_path)
     phage_rows = read_csv_rows(phage_kmer_feature_path)
     if not phage_rows:
@@ -399,9 +441,15 @@ def build_model_bundle(
     phage_rows = augment_phage_rows_with_features(
         phage_rows,
         extra_phage_feature_rows=extra_phage_feature_rows,
-        extra_phage_feature_columns=extra_phage_feature_columns,
+        extra_phage_feature_columns=[*extra_phage_categorical_columns, *extra_phage_feature_columns],
     )
-    phage_feature_columns = [column for column in phage_rows[0].keys() if column != "phage"]
+    combined_host_feature_columns = [*host_feature_columns, *extra_host_feature_columns]
+    phage_feature_columns = [
+        column for column in phage_rows[0].keys() if column not in {"phage", *extra_phage_categorical_columns}
+    ]
+    combined_phage_feature_columns = [
+        column for column in phage_feature_columns if column not in set(extra_phage_categorical_columns)
+    ]
 
     merged_rows = build_training_rows(
         st02_rows=st02_rows,
@@ -412,11 +460,14 @@ def build_model_bundle(
     merged_rows = augment_rows_with_pair_features(
         merged_rows,
         pair_feature_rows=pair_feature_rows,
-        pair_feature_columns=pair_feature_columns,
+        pair_feature_columns=[*pair_feature_categorical_columns, *pair_feature_columns],
     )
     feature_space = build_genome_only_feature_space(
-        host_feature_columns=host_feature_columns,
-        phage_feature_columns=phage_feature_columns,
+        host_categorical_columns=extra_host_categorical_columns,
+        host_feature_columns=combined_host_feature_columns,
+        phage_categorical_columns=extra_phage_categorical_columns,
+        phage_feature_columns=combined_phage_feature_columns,
+        pairwise_categorical_columns=pair_feature_categorical_columns,
         pairwise_feature_columns=pair_feature_columns,
     )
     calibrator, calibration_row_count = fit_calibrator_from_cv_rows(
@@ -473,9 +524,9 @@ def build_model_bundle(
         "feature_space": {
             "categorical_columns": list(feature_space.categorical_columns),
             "numeric_columns": list(feature_space.numeric_columns),
-            "host_feature_columns": list(host_feature_columns),
-            "phage_feature_columns": list(phage_feature_columns),
-            "pairwise_feature_columns": list(pair_feature_columns),
+            "host_feature_columns": list([*extra_host_categorical_columns, *combined_host_feature_columns]),
+            "phage_feature_columns": list([*extra_phage_categorical_columns, *combined_phage_feature_columns]),
+            "pairwise_feature_columns": list([*pair_feature_categorical_columns, *pair_feature_columns]),
         },
         "artifacts": {
             "phage_svd_filename": PHAGE_SVD_FILENAME,
@@ -491,7 +542,7 @@ def build_model_bundle(
             "random_state": random_state,
             "calibration_fold": calibration_fold,
             "calibration_row_count": calibration_row_count,
-            "host_count": host_manifest["host_count"],
+            "host_count": len(host_feature_rows),
             "pair_count": len(merged_rows),
         },
         "inputs": {
