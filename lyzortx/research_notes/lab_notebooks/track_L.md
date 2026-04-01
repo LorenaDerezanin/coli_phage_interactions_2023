@@ -1209,3 +1209,81 @@ So the plan now requires:
 
 This is still not a claim that the whole deployable stack is finished. It is a stricter honesty contract: now that the
 repo has the raw validation subset and the env boundaries, the plan should require them to be used.
+
+### 2026-03-31: TL15 Build raw-host surface projector for deployable compatibility features
+
+#### Executive summary
+
+TL15 now provides a checked-in raw-host surface projector that starts from assembly FASTA input and emits the
+deployable subset of the Track C host-surface schema plus a sidecar status table that keeps "absent" distinct from
+"not callable". The runtime contract is:
+
+- direct: O-antigen typing, ABC-capsule locus calling, receptor-presence calls for the existing OMP receptor family
+- proxy: LPS core type via a versioned O-type to majority-LPS lookup
+- unsupported: receptor variant cluster IDs, Group IV capsule flags, and Klebsiella/Kaptive-derived capsule fields
+
+Validation on the committed three-host FASTA subset recovered all three O-types, all three LPS core labels, and all
+`36/36` receptor-presence calls. The only systematic disagreement is the capsule family for `LF82`: the raw HMM path
+detects a contiguous ABC capsule locus and emits `class_1_3` / `abc_capsule_hmm`, while the legacy Track C metadata
+stores `ABC_serotype=5` with `Capsule_ABC=0`.
+
+#### What changed
+
+- Added `lyzortx.pipeline.track_l.steps.build_raw_host_surface_projector`, which:
+  - predicts proteins from raw host assemblies with `pyrodigal`
+  - scans O-antigen alleles with `nhmmer`
+  - scans ABC capsule profiles with `hmmscan`
+  - scans receptor references with `phmmer`
+  - writes projected feature rows, per-column call-state rows, validation comparison tables, a support table, and a
+    manifest with relative asset/instruction paths
+- Added a checked-in OMP reference FASTA for the receptor-presence layer and a checked-in O-antigen override manifest
+  for validation-covered alleles that were referenced in `data/genomics/bacteria/o_type/output.tsv` but missing from
+  `data/genomics/bacteria/isolation_strains/o_type/blast_output_alleles.txt`.
+- Added regression tests covering:
+  - O-antigen contract construction
+  - O-antigen override extraction from checked-in FASTA coordinates
+  - LPS proxy support logic
+  - capsule-model selection
+  - preservation of `not_callable` vs projected negatives
+  - `nhmmer` table parsing
+
+#### Reproduced vs proxy vs unsupported
+
+| Feature family | Status | Columns | Rationale |
+| --- | --- | --- | --- |
+| O-antigen type | direct | `host_o_antigen_present`, `host_o_antigen_type` | Uses checked-in ECTyper allele sequences plus a versioned override manifest for missing validation-covered alleles. |
+| LPS core type | proxy | `host_lps_core_present`, `host_lps_core_type`, `host_surface_lps_core_type` | The repo does not contain a reusable raw-genome `waaL` caller, so TL15 proxies LPS through stable O-type majority lookup. |
+| ABC capsule type and proxy | direct | `host_k_antigen_present`, `host_k_antigen_type`, `host_k_antigen_type_source`, `host_k_antigen_proxy_present`, `host_capsule_abc_present` | Uses checked-in ABC capsule HMM profiles and XML model definitions on predicted proteins. |
+| Group IV capsule flags | unsupported | `host_capsule_groupiv_e_present`, `host_capsule_groupiv_e_stricte_present`, `host_capsule_groupiv_s`, `host_capsule_wzy_stricte_present` | No checked-in raw-genome contract maps these mixed curated flags onto reproducible runtime calls. |
+| OMP receptor presence | direct | `host_receptor_btub_present`, `host_receptor_fadL_present`, `host_receptor_fhua_present`, `host_receptor_lamB_present`, `host_receptor_lptD_present`, `host_receptor_nfrA_present`, `host_receptor_ompA_present`, `host_receptor_ompC_present`, `host_receptor_ompF_present`, `host_receptor_tolC_present`, `host_receptor_tsx_present`, `host_receptor_yncD_present` | A versioned reference-protein panel is enough to recover the presence layer from raw predicted proteins. |
+| OMP receptor variant clusters | unsupported | `host_receptor_*_variant` | The repo contains panel 99% cluster labels but not representative sequences needed to place novel hosts into those exact cluster IDs. |
+| Klebsiella capsule type | unsupported | `host_surface_klebsiella_capsule_type`, `host_surface_klebsiella_capsule_type_missing` | The checked-in Kaptive file is a panel annotation table, not a reusable projector for arbitrary raw assemblies. |
+
+#### Validation highlights
+
+- `EDL933`
+  - recovered `O157` directly once TL15 supplemented the missing BLAST-export allele sequences with a checked-in
+    override manifest tied to the committed validation FASTA
+  - recovered `R3` through the O-type to LPS proxy
+  - matched all `12/12` receptor-presence fields
+- `LF82`
+  - recovered `O83` directly and `R1` through the proxy
+  - matched all `12/12` receptor-presence fields
+  - detected a contiguous ABC capsule locus, but the raw projector emits `class_1_3` / `abc_capsule_hmm` while the
+    legacy Track C surface block stores `5` / `ABC_serotype`; that mismatch is now explicit in the validation table
+- `55989`
+  - recovered `O104` directly and `R3` through the proxy
+  - matched all `12/12` receptor-presence fields
+  - produced no supported capsule call, so TL15 leaves the capsule-family columns `not_callable` instead of coercing
+    them to ordinary negatives
+
+#### Interpretation
+
+1. TL15 removes the biggest raw-host deployability blocker identified during TL13: the repo now has an honest
+   inference-time projector for the reproducible O-antigen, LPS-proxy, capsule, and receptor-presence subset of the
+   host-surface space.
+2. The projector is intentionally conservative about unsupported families. It does not pretend that panel-only receptor
+   cluster IDs, Group IV capsule flags, or Kaptive-derived capsule labels can be recreated from the checked-in assets.
+3. The remaining validation disagreements are about capsule-schema translation, not about whether the raw projector can
+   see the underlying signal. `LF82` clearly carries an ABC capsule locus by the raw HMM contract, but that contract is
+   not numerically identical to the legacy Track C `ABC_serotype` field.

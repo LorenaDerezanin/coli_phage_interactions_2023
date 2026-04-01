@@ -1,0 +1,3 @@
+allele_key	o_type	gene_family	source_fasta_path	record_name	start	end	strand
+O157-1-wzx-origin	O157	wzx	data/genomics/bacteria/validation_subset/fastas/EDL933.fasta	NC_002655.2	2853432	2854823	+
+O157-118-wzy	O157	wzy	data/genomics/bacteria/validation_subset/fastas/EDL933.fasta	NC_002655.2	2855525	2856691	+
