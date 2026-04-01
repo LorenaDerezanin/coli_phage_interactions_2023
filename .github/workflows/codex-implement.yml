@@ -165,6 +165,8 @@ jobs:
           ISSUE_NUM="${{ needs.resolve-ci-image.outputs.issue_number }}"
           PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
           IMAGE_LABEL="${{ needs.resolve-ci-image.outputs.ci_image_label }}"
+          RUN_ID="${{ github.run_id }}"
+          RUN_ATTEMPT="${{ github.run_attempt }}"
           {
             echo "# Task"
             echo ""
@@ -175,6 +177,11 @@ jobs:
             echo "Implement the task described above. This is issue #${ISSUE_NUM}."
             echo "Follow the policies in AGENTS.md and lyzortx/AGENTS.md."
             echo "This task is assigned CI image profile '${PROFILE}' via GitHub label '${IMAGE_LABEL}'."
+            echo "GitHub Actions run ID: ${RUN_ID}. Current run attempt: ${RUN_ATTEMPT}."
+            if [ "$RUN_ATTEMPT" -gt 1 ]; then
+              echo "This is a rerun. Pick up from prior run state instead of restarting from scratch."
+              echo "Use the 'gh-actions-logs' skill to check earlier attempts."
+            fi
             echo "In this GitHub Actions environment, use 'micromamba run -n phage_env ...' for Python, pytest, and pre-commit commands."
             if [ "$PROFILE" = "host-typing" ] || [ "$PROFILE" = "full-bio" ]; then
               echo "Dedicated caller envs are also available via 'micromamba run -n phylogroup_caller ...',"
