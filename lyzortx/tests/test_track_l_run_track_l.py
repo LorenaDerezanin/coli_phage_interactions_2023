@@ -19,6 +19,11 @@ def _stub_all_steps(monkeypatch, calls):
         run_track_l.retrain_mechanistic_v1_model, "main", lambda argv: calls.append("retrain-mechanistic-v1")
     )
     monkeypatch.setattr(
+        run_track_l.build_tl17_phage_compatibility_preprocessor,
+        "main",
+        lambda argv: calls.append("tl17-phage-compatibility-preprocessor"),
+    )
+    monkeypatch.setattr(
         run_track_l.build_generalized_inference_bundle,
         "main",
         lambda argv: calls.append("generalized-inference-bundle"),
@@ -73,6 +78,7 @@ def test_all_runs_every_step_in_order(monkeypatch) -> None:
         "rbp-features",
         "defense-features",
         "retrain-mechanistic-v1",
+        "tl17-phage-compatibility-preprocessor",
         "generalized-inference-bundle",
         "deployable-generalized-inference-bundle",
         "validate-vhdb-generalized-inference",
