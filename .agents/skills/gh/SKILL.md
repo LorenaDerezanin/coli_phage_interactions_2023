@@ -177,6 +177,25 @@ Always use `/pulls/{pr}/comments/{id}/replies`.
 **Rule:** If a thread reply fails, do not fall back to `gh pr comment`. Top-level PR comments are not threaded and
 create noise. Stop and investigate the endpoint instead.
 
+## 7.5. Prefer `gh issue edit` for PR label-only mutations
+
+**The rule:** When you only need to add or remove labels on a pull request, prefer `gh issue edit <PR_NUMBER>` over
+`gh pr edit <PR_NUMBER>`.
+
+**Why:** Pull requests are issues, and `gh issue edit` can mutate labels without touching PR-only GraphQL fields.
+`gh pr edit --add-label` has failed in this repo because GitHub's deprecated Projects classic fields leaked into the
+PR-edit path. A reversible live test on PR `#297` showed `gh issue edit 297 --add-label codex` and
+`gh issue edit 297 --remove-label codex` both work cleanly on a PR.
+
+**Pattern:**
+
+```bash
+gh issue edit 297 --repo OWNER/REPO --add-label "ci-image:host-typing"
+gh issue edit 297 --repo OWNER/REPO --remove-label "codex-review-round-1"
+```
+
+Use `gh pr edit` only when you need PR-specific mutations such as title/body/base/reviewers.
+
 ## 8. `gh pr checks` exit codes
 
 **The rule:** `gh pr checks` returns exit code 8 when any check is still pending or has been skipped. This is not a

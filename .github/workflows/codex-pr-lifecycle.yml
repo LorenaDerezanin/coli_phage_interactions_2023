@@ -176,7 +176,8 @@ jobs:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
-          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready-for-human-review"
+          gh issue edit "$PR_NUM" --repo "${{ github.repository }}" \
+            --add-label "ready-for-human-review"
           gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
             --body "Review passed with no issues. Ready for human review and merge."
 
@@ -194,7 +195,8 @@ jobs:
           if [ "${ROUND:-0}" -ge 3 ]; then
             gh pr comment "$PR_NUM" --repo "${{ github.repository }}" \
               --body "Maximum automated fix rounds (3) reached. Requesting human review."
-            gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "needs-human-review"
+            gh issue edit "$PR_NUM" --repo "${{ github.repository }}" \
+              --add-label "needs-human-review"
           fi
 
       - name: Collect unresolved review feedback
@@ -280,4 +282,5 @@ jobs:
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           NEXT_ROUND=$(( ${{ steps.round.outputs.round }} + 1 ))
-          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "codex-review-round-${NEXT_ROUND}"
+          gh issue edit "$PR_NUM" --repo "${{ github.repository }}" \
+            --add-label "codex-review-round-${NEXT_ROUND}"

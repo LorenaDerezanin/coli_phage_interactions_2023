@@ -248,5 +248,5 @@ jobs:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
-          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" \
+          gh issue edit "$PR_NUM" --repo "${{ github.repository }}" \
             --add-label "${{ needs.resolve-ci-image.outputs.ci_image_label }}"
