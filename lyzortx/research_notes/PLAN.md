@@ -541,7 +541,7 @@ graph LR
     approximated by a deployable proxy, or still unsupported, with a one-sentence rationale for each unsupported family
   - Runtime assets, emitted metadata, and validation instructions must resolve relative to checked-in manifests or saved
     outputs rather than hidden repo-root paths, stale gitignored artifacts, or ad hoc local installs
-- [ ] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `gpt-5.4`. CI image
+- [x] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `gpt-5.4`. CI image
       profile: `host-typing`.
   - Derive the host-typing subset of the old panel metadata block from raw host assemblies wherever the information is
     extractable with reasonable preprocessing effort, including phylogroup, serotype, and callable capsule-related

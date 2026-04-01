@@ -856,7 +856,7 @@ tracks:
         paths, stale gitignored artifacts, or ad hoc local installs
     - id: TL16
       title: Build genome-derived host typing projector for deployable bundle parity
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: host-typing
       depends_on_tasks: []
