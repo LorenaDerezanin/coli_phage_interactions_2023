@@ -550,8 +550,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     tl15_training_rows = build_tl15_panel_training_rows(
         picard_metadata_path=args.picard_metadata_path,
-        lps_primary_path=args.lps_primary_path,
-        lps_supplemental_path=args.lps_supplemental_path,
         receptor_cluster_path=args.receptor_cluster_path,
         target_bacteria=proxy_bacteria,
     )
@@ -792,7 +790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 {"block_id": TL16_BLOCK_ID, "status": "replaced_by_deployable_proxy", "source": "raw_host_assembly"},
                 {"block_id": TL17_BLOCK_ID, "status": "replaced_by_deployable_proxy", "source": "raw_phage_genome"},
             ],
-            "parity_audit": {"path": str(parity_audit_path), "sha256": sha256_file(parity_audit_path)},
+            "parity_audit": {"path": parity_audit_path.name, "sha256": sha256_file(parity_audit_path)},
             "roundtrip_gate": {
                 "predeclared_metrics": PREDECLARED_ROUNDTRIP_METRICS,
                 "material_degradation_tolerances": MATERIAL_DEGRADATION_TOLERANCES,
@@ -800,7 +798,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "materially_degraded_metrics": materially_degraded_metrics,
                 "gate_cleared": roundtrip_gate_cleared,
                 "conclusion": roundtrip_conclusion,
-                "metric_comparison_path": str(args.output_dir / ROUNDTRIP_METRIC_COMPARISON_FILENAME),
+                "metric_comparison_path": ROUNDTRIP_METRIC_COMPARISON_FILENAME,
             },
         },
     )

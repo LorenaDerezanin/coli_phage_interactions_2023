@@ -126,8 +126,11 @@ def _tool_env() -> Dict[str, str]:
     env = dict(os.environ)
     bin_dir = str(Path(sys.executable).resolve().parent)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
-    annotation_bin_dir = _annotation_tools_bin_dir()
-    env["PATH"] = f"{annotation_bin_dir}{os.pathsep}{env['PATH']}"
+    try:
+        annotation_bin_dir = _annotation_tools_bin_dir()
+        env["PATH"] = f"{annotation_bin_dir}{os.pathsep}{env['PATH']}"
+    except RuntimeError:
+        logger.debug("phage_annotation_tools env not available; skipping annotation tools PATH extension")
     return env
 
 

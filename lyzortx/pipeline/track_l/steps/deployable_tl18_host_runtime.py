@@ -50,12 +50,9 @@ def _read_semicolon_rows(path: Path) -> list[dict[str, str]]:
 def build_tl15_panel_training_rows(
     *,
     picard_metadata_path: Path,
-    lps_primary_path: Path,
-    lps_supplemental_path: Path,
     receptor_cluster_path: Path,
     target_bacteria: Sequence[str] | None = None,
 ) -> list[dict[str, object]]:
-    del lps_primary_path, lps_supplemental_path
     picard_rows = _read_semicolon_rows(picard_metadata_path)
     host_metadata = {row["bacteria"]: row for row in picard_rows if row.get("bacteria")}
     receptor_rows = receptor_surface.read_delimited_rows(receptor_cluster_path, "\t")
