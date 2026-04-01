@@ -525,7 +525,7 @@ graph LR
     note explicitly label the result as failed external validation and make no supportive claim about generalization
   - End with one of three explicit conclusions recorded in code outputs and notebooks: deployable bundle validated,
     deployable bundle failed, or validation inconclusive because the cohort contract could not be satisfied
-- [ ] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `gpt-5.4`. CI image
+- [x] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `gpt-5.4`. CI image
       profile: `full-bio`.
   - Build an inference-time projector that accepts raw host assembly FASTA input and emits the training-time
     host-surface feature schema needed for downstream deployable compatibility work, including the existing
