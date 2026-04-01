@@ -642,6 +642,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
         },
     )
+    # Pre-write the deployable runtime contract so the round-trip comparisons below can load the
+    # candidate bundle before the final manifest update adds the remaining metadata fields.
     persist_runtime_payloads(
         candidate_result["bundle_path"],
         {
@@ -762,18 +764,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "tl17_reference_fasta_filename": tl17_reference_fasta_copy.name,
         },
         bundle_updates={
-            "deployable_runtime": {
-                TL04_DIRECT_BLOCK_ID: {
-                    **tl04_contract["runtime_payload"],
-                    "panel_annotation_cache_dirname": tl13.PANEL_ANNOTATION_CACHE_DIRNAME,
-                },
-                TL15_BLOCK_ID: tl15_runtime_payload,
-                TL16_BLOCK_ID: tl16_runtime_payload,
-                TL17_BLOCK_ID: {
-                    **dict(tl17_runtime_payload),
-                    "reference_fasta_filename": tl17_reference_fasta_copy.name,
-                },
-            },
             "deployable_feature_blocks": [
                 {"block_id": "track_c_defense", "status": "included_directly", "source": "raw_host_assembly"},
                 {

@@ -425,6 +425,9 @@ def build_model_bundle(
     defense_rows = read_defense_rows(defense_subtypes_path)
     host_feature_rows, host_feature_columns, _ = build_defense_feature_rows(defense_rows)
     st02_rows = read_csv_rows(st02_pair_table_path)
+    # Filter host-side feature rows to the bacteria that actually appear in ST02 pairs so every
+    # caller (including the TL13 baseline bundle built inside TL18) trains and reports counts on
+    # the same effective host cohort instead of padding the bundle with unused panel hosts.
     target_bacteria = {str(row["bacteria"]) for row in st02_rows}
     host_feature_rows = [row for row in host_feature_rows if str(row["bacteria"]) in target_bacteria]
     host_feature_rows = augment_host_rows_with_features(
@@ -447,9 +450,6 @@ def build_model_bundle(
     phage_feature_columns = [
         column for column in phage_rows[0].keys() if column not in {"phage", *extra_phage_categorical_columns}
     ]
-    combined_phage_feature_columns = [
-        column for column in phage_feature_columns if column not in set(extra_phage_categorical_columns)
-    ]
 
     merged_rows = build_training_rows(
         st02_rows=st02_rows,
@@ -466,7 +466,7 @@ def build_model_bundle(
         host_categorical_columns=extra_host_categorical_columns,
         host_feature_columns=combined_host_feature_columns,
         phage_categorical_columns=extra_phage_categorical_columns,
-        phage_feature_columns=combined_phage_feature_columns,
+        phage_feature_columns=phage_feature_columns,
         pairwise_categorical_columns=pair_feature_categorical_columns,
         pairwise_feature_columns=pair_feature_columns,
     )
@@ -525,7 +525,7 @@ def build_model_bundle(
             "categorical_columns": list(feature_space.categorical_columns),
             "numeric_columns": list(feature_space.numeric_columns),
             "host_feature_columns": list([*extra_host_categorical_columns, *combined_host_feature_columns]),
-            "phage_feature_columns": list([*extra_phage_categorical_columns, *combined_phage_feature_columns]),
+            "phage_feature_columns": list([*extra_phage_categorical_columns, *phage_feature_columns]),
             "pairwise_feature_columns": list([*pair_feature_categorical_columns, *pair_feature_columns]),
         },
         "artifacts": {
