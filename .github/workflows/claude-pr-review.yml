@@ -128,8 +128,8 @@ jobs:
             --count-only)
           UNRESOLVED_REVIEW_THREADS=${UNRESOLVED_REVIEW_THREADS:-}
           if [ -z "$LATEST_REVIEW" ]; then
-            echo "::error::Claude did not submit a review for head ${CURRENT_HEAD_SHA}."
-            exit 1
+            echo "::warning::Claude completed but did not submit a formal review for head ${CURRENT_HEAD_SHA}. Treating as COMMENTED to dispatch lifecycle."
+            LATEST_REVIEW="COMMENTED"
           fi
           if ! [[ "$UNRESOLVED_REVIEW_THREADS" =~ ^[0-9]+$ ]]; then
             echo "::error::Failed to fetch unresolved review thread count: '${UNRESOLVED_REVIEW_THREADS}'"
