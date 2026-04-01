@@ -556,7 +556,7 @@ graph LR
     directly, which require a deployable proxy, and which remain noisy or unsupported
   - The implementation must run from checked-in env manifests rather than assuming undeclared local bioinformatics
     installs
-- [ ] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `gpt-5.4`. CI image profile:
+- [x] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `gpt-5.4`. CI image profile:
       `full-bio`.
   - Start from the phage-side feature-parity gap and justify which deployable raw-genome-derived compatibility block is
     the strongest next candidate beyond tetranucleotide SVD alone; the task fails if it adds a block without making that

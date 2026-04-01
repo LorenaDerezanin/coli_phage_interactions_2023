@@ -879,7 +879,7 @@ tracks:
         undeclared local bioinformatics installs
     - id: TL17
       title: Build deployable phage compatibility preprocessor beyond k-mer SVD
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: full-bio
       depends_on_tasks: []
