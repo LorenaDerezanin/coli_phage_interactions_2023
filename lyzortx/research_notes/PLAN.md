@@ -617,89 +617,91 @@ graph LR
   model should be trained on exactly the features it will see at inference time. The secondary goal is richer features
   that give the model more information to work with. Source code lives in lyzortx/pipeline/deployment_paired_features/ —
   see the AGENTS.md there for feature design principles and assembly download guidance.
-- [ ] **DEPLOY01** Download Picard collection assemblies and bake into CI image. Model: `gpt-5.4-mini`. CI image
-      profile: `full-bio`.
-  - Download all 403 host genome assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0)
-  - Store locally in gitignored data/genomics/bacteria/assemblies/picard/ with one FASTA per panel bacterium
+- [ ] **DEPLOY01** Assembly download script and manifest. Model: `gpt-5.4-mini`. CI image profile: `full-bio`.
+  - Write a function in lyzortx/pipeline/deployment_paired_features/ that downloads and extracts all 403 Picard
+    collection assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0) to
+    lyzortx/data/assemblies/picard/
+  - Use the figshare "Download all" zip endpoint at https://ndownloader.figshare.com/articles/25941691/versions/1
+    (~1.9GB zip, ~7 min download, ~7s unzip)
+  - Skip download if the directory already contains 403 FASTA files
   - Write a manifest.json with per-file SHA-256 checksums, the figshare DOI as provenance, and the CC BY 4.0 license
-    with attribution
-  - Validate that all 369 ST02 bacteria have a matching assembly file
-  - If any ST02 bacterium is missing from figshare, fail loudly with the list of missing IDs — do not silently proceed
-    with a partial set
-  - Add the assemblies directory to the full-bio CI image manifest so DEPLOY02-04 do not re-download per task — the
-    assemblies are static (published dataset) and belong in the image
-  - Include CC BY 4.0 attribution in the image manifest per the figshare license terms
-  - Provide a single-command entry point (function or script) that downloads the figshare zip and extracts it to the
-    local assemblies directory, skipping if already present. Downstream tasks and local dev should be able to call this
-    once and get all 403 FASTAs on disk. The figshare "Download all" zip endpoint is
-    https://ndownloader.figshare.com/articles/25941691/versions/1 (~1.9GB, ~7 min download, ~7s unzip)
-- [ ] **DEPLOY02** Re-derive host defense features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
+    attribution
+  - Validate that all 369 ST02 bacteria have a matching assembly file; fail loudly with the list of missing IDs if any
+    are absent
+  - Ensure the assemblies directory is gitignored
+- [ ] **DEPLOY02** Re-derive host defense features from raw assemblies (gate). Model: `gpt-5.4`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY01`.
-  - Run DefenseFinder (pinned version and model database from the existing runner) on all 403 assemblies from DEPLOY01
-  - Output a per-host defense subtype table with integer gene counts (not binary presence) matching the existing column
-    schema plus a _count suffix variant for each subtype
-  - Compare against the panel 370+host_defense_systems_subtypes.csv and report the per-host disagreement rate (systems
-    gained, lost, count changes) to quantify the DefenseFinder version drift identified in the TL18 audit
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/ host_defense/
-  - If the average per-host disagreement exceeds 3 systems, flag this in the lab notebook as a material divergence
-    requiring investigation before proceeding
+  - Run DefenseFinder (pinned version and model database from the existing runner) on all 403 assemblies
+  - Output a per-host defense subtype table with integer gene counts (not binary presence); use the same subtype column
+    names as the panel CSV so downstream consumers can swap the source without schema changes
+  - Drop the derived summary features host_defense_has_crispr, host_defense_diversity, and host_defense_abi_burden — the
+    model can learn these from the constituent counts
+  - Compare against the panel 370+host_defense_systems_subtypes.csv and report per-host disagreement rate (systems
+    gained, systems lost, count changes) in a comparison CSV and in the track lab notebook
+  - This task is a gate. If the average per-host disagreement exceeds 3 defense systems, the task must stop and report
+    the finding. Do not proceed to feature CSV output. The disagreement report is the deliverable in that case —
+    DEPLOY03 and DEPLOY04 should not be dispatched until the disagreement is understood
+  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
+  - Store outputs in gitignored generated_outputs/deployment_paired_features/host_defense/
 - [ ] **DEPLOY03** Re-derive host surface features with continuous scores. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY01`.
-  - Run the TL15 raw-host surface pipeline (nhmmer, hmmscan, phmmer) on all 403 assemblies
-  - Replace binary receptor presence with phmmer bit scores (12 continuous features); a zero score means no hit, not a
-    thresholded absence
-  - Replace binary O-antigen presence with nhmmer bit score (continuous) alongside the categorical O-type call
-  - Replace binary capsule presence with per-profile HMM scores (one continuous feature per capsule gene family
-    profile); do not interpret whether scattered genes form a functional locus — let the model learn what matters
-  - Drop all features identified as exact duplicates in the TL18 audit — host_o_type (duplicate of host_o_antigen_type),
-    host_surface_lps_core_type (duplicate of host_lps_core_type), host_capsule_abc_present (duplicate of
-    host_capsule_abc_proxy_present)
-  - Drop host_o_antigen_present and host_lps_core_present (derivable from whether the categorical is non-empty)
-  - Drop host_k_antigen_type_source (metadata about feature provenance, not biology)
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/ host_surface/
+      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY02`.
+  - Run the TL15 pipeline (nhmmer, hmmscan, phmmer) on all 403 assemblies
+  - Receptor features — emit phmmer bit score per receptor protein (12 continuous features replacing 12 binary); zero
+    means no hit
+  - O-antigen features — emit nhmmer bit score (continuous) alongside the categorical O-type call
+  - Capsule features — emit per-profile HMM score (one continuous feature per capsule gene family); do not threshold
+    into present/absent or interpret locus synteny
+  - Drop exact duplicates identified in TL18 audit — host_o_type (duplicate of host_o_antigen_type, 84 wasted one-hot
+    columns), host_surface_lps_core_type (duplicate of host_lps_core_type, 6 columns), host_capsule_abc_present
+    (duplicate of host_capsule_abc_proxy_present)
+  - Drop derivable indicators — host_o_antigen_present, host_lps_core_present, host_k_antigen_type_source
+  - Drop host_capsule_abc_proxy_present and host_abc_serotype_proxy — these are replaced by the continuous capsule
+    profile scores above
+  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
+  - Store outputs in gitignored generated_outputs/deployment_paired_features/host_surface/
 - [ ] **DEPLOY04** Re-derive host typing features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY01`.
+      `full-bio`. Depends on tasks: `DEPLOY03`.
   - Run Clermont phylogroup caller, ECTyper serotype, and MLST on all 403 assemblies
-  - Keep categoricals as-is (phylogroup, serotype, ST are genuinely categorical)
-  - Remove host_capsule_abc_proxy_present and host_abc_serotype_proxy — these are replaced by the continuous capsule
-    profile scores from DEPLOY03
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/ host_typing/
+  - Keep phylogroup, serotype, and ST as categoricals — these are genuinely categorical biological classifications
+  - Report per-host disagreement against picard metadata for phylogroup, O-type, H-type, and ST in a comparison CSV
+  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
+  - Store outputs in gitignored generated_outputs/deployment_paired_features/host_typing/
 - [ ] **DEPLOY05** Switch phage RBP features to continuous match scores. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`.
   - Modify TL17 projection to emit mmseqs percent identity per RBP family instead of binary presence (32 continuous
-    features replace 32 binary); zero means no hit above the minimum query coverage threshold
+    features replacing 32 binary); zero means no hit above the minimum query coverage threshold
   - Drop tl17_rbp_family_count (derivable as count of nonzero family scores)
   - Keep tl17_rbp_reference_hit_count (not derivable from per-family scores)
   - No assembly download needed — phage FNAs are already in the repo
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/ phage_rbp/
-- [ ] **DEPLOY06** Drop derived summary features from defense and anti-defense blocks. Model: `gpt-5.4-mini`. CI image
-      profile: `full-bio`.
-  - Drop host_defense_has_crispr (max of CRISPR-Cas subtype columns)
-  - Drop host_defense_diversity (count of nonzero defense subtypes)
-  - Drop host_defense_abi_burden (count of Abi-family subtypes)
-  - The model can learn these aggregates from the constituent features if they matter; pre-computing them wastes feature
-    budget and prevents the model from weighting constituents differently
-  - Verify the dropped features are not referenced by any downstream code outside the feature engineering path
-- [ ] **DEPLOY07** Retrain model on deployment-paired features and evaluate. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY02`, `DEPLOY03`, `DEPLOY04`, `DEPLOY05`, `DEPLOY06`.
-  - Rebuild the model bundle using re-derived features from DEPLOY02-06
-  - Same LightGBM hyperparameters, same ST03 holdout split, same calibration fold, same random seed as the TL18
-    candidate
-  - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000 strain-level resamples)
-  - Run a parity-only ablation — train one model with binary features from the raw pipeline (same encoding as TL18 but
-    derived from raw assemblies instead of panel metadata) to separate the parity fix from the gradient feature effect
-  - Compare three models in the same table — TL18 candidate (panel features), parity-only (raw-derived binary),
-    parity+gradient (raw-derived continuous)
-  - Validate exact training/inference parity on the 3 validation hosts — run inference from raw FASTAs and confirm
-    feature vectors are identical to the training features for those hosts (zero delta)
-  - If parity+gradient does not improve over parity-only, conclude that gradients did not help and lock on parity-only —
-    do not chase the gradient hypothesis further
-- [ ] **DEPLOY08** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY07`.
-  - Update generalized_inference.py so that training and inference call the same feature derivation functions — not
-    analogous functions that produce columns with the same names
-  - The inference runtime should import and call the exact functions used to produce training features in DEPLOY02-05
-  - Validate on the 3 validation hosts — run inference, compare feature vectors against training features, require zero
-    delta on all features
-  - Run the relocation probe — copy the bundle to a different directory and confirm inference still works
-  - Remove the extra 411_P3.fna from the FNA directory, or filter inference to panel phages via the metadata CSV
+  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
+  - Store outputs in gitignored generated_outputs/deployment_paired_features/phage_rbp/
+- [ ] **DEPLOY06** Retrain model on deployment-paired features and evaluate. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY02`, `DEPLOY03`, `DEPLOY04`, `DEPLOY05`.
+  - Load feature CSVs and schema manifests from DEPLOY02-05; validate that every schema column is present in the CSV and
+    that no two blocks share a column name (except the bacteria/phage join key)
+  - Assemble the joint feature matrix by joining host blocks on bacteria and phage blocks on phage, then merging with
+    the ST02 pair table
+  - Train three LightGBM models using the same hyperparameters, ST03 holdout split, calibration fold, and random seed as
+    TL18 — (a) TL18 baseline using panel features for reference, (b) parity-only using raw-derived features with binary
+    encoding to isolate the parity fix, (c) parity+gradient using raw-derived features with continuous encoding
+  - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000 strain-level resamples) for all three
+    models in one comparison table
+  - Validate training/inference parity on the 3 validation hosts — run inference from raw FASTAs using the winning model
+    bundle and confirm feature vectors are identical to the training features for those hosts (zero delta on every
+    feature)
+  - Lock decision — if parity+gradient improves over parity-only on AUC (bootstrap 95% CI for the delta excludes zero),
+    lock on parity+gradient; otherwise lock on parity-only; do not chase the gradient hypothesis further
+  - Write the comparison table and lock decision to the track lab notebook
+- [ ] **DEPLOY07** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY06`.
+  - Update generalized_inference.py so that training and inference call the exact same feature derivation functions —
+    not analogous functions that produce columns with the same names; import from
+    lyzortx/pipeline/deployment_paired_features/ for all feature blocks
+  - The locked feature encoding from DEPLOY06 (parity-only or parity+gradient) determines which functions are wired in;
+    read the lock decision from the saved bundle metadata
+  - Validate on the 3 validation hosts — run inference from raw FASTAs, compare feature vectors against training
+    features, require zero delta
+  - Run the relocation probe — copy the bundle to a different directory and confirm inference still works without
+    repo-root dependencies
+  - Filter inference to the 96 panel phages via the metadata CSV; the extra 411_P3.fna in the FNA directory must not
+    appear in predictions

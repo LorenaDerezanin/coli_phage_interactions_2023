@@ -18,8 +18,9 @@ needs assemblies:
 Do not serialize: start download → wait 7 minutes → then start thinking about the task. The download is I/O-bound and
 the planning is CPU-bound; they should overlap.
 
-In CI, the assemblies may already be present in the container image (baked in by DEPLOY01). The download function
-should skip if the assemblies directory already contains 403 FASTA files. Check before downloading.
+The download function should skip if the assemblies directory already contains 403 FASTA files. Check before
+downloading. The assemblies live at `lyzortx/data/assemblies/picard/` (gitignored, under `lyzortx/` per the fork's
+code placement policy).
 
 ## Feature Design Principles
 
