@@ -9,7 +9,6 @@ from lyzortx.pipeline.steel_thread_v0.checks import check_st01_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st01b_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st02_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st03_regression
-from lyzortx.pipeline.steel_thread_v0.checks import check_st03b_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st04_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st05_regression
 from lyzortx.pipeline.steel_thread_v0.checks import check_st06_regression
@@ -19,14 +18,10 @@ from lyzortx.pipeline.steel_thread_v0.steps import (
     st01b_confidence_tiers,
     st02_build_pair_table,
     st03_build_splits,
-    st03b_build_split_suite,
     st04_train_baselines,
-    st04b_ablation_suite,
     st05_calibrate_rank,
     st06_recommend_top3,
-    st06b_compare_ranking_policies,
     st07_build_report,
-    st08_tier_a_ingest_ablation,
 )
 
 
@@ -39,19 +34,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "st01b",
             "st02",
             "st03",
-            "st03b",
             "st04",
-            "st04b",
             "st05",
             "st06",
-            "st06b",
             "st07",
-            "st08",
             "check-st01",
             "check-st01b",
             "check-st02",
             "check-st03",
-            "check-st03b",
             "check-st04",
             "check-st05",
             "check-st06",
@@ -73,22 +63,14 @@ def main(argv: list[str] | None = None) -> None:
         st02_build_pair_table.main([])
     elif args.step == "st03":
         st03_build_splits.main([])
-    elif args.step == "st03b":
-        st03b_build_split_suite.main([])
     elif args.step == "st04":
         st04_train_baselines.main([])
-    elif args.step == "st04b":
-        st04b_ablation_suite.main([])
     elif args.step == "st05":
         st05_calibrate_rank.main([])
     elif args.step == "st06":
         st06_recommend_top3.main([])
-    elif args.step == "st06b":
-        st06b_compare_ranking_policies.main([])
     elif args.step == "st07":
         st07_build_report.main([])
-    elif args.step == "st08":
-        st08_tier_a_ingest_ablation.main([])
     elif args.step == "check-st01":
         check_st01_regression.main([])
     elif args.step == "check-st01b":
@@ -97,8 +79,6 @@ def main(argv: list[str] | None = None) -> None:
         check_st02_regression.main([])
     elif args.step == "check-st03":
         check_st03_regression.main([])
-    elif args.step == "check-st03b":
-        check_st03b_regression.main([])
     elif args.step == "check-st04":
         check_st04_regression.main([])
     elif args.step == "check-st05":
