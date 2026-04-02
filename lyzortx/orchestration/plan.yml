@@ -971,7 +971,9 @@ tracks:
       derived summary features). The primary goal is deployment integrity — the
       model should be trained on exactly the features it will see at inference
       time. The secondary goal is richer features that give the model more
-      information to work with.
+      information to work with. Source code lives in
+      lyzortx/pipeline/deployment_paired_features/ — see the AGENTS.md there
+      for feature design principles and assembly download guidance.
     stage: 4
     depends_on:
     - L

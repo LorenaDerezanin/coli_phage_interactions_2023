@@ -615,7 +615,8 @@ graph LR
   scores where the gradient carries biological signal. Deduplicate redundant features found in the TL18 audit (91 wasted
   one-hot features from exact duplicates, plus derived summary features). The primary goal is deployment integrity — the
   model should be trained on exactly the features it will see at inference time. The secondary goal is richer features
-  that give the model more information to work with.
+  that give the model more information to work with. Source code lives in lyzortx/pipeline/deployment_paired_features/ —
+  see the AGENTS.md there for feature design principles and assembly download guidance.
 - [ ] **DEPLOY01** Download Picard collection assemblies and bake into CI image. Model: `gpt-5.4-mini`. CI image
       profile: `full-bio`.
   - Download all 403 host genome assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0)
