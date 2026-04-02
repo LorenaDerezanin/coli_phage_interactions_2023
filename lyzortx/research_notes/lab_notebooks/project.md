@@ -1146,6 +1146,63 @@ The updated plan also records one negative lesson explicitly: do not treat fitte
 deployable shortcut. If continuous host-similarity signal is still needed, it should come from a stable runtime
 distance or projection contract, not from reusing a fragile embedding fit.
 
+### 2026-04-02: Deployment-Paired Feature Pipeline — new track after TL18 audit
+
+#### Executive summary
+
+A step-by-step inference audit of the TL18 richer bundle found three deployment-path bugs and a systematic feature
+redundancy problem that together motivate a new track: the Deployment-Paired Feature Pipeline (DEPLOY01-08). The
+primary goal is deployment integrity — the model should be trained on exactly the features it will see at inference
+time. The secondary goal is richer features that give the model more information to work with.
+
+#### What the audit found
+
+The TL18 audit walked through every inference step on the 3 committed validation hosts (55989, EDL933, LF82) and
+the 65-strain holdout set. It confirmed that the model quality improvement from the richer bundle is real (ROC-AUC
++0.036, 95% CI [+0.002, +0.079], 98.5% probability of improvement; top-3 +3.2pp; Brier -0.011). No label leakage was
+found. But three deployment-path bugs were identified:
+
+1. **DefenseFinder version drift**: fresh runs on raw FASTAs disagree with panel annotations (EDL933: 8 vs 9 systems).
+   Defense subtypes carry 17.3% of model importance.
+2. **Capsule train/inference mismatch**: raw HMM scan is more sensitive than the picard `Capsule_ABC` metadata field.
+   EDL933 gets K4 from raw HMM but `Capsule_ABC=0` in panel metadata. Capsule features carry 3-5% of importance.
+3. **Extra phage 411_P3**: 97 FNA files vs 96 panel phages. Minor ranking impact.
+
+A redundancy analysis found 91 wasted one-hot features from exact duplicates (`host_o_type` duplicates
+`host_o_antigen_type`: 84 one-hot columns; `host_surface_lps_core_type` duplicates `host_lps_core_type`: 6 columns;
+`host_capsule_abc_present` duplicates `host_capsule_abc_proxy_present`: 1 column) plus 4 derived summary features
+computable from their constituents (`defense_diversity`, `has_crispr`, `abi_burden`, `rbp_family_count`).
+
+A feature encoding audit found that 141 of 190 numeric features (74%) are binary thresholds that discard continuous
+information. Receptor phmmer bit scores, RBP family mmseqs percent identity, capsule HMM profile scores, and defense
+system gene counts all carry biological gradients that the current binary encoding throws away.
+
+#### Strategic decision
+
+The new DEPLOY track addresses all of these by:
+
+1. Downloading all 403 Picard collection assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1)
+2. Re-deriving all host features from raw FASTAs using the same pipeline that runs at inference time
+3. Switching to continuous scores for receptors (phmmer bit scores), RBP families (mmseqs % identity), and capsule
+   (per-profile HMM scores). Defense subtypes switch from binary to integer gene counts.
+4. Dropping 91+ redundant features
+5. Retraining and evaluating with a 3-way comparison: TL18 panel baseline vs parity-only vs parity+gradients
+6. Wiring the re-derived pipeline into the inference runtime with zero-delta parity validation
+
+The DEPLOY track replaces Track L as the active development front. Track L is complete.
+
+#### Why not just retrain on the current features
+
+The parity fix is necessary for deployment integrity regardless of whether it improves metrics. A model trained on
+curated panel metadata but scored on fresh bioinformatics tool outputs is predicting on a different feature distribution
+than it was trained on. Bugs #1 and #2 prove this causes real divergence. Even if the holdout metrics look the same
+after the parity fix (because holdout already used consistent panel features), the deployed predictions for novel hosts
+will be more trustworthy.
+
+The gradient features are a bonus — they may or may not improve metrics. DEPLOY07 explicitly separates the two effects
+with an ablation: train one model with parity-only (raw-derived binary) and one with parity+gradients (raw-derived
+continuous) to measure whether gradients help.
+
 ### 2026-04-01: Project-level implication of the Track L raw-validation subset
 
 The Track L replan is now stricter in one important way: "deployable" work can no longer hide behind the excuse that

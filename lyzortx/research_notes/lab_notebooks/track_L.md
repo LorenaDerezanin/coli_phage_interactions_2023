@@ -1845,3 +1845,11 @@ None of these bugs invalidate the decision to promote the richer bundle as the n
 that the holdout metrics (+0.036 AUC, +3.2pp top-3) are an **upper bound** on the improvement a truly novel host would
 see through the raw-input inference path. The actual deployment improvement will be smaller, by an amount that depends
 primarily on the DefenseFinder disagreement rate.
+
+#### Continuation: Deployment-Paired Feature Pipeline
+
+The audit findings above — training/inference feature mismatch, binary thresholds discarding gradients, and 91 wasted
+duplicate one-hot features — motivated a new track: **Deployment-Paired Feature Pipeline** (DEPLOY01-08 in plan.yml).
+That track downloads all 403 panel assemblies from figshare, re-derives every host feature from raw FASTAs using the
+same pipeline that runs at inference time, switches to continuous scores where the gradient carries biological signal,
+and deduplicates redundant features. Track L work is complete; further development continues in the DEPLOY track.
