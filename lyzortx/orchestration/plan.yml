@@ -980,7 +980,7 @@ tracks:
     - G
     tasks:
     - id: DEPLOY01
-      title: Assembly download script and manifest
+      title: Assembly download script
       status: pending
       model: gpt-5.4-mini
       ci_image_profile: full-bio
@@ -993,8 +993,6 @@ tracks:
         https://ndownloader.figshare.com/articles/25941691/versions/1 (~1.9GB
         zip, ~7 min download, ~7s unzip)
       - Skip download if the directory already contains 403 FASTA files
-      - Write a manifest.json with per-file SHA-256 checksums, the figshare DOI
-        as provenance, and the CC BY 4.0 license attribution
       - Validate that all 369 ST02 bacteria have a matching assembly file; fail
         loudly with the list of missing IDs if any are absent
       - Ensure the assemblies directory is gitignored

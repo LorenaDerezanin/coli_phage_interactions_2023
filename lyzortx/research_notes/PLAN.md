@@ -617,15 +617,13 @@ graph LR
   model should be trained on exactly the features it will see at inference time. The secondary goal is richer features
   that give the model more information to work with. Source code lives in lyzortx/pipeline/deployment_paired_features/ —
   see the AGENTS.md there for feature design principles and assembly download guidance.
-- [ ] **DEPLOY01** Assembly download script and manifest. Model: `gpt-5.4-mini`. CI image profile: `full-bio`.
+- [ ] **DEPLOY01** Assembly download script. Model: `gpt-5.4-mini`. CI image profile: `full-bio`.
   - Write a function in lyzortx/pipeline/deployment_paired_features/ that downloads and extracts all 403 Picard
     collection assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0) to
     lyzortx/data/assemblies/picard/
   - Use the figshare "Download all" zip endpoint at https://ndownloader.figshare.com/articles/25941691/versions/1
     (~1.9GB zip, ~7 min download, ~7s unzip)
   - Skip download if the directory already contains 403 FASTA files
-  - Write a manifest.json with per-file SHA-256 checksums, the figshare DOI as provenance, and the CC BY 4.0 license
-    attribution
   - Validate that all 369 ST02 bacteria have a matching assembly file; fail loudly with the list of missing IDs if any
     are absent
   - Ensure the assemblies directory is gitignored
