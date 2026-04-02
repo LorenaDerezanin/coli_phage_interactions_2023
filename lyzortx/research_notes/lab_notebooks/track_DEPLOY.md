@@ -117,3 +117,61 @@ any of the 369 ST02 bacteria are missing their assembly file.
 - Zip extraction and validation on a small synthetic archive.
 - Cache-skip behavior when the expected FASTA count is already present.
 - Loud failure when a required ST02 assembly is absent.
+
+### 2026-04-02: DEPLOY02 host defense integer-count gate
+
+#### Executive summary
+
+Implemented `derive_host_defense_features()` and `run_validation_subset()` in
+`lyzortx/pipeline/deployment_paired_features/derive_host_defense_features.py`.
+The deployment host-defense block now runs the existing pinned DefenseFinder runner on raw assemblies, emits integer
+gene counts for the retained 79 defense subtypes using the original panel subtype names, and writes a schema manifest
+at `lyzortx/generated_outputs/deployment_paired_features/host_defense/schema_manifest.json`.
+
+The 3-host gate clears. On the committed validation FASTAs (`55989`, `EDL933`, `LF82`), the average disagreement
+against the panel annotations is **0.667 systems/host** across the retained 79-column feature schema, below the
+track's 3-systems/host stop threshold. The observed mismatches look like minor subtype-label/version drift within
+restriction-modification families, not a fundamental methodology mismatch.
+
+#### Implementation
+
+- Reused the Track L DefenseFinder wrapper for the pinned CLI/model installation, Pyrodigal protein calling, and
+  systems TSV parsing rather than creating a second runner.
+- Built the deployment schema from the same Track C support mask logic (`min_present_count=5`, `max_present_count=395`)
+  so the block keeps the established 79 retained defense subtypes, but the output columns stay in raw panel naming
+  form (`AbiD`, `RM_Type_IV`, etc.) instead of `host_defense_subtype_*` slugs.
+- Dropped the derived summary columns `host_defense_has_crispr`, `host_defense_diversity`, and
+  `host_defense_abi_burden` from the deployment schema entirely.
+- Wrote per-host count CSVs and manifests under
+  `lyzortx/generated_outputs/deployment_paired_features/host_defense/<host>/`, plus a combined validation CSV and
+  validation disagreement report at the block root.
+
+#### Validation comparison
+
+Comparison scope: retained 79 subtype columns from the panel CSV, with integer counts and no derived summary features.
+
+- `55989`: exact match on all 79 retained subtype columns. Raw unmatched detections were `DS-13`, `DS-27`, and
+  `PARIS_II`; none of these affect the retained deployment feature schema.
+- `EDL933`: one lost system. Panel annotation has `RM_Type_IIG=1`; the raw DefenseFinder output reported
+  `RM_Type_IIG_2=1`, which did not normalize onto the retained `RM_Type_IIG` column. All other retained subtype counts
+  matched exactly.
+- `LF82`: one count change. Panel annotation has `RM_Type_IV=2`; the raw DefenseFinder output matched one
+  `RM_Type_IV` system and emitted one unmatched `RM_Type_IV_1`, so the derived retained count is `RM_Type_IV=1`.
+
+#### Interpretation
+
+- The disagreement pattern is narrow and family-localized: both mismatches are restriction-modification subtype naming
+  variants (`RM_Type_IIG_2`, `RM_Type_IV_1`) rather than broad system loss, broad system gain, or widespread count
+  compression.
+- `55989` matching exactly across all 79 retained columns is a strong sanity check that the pipeline is not globally
+  misconfigured.
+- Because the gate discrepancy rate is low and the misses are explainable as subtype-label drift rather than systematic
+  detection failure, DEPLOY02 should proceed to DEPLOY03 instead of stopping at the disagreement report.
+
+#### Tests
+
+- Unit tests for schema construction, ensuring raw panel subtype names are preserved and the three derived summary
+  columns are excluded.
+- Unit tests for disagreement reporting (`systems_gained`, `systems_lost`, `count_changes`).
+- Unit tests for the single-assembly derivation path, validating integer counts and schema manifest contents.
+- Unit tests for the 3-host validation subset runner, validating combined CSV/report generation.
