@@ -627,23 +627,24 @@ graph LR
   - Validate that all 369 ST02 bacteria have a matching assembly file; fail loudly with the list of missing IDs if any
     are absent
   - Ensure the assemblies directory is gitignored
-- [ ] **DEPLOY02** Re-derive host defense features from raw assemblies (gate). Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY01`.
-  - Run DefenseFinder (pinned version and model database from the existing runner) on all 403 assemblies
-  - Output a per-host defense subtype table with integer gene counts (not binary presence); use the same subtype column
-    names as the panel CSV so downstream consumers can swap the source without schema changes
+- [ ] **DEPLOY02** Re-derive host defense features with integer gene counts (gate). Model: `gpt-5.4`. CI image profile:
+      `full-bio`.
+  - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
+    validation FASTAs (55989, EDL933, LF82) — the full 403-host run happens in DEPLOY06
+  - The function must run DefenseFinder (pinned version and model database from the existing runner) on a given assembly
+    and output integer gene counts (not binary presence) per defense subtype; use the same subtype column names as the
+    panel CSV
   - Drop the derived summary features host_defense_has_crispr, host_defense_diversity, and host_defense_abi_burden — the
     model can learn these from the constituent counts
-  - Compare against the panel 370+host_defense_systems_subtypes.csv and report per-host disagreement rate (systems
-    gained, systems lost, count changes) in a comparison CSV and in the track lab notebook
-  - This task is a gate. If the average per-host disagreement exceeds 3 defense systems, the task must stop and report
-    the finding. Do not proceed to feature CSV output. The disagreement report is the deliverable in that case —
-    DEPLOY03 and DEPLOY04 should not be dispatched until the disagreement is understood
-  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/host_defense/
+  - Compare the 3 validation hosts against their panel annotations and report per-host disagreement (systems gained,
+    systems lost, count changes) in the track lab notebook
+  - This task is a gate. If the 3-host comparison reveals disagreements that suggest a fundamental methodology mismatch
+    (not just minor version drift), stop and report. The disagreement report is the deliverable in that case.
+  - Output a schema manifest (JSON) listing every column name and dtype
 - [ ] **DEPLOY03** Re-derive host surface features with continuous scores. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY02`.
-  - Run the TL15 pipeline (nhmmer, hmmscan, phmmer) on all 403 assemblies
+      `full-bio`. Depends on tasks: `DEPLOY02`.
+  - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
+    validation FASTAs — the full 403-host run happens in DEPLOY06
   - Receptor features — emit phmmer bit score per receptor protein (12 continuous features replacing 12 binary); zero
     means no hit
   - O-antigen features — emit nhmmer bit score (continuous) alongside the categorical O-type call
@@ -655,15 +656,16 @@ graph LR
   - Drop derivable indicators — host_o_antigen_present, host_lps_core_present, host_k_antigen_type_source
   - Drop host_capsule_abc_proxy_present and host_abc_serotype_proxy — these are replaced by the continuous capsule
     profile scores above
-  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/host_surface/
+  - Output a schema manifest (JSON) listing every column name and dtype
 - [ ] **DEPLOY04** Re-derive host typing features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY03`.
-  - Run Clermont phylogroup caller, ECTyper serotype, and MLST on all 403 assemblies
+  - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
+    validation FASTAs — the full 403-host run happens in DEPLOY06
+  - Run Clermont phylogroup caller, ECTyper serotype, and MLST
   - Keep phylogroup, serotype, and ST as categoricals — these are genuinely categorical biological classifications
-  - Report per-host disagreement against picard metadata for phylogroup, O-type, H-type, and ST in a comparison CSV
-  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/host_typing/
+  - Compare the 3 validation hosts against picard metadata for phylogroup, O-type, H-type, and ST in the track lab
+    notebook
+  - Output a schema manifest (JSON) listing every column name and dtype
 - [ ] **DEPLOY05** Switch phage RBP features to continuous match scores. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`.
   - Modify TL17 projection to emit mmseqs percent identity per RBP family instead of binary presence (32 continuous
@@ -671,24 +673,29 @@ graph LR
   - Drop tl17_rbp_family_count (derivable as count of nonzero family scores)
   - Keep tl17_rbp_reference_hit_count (not derivable from per-family scores)
   - No assembly download needed — phage FNAs are already in the repo
-  - Output a schema manifest (JSON) listing every column name and dtype alongside the feature CSV
-  - Store outputs in gitignored generated_outputs/deployment_paired_features/phage_rbp/
-- [ ] **DEPLOY06** Retrain model on deployment-paired features and evaluate. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY02`, `DEPLOY03`, `DEPLOY04`, `DEPLOY05`.
+  - Output a schema manifest (JSON) listing every column name and dtype
+- [ ] **DEPLOY06** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY04`, `DEPLOY05`.
+  - Download the 403 assemblies using the DEPLOY01 function if not already present
+  - Run the DEPLOY02-04 feature derivation functions on all 403 hosts; run the DEPLOY05 phage feature derivation on all
+    96 panel phages
+  - Store all feature CSVs in gitignored generated_outputs/deployment_paired_features/
   - Load feature CSVs and schema manifests from DEPLOY02-05; validate that every schema column is present in the CSV and
     that no two blocks share a column name (except the bacteria/phage join key)
+  - Report per-host defense disagreement rate against the panel CSV (full 403-host comparison); if average disagreement
+    exceeds 3 systems, flag in the lab notebook and investigate before retraining
   - Assemble the joint feature matrix by joining host blocks on bacteria and phage blocks on phage, then merging with
     the ST02 pair table
-  - Train three LightGBM models using the same hyperparameters, ST03 holdout split, calibration fold, and random seed as
-    TL18 — (a) TL18 baseline using panel features for reference, (b) parity-only using raw-derived features with binary
-    encoding to isolate the parity fix, (c) parity+gradient using raw-derived features with continuous encoding
-  - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000 strain-level resamples) for all three
-    models in one comparison table
+  - Train two LightGBM models using the same hyperparameters, ST03 holdout split, calibration fold, and random seed as
+    TL18 — (a) TL18 baseline using panel features for reference, (b) deployment-paired model using raw-derived features
+    with continuous encoding from DEPLOY02-05
+  - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000 strain-level resamples) for both models
+    in one comparison table
   - Validate training/inference parity on the 3 validation hosts — run inference from raw FASTAs using the winning model
     bundle and confirm feature vectors are identical to the training features for those hosts (zero delta on every
     feature)
-  - Lock decision — if parity+gradient improves over parity-only on AUC (bootstrap 95% CI for the delta excludes zero),
-    lock on parity+gradient; otherwise lock on parity-only; do not chase the gradient hypothesis further
+  - Lock decision — if the deployment-paired model improves over the TL18 baseline on AUC (bootstrap 95% CI for the
+    delta excludes zero), lock on the deployment-paired model; otherwise keep TL18 baseline
   - Write the comparison table and lock decision to the track lab notebook
 - [ ] **DEPLOY07** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY06`.
