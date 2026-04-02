@@ -91,15 +91,29 @@ jobs:
                  gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
                - Unresolve inadequately resolved threads:
                  gh api graphql -f query='mutation($id:ID!){unresolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id="THREAD_ID"
-            6. Submit a formal review:
+            6. Submit a formal review. Try the MCP tools first; if they error or are
+               unavailable, fall back to the gh api REST approach.
+
+               MCP approach (preferred):
                 - mcp__github__create_pending_pull_request_review to start.
                 - mcp__github__add_comment_to_pending_review for inline comments.
-                - mcp__github__submit_pending_pull_request_review to submit:
+                - mcp__github__submit_pending_pull_request_review to submit.
+
+               gh api fallback (if MCP tools fail):
+                gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+                  -f event=EVENT -f body="REVIEW_BODY" -f commit_id="${{ github.event.pull_request.head.sha }}"
+
+               Review decision:
                  "APPROVE" only if you would merge the current head as-is right now:
                  no substantive issues, no merge-blocking nits or follow-up fixes requested from Codex,
                  and no unresolved review threads.
                  If you identify anything that should delay merge, use "COMMENT" instead of "APPROVE".
                  NEVER use "REQUEST_CHANGES".
+
+               CRITICAL: After submitting, verify the review was posted by running:
+                 gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+                   --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state // empty'
+                 If this returns empty or null, your review was NOT posted. Retry with the gh api fallback.
 
       # After Claude reviews, check the outcome and trigger downstream actions.
       # Auto-merge on approval; dispatch Codex lifecycle on commented reviews.
@@ -128,8 +142,8 @@ jobs:
             --count-only)
           UNRESOLVED_REVIEW_THREADS=${UNRESOLVED_REVIEW_THREADS:-}
           if [ -z "$LATEST_REVIEW" ]; then
-            echo "::error::Claude did not submit a review for head ${CURRENT_HEAD_SHA}."
-            exit 1
+            echo "::warning::Claude completed but did not submit a formal review for head ${CURRENT_HEAD_SHA}. Treating as COMMENTED to dispatch lifecycle."
+            LATEST_REVIEW="COMMENTED"
           fi
           if ! [[ "$UNRESOLVED_REVIEW_THREADS" =~ ^[0-9]+$ ]]; then
             echo "::error::Failed to fetch unresolved review thread count: '${UNRESOLVED_REVIEW_THREADS}'"
