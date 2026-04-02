@@ -16,4 +16,7 @@ dev/predictions/results/predictions/
 
 # lyzortx generated artifacts
 lyzortx/generated_outputs/
+
+# lyzortx external data (downloaded, not committed)
+lyzortx/data/assemblies/
 .env

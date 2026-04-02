@@ -962,3 +962,47 @@ Automated reachability analysis is a useful starting point for identifying delet
 as the sole decision criterion. Always have a human or independent reviewer check the deletion list against project
 needs that aren't captured in import graphs: CI gates, CLI entry points, documentation references, and planned future
 work.
+
+### 2026-04-02: CI runner sizing for DEPLOY track
+
+#### Decision
+
+Try the free `ubuntu-24.04` runner first for DEPLOY tasks. Fall back to the paid `ubuntu-24.04-4core` (150GB disk,
+$0.008/min) only if the free runner's 14GB disk proves insufficient.
+
+#### Context
+
+The `full-bio` CI image is 9.5GB compressed. The free runner has 14GB disk with ~6GB usable after the runner OS. The
+image already exceeds this, relying on layer sharing with the runner base to fit. Adding the 1.9GB Picard assembly
+set to the image is not viable on the free runner.
+
+Instead, DEPLOY tasks download assemblies at runtime from figshare (~7 min for the 1.9GB zip). This eats into the
+90-minute task timeout but avoids image bloat. The download function skips if assemblies are already present, so local
+dev only pays the cost once.
+
+If the free runner runs out of disk during DEPLOY02 (DefenseFinder on 403 genomes produces intermediate files),
+switching to `ubuntu-24.04-4core` costs ~$0.24-0.48 per task run (30-60 min typical). The full DEPLOY track would cost
+~$3-5 total on paid runners. This is acceptable if needed but not worth pre-committing to.
+
+#### Future: Switch pharokka to meta mode for batch annotation
+
+**Trigger:** Next time pharokka annotations need regenerating, or if `run_pharokka.py` is refactored for the DEPLOY
+track.
+
+**Finding (2026-04-02):** Running pharokka in `--meta --split` mode on a single concatenated multi-FASTA of all 97 phage
+genomes completes in **3 minutes 13 seconds** (192s wall time, 4 threads). The current per-phage approach
+(`ProcessPoolExecutor` with 97 separate `pharokka.py` subprocess calls) takes **1-2 hours** with parallelism. The
+speedup is ~20-40x because mmseqs2 database indexing and profile search happen once instead of 97 times.
+
+The meta mode output is a single combined `pharokka_cds_final_merged_output.tsv` (3.4MB, 10,114 CDS rows) with a
+`contig` column containing the phage name. The `--split` flag also produces per-phage GFF/FAA/FASTA files under
+`single_gffs/` etc. Downstream code currently reads per-phage `_cds_final_merged_output.tsv` files; it would need
+either a trivial split-by-contig post-processing step or a parser update to accept the combined file.
+
+The combined TSV compresses to 343KB. It could be committed directly or baked into the CI image with negligible
+size impact. The existing 194 committed files in `data/annotations/pharokka/` (4.5MB total) could be replaced by
+this single file, though at 4.5MB the current approach is also not a real problem.
+
+**What to do if triggered:** Replace the `ProcessPoolExecutor` loop in `run_pharokka.py` with a single
+`pharokka.py --meta --split` call on a concatenated FASTA, then split the combined TSV by the `contig` column to
+produce per-phage files compatible with existing downstream parsers.
