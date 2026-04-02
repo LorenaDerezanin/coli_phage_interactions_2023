@@ -92,3 +92,28 @@ The primary outcome is deployment integrity: zero delta between training feature
 whose assembly is available. The secondary outcome is potentially richer signal from continuous scores. DEPLOY06
 explicitly separates these with a 3-way ablation (TL18 baseline vs parity-only vs parity+gradients) so we can measure
 whether gradients help independently of the parity fix.
+
+### 2026-04-02: DEPLOY01 assembly download implementation
+
+#### Executive summary
+
+Implemented `download_picard_assemblies()` in `lyzortx/pipeline/deployment_paired_features/download_picard_assemblies.py`.
+The function derives the ST02 validation host set from `data/interactions/raw/raw_interactions.csv`, downloads the
+figshare "Download all" archive to `.scratch/`, extracts it into `lyzortx/data/assemblies/picard/`, and fails loudly if
+any of the 369 ST02 bacteria are missing their assembly file.
+
+#### Interpretation
+
+- The committed raw interactions table contains 369 unique bacteria, which matches the ST02 host count referenced in
+  the plan.
+- `data/genomics/bacteria/picard_collection.csv` contains 403 Picard collection hosts, so the download target and the
+  ST02 validation set are different but overlapping cohorts.
+- The download path is guarded by a complete-cache check: if `lyzortx/data/assemblies/picard/` already contains 403
+  FASTA files, the function skips the network request and only validates coverage.
+
+#### Tests
+
+- Unique ST02 bacteria extraction from a semicolon-delimited raw interactions table.
+- Zip extraction and validation on a small synthetic archive.
+- Cache-skip behavior when the expected FASTA count is already present.
+- Loud failure when a required ST02 assembly is absent.
