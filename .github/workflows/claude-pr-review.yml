@@ -112,8 +112,8 @@ jobs:
 
                CRITICAL: After submitting, verify the review was posted by running:
                  gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
-                   --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state'
-                 If this returns empty, your review was NOT posted. Retry with the gh api fallback.
+                   --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state // empty'
+                 If this returns empty or null, your review was NOT posted. Retry with the gh api fallback.
 
       # After Claude reviews, check the outcome and trigger downstream actions.
       # Auto-merge on approval; dispatch Codex lifecycle on commented reviews.
