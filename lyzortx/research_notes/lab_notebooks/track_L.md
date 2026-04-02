@@ -1587,3 +1587,261 @@ was previously missing from the deployable bundle.
    *more complete*.
 4. The correct next state is to promote the richer bundle as the new deployable baseline and proceed with external
    validation.
+
+### 2026-04-02: TL18 post-merge audit — holdout metrics validated, three deployment-path bugs found
+
+#### Executive summary
+
+A manual step-by-step audit of the TL18 inference pipeline on the 3 committed validation hosts (55989, EDL933, LF82)
+plus the 65-strain holdout set confirmed that the reported model quality improvement is real: bootstrap CIs (2000
+strain-level resamples) place the ROC-AUC delta at +0.036 with a 95% CI of [+0.002, +0.079] and 98.5% probability of
+improvement. However, the audit also found three bugs that affect the raw-input inference path but not the holdout
+evaluation. Two are systematic feature mismatches between training-time panel features and inference-time raw-genome
+features; the third is an extra phage genome in the FNA directory. None of these invalidate the holdout comparison, but
+all three will degrade prediction quality for truly novel hosts at deployment time.
+
+#### Audit methodology
+
+The audit traced every inference step on each of the 3 committed validation hosts:
+
+1. **Defense Finder** — ran fresh on each raw FASTA, compared output to panel defense subtype annotations.
+2. **TL15 host surface projection** — ran nhmmer (O-antigen), hmmscan (ABC capsule), phmmer (receptor presence) on each
+   raw FASTA, compared projected features to the picard metadata-derived training features.
+3. **TL16 host typing projection** — ran Clermont phylogroup caller, ECTyper serotype caller, MLST, and capsule proxy
+   HMM scan on each raw FASTA, compared to picard metadata fields.
+4. **Phage projection** — ran pyrodigal + kmer SVD + TL04 anti-defense + TL17 RBP family matching for a subset of
+   phages, checked feature values against panel precomputed features.
+5. **Scoring** — ran full inference (EDL933 vs 96 phages), compared raw-input predictions to panel-feature predictions
+   and to known labels.
+6. **Holdout evaluation** — recomputed baseline vs candidate metrics on the ST03 65-strain holdout using panel features,
+   computed bootstrap CIs, and checked per-strain top-3 changes.
+7. **Leakage audit** — verified that no feature in the candidate model is derived from interaction labels. Checked
+   enrichment holdout exclusion (TL10), TL04 pair feature construction, TL15/TL16 metadata provenance, and TL17
+   sequence-only family definitions.
+8. **Feature importance analysis** — computed per-block importance shares to assess which new feature blocks contribute
+   real signal vs noise.
+
+#### Validation host inference results
+
+**EDL933** (in panel, training set, 3 lytic phages out of 96):
+
+- Defense features: 8 systems detected by fresh DefenseFinder vs 9 in panel data (RM_Type_IIG missed). Defense
+  diversity correctly reported as 8. All other systems match.
+- TL15 surface: O157 recovered directly, R3 LPS proxy correct, all 12/12 receptor-presence fields match.
+- TL16 typing: phylogroup E, ST 11, O157:H7 all correct. **Capsule disagreement**: raw HMM scan detects K4
+  (`KfoFGCA_2_unknown` model, 28 profile hits with strong scores), but picard metadata records `Capsule_ABC=0`.
+- Full inference: top-2 predicted phages are DIJ07_P1 and DIJ07_P2 (both truly lytic). Top-3 hit: yes. Per-host
+  AUC: 0.9964.
+- Raw-input vs panel-feature comparison: median probability delta 0.015, max delta 0.118. Top-3 phages identical
+  (order swapped). AUC: 0.9982 (panel) vs 0.9964 (raw).
+
+**55989** (in picard metadata but not in ST02 pair table — no interaction labels):
+
+- O104, phylogroup B1, ST 678. All features biologically plausible.
+- Predictions: 4 phages above P(lysis) > 0.5, 19 above 0.3. Cannot validate against labels.
+
+**LF82** (in picard metadata but not in ST02 pair table — no interaction labels):
+
+- O83, phylogroup B2, ST 135. More broadly susceptible profile than 55989.
+- Predictions: 26 phages above P(lysis) > 0.5, 34 above 0.3. Consistent with B2 phylogroup being generally more
+  susceptible. Cannot validate against labels.
+
+#### Holdout evaluation with bootstrap confidence intervals
+
+The holdout evaluation uses **panel-derived features** for all 65 holdout strains (no raw FASTAs available for holdout
+hosts). This is the correct test for model quality: it measures whether adding TL15/TL16/TL17 features to the training
+feature set improves predictions on held-out strains, using the same feature derivation path for training and
+evaluation. It does **not** test whether the raw-input preprocessing pipeline faithfully reproduces those features for
+novel hosts — that is a separate concern addressed in the bug section below.
+
+| Metric | Baseline (defense + kmer) | Candidate (+ TL15/TL16/TL17) | Delta | 95% CI | P(improvement) |
+| --- | --- | --- | --- | --- | --- |
+| ROC-AUC | 0.787 | 0.823 | +0.036 | [+0.002, +0.079] | 98.5% |
+| Top-3 hit rate | 90.5% (57/63) | 93.7% (59/63) | +3.2pp | [-2.6pp, +10.5pp] | 82.2% |
+| Brier score | 0.152 | 0.141 | -0.011 | [-0.025, +0.000] | 96.9% |
+
+Bootstrap method: 2000 resamples of the 65 holdout strains (strain-level resampling, not pair-level), metrics recomputed
+per resample.
+
+The AUC improvement is statistically robust — the 95% CI is entirely above zero and 98.5% of bootstrap resamples show
+improvement. The Brier improvement is near-significant (96.9% probability, CI just touching zero). The top-3
+improvement is directionally correct but uncertain on 65 strains — net +2 strains (3 gained, 1 lost) is within random
+variation.
+
+Per-strain top-3 changes:
+
+- **Gained** (baseline miss → candidate hit):
+  - `H1-003-0088-B-J` (12 lytic phages): candidate places LF110_P2 and LF82_P5 in top-3.
+  - `IAI58` (28 lytic phages): candidate places LF82_P6 in top-3.
+  - `NILS41` (14 lytic phages): candidate places LF73_P4 in top-3.
+- **Lost** (baseline hit → candidate miss):
+  - `ECOR-69` (10 lytic phages): candidate pushes DIJ07_P1/P2 (non-lytic for this strain) to ranks 1-2 with higher
+    confidence (P=0.770), bumping 4 lytic phages from tied-rank-1 (P=0.586) to rank-4+ (P=0.667). The richer features
+    gave the model a stronger opinion that happened to be wrong for this strain.
+
+Train-holdout gap comparison:
+
+| | Baseline | Candidate |
+| --- | --- | --- |
+| Train AUC | 0.932 | 0.942 |
+| Holdout AUC | 0.787 | 0.823 |
+| Gap | 0.146 | **0.119** |
+
+The candidate has a **smaller** train-holdout gap, indicating the richer features improve generalization rather than
+causing overfitting.
+
+#### Feature importance by block
+
+| Block | Importance | Share |
+| --- | --- | --- |
+| Phage kmer SVD (26 features) | 3808 | 42.3% |
+| TL16 host typing (466 features after one-hot) | 1963 | 21.8% |
+| Defense subtypes (82 features) | 1561 | 17.3% |
+| TL15 host surface (137 features after one-hot) | 1190 | 13.2% |
+| TL17 phage RBP families (34 features) | 313 | 3.5% |
+| TL04 anti-defense pairs (30 features) | 176 | 2.0% |
+
+The new TL15/TL16/TL17 blocks account for 38.5% of total feature importance. TL16 (host typing: phylogroup, serotype,
+MLST, capsule proxy) is the second most important block overall at 21.8%, confirming these features carry substantial
+predictive signal. TL15 (host surface: O-antigen, LPS, receptor presence) contributes 13.2%. TL17 (phage RBP families)
+contributes 3.5% — modest but nonzero, and biologically expected given that RBP family presence is a coarse proxy for
+receptor specificity.
+
+#### Leakage audit result
+
+No label leakage found in any feature block:
+
+- **Defense subtypes**: derived from DefenseFinder annotations on host genomes. No interaction data involved.
+- **TL15 host surface**: derived from picard metadata (O-type, capsule, receptor clusters) and raw FASTA projections
+  (nhmmer, hmmscan, phmmer). All inputs are organism properties, not interaction outcomes.
+- **TL16 host typing**: derived from picard metadata (Clermont phylogroup, serotype, ST, capsule) and raw FASTA
+  projections (ClermonTyping, ECTyper, MLST, capsule HMM). All inputs are organism properties.
+- **Phage kmer SVD**: derived from tetranucleotide frequencies of phage genomes. No interaction data involved.
+- **TL17 RBP families**: defined by PHROG functional annotation and mmseqs sequence clustering. Family definitions are
+  sequence-based. No interaction data involved.
+- **TL04 anti-defense pairs**: enrichment weights computed from TL02, which properly excluded all 65 holdout bacteria
+  (confirmed in `lyzortx/generated_outputs/track_l/enrichment/manifest.json`:
+  `holdout_exclusion.excluded_holdout_bacteria_count = 65`). Pair features constructed from TL04 manifest which records
+  `holdout_exclusion.excluded_pair_rows = 6240`.
+- **No legacy label-derived features** (`legacy_label_breadth_count`, `legacy_receptor_support_count`,
+  `defense_evasion_*`, `receptor_variant_seen_in_training_positives`) are present in the candidate feature set.
+
+#### Bug #1: Extra phage 411_P3 in FNA directory
+
+The `data/genomics/phages/FNA/` directory contains 97 `.fna` files, but the panel metadata
+(`data/genomics/phages/guelin_collection.csv`) defines only 96 phages. The extra file is `411_P3.fna`. When
+`generalized_inference.infer()` is called with a glob of the FNA directory (as in the round-trip comparisons and manual
+inference tests), it scores 97 phages instead of 96.
+
+**Impact on reported metrics**: None. The holdout evaluation uses precomputed panel features from
+`tl08_locked_panel_predictions.csv`, which is generated by `build_model_bundle` using `read_panel_phages` with
+`expected_panel_count=96`. The extra phage never enters the holdout evaluation.
+
+**Impact on deployment**: Low but real. If a user runs `gi.infer(host_fasta, glob("data/genomics/phages/FNA/*.fna"),
+bundle_path)`, the rankings include `411_P3` — a phage with no training label. It competes for top-3 slots without the
+model having seen any positive or negative evidence for it. The probability estimate for `411_P3` is based entirely on
+its genomic features (kmer profile, RBP families, anti-defense genes) without any ground truth anchoring.
+
+**Fix**: Either remove `411_P3.fna` from the FNA directory, or filter phage paths through the panel metadata before
+scoring. The inference API should not silently accept phages outside the training panel without warning.
+
+#### Bug #2: Capsule train/inference feature mismatch
+
+The TL16 `host_capsule_abc_proxy_present` feature has a systematic discrepancy between training-time and inference-time
+derivation:
+
+- **Training time**: derived from picard metadata `Capsule_ABC` field via
+  `int(float(row.get("Capsule_ABC", "0") or 0) > 0)`. The picard metadata records `Capsule_ABC=0` for 261 of 403
+  panel hosts.
+- **Inference time**: derived from raw HMM capsule scan via `tl16.scan_capsule_proxy()`, which runs `hmmscan` against
+  checked-in ABC capsule HMM profiles on predicted proteins from the assembly FASTA.
+
+The raw HMM scan is more sensitive than the picard metadata field. Concrete example: EDL933 has `Capsule_ABC=0` and
+`ABC_serotype=` (empty) in picard, but the raw HMM scan detects a K4 capsule locus with 28 profile hits including
+strong matches to KfoF (score 735), KfiD (score 698), and KfoA (score 385).
+
+The picard metadata inconsistency extends beyond EDL933: 29 panel hosts have `Capsule_ABC=0` but a non-empty
+`ABC_serotype` field, and 20 hosts have `Capsule_ABC>0` but an empty `ABC_serotype`. The `Capsule_ABC` column is not
+a reliable binary indicator of capsule presence.
+
+**Impact on reported metrics**: None. The holdout evaluation uses panel features consistently for both training and
+evaluation. The capsule mismatch only manifests when the raw-input inference path is used for novel hosts.
+
+**Impact on deployment**: Moderate. Capsule-related features carry approximately 3% of total model importance (direct
+`host_capsule_abc_present` importance plus contributions through the one-hot encoded `host_abc_serotype_proxy`
+categorical, which adds another ~2% through TL16 typing). When a novel host arrives and the raw HMM scan detects
+capsule genes that the picard metadata would have coded as absent, the model sees feature values it learned to
+associate with a different host population. The direction of error is unpredictable — it depends on the specific
+capsule type detected and whether the model learned to associate that type with higher or lower lysis probability.
+
+**Root cause**: The training features use a curated metadata field (`Capsule_ABC`) whose provenance is unclear —
+it may represent a different capsule detection methodology, a different sensitivity threshold, or manual curation
+decisions that differ from the automated HMM scan. The TL16 panel training path and the TL16 raw inference path use
+fundamentally different capsule evidence sources.
+
+**Fix options**:
+1. Retrain with HMM-derived capsule features for all panel hosts (run the capsule scan on all 403 panel assemblies
+   and use those values instead of picard `Capsule_ABC`). This aligns training and inference, but requires assemblies
+   for all panel hosts.
+2. Calibrate the HMM scan threshold to match the picard metadata sensitivity. This preserves the training feature
+   distribution but weakens the capsule signal at inference time.
+3. Accept the mismatch and document it. Capsule is 3-5% of importance; the expected prediction shift is small.
+
+#### Bug #3: DefenseFinder version drift between panel annotations and raw inference
+
+Fresh DefenseFinder runs on raw FASTAs produce slightly different defense system calls than the panel defense subtype
+annotations in `data/genomics/bacteria/defense_finder/370+host_defense_systems_subtypes.csv`. Concrete example:
+EDL933's panel data records 9 non-zero defense subtypes (including `RM_Type_IIG=1` and `MazEF=2`), but the fresh
+DefenseFinder run on EDL933's FASTA detects only 8 systems (missing `RM_Type_IIG`, and `MazEF` is binarized to 1).
+
+The binarization (`MazEF=2` → `host_defense_subtype_maz_ef=1`) is by design — the feature pipeline uses presence
+indicators, not counts. But the missing `RM_Type_IIG` is a genuine detection disagreement between the panel annotation
+run and the current DefenseFinder installation.
+
+**Impact on reported metrics**: None. The holdout evaluation uses panel defense features, not fresh DefenseFinder output.
+
+**Impact on deployment**: This is potentially the **most consequential** of the three bugs for deployed prediction
+quality. Defense subtypes carry 17.3% of total model importance — the third largest block. If fresh DefenseFinder
+systematically misses or adds defense systems relative to the panel annotations, dozens of binary features can flip
+per host. A single missed system (like RM_Type_IIG) changes one feature, but if the disagreement rate is 1-2 systems
+per host on average, the cumulative feature noise could meaningfully degrade predictions.
+
+The magnitude cannot be assessed from a single host. A proper assessment requires running fresh DefenseFinder on all
+403 panel host assemblies and computing the per-host agreement rate against the panel annotations. If the average
+disagreement is <1 system per host, the impact is small (defense features are individually weak, importance is spread
+across 82 features). If the average disagreement is >3 systems per host, the defense block is substantially noisier
+at inference time than at training time.
+
+**Root cause**: The panel defense annotations were generated at a specific point in time with a specific DefenseFinder
+version and model database. DefenseFinder and its HMM models are updated independently. The repo pins
+`defense-finder-models==2.0.2` in the runner, but the underlying tool version may differ between the original panel
+annotation run and the current `phage_env` installation.
+
+**Fix options**:
+1. Re-annotate all 403 panel hosts with the current DefenseFinder installation and retrain on the fresh annotations.
+   This aligns training and inference at the cost of potentially changing the model.
+2. Pin the exact DefenseFinder version and model database that was used for the panel annotations, and use that same
+   version at inference time. This preserves consistency but may miss real defense systems in novel hosts.
+3. Quantify the disagreement rate first (option 1 as a measurement, not a retraining), then decide based on the
+   magnitude.
+
+#### Summary of audit conclusions
+
+The **model quality improvement is real and statistically robust**. The AUC gain of +0.036 has a 98.5% probability of
+being positive, the train-holdout gap shrank, no label leakage was found, and the new feature blocks carry 38.5% of
+model importance. The holdout evaluation is internally consistent and methodologically sound.
+
+The **deployment quality** has three known gaps between training-time and inference-time feature derivation. All three
+affect only the raw-input inference path for novel hosts, not the panel-feature holdout evaluation. In order of
+estimated impact:
+
+1. **DefenseFinder version drift** (17.3% importance block, unknown disagreement magnitude) — highest risk, needs
+   quantification.
+2. **Capsule train/inference mismatch** (3-5% importance, systematic sensitivity difference) — moderate risk,
+   well-characterized.
+3. **Extra phage 411_P3** (affects ranking only, no training signal) — low risk, trivial fix.
+
+None of these bugs invalidate the decision to promote the richer bundle as the new deployable baseline. They do mean
+that the holdout metrics (+0.036 AUC, +3.2pp top-3) are an **upper bound** on the improvement a truly novel host would
+see through the raw-input inference path. The actual deployment improvement will be smaller, by an amount that depends
+primarily on the DefenseFinder disagreement rate.
