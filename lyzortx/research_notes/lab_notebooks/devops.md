@@ -895,3 +895,70 @@ are CI inputs, but they are not CI-only.
   - `base-sha-7231a81bb21eddd0e34095e4613506220774fde7`
   - `host-typing-sha-7231a81bb21eddd0e34095e4613506220774fde7`
   - `full-bio-sha-7231a81bb21eddd0e34095e4613506220774fde7`
+
+### 2026-04-02: Dead code pruning — criterion selection and first-attempt failure
+
+#### Executive summary
+
+Pruned ~9.2k lines of dead-end code from `lyzortx/` (33 files). The first attempt used `pydeps` transitive import
+closure from the TL18 entry point as the reachability criterion, which deleted ~15k lines (86 files) including active CI
+gates, the Track J regeneration pipeline, ad-hoc analysis scripts referenced by notebooks, and the
+steel-thread-regression workflow. An independent review caught the over-deletion. The correct criterion turned out to be
+"has no future use and no traceability value," applied case-by-case.
+
+#### What was deleted
+
+- **Track H** (cocktail recommendations): built on the leaked model, never updated post-leakage-fix. Would need
+  rebuilding from scratch on the DEPLOY model anyway.
+- **Track I** (external data ingestion): proven dead end — zero joinable external rows with the internal 404×96 panel.
+  Documented in `project.md`. Download infrastructure would need rewriting for any future attempt.
+- **ST v0 superseded experimental steps**: st03b (split suite), st04b (ablation suite), st06b (ranking policy
+  comparison), st08 (tier A ingest ablation), plus the st03b regression check and baseline. All superseded by Track G.
+- **Track A dead-end experiments**: `build_mechanistic_proxy_features`, `run_phistruct_rbp_pilot`. Findings recorded in
+  lab notebooks; code not needed to reproduce current pipeline.
+- **Track G analysis-only steps**: `investigate_non_leaky_candidate_features`, `run_feature_subset_sweep`. Their
+  findings are locked in the lab notebook and `v1_feature_configuration.json`. Not needed to reproduce the current
+  model.
+- Tests for all of the above.
+
+#### What was kept (and why the first attempt was wrong to delete it)
+
+| Code | Why it must stay |
+|------|-----------------|
+| ST v0 regression checks + baselines | Active CI gate (`steel-thread-regression.yml`). Validates the data pipeline hasn't regressed. Needed when DEPLOY retrains from re-derived features. |
+| `steel-thread-regression.yml` | The workflow that runs the checks above. |
+| Track J (`run_track_j.py`) | One-command regeneration of all v1 outputs. Needed for DEPLOY track and any future release. |
+| Track G runner (`run_track_g.py`) | Dispatches the 4 kept modeling steps. Without it, there's no CLI to run the modeling pipeline. |
+| Ad-hoc analysis scripts | Referenced by lab notebook entries. Deleting them breaks traceability. Cheap to keep. |
+| Track A/G runners, checks, READMEs | Infrastructure for tracks whose core code is kept. |
+
+#### Design decision: why "pydeps import closure" was the wrong criterion
+
+The `pydeps` transitive closure from `run_track_l.py` captures everything TL18 *imports at module level*. But
+"imported by TL18" ≠ "needed by the project." The project also needs:
+
+1. **CI validation** — regression checks that don't appear in any import chain because they're invoked via CLI
+2. **Regeneration** — Track J's `run_track_j.py` orchestrates a full pipeline run but isn't imported by any step
+3. **Traceability** — ad-hoc scripts referenced by notebook entries that document design decisions
+4. **Future hooks** — code that is dormant now but has a documented "revisit when" trigger
+
+The correct criterion is case-by-case: "has no future use AND no traceability value." This requires judgment that a
+static import graph cannot provide.
+
+#### Cascade updates required
+
+Deleting steps that are imported by kept runners creates broken imports. Each deletion required updating the runner
+that dispatches it:
+
+- `run_steel_thread_v0.py` — removed st03b/st04b/st06b/st08 imports and dispatch cases
+- `run_track_g.py` — removed `run_feature_subset_sweep` and `investigate_non_leaky_candidate_features`
+- `run_track_j.py` — removed Track H import/dispatch (Track H was deleted) and the "recommendations" step choice
+
+Tests for all three runners were updated to match the new dispatch tables.
+
+#### Lesson
+
+Automated reachability analysis is a useful starting point for identifying deletion candidates, but it must not be used
+as the sole decision criterion. Always have a human or independent reviewer check the deletion list against project
+needs that aren't captured in import graphs: CI gates, CLI entry points, documentation references, and planned future
+work.

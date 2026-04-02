@@ -18,10 +18,6 @@ from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import (
     build_ablation_arms,
     partition_track_c_columns,
 )
-from lyzortx.pipeline.track_g.steps.run_feature_subset_sweep import (
-    build_subset_sweep_arms,
-    select_winning_subset,
-)
 from lyzortx.pipeline.track_g.steps.train_v1_binary_classifier import (
     FeatureSpace,
     build_feature_space,
@@ -366,9 +362,8 @@ def test_build_ablation_arms_matches_acceptance_sequence() -> None:
     assert arms[-1].categorical_columns == ("host_pathotype", "host_surface_lps_core_type")
 
 
-def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
-    calls: list[str] = []
-
+def _patch_track_g_steps(monkeypatch, calls: list[str]) -> None:
+    """Monkeypatch all Track G step mains to record calls."""
     monkeypatch.setattr(
         run_track_g.train_v1_binary_classifier,
         "main",
@@ -389,16 +384,11 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "main",
         lambda argv: calls.append("compute-shap"),
     )
-    monkeypatch.setattr(
-        run_track_g.run_feature_subset_sweep,
-        "main",
-        lambda argv: calls.append("feature-subset-sweep"),
-    )
-    monkeypatch.setattr(
-        run_track_g.investigate_non_leaky_candidate_features,
-        "main",
-        lambda argv: calls.append("non-leaky-candidate-search"),
-    )
+
+
+def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
+    calls: list[str] = []
+    _patch_track_g_steps(monkeypatch, calls)
 
     run_track_g.main(["--step", "train-v1-binary"])
     assert calls == ["train-v1-binary"]
@@ -410,44 +400,12 @@ def test_run_track_g_dispatches_training_step(monkeypatch) -> None:
         "calibrate-gbm",
         "feature-block-ablation",
         "compute-shap",
-        "feature-subset-sweep",
-        "non-leaky-candidate-search",
     ]
 
 
 def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
     calls: list[str] = []
-
-    monkeypatch.setattr(
-        run_track_g.train_v1_binary_classifier,
-        "main",
-        lambda argv: calls.append("train-v1-binary"),
-    )
-    monkeypatch.setattr(
-        run_track_g.calibrate_gbm_outputs,
-        "main",
-        lambda argv: calls.append("calibrate-gbm"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_block_ablation_suite,
-        "main",
-        lambda argv: calls.append("feature-block-ablation"),
-    )
-    monkeypatch.setattr(
-        run_track_g.compute_shap_explanations,
-        "main",
-        lambda argv: calls.append("compute-shap"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_subset_sweep,
-        "main",
-        lambda argv: calls.append("feature-subset-sweep"),
-    )
-    monkeypatch.setattr(
-        run_track_g.investigate_non_leaky_candidate_features,
-        "main",
-        lambda argv: calls.append("non-leaky-candidate-search"),
-    )
+    _patch_track_g_steps(monkeypatch, calls)
 
     run_track_g.main(["--step", "calibrate-gbm"])
     assert calls == ["calibrate-gbm"]
@@ -455,37 +413,7 @@ def test_run_track_g_dispatches_calibration_step(monkeypatch) -> None:
 
 def test_run_track_g_dispatches_tg03_ablation_step(monkeypatch) -> None:
     calls: list[str] = []
-
-    monkeypatch.setattr(
-        run_track_g.train_v1_binary_classifier,
-        "main",
-        lambda argv: calls.append("train-v1-binary"),
-    )
-    monkeypatch.setattr(
-        run_track_g.calibrate_gbm_outputs,
-        "main",
-        lambda argv: calls.append("calibrate-gbm"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_block_ablation_suite,
-        "main",
-        lambda argv: calls.append("feature-block-ablation"),
-    )
-    monkeypatch.setattr(
-        run_track_g.compute_shap_explanations,
-        "main",
-        lambda argv: calls.append("compute-shap"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_subset_sweep,
-        "main",
-        lambda argv: calls.append("feature-subset-sweep"),
-    )
-    monkeypatch.setattr(
-        run_track_g.investigate_non_leaky_candidate_features,
-        "main",
-        lambda argv: calls.append("non-leaky-candidate-search"),
-    )
+    _patch_track_g_steps(monkeypatch, calls)
 
     run_track_g.main(["--step", "feature-block-ablation"])
     assert calls == ["feature-block-ablation"]
@@ -493,177 +421,10 @@ def test_run_track_g_dispatches_tg03_ablation_step(monkeypatch) -> None:
 
 def test_run_track_g_dispatches_tg04_shap_step(monkeypatch) -> None:
     calls: list[str] = []
-
-    monkeypatch.setattr(
-        run_track_g.train_v1_binary_classifier,
-        "main",
-        lambda argv: calls.append("train-v1-binary"),
-    )
-    monkeypatch.setattr(
-        run_track_g.calibrate_gbm_outputs,
-        "main",
-        lambda argv: calls.append("calibrate-gbm"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_block_ablation_suite,
-        "main",
-        lambda argv: calls.append("feature-block-ablation"),
-    )
-    monkeypatch.setattr(
-        run_track_g.compute_shap_explanations,
-        "main",
-        lambda argv: calls.append("compute-shap"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_subset_sweep,
-        "main",
-        lambda argv: calls.append("feature-subset-sweep"),
-    )
-    monkeypatch.setattr(
-        run_track_g.investigate_non_leaky_candidate_features,
-        "main",
-        lambda argv: calls.append("non-leaky-candidate-search"),
-    )
+    _patch_track_g_steps(monkeypatch, calls)
 
     run_track_g.main(["--step", "compute-shap"])
     assert calls == ["compute-shap"]
-
-
-def test_build_subset_sweep_arms_emits_all_required_2_and_3_block_combinations() -> None:
-    arms = build_subset_sweep_arms(
-        FeatureSpace(
-            categorical_columns=("host_pathotype", "host_surface_lps_core_type"),
-            numeric_columns=(
-                "legacy_host_label_count",
-                "host_defense_subtype_abi_a",
-                "host_defense_diversity",
-                "host_receptor_variant_btub_01",
-                "host_phylogeny_umap_00",
-                "phage_gc_content",
-                "target_receptor_present",
-                "legacy_receptor_support_count",
-            ),
-            track_c_additional_columns=(
-                "host_defense_subtype_abi_a",
-                "host_defense_diversity",
-                "host_receptor_variant_btub_01",
-                "host_surface_lps_core_type",
-                "host_phylogeny_umap_00",
-            ),
-            track_d_columns=("phage_gc_content",),
-            track_e_columns=("target_receptor_present", "legacy_receptor_support_count"),
-        )
-    )
-
-    assert len(arms) == 10
-    assert arms[0].arm_id == "subset_defense__omp"
-    assert arms[-1].arm_id == "subset_omp__phage_genomic__pairwise"
-    assert {len(arm.subset_blocks) for arm in arms} == {2, 3}
-
-
-def test_select_winning_subset_requires_non_degrading_auc_before_top3() -> None:
-    winner = select_winning_subset(
-        [
-            {
-                "arm_id": "subset_defense__phage_genomic",
-                "holdout_roc_auc": 0.9105,
-                "holdout_brier_score": 0.1120,
-                "holdout_top3_hit_rate_all_strains": 0.92,
-            },
-            {
-                "arm_id": "subset_defense__pairwise",
-                "holdout_roc_auc": 0.9099,
-                "holdout_brier_score": 0.1110,
-                "holdout_top3_hit_rate_all_strains": 0.95,
-            },
-            {
-                "arm_id": "tg01_all_features_reference",
-                "holdout_roc_auc": 0.9100,
-                "holdout_brier_score": 0.1131,
-                "holdout_top3_hit_rate_all_strains": 0.892308,
-            },
-        ],
-        all_features_auc=0.9100,
-    )
-
-    assert winner["arm_id"] == "subset_defense__phage_genomic"
-    assert winner["auc_non_degrading_vs_tg01_all_features"] is True
-
-
-def test_run_track_g_dispatches_tg05_feature_subset_sweep(monkeypatch) -> None:
-    calls: list[str] = []
-
-    monkeypatch.setattr(
-        run_track_g.train_v1_binary_classifier,
-        "main",
-        lambda argv: calls.append("train-v1-binary"),
-    )
-    monkeypatch.setattr(
-        run_track_g.calibrate_gbm_outputs,
-        "main",
-        lambda argv: calls.append("calibrate-gbm"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_block_ablation_suite,
-        "main",
-        lambda argv: calls.append("feature-block-ablation"),
-    )
-    monkeypatch.setattr(
-        run_track_g.compute_shap_explanations,
-        "main",
-        lambda argv: calls.append("compute-shap"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_subset_sweep,
-        "main",
-        lambda argv: calls.append("feature-subset-sweep"),
-    )
-    monkeypatch.setattr(
-        run_track_g.investigate_non_leaky_candidate_features,
-        "main",
-        lambda argv: calls.append("non-leaky-candidate-search"),
-    )
-
-    run_track_g.main(["--step", "feature-subset-sweep"])
-    assert calls == ["feature-subset-sweep"]
-
-
-def test_run_track_g_dispatches_tg11_non_leaky_candidate_search(monkeypatch) -> None:
-    calls: list[str] = []
-
-    monkeypatch.setattr(
-        run_track_g.train_v1_binary_classifier,
-        "main",
-        lambda argv: calls.append("train-v1-binary"),
-    )
-    monkeypatch.setattr(
-        run_track_g.calibrate_gbm_outputs,
-        "main",
-        lambda argv: calls.append("calibrate-gbm"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_block_ablation_suite,
-        "main",
-        lambda argv: calls.append("feature-block-ablation"),
-    )
-    monkeypatch.setattr(
-        run_track_g.compute_shap_explanations,
-        "main",
-        lambda argv: calls.append("compute-shap"),
-    )
-    monkeypatch.setattr(
-        run_track_g.run_feature_subset_sweep,
-        "main",
-        lambda argv: calls.append("feature-subset-sweep"),
-    )
-    monkeypatch.setattr(
-        run_track_g.investigate_non_leaky_candidate_features,
-        "main",
-        lambda argv: calls.append("non-leaky-candidate-search"),
-    )
-
-    run_track_g.main(["--step", "non-leaky-candidate-search"])
-    assert calls == ["non-leaky-candidate-search"]
 
 
 def test_select_recommendation_rows_keeps_top_k_per_bacteria() -> None:

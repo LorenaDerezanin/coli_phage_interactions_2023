@@ -20,7 +20,6 @@ from lyzortx.pipeline.track_c.steps import build_v1_host_feature_pair_table
 from lyzortx.pipeline.track_d import run_track_d
 from lyzortx.pipeline.track_e import run_track_e
 from lyzortx.pipeline.track_g import run_track_g
-from lyzortx.pipeline.track_h import run_track_h
 from lyzortx.pipeline.steel_thread_v0.steps import st01_label_policy
 from lyzortx.pipeline.steel_thread_v0.steps import st01b_confidence_tiers
 from lyzortx.pipeline.steel_thread_v0.steps import st02_build_pair_table
@@ -53,7 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--step",
-        choices=["foundation", "feature-blocks", "modeling", "recommendations", "all"],
+        choices=["foundation", "feature-blocks", "modeling", "all"],
         default="all",
         help="Track J step to run. 'all' runs the full release regeneration sequence.",
     )
@@ -63,25 +62,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _runners_for_step(step: str) -> Iterable[StepRunner]:
     foundation = foundation_runners()
     features = feature_block_runners()
-    rest: Tuple[StepRunner, ...] = (
+    modeling: Tuple[StepRunner, ...] = (
         ("track-d", lambda: run_track_d.main(["--step", "all"])),
         ("track-e", lambda: run_track_e.main(["--step", "all"])),
         ("track-g-train-v1-binary", lambda: run_track_g.train_v1_binary_classifier.main([])),
         ("track-g-calibrate-gbm", lambda: run_track_g.calibrate_gbm_outputs.main([])),
         ("track-g-feature-block-ablation", lambda: run_track_g.run_feature_block_ablation_suite.main([])),
         ("track-g-compute-shap", lambda: run_track_g.compute_shap_explanations.main([])),
-        ("track-h", lambda: run_track_h.main(["--step", "all"])),
     )
     if step == "foundation":
         return foundation
     if step == "feature-blocks":
         return features
     if step == "modeling":
-        return rest[:6]
-    if step == "recommendations":
-        return rest[6:]
+        return modeling
     if step == "all":
-        return (*foundation, *features, *rest)
+        return (*foundation, *features, *modeling)
     raise ValueError(f"Unsupported step: {step}")
 
 
