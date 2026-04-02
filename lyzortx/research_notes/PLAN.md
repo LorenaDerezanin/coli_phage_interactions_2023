@@ -617,7 +617,7 @@ graph LR
   model should be trained on exactly the features it will see at inference time. The secondary goal is richer features
   that give the model more information to work with. Source code lives in lyzortx/pipeline/deployment_paired_features/ —
   see the AGENTS.md there for feature design principles and assembly download guidance.
-- [ ] **DEPLOY01** Assembly download script. Model: `gpt-5.4-mini`. CI image profile: `full-bio`.
+- [x] **DEPLOY01** Assembly download script. Model: `gpt-5.4-mini`. CI image profile: `full-bio`.
   - Write a function in lyzortx/pipeline/deployment_paired_features/ that downloads and extracts all 403 Picard
     collection assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0) to
     lyzortx/data/assemblies/picard/

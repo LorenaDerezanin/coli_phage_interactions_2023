@@ -962,18 +962,16 @@ tracks:
       - Random seeds documented for reproducible model training
   DEPLOY:
     name: Deployment-Paired Feature Pipeline
-    description: >-
-      Eliminate the training/inference feature mismatch by re-deriving all host
-      features from raw genome assemblies using the same pipeline that runs at
-      inference time. Replace binary thresholds with continuous scores where the
-      gradient carries biological signal. Deduplicate redundant features found
-      in the TL18 audit (91 wasted one-hot features from exact duplicates, plus
-      derived summary features). The primary goal is deployment integrity — the
-      model should be trained on exactly the features it will see at inference
-      time. The secondary goal is richer features that give the model more
-      information to work with. Source code lives in
-      lyzortx/pipeline/deployment_paired_features/ — see the AGENTS.md there
-      for feature design principles and assembly download guidance.
+    description: Eliminate the training/inference feature mismatch by re-deriving
+      all host features from raw genome assemblies using the same pipeline that runs
+      at inference time. Replace binary thresholds with continuous scores where the
+      gradient carries biological signal. Deduplicate redundant features found in
+      the TL18 audit (91 wasted one-hot features from exact duplicates, plus derived
+      summary features). The primary goal is deployment integrity — the model should
+      be trained on exactly the features it will see at inference time. The secondary
+      goal is richer features that give the model more information to work with. Source
+      code lives in lyzortx/pipeline/deployment_paired_features/ — see the AGENTS.md
+      there for feature design principles and assembly download guidance.
     stage: 4
     depends_on:
     - L
@@ -981,20 +979,18 @@ tracks:
     tasks:
     - id: DEPLOY01
       title: Assembly download script
-      status: pending
+      status: done
       model: gpt-5.4-mini
       ci_image_profile: full-bio
       acceptance_criteria:
-      - Write a function in lyzortx/pipeline/deployment_paired_features/ that
-        downloads and extracts all 403 Picard collection assemblies from figshare
-        (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0) to
-        lyzortx/data/assemblies/picard/
-      - Use the figshare "Download all" zip endpoint at
-        https://ndownloader.figshare.com/articles/25941691/versions/1 (~1.9GB
-        zip, ~7 min download, ~7s unzip)
+      - Write a function in lyzortx/pipeline/deployment_paired_features/ that downloads
+        and extracts all 403 Picard collection assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1,
+        Tesson 2024, CC BY 4.0) to lyzortx/data/assemblies/picard/
+      - Use the figshare "Download all" zip endpoint at https://ndownloader.figshare.com/articles/25941691/versions/1
+        (~1.9GB zip, ~7 min download, ~7s unzip)
       - Skip download if the directory already contains 403 FASTA files
-      - Validate that all 369 ST02 bacteria have a matching assembly file; fail
-        loudly with the list of missing IDs if any are absent
+      - Validate that all 369 ST02 bacteria have a matching assembly file; fail loudly
+        with the list of missing IDs if any are absent
       - Ensure the assemblies directory is gitignored
     - id: DEPLOY02
       title: Re-derive host defense features with integer gene counts (gate)
@@ -1002,24 +998,22 @@ tracks:
       model: gpt-5.4
       ci_image_profile: full-bio
       acceptance_criteria:
-      - Write the feature derivation code in
-        lyzortx/pipeline/deployment_paired_features/ and validate it on the 3
-        committed validation FASTAs (55989, EDL933, LF82) — the full 403-host
-        run happens in DEPLOY06
-      - The function must run DefenseFinder (pinned version and model database
-        from the existing runner) on a given assembly and output integer gene
-        counts (not binary presence) per defense subtype; use the same subtype
-        column names as the panel CSV
-      - Drop the derived summary features host_defense_has_crispr,
-        host_defense_diversity, and host_defense_abi_burden — the model can
-        learn these from the constituent counts
-      - Compare the 3 validation hosts against their panel annotations and
-        report per-host disagreement (systems gained, systems lost, count
-        changes) in the track lab notebook
-      - This task is a gate. If the 3-host comparison reveals disagreements
-        that suggest a fundamental methodology mismatch (not just minor version
-        drift), stop and report. The disagreement report is the deliverable in
-        that case.
+      - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/
+        and validate it on the 3 committed validation FASTAs (55989, EDL933, LF82)
+        — the full 403-host run happens in DEPLOY06
+      - The function must run DefenseFinder (pinned version and model database from
+        the existing runner) on a given assembly and output integer gene counts (not
+        binary presence) per defense subtype; use the same subtype column names as
+        the panel CSV
+      - Drop the derived summary features host_defense_has_crispr, host_defense_diversity,
+        and host_defense_abi_burden — the model can learn these from the constituent
+        counts
+      - Compare the 3 validation hosts against their panel annotations and report
+        per-host disagreement (systems gained, systems lost, count changes) in the
+        track lab notebook
+      - This task is a gate. If the 3-host comparison reveals disagreements that suggest
+        a fundamental methodology mismatch (not just minor version drift), stop and
+        report. The disagreement report is the deliverable in that case.
       - Output a schema manifest (JSON) listing every column name and dtype
     - id: DEPLOY03
       title: Re-derive host surface features with continuous scores
@@ -1029,24 +1023,24 @@ tracks:
       model: gpt-5.4
       ci_image_profile: full-bio
       acceptance_criteria:
-      - Write the feature derivation code in
-        lyzortx/pipeline/deployment_paired_features/ and validate it on the 3
-        committed validation FASTAs — the full 403-host run happens in DEPLOY06
-      - Receptor features — emit phmmer bit score per receptor protein (12
-        continuous features replacing 12 binary); zero means no hit
-      - O-antigen features — emit nhmmer bit score (continuous) alongside the
-        categorical O-type call
-      - Capsule features — emit per-profile HMM score (one continuous feature
-        per capsule gene family); do not threshold into present/absent or
-        interpret locus synteny
-      - Drop exact duplicates identified in TL18 audit — host_o_type (duplicate
-        of host_o_antigen_type, 84 wasted one-hot columns),
-        host_surface_lps_core_type (duplicate of host_lps_core_type, 6 columns),
-        host_capsule_abc_present (duplicate of host_capsule_abc_proxy_present)
-      - Drop derivable indicators — host_o_antigen_present,
-        host_lps_core_present, host_k_antigen_type_source
-      - Drop host_capsule_abc_proxy_present and host_abc_serotype_proxy — these
-        are replaced by the continuous capsule profile scores above
+      - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/
+        and validate it on the 3 committed validation FASTAs — the full 403-host run
+        happens in DEPLOY06
+      - Receptor features — emit phmmer bit score per receptor protein (12 continuous
+        features replacing 12 binary); zero means no hit
+      - O-antigen features — emit nhmmer bit score (continuous) alongside the categorical
+        O-type call
+      - Capsule features — emit per-profile HMM score (one continuous feature per
+        capsule gene family); do not threshold into present/absent or interpret locus
+        synteny
+      - Drop exact duplicates identified in TL18 audit — host_o_type (duplicate of
+        host_o_antigen_type, 84 wasted one-hot columns), host_surface_lps_core_type
+        (duplicate of host_lps_core_type, 6 columns), host_capsule_abc_present (duplicate
+        of host_capsule_abc_proxy_present)
+      - Drop derivable indicators — host_o_antigen_present, host_lps_core_present,
+        host_k_antigen_type_source
+      - Drop host_capsule_abc_proxy_present and host_abc_serotype_proxy — these are
+        replaced by the continuous capsule profile scores above
       - Output a schema manifest (JSON) listing every column name and dtype
     - id: DEPLOY04
       title: Re-derive host typing features from raw assemblies
@@ -1056,14 +1050,14 @@ tracks:
       model: gpt-5.4-mini
       ci_image_profile: full-bio
       acceptance_criteria:
-      - Write the feature derivation code in
-        lyzortx/pipeline/deployment_paired_features/ and validate it on the 3
-        committed validation FASTAs — the full 403-host run happens in DEPLOY06
+      - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/
+        and validate it on the 3 committed validation FASTAs — the full 403-host run
+        happens in DEPLOY06
       - Run Clermont phylogroup caller, ECTyper serotype, and MLST
-      - Keep phylogroup, serotype, and ST as categoricals — these are genuinely
-        categorical biological classifications
-      - Compare the 3 validation hosts against picard metadata for phylogroup,
-        O-type, H-type, and ST in the track lab notebook
+      - Keep phylogroup, serotype, and ST as categoricals — these are genuinely categorical
+        biological classifications
+      - Compare the 3 validation hosts against picard metadata for phylogroup, O-type,
+        H-type, and ST in the track lab notebook
       - Output a schema manifest (JSON) listing every column name and dtype
     - id: DEPLOY05
       title: Switch phage RBP features to continuous match scores
@@ -1071,9 +1065,9 @@ tracks:
       model: gpt-5.4-mini
       ci_image_profile: full-bio
       acceptance_criteria:
-      - Modify TL17 projection to emit mmseqs percent identity per RBP family
-        instead of binary presence (32 continuous features replacing 32 binary);
-        zero means no hit above the minimum query coverage threshold
+      - Modify TL17 projection to emit mmseqs percent identity per RBP family instead
+        of binary presence (32 continuous features replacing 32 binary); zero means
+        no hit above the minimum query coverage threshold
       - Drop tl17_rbp_family_count (derivable as count of nonzero family scores)
       - Keep tl17_rbp_reference_hit_count (not derivable from per-family scores)
       - No assembly download needed — phage FNAs are already in the repo
@@ -1088,34 +1082,31 @@ tracks:
       - DEPLOY05
       model: gpt-5.4
       acceptance_criteria:
-      - Download the 403 assemblies using the DEPLOY01 function if not already
-        present
-      - Run the DEPLOY02-04 feature derivation functions on all 403 hosts;
-        run the DEPLOY05 phage feature derivation on all 96 panel phages
-      - Store all feature CSVs in gitignored
-        generated_outputs/deployment_paired_features/
-      - Load feature CSVs and schema manifests from DEPLOY02-05; validate that
-        every schema column is present in the CSV and that no two blocks share
-        a column name (except the bacteria/phage join key)
-      - Report per-host defense disagreement rate against the panel CSV (full
-        403-host comparison); if average disagreement exceeds 3 systems, flag
-        in the lab notebook and investigate before retraining
-      - Assemble the joint feature matrix by joining host blocks on bacteria
-        and phage blocks on phage, then merging with the ST02 pair table
-      - Train two LightGBM models using the same hyperparameters, ST03
-        holdout split, calibration fold, and random seed as TL18 —
-        (a) TL18 baseline using panel features for reference,
-        (b) deployment-paired model using raw-derived features with continuous
-        encoding from DEPLOY02-05
-      - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs
-        (2000 strain-level resamples) for both models in one comparison table
-      - Validate training/inference parity on the 3 validation hosts — run
-        inference from raw FASTAs using the winning model bundle and confirm
-        feature vectors are identical to the training features for those hosts
-        (zero delta on every feature)
-      - Lock decision — if the deployment-paired model improves over the TL18
-        baseline on AUC (bootstrap 95% CI for the delta excludes zero), lock
-        on the deployment-paired model; otherwise keep TL18 baseline
+      - Download the 403 assemblies using the DEPLOY01 function if not already present
+      - Run the DEPLOY02-04 feature derivation functions on all 403 hosts; run the
+        DEPLOY05 phage feature derivation on all 96 panel phages
+      - Store all feature CSVs in gitignored generated_outputs/deployment_paired_features/
+      - Load feature CSVs and schema manifests from DEPLOY02-05; validate that every
+        schema column is present in the CSV and that no two blocks share a column
+        name (except the bacteria/phage join key)
+      - Report per-host defense disagreement rate against the panel CSV (full 403-host
+        comparison); if average disagreement exceeds 3 systems, flag in the lab notebook
+        and investigate before retraining
+      - Assemble the joint feature matrix by joining host blocks on bacteria and phage
+        blocks on phage, then merging with the ST02 pair table
+      - Train two LightGBM models using the same hyperparameters, ST03 holdout split,
+        calibration fold, and random seed as TL18 — (a) TL18 baseline using panel
+        features for reference, (b) deployment-paired model using raw-derived features
+        with continuous encoding from DEPLOY02-05
+      - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000
+        strain-level resamples) for both models in one comparison table
+      - Validate training/inference parity on the 3 validation hosts — run inference
+        from raw FASTAs using the winning model bundle and confirm feature vectors
+        are identical to the training features for those hosts (zero delta on every
+        feature)
+      - Lock decision — if the deployment-paired model improves over the TL18 baseline
+        on AUC (bootstrap 95% CI for the delta excludes zero), lock on the deployment-paired
+        model; otherwise keep TL18 baseline
       - Write the comparison table and lock decision to the track lab notebook
     - id: DEPLOY07
       title: Wire deployment-paired features into the inference runtime
@@ -1125,16 +1116,16 @@ tracks:
       - DEPLOY06
       model: gpt-5.4
       acceptance_criteria:
-      - Update generalized_inference.py so that training and inference call
-        the exact same feature derivation functions — not analogous functions
-        that produce columns with the same names; import from
-        lyzortx/pipeline/deployment_paired_features/ for all feature blocks
-      - The locked feature encoding from DEPLOY06 (parity-only or
-        parity+gradient) determines which functions are wired in; read the
-        lock decision from the saved bundle metadata
-      - Validate on the 3 validation hosts — run inference from raw FASTAs,
-        compare feature vectors against training features, require zero delta
-      - Run the relocation probe — copy the bundle to a different directory
-        and confirm inference still works without repo-root dependencies
-      - Filter inference to the 96 panel phages via the metadata CSV; the
-        extra 411_P3.fna in the FNA directory must not appear in predictions
+      - Update generalized_inference.py so that training and inference call the exact
+        same feature derivation functions — not analogous functions that produce columns
+        with the same names; import from lyzortx/pipeline/deployment_paired_features/
+        for all feature blocks
+      - The locked feature encoding from DEPLOY06 (parity-only or parity+gradient)
+        determines which functions are wired in; read the lock decision from the saved
+        bundle metadata
+      - Validate on the 3 validation hosts — run inference from raw FASTAs, compare
+        feature vectors against training features, require zero delta
+      - Run the relocation probe — copy the bundle to a different directory and confirm
+        inference still works without repo-root dependencies
+      - Filter inference to the 96 panel phages via the metadata CSV; the extra 411_P3.fna
+        in the FNA directory must not appear in predictions
