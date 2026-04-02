@@ -994,7 +994,7 @@ tracks:
       - Ensure the assemblies directory is gitignored
     - id: DEPLOY02
       title: Re-derive host defense features with integer gene counts (gate)
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: full-bio
       acceptance_criteria:

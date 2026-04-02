@@ -627,7 +627,7 @@ graph LR
   - Validate that all 369 ST02 bacteria have a matching assembly file; fail loudly with the list of missing IDs if any
     are absent
   - Ensure the assemblies directory is gitignored
-- [ ] **DEPLOY02** Re-derive host defense features with integer gene counts (gate). Model: `gpt-5.4`. CI image profile:
+- [x] **DEPLOY02** Re-derive host defense features with integer gene counts (gate). Model: `gpt-5.4`. CI image profile:
       `full-bio`.
   - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
     validation FASTAs (55989, EDL933, LF82) — the full 403-host run happens in DEPLOY06
