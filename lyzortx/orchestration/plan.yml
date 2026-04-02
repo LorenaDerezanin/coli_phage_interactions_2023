@@ -978,20 +978,32 @@ tracks:
     - G
     tasks:
     - id: DEPLOY01
-      title: Download and validate Picard collection assemblies from figshare
+      title: Download Picard collection assemblies and bake into CI image
       status: pending
       model: gpt-5.4-mini
       ci_image_profile: full-bio
       acceptance_criteria:
       - Download all 403 host genome assemblies from figshare
-        (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024)
-      - Store in gitignored data/genomics/bacteria/assemblies/picard/ with one
-        FASTA per panel bacterium
-      - Write a manifest.json with per-file SHA-256 checksums and the figshare
-        DOI as provenance
+        (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0)
+      - Store locally in gitignored data/genomics/bacteria/assemblies/picard/
+        with one FASTA per panel bacterium
+      - Write a manifest.json with per-file SHA-256 checksums, the figshare DOI
+        as provenance, and the CC BY 4.0 license with attribution
       - Validate that all 369 ST02 bacteria have a matching assembly file
       - If any ST02 bacterium is missing from figshare, fail loudly with the
         list of missing IDs — do not silently proceed with a partial set
+      - Add the assemblies directory to the full-bio CI image manifest so
+        DEPLOY02-04 do not re-download per task — the assemblies are static
+        (published dataset) and belong in the image
+      - Include CC BY 4.0 attribution in the image manifest per the figshare
+        license terms
+      - Provide a single-command entry point (function or script) that downloads
+        the figshare zip and extracts it to the local assemblies directory,
+        skipping if already present. Downstream tasks and local dev should be
+        able to call this once and get all 403 FASTAs on disk. The figshare
+        "Download all" zip endpoint is
+        https://ndownloader.figshare.com/articles/25941691/versions/1 (~1.9GB,
+        ~7 min download, ~7s unzip)
     - id: DEPLOY02
       title: Re-derive host defense features from raw assemblies
       status: pending

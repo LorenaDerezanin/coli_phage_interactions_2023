@@ -616,14 +616,22 @@ graph LR
   one-hot features from exact duplicates, plus derived summary features). The primary goal is deployment integrity — the
   model should be trained on exactly the features it will see at inference time. The secondary goal is richer features
   that give the model more information to work with.
-- [ ] **DEPLOY01** Download and validate Picard collection assemblies from figshare. Model: `gpt-5.4-mini`. CI image
+- [ ] **DEPLOY01** Download Picard collection assemblies and bake into CI image. Model: `gpt-5.4-mini`. CI image
       profile: `full-bio`.
-  - Download all 403 host genome assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024)
-  - Store in gitignored data/genomics/bacteria/assemblies/picard/ with one FASTA per panel bacterium
-  - Write a manifest.json with per-file SHA-256 checksums and the figshare DOI as provenance
+  - Download all 403 host genome assemblies from figshare (doi:10.6084/m9.figshare.25941691.v1, Tesson 2024, CC BY 4.0)
+  - Store locally in gitignored data/genomics/bacteria/assemblies/picard/ with one FASTA per panel bacterium
+  - Write a manifest.json with per-file SHA-256 checksums, the figshare DOI as provenance, and the CC BY 4.0 license
+    with attribution
   - Validate that all 369 ST02 bacteria have a matching assembly file
   - If any ST02 bacterium is missing from figshare, fail loudly with the list of missing IDs — do not silently proceed
     with a partial set
+  - Add the assemblies directory to the full-bio CI image manifest so DEPLOY02-04 do not re-download per task — the
+    assemblies are static (published dataset) and belong in the image
+  - Include CC BY 4.0 attribution in the image manifest per the figshare license terms
+  - Provide a single-command entry point (function or script) that downloads the figshare zip and extracts it to the
+    local assemblies directory, skipping if already present. Downstream tasks and local dev should be able to call this
+    once and get all 403 FASTAs on disk. The figshare "Download all" zip endpoint is
+    https://ndownloader.figshare.com/articles/25941691/versions/1 (~1.9GB, ~7 min download, ~7s unzip)
 - [ ] **DEPLOY02** Re-derive host defense features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY01`.
   - Run DefenseFinder (pinned version and model database from the existing runner) on all 403 assemblies from DEPLOY01
