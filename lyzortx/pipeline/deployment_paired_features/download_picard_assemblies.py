@@ -23,6 +23,7 @@ DEFAULT_RAW_INTERACTIONS_PATH = Path("data/interactions/raw/raw_interactions.csv
 EXPECTED_ASSEMBLY_COUNT = 403
 FASTA_SUFFIXES = (".fa", ".faa", ".fasta", ".fna", ".ffn", ".frn")
 SCRATCH_DOWNLOAD_DIR = Path(".scratch/deployment_paired_features")
+DOWNLOAD_TIMEOUT_SECONDS = 300
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -69,7 +70,10 @@ def load_st02_bacteria_ids(raw_interactions_path: Path = DEFAULT_RAW_INTERACTION
 
 def _download_zip_file(download_url: str, destination_path: Path) -> None:
     destination_path.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(download_url) as response, destination_path.open("wb") as handle:
+    with (
+        urllib.request.urlopen(download_url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response,
+        destination_path.open("wb") as handle,
+    ):
         shutil.copyfileobj(response, handle)
 
 

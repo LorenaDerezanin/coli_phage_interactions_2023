@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import csv
 import shutil
 import zipfile
@@ -26,6 +27,33 @@ def test_load_st02_bacteria_ids_reads_unique_values(tmp_path: Path) -> None:
         writer.writerow({"bacteria": "B2", "phage": "P3"})
 
     assert picard_download.load_st02_bacteria_ids(raw_path) == ["A1", "B2"]
+
+
+def test_download_zip_file_uses_timeout(monkeypatch, tmp_path: Path) -> None:
+    observed_timeout = {}
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_urlopen(download_url, timeout):
+        observed_timeout["download_url"] = download_url
+        observed_timeout["timeout"] = timeout
+        return FakeResponse(b"payload")
+
+    monkeypatch.setattr(picard_download.urllib.request, "urlopen", fake_urlopen)
+
+    destination_path = tmp_path / "download.zip"
+    picard_download._download_zip_file("https://example.invalid/picard.zip", destination_path)
+
+    assert observed_timeout == {
+        "download_url": "https://example.invalid/picard.zip",
+        "timeout": picard_download.DOWNLOAD_TIMEOUT_SECONDS,
+    }
+    assert destination_path.read_bytes() == b"payload"
 
 
 def test_download_picard_assemblies_extracts_and_validates(monkeypatch, tmp_path: Path) -> None:
