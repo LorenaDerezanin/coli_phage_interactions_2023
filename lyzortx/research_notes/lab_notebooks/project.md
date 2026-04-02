@@ -1151,7 +1151,7 @@ distance or projection contract, not from reusing a fragile embedding fit.
 #### Executive summary
 
 A step-by-step inference audit of the TL18 richer bundle found three deployment-path bugs and a systematic feature
-redundancy problem that together motivate a new track: the Deployment-Paired Feature Pipeline (DEPLOY01-08). The
+redundancy problem that together motivate a new track: the Deployment-Paired Feature Pipeline (DEPLOY01-07). The
 primary goal is deployment integrity — the model should be trained on exactly the features it will see at inference
 time. The secondary goal is richer features that give the model more information to work with.
 
@@ -1199,9 +1199,34 @@ than it was trained on. Bugs #1 and #2 prove this causes real divergence. Even i
 after the parity fix (because holdout already used consistent panel features), the deployed predictions for novel hosts
 will be more trustworthy.
 
-The gradient features are a bonus — they may or may not improve metrics. DEPLOY07 explicitly separates the two effects
+The gradient features are a bonus — they may or may not improve metrics. DEPLOY06 explicitly separates the two effects
 with an ablation: train one model with parity-only (raw-derived binary) and one with parity+gradients (raw-derived
 continuous) to measure whether gradients help.
+
+#### Infrastructure findings during DEPLOY planning
+
+The figshare assemblies (doi:10.6084/m9.figshare.25941691.v1, CC BY 4.0) are 403 FASTA files totalling 1.9GB. The
+"Download all" zip endpoint downloads in ~7 minutes and unzips in ~7 seconds. The `full-bio` CI image is 9.5GB
+compressed, which already strains the free GitHub Actions runner (14GB disk, ~6GB usable). Baking 1.9GB of assemblies
+into the image is not viable. Instead, DEPLOY tasks download assemblies on demand at runtime, with a skip-if-present
+check so local dev only pays the 7-minute cost once. If the free runner's disk proves insufficient during DEPLOY02
+(DefenseFinder on 403 genomes), the fallback is the paid `ubuntu-24.04-4core` runner at ~$0.24-0.48 per task run.
+
+Pharokka meta mode (`--meta --split`) annotates all 97 phage genomes in 3 minutes 13 seconds, compared to 1-2 hours
+with the current per-phage `ProcessPoolExecutor` approach. The 40x speedup comes from running mmseqs2 database indexing
+and profile search once instead of 97 times. The existing 194 committed pharokka annotation files (4.5MB in
+`data/annotations/pharokka/`) are small enough to keep as-is; the meta-mode optimization is deferred until the next
+time `run_pharokka.py` is refactored.
+
+#### Fork code placement policy enforcement
+
+During DEPLOY planning we identified that ~1,024 files had been added outside `lyzortx/` by previous work (194
+pharokka annotations, 223 capsule/phylogroup reference databases, 98 phage FNAs, 3 validation FASTAs, 6 defense
+finder files, plus upstream dev/ artifacts). Root-level files (`AGENTS.md`, `CLAUDE.md`, env manifests) are justified
+exceptions. The rest are a mix of legitimate reference data and generated outputs that should ideally live under
+`lyzortx/`. Retroactive migration would touch hundreds of `DEFAULT_*_PATH` constants across dozens of files — not
+worth the churn now. Going forward, all new data and code goes under `lyzortx/` (the DEPLOY assembly download path is
+`lyzortx/data/assemblies/picard/`, gitignored).
 
 ### 2026-04-01: Project-level implication of the Track L raw-validation subset
 

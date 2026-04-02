@@ -57,9 +57,38 @@ found:
 - `tl17_rbp_family_count` (sum of RBP family presence columns)
 - `host_capsule_abc_proxy_present` and `host_abc_serotype_proxy` (replaced by continuous capsule profile scores)
 
+#### Infrastructure benchmarks
+
+- **Figshare assemblies**: 403 FASTA files, 1.9GB zip, CC BY 4.0 license. Download: ~7 min via the "Download all" zip
+  endpoint (`https://ndownloader.figshare.com/articles/25941691/versions/1`). Unzip: ~7 seconds. Downloaded on demand,
+  stored in gitignored `lyzortx/data/assemblies/picard/`, skipped if already present.
+- **CI image**: 9.5GB compressed (`full-bio` profile). The free GitHub Actions runner (14GB disk) cannot accommodate
+  the assemblies baked into the image. DEPLOY tasks download at runtime instead.
+- **Pharokka meta mode**: all 97 phage genomes annotated in 3 min 13s using `pharokka.py --meta --split` on a
+  concatenated multi-FASTA, vs 1-2 hours with the current per-phage approach. The 40x speedup comes from running
+  mmseqs2 indexing and profile search once instead of 97 times. This is a deferred optimization — the existing
+  committed pharokka annotations (4.5MB) are small enough to keep.
+
+#### Task structure and gating
+
+7 tasks (DEPLOY01-07), reorganized from an initial 8-task plan based on review of acceptance criteria quality:
+
+- **DEPLOY01** (download): assembly download script, no manifest
+- **DEPLOY02** (defense, **gate**): re-derive defense features from raw assemblies; if DefenseFinder disagreement
+  with panel annotations exceeds 3 systems/host on average, stop and investigate before proceeding
+- **DEPLOY03** (surface): re-derive host surface features with continuous scores; depends on DEPLOY02 gate clearing
+- **DEPLOY04** (typing): re-derive host typing; depends on DEPLOY03 (sequential to avoid merge conflicts on shared
+  host feature code)
+- **DEPLOY05** (phage RBP): switch to continuous mmseqs scores; independent, can run in parallel with DEPLOY02-04
+- **DEPLOY06** (retrain): 3-way comparison (TL18 baseline vs parity-only vs parity+gradient), lock decision
+- **DEPLOY07** (wire inference): make training and inference call the exact same functions, validate zero-delta parity
+
+Each feature task (DEPLOY02-05) outputs a schema manifest (JSON) listing column names and dtypes. DEPLOY06 validates
+the joint schema before assembling the feature matrix.
+
 #### Expected outcomes
 
 The primary outcome is deployment integrity: zero delta between training features and inference features for any host
-whose assembly is available. The secondary outcome is potentially richer signal from continuous scores. DEPLOY07
+whose assembly is available. The secondary outcome is potentially richer signal from continuous scores. DEPLOY06
 explicitly separates these with a 3-way ablation (TL18 baseline vs parity-only vs parity+gradients) so we can measure
 whether gradients help independently of the parity fix.
