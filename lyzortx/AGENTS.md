@@ -28,6 +28,7 @@ These are validation checkpoints, not dispatchable tasks. All must hold before e
 # Generated Outputs
 
 - Store generated outputs under `lyzortx/generated_outputs/`, organized by analysis name.
+- Do not write new generated artifacts to top-level directories like `figures/` for `lyzortx` analyses.
 - This directory is gitignored. **Never commit generated outputs** — do not use `git add -f`.
 
 # Fail-Fast on Missing Data
@@ -39,6 +40,7 @@ These are validation checkpoints, not dispatchable tasks. All must hold before e
 
 # Coding Principles
 
+- **Test data quality** — prefer real data (or programmatically generated realistic data) over hand-crafted dummy values.
 - **No magic numbers or inline string literals** — define named constants for repeated or meaningful values.
 - **Progress feedback** — long-running operations must log "starting" and "completed" messages.
 - **Timestamped logging** — use Python's `logging` module with timestamps, not bare `print()`. Use
@@ -49,6 +51,10 @@ These are validation checkpoints, not dispatchable tasks. All must hold before e
   batch operations over per-element calls.
 - **Optimize the repeated hotspot first** — remove duplicated expensive work before adding clever machinery.
 - **Keep performance fixes readable** — named helpers, clear constants, phase-level logging over opaque one-liners.
+
+# One-Off Analyses
+
+- Store one-off analysis scripts under `lyzortx/research_notes/ad_hoc_analysis_code/`.
 
 # Function Design and Testing
 

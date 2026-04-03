@@ -59,7 +59,10 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 - The user may have multiple sessions open. Never claim changes are uncommitted without running `git status` first.
 - After every push to a PR branch, update the PR title and body to reflect all commits.
 - Any PR addressing a tracked issue must include `Closes #<issue_number>` in the description.
-- Do not remove a worktree until its PR is merged or the user explicitly abandons it.
+- Do not remove a worktree until its PR is merged or the user explicitly abandons it. After creating a worktree and
+  pushing a PR, tell the user where it is.
+- The Edit tool succeeds silently when `old_string` already equals `new_string`. Your edit appearing to succeed does
+  **not** prove the change was uncommitted — another session may have committed it already.
 
 # Plan-Driven Execution
 
@@ -76,9 +79,11 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 
 # Issue Closure Policy
 
-- Closing a GitHub issue signals completion to the orchestrator (`done`).
+- Closing a GitHub issue signals completion to the orchestrator (`done`). Never close an orchestrator-task issue unless
+  the task is genuinely finished and its acceptance criteria are met.
 - To close **without** marking done: `gh issue close --reason "not planned"`.
-- Never reopen a closed orchestrator issue. To invalidate, change close reason via API:
+- Never reopen a closed orchestrator issue — reopening triggers the implementation workflow. To invalidate, change close
+  reason via API:
   `gh api repos/OWNER/REPO/issues/NUMBER -X PATCH -f state=closed -f state_reason=not_planned`.
 
 # Graphite Stacked PRs
@@ -86,7 +91,9 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 - Use plain `git` for single-branch workflows. Only use `gt` for stacked PRs.
 - This repo is not synced with Graphite's remote. Use `git push` instead of `gt submit`.
 - Use `gt create --no-interactive` for new branches in a stack.
-- Prefer stacked PRs when the diff exceeds ~300 lines or has clear layered stages.
+- Prefer stacked PRs when the diff exceeds ~300 lines or has clear layered stages. Use the `/graphite` skill to create
+  stacks.
+- Each PR in a stack must be atomic and pass CI independently.
 
 # Review Focus Areas
 
@@ -100,7 +107,12 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 
 Do NOT nitpick style — ruff handles formatting. Focus on substantive issues only. Do not invent problems.
 
-When addressing review feedback, push back on comments that are wrong, overcomplicated, or low-value.
+- Do not approve a PR unless all CI checks pass.
+- Every time an agent creates a PR or pushes an update, it must self-review against these guidelines before considering
+  the PR ready.
+- Before raising an issue, check existing review threads — do not re-raise concerns already addressed.
+- Do not add "CI passes" as a test-plan item in PR descriptions — it is redundant noise.
+- When addressing review feedback, push back on comments that are wrong, overcomplicated, or low-value.
 
 # Requirement Challenge Policy
 
@@ -141,4 +153,4 @@ When addressing review feedback, push back on comments that are wrong, overcompl
 # Commit Shortcut
 
 - On `commit staged`: commit only currently staged files with a generated message. Do not stage, unstage, or modify
-  anything.
+  anything. If no files are staged, report that and stop.
