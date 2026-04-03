@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv
+from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
 from lyzortx.pipeline.track_d.steps.build_phage_protein_sets import (
     call_proteins_with_pyrodigal,
     read_fasta_records,
@@ -23,10 +23,13 @@ from lyzortx.pipeline.track_l.steps.parse_annotations import classify_rbp_genes,
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MMSEQS_COMMAND: tuple[str, ...] = ("micromamba", "run", "-n", "phage_annotation_tools", "mmseqs")
-DEFAULT_MMSEQS_MIN_IDENTITY = 30.0
+DEFAULT_MMSEQS_MIN_IDENTITY = 0.0
 DEFAULT_MMSEQS_MIN_QUERY_COVERAGE = 0.70
 DEFAULT_MIN_FAMILY_PHAGE_SUPPORT = 2
 DEFAULT_MAX_TARGET_SEQS = 20
+STRING_DTYPE = "string"
+FLOAT_DTYPE = "float64"
+INTEGER_DTYPE = "int64"
 MMSEQS_OUTPUT_COLUMNS: tuple[str, ...] = (
     "query",
     "target",
@@ -44,7 +47,7 @@ MMSEQS_OUTPUT_COLUMNS: tuple[str, ...] = (
 TL17_BLOCK_ID = "tl17_rbp_family_projection"
 FAMILY_COLUMN_PREFIX = "tl17_phage_rbp_family"
 SUMMARY_HIT_COUNT_COLUMN = "tl17_rbp_reference_hit_count"
-SUMMARY_FAMILY_COUNT_COLUMN = "tl17_rbp_family_count"
+SCHEMA_MANIFEST_FILENAME = "schema_manifest.json"
 GENE_INDEX_RE = re.compile(r"_(\d+)$")
 PHROG_FAMILY_RE = re.compile(r"RBP_PHROG_(?P<phrog>\S+)")
 PROTEIN_COORDS_RE = re.compile(r"start=(?P<start>\d+) end=(?P<end>\d+) strand=(?P<strand>-?1)")
@@ -104,7 +107,29 @@ def build_family_column_name(family_id: str) -> str:
     match = PHROG_FAMILY_RE.fullmatch(family_id)
     suffix = match.group("phrog") if match else family_id.lower()
     cleaned = re.sub(r"[^A-Za-z0-9]+", "_", suffix).strip("_").lower()
-    return f"{FAMILY_COLUMN_PREFIX}_{cleaned}_present"
+    return f"{FAMILY_COLUMN_PREFIX}_{cleaned}_percent_identity"
+
+
+def build_projection_schema(family_rows: Sequence[Tl17FamilyRuntime]) -> dict[str, object]:
+    columns = [
+        {"name": "phage", "dtype": STRING_DTYPE},
+        *({"name": row.column_name, "dtype": FLOAT_DTYPE} for row in family_rows),
+        {"name": SUMMARY_HIT_COUNT_COLUMN, "dtype": INTEGER_DTYPE},
+    ]
+    return {
+        "feature_block": TL17_BLOCK_ID,
+        "key_column": "phage",
+        "column_count": len(columns),
+        "columns": columns,
+        "family_score_columns": [row.column_name for row in family_rows],
+        "reference_hit_count_column": SUMMARY_HIT_COUNT_COLUMN,
+        "dropped_legacy_columns": ["tl17_rbp_family_count"],
+    }
+
+
+def write_schema_manifest(family_rows: Sequence[Tl17FamilyRuntime], output_path: Path) -> Path:
+    write_json(output_path, build_projection_schema(family_rows))
+    return output_path
 
 
 def parse_gene_index(gene_name: str) -> int:
@@ -426,7 +451,7 @@ def project_phage_feature_row(
     scratch_root: Path,
 ) -> dict[str, object]:
     family_rows, reference_rows, matching_policy = parse_runtime_payload(runtime_payload)
-    target_to_family = {row.reference_id: row.family_id for row in reference_rows}
+    reference_to_family = {row.reference_id: row.family_id for row in reference_rows}
     phage_scratch_dir = scratch_root / phage_path.stem
     if phage_scratch_dir.exists():
         shutil.rmtree(phage_scratch_dir)
@@ -440,25 +465,21 @@ def project_phage_feature_row(
         scratch_dir=phage_scratch_dir,
         mmseqs_command=tuple(str(token) for token in matching_policy["mmseqs_command"]),
     )
-    min_percent_identity = float(matching_policy["min_percent_identity"])
     min_query_coverage = float(matching_policy["min_query_coverage"])
-    accepted_families: set[str] = set()
+    family_scores = {row.family_id: 0.0 for row in family_rows}
     accepted_hit_count = 0
     for match in read_mmseqs_matches(match_tsv_path):
-        family_id = target_to_family.get(match.target_id)
+        family_id = reference_to_family.get(match.target_id)
         if family_id is None:
-            continue
-        if match.percent_identity < min_percent_identity:
             continue
         if match.query_coverage < min_query_coverage:
             continue
-        accepted_families.add(family_id)
         accepted_hit_count += 1
+        family_scores[family_id] = max(family_scores[family_id], float(match.percent_identity))
     row: dict[str, object] = {"phage": phage_path.stem}
     for family_row in family_rows:
-        row[family_row.column_name] = int(family_row.family_id in accepted_families)
+        row[family_row.column_name] = family_scores[family_row.family_id]
     row[SUMMARY_HIT_COUNT_COLUMN] = accepted_hit_count
-    row[SUMMARY_FAMILY_COUNT_COLUMN] = len(accepted_families)
     return row
 
 
@@ -492,8 +513,7 @@ def project_phage_feature_rows_batched(
 ) -> list[dict[str, object]]:
     """Project multiple phages in a single batched mmseqs search instead of one per phage."""
     family_rows, reference_rows, matching_policy = parse_runtime_payload(runtime_payload)
-    target_to_family = {row.reference_id: row.family_id for row in reference_rows}
-    min_percent_identity = float(matching_policy["min_percent_identity"])
+    reference_to_family = {row.reference_id: row.family_id for row in reference_rows}
     min_query_coverage = float(matching_policy["min_query_coverage"])
     mmseqs_command = tuple(str(token) for token in matching_policy["mmseqs_command"])
 
@@ -524,29 +544,30 @@ def project_phage_feature_rows_batched(
         mmseqs_command=mmseqs_command,
     )
 
-    accepted_families_by_phage: dict[str, set[str]] = {phage: set() for phage in phage_names}
+    family_scores_by_phage: dict[str, dict[str, float]] = {
+        phage: {row.family_id: 0.0 for row in family_rows} for phage in phage_names
+    }
     accepted_hits_by_phage: dict[str, int] = {phage: 0 for phage in phage_names}
     for match in read_mmseqs_matches(match_tsv_path):
         phage = match.query_id.split("|", 1)[0]
-        family_id = target_to_family.get(match.target_id)
+        family_id = reference_to_family.get(match.target_id)
         if family_id is None:
-            continue
-        if match.percent_identity < min_percent_identity:
             continue
         if match.query_coverage < min_query_coverage:
             continue
-        if phage in accepted_families_by_phage:
-            accepted_families_by_phage[phage].add(family_id)
-            accepted_hits_by_phage[phage] += 1
+        if phage not in family_scores_by_phage:
+            continue
+        family_scores_by_phage[phage][family_id] = max(
+            family_scores_by_phage[phage][family_id], float(match.percent_identity)
+        )
+        accepted_hits_by_phage[phage] += 1
 
     feature_rows: list[dict[str, object]] = []
     for phage in phage_names:
-        accepted_families = accepted_families_by_phage[phage]
         row: dict[str, object] = {"phage": phage}
         for family_row in family_rows:
-            row[family_row.column_name] = int(family_row.family_id in accepted_families)
+            row[family_row.column_name] = family_scores_by_phage[phage][family_row.family_id]
         row[SUMMARY_HIT_COUNT_COLUMN] = accepted_hits_by_phage[phage]
-        row[SUMMARY_FAMILY_COUNT_COLUMN] = len(accepted_families)
         feature_rows.append(row)
     return feature_rows
 

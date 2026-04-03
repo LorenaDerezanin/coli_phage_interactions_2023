@@ -83,7 +83,37 @@ def test_read_mmseqs_matches_parses_query_coverage(tmp_path: Path) -> None:
     assert matches[0].query_coverage == 0.8
 
 
-def test_project_phage_feature_row_applies_identity_and_coverage_thresholds(tmp_path: Path, monkeypatch) -> None:
+def test_build_projection_schema_lists_percent_identity_features_and_hit_count() -> None:
+    schema = tl17.build_projection_schema(
+        [
+            tl17.Tl17FamilyRuntime(
+                family_id="RBP_PHROG_11",
+                column_name="tl17_phage_rbp_family_11_percent_identity",
+                supporting_phage_count=2,
+                supporting_reference_count=2,
+            ),
+            tl17.Tl17FamilyRuntime(
+                family_id="RBP_PHROG_22",
+                column_name="tl17_phage_rbp_family_22_percent_identity",
+                supporting_phage_count=2,
+                supporting_reference_count=2,
+            ),
+        ]
+    )
+
+    assert schema["columns"] == [
+        {"name": "phage", "dtype": "string"},
+        {"name": "tl17_phage_rbp_family_11_percent_identity", "dtype": "float64"},
+        {"name": "tl17_phage_rbp_family_22_percent_identity", "dtype": "float64"},
+        {"name": tl17.SUMMARY_HIT_COUNT_COLUMN, "dtype": "int64"},
+    ]
+    assert schema["dropped_legacy_columns"] == ["tl17_rbp_family_count"]
+
+
+def test_project_phage_feature_row_emits_percent_identity_scores_and_hit_count(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     phage_path = tmp_path / "P1.fna"
     phage_path.write_text(">P1\nATGC\n", encoding="utf-8")
     reference_fasta_path = tmp_path / "reference.faa"
@@ -92,13 +122,13 @@ def test_project_phage_feature_row_applies_identity_and_coverage_thresholds(tmp_
         "family_rows": [
             {
                 "family_id": "RBP_PHROG_11",
-                "column_name": "tl17_phage_rbp_family_11_present",
+                "column_name": "tl17_phage_rbp_family_11_percent_identity",
                 "supporting_phage_count": 2,
                 "supporting_reference_count": 2,
             },
             {
                 "family_id": "RBP_PHROG_22",
-                "column_name": "tl17_phage_rbp_family_22_present",
+                "column_name": "tl17_phage_rbp_family_22_percent_identity",
                 "supporting_phage_count": 2,
                 "supporting_reference_count": 2,
             },
@@ -142,7 +172,7 @@ def test_project_phage_feature_row_applies_identity_and_coverage_thresholds(tmp_
         output_tsv_path.write_text(
             (
                 "P1|query_prot_0001\tref_11\t88.0\t80\t1\t80\t100\t1\t80\t80\t1e-30\t300\n"
-                "P1|query_prot_0001\tref_22\t45.0\t40\t1\t40\t100\t1\t60\t60\t1e-10\t110\n"
+                "P1|query_prot_0001\tref_22\t45.0\t80\t1\t80\t100\t1\t60\t60\t1e-10\t110\n"
             ),
             encoding="utf-8",
         )
@@ -159,11 +189,91 @@ def test_project_phage_feature_row_applies_identity_and_coverage_thresholds(tmp_
 
     assert observed == {
         "phage": "P1",
-        "tl17_phage_rbp_family_11_present": 1,
-        "tl17_phage_rbp_family_22_present": 0,
-        tl17.SUMMARY_HIT_COUNT_COLUMN: 1,
-        tl17.SUMMARY_FAMILY_COUNT_COLUMN: 1,
+        "tl17_phage_rbp_family_11_percent_identity": 88.0,
+        "tl17_phage_rbp_family_22_percent_identity": 45.0,
+        tl17.SUMMARY_HIT_COUNT_COLUMN: 2,
     }
+
+
+def test_project_phage_feature_rows_batched_emits_continuous_family_scores(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    phage_paths = [tmp_path / "P1.fna", tmp_path / "P2.fna"]
+    for phage_path in phage_paths:
+        phage_path.write_text(f">{phage_path.stem}\nATGC\n", encoding="utf-8")
+    reference_fasta_path = tmp_path / "reference.faa"
+    reference_fasta_path.write_text(">ref\nMPEPTIDE\n", encoding="utf-8")
+    runtime_payload = {
+        "family_rows": [
+            {
+                "family_id": "RBP_PHROG_11",
+                "column_name": "tl17_phage_rbp_family_11_percent_identity",
+                "supporting_phage_count": 2,
+                "supporting_reference_count": 2,
+            }
+        ],
+        "reference_rows": [
+            {
+                "reference_id": "ref_11",
+                "phage": "P1",
+                "family_id": "RBP_PHROG_11",
+                "gene_name": "P1_CDS_0001",
+                "protein_index": 1,
+                "annotation": "tail fiber",
+                "phrog": "11",
+                "protein_sequence": "MPEPTIDE",
+            }
+        ],
+        "matching_policy": {
+            "min_percent_identity": 0.0,
+            "min_query_coverage": 0.70,
+            "mmseqs_command": ["mmseqs"],
+        },
+    }
+
+    monkeypatch.setattr(
+        tl17,
+        "read_fasta_records",
+        lambda path, **_kwargs: [SequenceRecord(identifier=path.stem, description=path.stem, sequence="ATGC")],
+    )
+    monkeypatch.setattr(
+        tl17,
+        "call_proteins_with_pyrodigal",
+        lambda phage, _records: ([SequenceRecord(identifier=f"{phage}|prot", description=phage, sequence="M")], "meta"),
+    )
+
+    def fake_run_mmseqs_search(*, output_tsv_path: Path, **_kwargs) -> Path:
+        output_tsv_path.write_text(
+            (
+                "P1|query_prot_0001\tref_11\t82.0\t80\t1\t80\t100\t1\t80\t80\t1e-30\t300\n"
+                "P2|query_prot_0001\tref_11\t61.0\t80\t1\t80\t100\t1\t80\t80\t1e-20\t200\n"
+            ),
+            encoding="utf-8",
+        )
+        return output_tsv_path
+
+    monkeypatch.setattr(tl17, "run_mmseqs_search", fake_run_mmseqs_search)
+
+    observed = tl17.project_phage_feature_rows_batched(
+        phage_paths,
+        runtime_payload=runtime_payload,
+        reference_fasta_path=reference_fasta_path,
+        scratch_root=tmp_path / "scratch",
+    )
+
+    assert observed == [
+        {
+            "phage": "P1",
+            "tl17_phage_rbp_family_11_percent_identity": 82.0,
+            tl17.SUMMARY_HIT_COUNT_COLUMN: 1,
+        },
+        {
+            "phage": "P2",
+            "tl17_phage_rbp_family_11_percent_identity": 61.0,
+            tl17.SUMMARY_HIT_COUNT_COLUMN: 1,
+        },
+    ]
 
 
 def test_build_fasta_inventory_rows_hashes_panel_fastas(tmp_path: Path) -> None:

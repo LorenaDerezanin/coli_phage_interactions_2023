@@ -25,13 +25,15 @@ from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import (
     DEFAULT_MMSEQS_COMMAND,
     DEFAULT_MMSEQS_MIN_IDENTITY,
     DEFAULT_MMSEQS_MIN_QUERY_COVERAGE,
-    SUMMARY_FAMILY_COUNT_COLUMN,
     SUMMARY_HIT_COUNT_COLUMN,
+    SCHEMA_MANIFEST_FILENAME,
     TL17_BLOCK_ID,
+    build_projection_schema,
     build_fasta_inventory_rows,
     build_reference_proteins,
     build_runtime_payload,
     project_panel_feature_rows,
+    write_schema_manifest,
     write_family_metadata_csv,
     write_reference_fasta,
     write_reference_metadata_csv,
@@ -261,13 +263,13 @@ def build_surface_delta_rows(
 def build_validation_summary_rows(
     *,
     projected_feature_rows: Sequence[Mapping[str, object]],
-    feature_columns: Sequence[str],
+    family_score_columns: Sequence[str],
     surface_summary_rows: Sequence[Mapping[str, object]],
     selected_surface_hosts: Sequence[str],
 ) -> list[dict[str, object]]:
     frame = pd.DataFrame(projected_feature_rows)
-    nonzero_phages = int((frame[SUMMARY_FAMILY_COUNT_COLUMN] > 0).sum())
-    nonzero_features = int((frame[list(feature_columns)].sum(axis=0) > 0).sum())
+    nonzero_phages = int((frame[list(family_score_columns)].sum(axis=1) > 0).sum())
+    nonzero_features = int((frame[list(family_score_columns)].sum(axis=0) > 0).sum())
     changed_predictions = sum(int(row["changed_prediction_count"]) for row in surface_summary_rows)
     return [
         {
@@ -276,7 +278,7 @@ def build_validation_summary_rows(
         },
         {
             "metric": "tl17_family_feature_count",
-            "value": len(feature_columns),
+            "value": len(family_score_columns),
         },
         {
             "metric": "nonzero_family_feature_count",
@@ -374,11 +376,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     projected_feature_path = args.output_dir / PROJECTED_FEATURE_FILENAME
     write_csv(projected_feature_path, list(panel_feature_rows[0].keys()), panel_feature_rows)
-    feature_columns = [
-        column
-        for column in panel_feature_rows[0].keys()
-        if column not in {"phage", SUMMARY_HIT_COUNT_COLUMN, SUMMARY_FAMILY_COUNT_COLUMN}
-    ]
+    schema_manifest = build_projection_schema(family_rows)
+    schema_manifest_path = args.output_dir / SCHEMA_MANIFEST_FILENAME
+    write_schema_manifest(family_rows, schema_manifest_path)
+    family_score_columns = list(schema_manifest["family_score_columns"])
 
     baseline_result = build_generalized_inference_bundle.build_model_bundle(
         st02_pair_table_path=args.st02_pair_table_path,
@@ -402,7 +403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         random_state=args.random_state,
         calibration_fold=args.calibration_fold,
         extra_phage_feature_rows=panel_feature_rows,
-        extra_phage_feature_columns=feature_columns,
+        extra_phage_feature_columns=[*family_score_columns, SUMMARY_HIT_COUNT_COLUMN],
         bundle_task_id="TL17",
         bundle_format_version=DEPLOYABLE_BUNDLE_FORMAT_VERSION,
     )
@@ -424,7 +425,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     validation_summary_rows = build_validation_summary_rows(
         projected_feature_rows=panel_feature_rows,
-        feature_columns=feature_columns,
+        family_score_columns=family_score_columns,
         surface_summary_rows=surface_summary_rows,
         selected_surface_hosts=selected_surface_hosts,
     )
@@ -455,6 +456,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "reference_fasta_path": str(reference_fasta_path),
             "reference_metadata_path": str(reference_metadata_path),
             "family_metadata_path": str(family_metadata_path),
+            "schema_manifest_path": str(schema_manifest_path),
         },
         "matching_policy": {
             "mmseqs_command": list(args.mmseqs_command),
@@ -470,6 +472,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "surface_summary_csv": str(surface_summary_path),
             "baseline_bundle_path": str(baseline_result["bundle_path"]),
             "candidate_bundle_path": str(candidate_result["bundle_path"]),
+            "schema_manifest_json": str(schema_manifest_path),
         },
         "counts": {
             "retained_family_count": len(family_rows),
@@ -495,7 +498,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     LOGGER.info("Retained TL17 RBP families: %d", len(family_rows))
     LOGGER.info(
         "Panel phages with any TL17 family hit: %d",
-        sum(int(row[SUMMARY_FAMILY_COUNT_COLUMN] > 0) for row in panel_feature_rows),
+        sum(int(row[SUMMARY_HIT_COUNT_COLUMN] > 0) for row in panel_feature_rows),
     )
     LOGGER.info("Real-example surface hosts: %s", ", ".join(selected_surface_hosts))
     return 0

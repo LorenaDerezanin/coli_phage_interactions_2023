@@ -284,3 +284,42 @@ Aggregate field matches across the 3 validation hosts:
 - Unit tests for schema construction and categorical column typing.
 - Unit tests for direct feature-row projection from raw caller outputs.
 - Unit tests for panel-metadata comparison and validation aggregation.
+
+### 2026-04-03: DEPLOY05 phage RBP continuous-score projection
+
+#### Executive summary
+
+Implemented the TL17 phage RBP projection update in
+`lyzortx/pipeline/track_l/steps/deployable_tl17_runtime.py` and wired it through
+`lyzortx/pipeline/track_l/steps/build_tl17_phage_compatibility_preprocessor.py`.
+The projected phage feature block now emits 32 continuous mmseqs percent-identity columns, one per retained RBP
+family, plus the non-derivable `tl17_rbp_reference_hit_count`. The old binary family presence columns are gone, and
+`tl17_rbp_family_count` is no longer written. A schema manifest is now written to
+`lyzortx/generated_outputs/track_l/tl17_phage_compatibility_preprocessor/schema_manifest.json`.
+
+#### Validation comparison
+
+The projection logic now uses query coverage as the acceptance gate and stores the best percent identity per family.
+That means:
+
+- zero means no accepted hit above the query-coverage threshold
+- scores are continuous percent identities, not presence flags
+- `tl17_rbp_reference_hit_count` still tracks total accepted reference hits and cannot be reconstructed from the family
+  score columns alone
+
+The deployment bundle integration now carries the new 33-column phage feature block directly into TL18 without any
+assembly download step, because the committed phage FNAs in `data/genomics/phages/FNA/` are already sufficient.
+
+#### Interpretation
+
+- This fixes the last TL17 training/inference mismatch for phage-side features: the bundle now trains and scores on the
+  same continuous family scores that the runtime projects.
+- Dropping `tl17_rbp_family_count` is correct because it is derivable from the family score block, while keeping
+  `tl17_rbp_reference_hit_count` preserves extra information about how many hits survived the coverage filter.
+- The schema manifest makes the TL17 contract explicit for downstream bundle assembly and review.
+
+#### Tests
+
+- Unit tests for schema construction and schema-manifest emission.
+- Unit tests for single-phage and batched TL17 projection with continuous family scores.
+- Unit tests for TL17 validation-summary aggregation on the family score columns.
