@@ -630,7 +630,7 @@ graph LR
 - [x] **DEPLOY02** Re-derive host defense features with integer gene counts (gate). Model: `gpt-5.4`. CI image profile:
       `full-bio`.
   - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
-    validation FASTAs (55989, EDL933, LF82) — the full 403-host run happens in DEPLOY06
+    validation FASTAs (55989, EDL933, LF82) — the full 403-host run happens in DEPLOY07
   - The function must run DefenseFinder (pinned version and model database from the existing runner) on a given assembly
     and output integer gene counts (not binary presence) per defense subtype; use the same subtype column names as the
     panel CSV
@@ -644,7 +644,7 @@ graph LR
 - [x] **DEPLOY03** Re-derive host surface features with continuous scores. Model: `gpt-5.4`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY02`.
   - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
-    validation FASTAs — the full 403-host run happens in DEPLOY06
+    validation FASTAs — the full 403-host run happens in DEPLOY07
   - Receptor features — emit phmmer bit score per receptor protein (12 continuous features replacing 12 binary); zero
     means no hit
   - O-antigen features — emit nhmmer bit score (continuous) alongside the categorical O-type call
@@ -660,7 +660,7 @@ graph LR
 - [x] **DEPLOY04** Re-derive host typing features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY03`.
   - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
-    validation FASTAs — the full 403-host run happens in DEPLOY06
+    validation FASTAs — the full 403-host run happens in DEPLOY07
   - Run Clermont phylogroup caller, ECTyper serotype, and MLST
   - Keep phylogroup, serotype, and ST as categoricals — these are genuinely categorical biological classifications
   - Compare the 3 validation hosts against picard metadata for phylogroup, O-type, H-type, and ST in the track lab
@@ -674,10 +674,26 @@ graph LR
   - Keep tl17_rbp_reference_hit_count (not derivable from per-family scores)
   - No assembly download needed — phage FNAs are already in the repo
   - Output a schema manifest (JSON) listing every column name and dtype
-- [ ] **DEPLOY06** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY04`, `DEPLOY05`.
+- [ ] **DEPLOY06** Pre-compute 403-host defense features and check in aggregated CSV. Depends on tasks: `DEPLOY02`.
+  - Run lyzortx/pipeline/deployment_paired_features/run_all_host_defense.py locally on a machine with defense-finder,
+    hmmsearch, and the Picard assemblies to derive integer defense gene counts for all 403 hosts in parallel
+  - DefenseFinder runs one hmmsearch per HMM profile (~1,178 profiles) against each host's predicted proteome (~2,500
+    proteins); this takes ~50s per host with --workers 1, so 10-way parallel over 403 hosts takes ~35 min on a 10-core
+    machine — infeasible in CI (4-core runner, 10-min Codex timeout)
+  - Aggregate per-host host_defense_gene_counts.csv files into a single checked-in CSV at
+    lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv
+  - The CSV has one row per host, columns matching the DEPLOY02 schema manifest (bacteria key + retained defense subtype
+    integer counts)
+  - Commit the aggregated CSV so downstream tasks (DEPLOY07) can load it without re-running defense-finder in CI
+  - The per-host intermediate outputs (protein FASTAs, raw TSVs) remain in gitignored generated_outputs and are NOT
+    checked in
+- [ ] **DEPLOY07** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY06`, `DEPLOY04`, `DEPLOY05`.
   - Download the 403 assemblies using the DEPLOY01 function if not already present
-  - Run the DEPLOY02-04 feature derivation functions on all 403 hosts; run the DEPLOY05 phage feature derivation on all
+  - Load the pre-computed 403-host defense gene counts from the checked-in CSV at
+    lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv (produced by DEPLOY06); do NOT re-run
+    defense-finder in CI
+  - Run the DEPLOY03-04 feature derivation functions on all 403 hosts; run the DEPLOY05 phage feature derivation on all
     96 panel phages
   - Store all feature CSVs in gitignored generated_outputs/deployment_paired_features/
   - Load feature CSVs and schema manifests from DEPLOY02-05; validate that every schema column is present in the CSV and
@@ -701,12 +717,12 @@ graph LR
   - Lock decision — if the deployment-paired model improves over the TL18 baseline on AUC (bootstrap 95% CI for the
     delta excludes zero), lock on the deployment-paired model; otherwise keep TL18 baseline
   - Write the comparison table and lock decision to the track lab notebook
-- [ ] **DEPLOY07** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY06`.
+- [ ] **DEPLOY08** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY07`.
   - Update generalized_inference.py so that training and inference call the exact same feature derivation functions —
     not analogous functions that produce columns with the same names; import from
     lyzortx/pipeline/deployment_paired_features/ for all feature blocks
-  - The locked feature encoding from DEPLOY06 (parity-only or parity+gradient) determines which functions are wired in;
+  - The locked feature encoding from DEPLOY07 (parity-only or parity+gradient) determines which functions are wired in;
     read the lock decision from the saved bundle metadata
   - Validate on the 3 validation hosts — run inference from raw FASTAs, compare feature vectors against training
     features, require zero delta
