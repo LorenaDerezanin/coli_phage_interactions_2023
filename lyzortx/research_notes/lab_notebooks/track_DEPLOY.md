@@ -242,3 +242,45 @@ continuous receptor scores + 99 continuous capsule-profile scores.
 - Unit tests for O-antigen score aggregation and unresolved-call behavior.
 - Unit tests for receptor best-hit score selection and zero-filling.
 - Unit tests for feature-row construction and validation-report generation.
+
+### 2026-04-03: DEPLOY04 host typing categorical derivation
+
+#### Executive summary
+
+Implemented `derive_host_typing_features()` in `lyzortx/pipeline/deployment_paired_features/derive_host_typing_features.py`.
+The deployment host-typing block now runs the pinned Clermont phylogroup caller, ECTyper serotype caller, and MLST
+caller on raw assemblies and emits a purely categorical schema: `bacteria`, `host_clermont_phylo`,
+`host_st_warwick`, `host_o_type`, `host_h_type`, and `host_serotype`. The schema manifest is written to
+`lyzortx/generated_outputs/deployment_paired_features/host_typing/schema_manifest.json`.
+
+#### Validation comparison
+
+Validation scope: the 3 committed FASTAs (`55989`, `EDL933`, `LF82`) compared against `data/genomics/bacteria/picard_collection.csv`.
+
+- `55989`: exact match on phylogroup `B1`, O-type `O104`, H-type `H4`, ST `678`, and derived serotype `O104:H4`.
+- `EDL933`: exact match on phylogroup `E`, O-type `O157`, H-type `H7`, and derived serotype `O157:H7`, but MLST
+  returned an unresolved `ST = -` in the raw caller output, so `host_st_warwick` stayed empty and did not match the
+  Picard metadata ST `11`.
+- `LF82`: exact match on phylogroup `B2`, O-type `O83`, H-type `H1`, ST `135`, and derived serotype `O83:H1`.
+
+Aggregate field matches across the 3 validation hosts:
+
+- phylogroup: `3/3`
+- O-type: `3/3`
+- H-type: `3/3`
+- ST: `2/3`
+- derived serotype consistency: `3/3`
+
+#### Interpretation
+
+- The typing path is aligned with Picard metadata on the categorical biology that was called successfully.
+- The only miss is the unresolved MLST assignment for `EDL933`; the raw caller output is auditable in
+  `lyzortx/generated_outputs/deployment_paired_features/host_typing/EDL933/sequence_type/mlst_legacy.tsv` and shows
+  `ST = -`. That is a caller/data limitation, not a schema or parsing failure.
+- The feature block is ready for the full 403-host DEPLOY06 run, with the `EDL933` MLST caveat documented for review.
+
+#### Tests
+
+- Unit tests for schema construction and categorical column typing.
+- Unit tests for direct feature-row projection from raw caller outputs.
+- Unit tests for panel-metadata comparison and validation aggregation.
