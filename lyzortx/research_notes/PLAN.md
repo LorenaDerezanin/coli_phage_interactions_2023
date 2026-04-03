@@ -666,7 +666,7 @@ graph LR
   - Compare the 3 validation hosts against picard metadata for phylogroup, O-type, H-type, and ST in the track lab
     notebook
   - Output a schema manifest (JSON) listing every column name and dtype
-- [ ] **DEPLOY05** Switch phage RBP features to continuous match scores. Model: `gpt-5.4-mini`. CI image profile:
+- [x] **DEPLOY05** Switch phage RBP features to continuous match scores. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`.
   - Modify TL17 projection to emit mmseqs percent identity per RBP family instead of binary presence (32 continuous
     features replacing 32 binary); zero means no hit above the minimum query coverage threshold

@@ -1061,7 +1061,7 @@ tracks:
       - Output a schema manifest (JSON) listing every column name and dtype
     - id: DEPLOY05
       title: Switch phage RBP features to continuous match scores
-      status: pending
+      status: done
       model: gpt-5.4-mini
       ci_image_profile: full-bio
       acceptance_criteria:
