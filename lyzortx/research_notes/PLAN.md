@@ -674,7 +674,7 @@ graph LR
   - Keep tl17_rbp_reference_hit_count (not derivable from per-family scores)
   - No assembly download needed — phage FNAs are already in the repo
   - Output a schema manifest (JSON) listing every column name and dtype
-- [ ] **DEPLOY06** Pre-compute 403-host defense features and check in aggregated CSV. Depends on tasks: `DEPLOY02`.
+- [x] **DEPLOY06** Pre-compute 403-host defense features and check in aggregated CSV. Depends on tasks: `DEPLOY02`.
   - Run lyzortx/pipeline/deployment_paired_features/run_all_host_defense.py locally on a machine with defense-finder,
     hmmsearch, and the Picard assemblies to derive integer defense gene counts for all 403 hosts in parallel
   - DefenseFinder runs one hmmsearch per HMM profile (~1,178 profiles) against each host's predicted proteome (~2,500
