@@ -1017,7 +1017,7 @@ tracks:
       - Output a schema manifest (JSON) listing every column name and dtype
     - id: DEPLOY03
       title: Re-derive host surface features with continuous scores
-      status: pending
+      status: done
       depends_on_tasks:
       - DEPLOY02
       model: gpt-5.4

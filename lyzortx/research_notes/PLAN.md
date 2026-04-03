@@ -641,7 +641,7 @@ graph LR
   - This task is a gate. If the 3-host comparison reveals disagreements that suggest a fundamental methodology mismatch
     (not just minor version drift), stop and report. The disagreement report is the deliverable in that case.
   - Output a schema manifest (JSON) listing every column name and dtype
-- [ ] **DEPLOY03** Re-derive host surface features with continuous scores. Model: `gpt-5.4`. CI image profile:
+- [x] **DEPLOY03** Re-derive host surface features with continuous scores. Model: `gpt-5.4`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY02`.
   - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
     validation FASTAs — the full 403-host run happens in DEPLOY06
