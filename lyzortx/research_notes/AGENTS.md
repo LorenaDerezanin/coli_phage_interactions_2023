@@ -30,13 +30,14 @@ correct ones. Do not preserve stale claims with "initially we thought X" hedging
 evolution. The entry as merged should read as a clean, accurate record of the final state.
 
 This applies only to entries added in the current PR. Entries from prior PRs are historical records and must not be
-modified (see Done Task Immutability in the root AGENTS.md).
+modified (see Done Task Immutability in the orchestration AGENTS.md).
 
 ## Entry format
 
-- Each entry starts with `### YYYY-MM-DD: Title` (date heading level 3).
+- Each entry starts with `### YYYY-MM-DD HH:MM UTC: Title` (date heading level 3; timestamp helps resolve merge
+  conflicts when two entries are added on the same day).
 - Entries within a track file are ordered by task code, earliest first.
-- Every entry must begin with an `#### Executive summary` section: 2–4 sentences covering what changed, why, and the
+- Every entry must begin with an `#### Executive summary` section: 2-4 sentences covering what changed, why, and the
   key outcome or metric. A reader should be able to skip the rest of the entry and still understand the decision.
 - Subsequent sections typically include: problem statement, design decisions, interpretation, and next steps.
 - Entries should reference generated output paths and script paths so findings are traceable.
