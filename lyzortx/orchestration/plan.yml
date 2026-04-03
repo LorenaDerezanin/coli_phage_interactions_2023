@@ -1080,11 +1080,11 @@ tracks:
       - DEPLOY02
       acceptance_criteria:
       - Run lyzortx/pipeline/deployment_paired_features/run_all_host_defense.py locally
-        on a machine with defense-finder, hmmsearch, and the Picard assemblies to derive
-        integer defense gene counts for all 403 hosts in parallel
-      - DefenseFinder runs one hmmsearch per HMM profile (~1,178 profiles) against each
-        host's predicted proteome (~2,500 proteins); this takes ~50s per host with
-        --workers 1, so 10-way parallel over 403 hosts takes ~35 min on a 10-core
+        on a machine with defense-finder, hmmsearch, and the Picard assemblies to
+        derive integer defense gene counts for all 403 hosts in parallel
+      - DefenseFinder runs one hmmsearch per HMM profile (~1,178 profiles) against
+        each host's predicted proteome (~2,500 proteins); this takes ~50s per host
+        with --workers 1, so 10-way parallel over 403 hosts takes ~35 min on a 10-core
         machine — infeasible in CI (4-core runner, 10-min Codex timeout)
       - Aggregate per-host host_defense_gene_counts.csv files into a single checked-in
         CSV at lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv
@@ -1096,7 +1096,7 @@ tracks:
         generated_outputs and are NOT checked in
     - id: DEPLOY07
       title: Pre-compute 403-host surface features and check in aggregated CSV
-      status: pending
+      status: done
       executor: human
       ci_image_profile: full-bio
       model: gpt-5.4
@@ -1114,15 +1114,14 @@ tracks:
       - nhmmer DNA search takes ~72s/host single-threaded (403 hosts = ~48 min with
         10 workers); protein phmmer takes ~4.3s/host — infeasible in CI (4-core runner,
         10-min Codex timeout)
-      - Aggregate per-host feature rows into a single checked-in CSV at
-        lyzortx/data/deployment_paired_features/403_host_surface_features.csv
+      - Aggregate per-host feature rows into a single checked-in CSV at lyzortx/data/deployment_paired_features/403_host_surface_features.csv
       - The CSV has one row per host, columns matching the DEPLOY03 schema manifest
-        (bacteria key + O-antigen type/score + LPS core type + 12 receptor scores +
-        99 capsule profile scores)
+        (bacteria key + O-antigen type/score + LPS core type + 12 receptor scores
+        + 99 capsule profile scores)
       - Commit the aggregated CSV so downstream tasks (DEPLOY08) can load it without
         re-running HMMER scans in CI
-      - The per-host intermediate outputs (predicted proteins, tblout files) remain in
-        gitignored generated_outputs and are NOT checked in
+      - The per-host intermediate outputs (predicted proteins, tblout files) remain
+        in gitignored generated_outputs and are NOT checked in
     - id: DEPLOY08
       title: Run full feature derivation on 403 hosts, retrain, and evaluate
       status: pending
@@ -1136,12 +1135,12 @@ tracks:
       model: gpt-5.4
       acceptance_criteria:
       - Download the 403 assemblies using the DEPLOY01 function if not already present
-      - Load the pre-computed 403-host defense gene counts from the checked-in CSV at
-        lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv
+      - Load the pre-computed 403-host defense gene counts from the checked-in CSV
+        at lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv
         (produced by DEPLOY06); do NOT re-run defense-finder in CI
       - Load the pre-computed 403-host surface features from the checked-in CSV at
-        lyzortx/data/deployment_paired_features/403_host_surface_features.csv
-        (produced by DEPLOY07); do NOT re-run HMMER scans in CI
+        lyzortx/data/deployment_paired_features/403_host_surface_features.csv (produced
+        by DEPLOY07); do NOT re-run HMMER scans in CI
       - Run the DEPLOY04 host-typing feature derivation on all 403 hosts; run the
         DEPLOY05 phage feature derivation on all 96 panel phages
       - Store all feature CSVs in gitignored generated_outputs/deployment_paired_features/
@@ -1154,16 +1153,15 @@ tracks:
       - Assemble the joint feature matrix by joining host blocks on bacteria and phage
         blocks on phage, then merging with the ST02 pair table
       - Train two LightGBM models using the same hyperparameters, ST03 holdout split,
-        calibration fold, and random seed as TL18 — (a) TL18 baseline using the
-        original panel features for reference, (b) deployment-paired model using ALL
-        DEPLOY02-05 feature blocks for BOTH host and phage sides. Specifically the
-        deployment arm must use DEPLOY02 integer defense counts (not panel binary),
-        DEPLOY03 continuous receptor/capsule/O-antigen scores (not panel binary),
-        DEPLOY04 raw-derived typing categoricals (not panel picard metadata), AND
-        DEPLOY05 continuous RBP percent-identity scores (not TL17 binary presence).
-        Do not hold any feature block constant between the two arms — the TL18
-        baseline uses the old encoding everywhere, the deployment arm uses the new
-        encoding everywhere
+        calibration fold, and random seed as TL18 — (a) TL18 baseline using the original
+        panel features for reference, (b) deployment-paired model using ALL DEPLOY02-05
+        feature blocks for BOTH host and phage sides. Specifically the deployment
+        arm must use DEPLOY02 integer defense counts (not panel binary), DEPLOY03
+        continuous receptor/capsule/O-antigen scores (not panel binary), DEPLOY04
+        raw-derived typing categoricals (not panel picard metadata), AND DEPLOY05
+        continuous RBP percent-identity scores (not TL17 binary presence). Do not
+        hold any feature block constant between the two arms — the TL18 baseline uses
+        the old encoding everywhere, the deployment arm uses the new encoding everywhere
       - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000
         strain-level resamples) for both models in one comparison table
       - Validate training/inference parity on the 3 validation hosts — run inference

@@ -687,7 +687,7 @@ graph LR
   - Commit the aggregated CSV so downstream tasks (DEPLOY07) can load it without re-running defense-finder in CI
   - The per-host intermediate outputs (protein FASTAs, raw TSVs) remain in gitignored generated_outputs and are NOT
     checked in
-- [ ] **DEPLOY07** Pre-compute 403-host surface features and check in aggregated CSV. Model: `gpt-5.4`. CI image
+- [x] **DEPLOY07** Pre-compute 403-host surface features and check in aggregated CSV. Model: `gpt-5.4`. CI image
       profile: `full-bio`. Depends on tasks: `DEPLOY03`.
   - Close the stranded draft PR #322 (Codex DEPLOY07 attempt that could not finish the 403-host surface derivation in
     CI) as "not planned"
