@@ -418,6 +418,55 @@ decision for DEPLOY07 or beyond — not a pre-compute blocker.
 - Empty output directory raises `FileNotFoundError`.
 - Test fixtures are real DefenseFinder outputs from 3 completed hosts (001-023, 003-026, 013-008).
 
+### 2026-04-03 23:24 UTC: DEPLOY07 full 403-host surface pre-compute
+
+#### Executive summary
+
+Completed the full 403-host surface-feature derivation and checked in
+`lyzortx/data/deployment_paired_features/403_host_surface_features.csv`. The final CSV has 403 unique bacteria rows
+and 115 columns, and its header matches the DEPLOY03 schema manifest exactly (`bacteria`, O-antigen type/score, LPS
+core type, 12 receptor scores, 99 capsule-profile scores). The only code change needed during the run was removing an
+unnecessary Biopython dependency from the O-antigen allele translation helper so the runner works in the declared
+`phage_env`.
+
+#### Run result
+
+- Command: `micromamba run -n phage_env python -m lyzortx.pipeline.deployment_paired_features.run_all_host_surface
+  --max-workers 4`
+- Runner environment: GitHub Actions `full-bio` image, 4 CPUs available (`os.cpu_count() == 4`)
+- Picard input set: 403 assemblies downloaded into `lyzortx/data/assemblies/picard/`
+- Successful scan result: 403/403 hosts completed, 0 failures
+- Aggregated CSV: `lyzortx/data/deployment_paired_features/403_host_surface_features.csv` (`275292` bytes)
+- Schema validation: exact header match against `build_host_surface_schema(...)`, `403` unique bacteria IDs, sorted
+  from `001-023` through `colF12g`
+
+#### Runtime notes
+
+The first full attempt on this runner spent `201s` predicting proteins for all 403 hosts, then failed before the scan
+phase because `run_all_host_surface.py` imported `Bio.SeqIO` and `phage_env` does not ship Biopython. After replacing
+that helper with a small built-in FASTA parser and codon-table translator, the rerun resumed from the cached
+`predicted_proteins.faa` files and completed the pyhmmer scan phase in `1802s` (`30.0 min`), for an end-to-end cold
+cache runtime of roughly `2003s` (`33.4 min`) on 4 cores.
+
+This is slower than the earlier 10-core local benchmark recorded below, but it still fits the purpose of this task:
+the expensive surface derivation can now be run once outside the downstream retrain PR, and DEPLOY08 can consume the
+checked-in CSV directly without launching 403 HMMER scans in CI.
+
+#### Interpretation
+
+- The runner now matches the environment contract more honestly: no hidden Biopython dependency, no manual package
+  install, and no need to weaken validation.
+- The checked-in CSV satisfies the deployability contract for DEPLOY08. Downstream code can load one stable artifact
+  instead of re-running O-antigen/receptor/capsule searches on every CI attempt.
+- Per-host intermediates remain gitignored under
+  `lyzortx/generated_outputs/deployment_paired_features/host_surface/`; only the aggregated deployment artifact is
+  versioned.
+
+#### Tests
+
+- `micromamba run -n phage_env pytest -q lyzortx/tests/test_run_all_host_surface.py`
+- Schema/header verification against `build_host_surface_schema(...)` on the checked-in aggregated CSV
+
 ### 2026-04-04 22:18 UTC: DEPLOY07 pre-compute 403-host surface features (code + plan)
 
 #### Executive summary

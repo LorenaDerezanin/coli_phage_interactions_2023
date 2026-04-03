@@ -164,6 +164,18 @@ class TestTranslateOAntigenAlleles:
         assert lines[2] == ">O9__wzt__O9-1"
         assert lines[3] == "MA"  # ATG GCG, stop stripped
 
+    def test_translates_multiline_sequence(self, tmp_path):
+        dna_fasta = tmp_path / "multiline.fna"
+        dna_fasta.write_text(">O6__wzx__O6-1\nATGAAA\nGCGTAA\n")
+        out = tmp_path / "multiline.faa"
+
+        count = _translate_o_antigen_alleles(dna_fasta, out)
+        assert count == 1
+
+        lines = out.read_text().strip().split("\n")
+        assert lines[0] == ">O6__wzx__O6-1"
+        assert lines[1] == "MKA"  # ATG AAA GCG, stop stripped
+
     def test_empty_input(self, tmp_path):
         dna_fasta = tmp_path / "empty.fna"
         dna_fasta.write_text("")
