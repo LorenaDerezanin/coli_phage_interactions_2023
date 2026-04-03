@@ -50,13 +50,105 @@ def _translate_o_antigen_alleles(dna_query_path: Path, output_path: Path) -> int
 
     Returns the number of protein sequences written.
     """
-    from Bio import SeqIO
+    codon_table = {
+        "TTT": "F",
+        "TTC": "F",
+        "TTA": "L",
+        "TTG": "L",
+        "TCT": "S",
+        "TCC": "S",
+        "TCA": "S",
+        "TCG": "S",
+        "TAT": "Y",
+        "TAC": "Y",
+        "TAA": "*",
+        "TAG": "*",
+        "TGT": "C",
+        "TGC": "C",
+        "TGA": "*",
+        "TGG": "W",
+        "CTT": "L",
+        "CTC": "L",
+        "CTA": "L",
+        "CTG": "L",
+        "CCT": "P",
+        "CCC": "P",
+        "CCA": "P",
+        "CCG": "P",
+        "CAT": "H",
+        "CAC": "H",
+        "CAA": "Q",
+        "CAG": "Q",
+        "CGT": "R",
+        "CGC": "R",
+        "CGA": "R",
+        "CGG": "R",
+        "ATT": "I",
+        "ATC": "I",
+        "ATA": "I",
+        "ATG": "M",
+        "ACT": "T",
+        "ACC": "T",
+        "ACA": "T",
+        "ACG": "T",
+        "AAT": "N",
+        "AAC": "N",
+        "AAA": "K",
+        "AAG": "K",
+        "AGT": "S",
+        "AGC": "S",
+        "AGA": "R",
+        "AGG": "R",
+        "GTT": "V",
+        "GTC": "V",
+        "GTA": "V",
+        "GTG": "V",
+        "GCT": "A",
+        "GCC": "A",
+        "GCA": "A",
+        "GCG": "A",
+        "GAT": "D",
+        "GAC": "D",
+        "GAA": "E",
+        "GAG": "E",
+        "GGT": "G",
+        "GGC": "G",
+        "GGA": "G",
+        "GGG": "G",
+    }
 
-    alleles = list(SeqIO.parse(dna_query_path, "fasta"))
-    with open(output_path, "w") as out:
-        for allele in alleles:
-            protein = str(allele.seq.translate()).rstrip("*")
-            out.write(f">{allele.id}\n{protein}\n")
+    def iter_fasta_records() -> list[tuple[str, str]]:
+        records: list[tuple[str, str]] = []
+        current_id = ""
+        sequence_parts: list[str] = []
+        with dna_query_path.open(encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if line.startswith(">"):
+                    if current_id:
+                        records.append((current_id, "".join(sequence_parts)))
+                    current_id = line[1:].split()[0]
+                    sequence_parts = []
+                    continue
+                sequence_parts.append(line)
+        if current_id:
+            records.append((current_id, "".join(sequence_parts)))
+        return records
+
+    def translate_dna(sequence: str) -> str:
+        protein: list[str] = []
+        clean_sequence = sequence.upper().replace("U", "T")
+        for start in range(0, len(clean_sequence) - 2, 3):
+            protein.append(codon_table.get(clean_sequence[start : start + 3], "X"))
+        return "".join(protein).rstrip("*")
+
+    alleles = iter_fasta_records()
+    with output_path.open("w", encoding="utf-8") as out:
+        for allele_id, sequence in alleles:
+            protein = translate_dna(sequence)
+            out.write(f">{allele_id}\n{protein}\n")
     return len(alleles)
 
 
