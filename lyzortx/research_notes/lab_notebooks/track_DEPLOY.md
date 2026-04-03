@@ -326,6 +326,42 @@ assembly download step, because the committed phage FNAs in `data/genomics/phage
 - Unit tests for single-phage and batched TL17 projection with continuous family scores.
 - Unit tests for TL17 validation-summary aggregation on the family score columns.
 
+### 2026-04-03: DEPLOY07 implementation checkpoint — runner landed, full 403-host execution still blocked by CI runtime
+
+#### Executive summary
+
+Implemented `lyzortx/pipeline/deployment_paired_features/run_deploy07_full_evaluation.py` plus focused unit tests in
+`lyzortx/tests/test_deploy07_full_evaluation.py`. The runner now wires together:
+
+- DEPLOY01 assembly availability checks
+- DEPLOY03-04 full-cohort feature derivation orchestration
+- DEPLOY05 96-phage projection
+- schema-column validation and duplicate-column detection
+- full 403-host defense disagreement auditing against the panel CSV
+- calibrated LightGBM baseline-vs-deployment training with 2000 strain-level bootstrap CIs
+- validation-host feature-vector parity checks for the winning bundle
+
+The code is in place, but the full CI execution was **not completed** in this session. The limiting step is the
+403-host DEPLOY03 surface pass: on the GitHub Actions `full-bio` runner, individual `nhmmer` O-antigen scans were
+taking roughly 146-158 seconds per host. With 4 workers, the first completed host arrived after 165 seconds; with 8
+workers, the run still had not reached the next completed-wave within the tested window. That is too slow to honestly
+claim the full 403-host evaluation, notebook metrics, or lock decision are finished.
+
+#### Interpretation
+
+- The implementation gap for DEPLOY07 is now mostly **execution/runtime**, not missing orchestration code.
+- The CI-safe defense path is wired correctly around the checked-in DEPLOY06 counts, but the raw-genome surface path is
+  still too expensive to finish interactively on the available runner footprint.
+- Before this task can be marked done, the project needs either:
+  - a materially faster 403-host DEPLOY03 execution strategy, or
+  - an accepted execution environment with enough wall-clock/CPU budget to let the current derivation finish.
+
+#### Verification completed so far
+
+- `micromamba run -n phage_env pytest -q lyzortx/tests/` passed (`389 passed`).
+- The branch now contains the DEPLOY07 runner, unit coverage for its pure helpers, and a draft PR updated to reflect
+  that the branch is still awaiting the full 403-host execution results.
+
 ### 2026-04-03: DEPLOY06 pre-compute 403-host defense features
 
 #### Executive summary
