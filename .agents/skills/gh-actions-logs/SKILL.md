@@ -1,13 +1,37 @@
 ---
 name: gh-actions-logs
 description: >
-  Read GitHub Actions logs that are already downloaded under `.scratch/gh-actions-logs/`, especially Codex `codex exec`
-  jobs. Use this skill when the user asks why a workflow failed, whether a run really timed out, how close a job was
-  to finishing, how to navigate a saved Actions log, or what happened inside a Codex implement/lifecycle run. Fetch
-  the logs with the `gh` skill first, then use this skill to inspect them efficiently.
+  Fetch and read GitHub Actions logs. Use this skill whenever the user shares a GitHub Actions URL
+  (e.g., github.com/.../actions/runs/... or .../job/...), asks "what happened" or "why did this fail" about a CI run,
+  asks about a workflow run, wants to debug a failed job, asks whether a run timed out, how close a job was to
+  finishing, or what happened inside a Codex implement/lifecycle run. This skill handles the full flow: fetching logs
+  from GitHub, extracting and cleaning them, and reading/interpreting them locally.
 ---
 
 # GitHub Actions Log Reading
+
+## Start here: user gives you a URL or run ID
+
+When the user shares a GitHub Actions URL or asks about a run:
+
+1. **Parse the URL** — extract run ID and (if present) job ID from
+   `.../actions/runs/<run-id>/job/<job-id>`.
+2. **Fetch metadata first** — get run status, conclusion, event, and job list:
+   ```bash
+   RUN_ID=<run-id>
+   gh run view "$RUN_ID" --json status,conclusion,name,event,headBranch,jobs \
+     --jq '{status, conclusion, name, event, headBranch, jobs: [.jobs[] | {name, status, conclusion, databaseId}]}'
+   ```
+3. **For Codex runs** — use `extract-codex` (see below) which fetches and cleans
+   in one step.
+4. **For non-Codex runs** — fetch the raw log and inspect it (see "Raw log
+   inspection" below):
+   ```bash
+   RUN_DIR=".scratch/gh-actions-logs/$RUN_ID"
+   mkdir -p "$RUN_DIR"
+   gh run view "$RUN_ID" --job "$JOB_ID" --log-failed > "$RUN_DIR/${JOB_ID}.failed.log"
+   ```
+5. **Read and interpret** the logs, then report findings to the user.
 
 ## Extract and clean Codex logs
 
@@ -41,8 +65,13 @@ log inspection. These are typically 100-500 lines vs 100K+ raw.
 ## Raw log inspection
 
 If the cleaned log is insufficient, fall back to raw logs under
-`.scratch/gh-actions-logs/`. If they do not exist, use the `gh` skill first to
-fetch them.
+`.scratch/gh-actions-logs/`. If they do not exist, fetch them first:
+
+```bash
+RUN_DIR=".scratch/gh-actions-logs/$RUN_ID"
+mkdir -p "$RUN_DIR"
+gh run view "$RUN_ID" --job "$JOB_ID" --log > "$RUN_DIR/${JOB_ID}.log"
+```
 
 1. Identify the exact run/job log file you need.
 2. Use `rg -n` to find failure markers before reading large chunks.
