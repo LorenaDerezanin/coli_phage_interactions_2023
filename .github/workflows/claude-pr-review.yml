@@ -104,10 +104,11 @@ jobs:
                   -f event=EVENT -f body="REVIEW_BODY" -f commit_id="${{ github.event.pull_request.head.sha }}"
 
                Review decision:
-                 "APPROVE" only if you would merge the current head as-is right now:
-                 no substantive issues, no merge-blocking nits or follow-up fixes requested from Codex,
-                 and no unresolved review threads.
-                 If you identify anything that should delay merge, use "COMMENT" instead of "APPROVE".
+                 "APPROVE" only if you have zero inline comments to post and zero
+                 unresolved review threads — i.e., the PR is merge-ready as-is.
+                 If you have ANY inline comments (even nits, observations, or praise),
+                 use "COMMENT". The downstream workflow will dispatch Codex to address
+                 them, and you will re-review on the next push.
                  NEVER use "REQUEST_CHANGES".
 
                CRITICAL: After submitting, verify the review was posted by running:
