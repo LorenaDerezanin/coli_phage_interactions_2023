@@ -687,13 +687,35 @@ graph LR
   - Commit the aggregated CSV so downstream tasks (DEPLOY07) can load it without re-running defense-finder in CI
   - The per-host intermediate outputs (protein FASTAs, raw TSVs) remain in gitignored generated_outputs and are NOT
     checked in
-- [ ] **DEPLOY07** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY06`, `DEPLOY04`, `DEPLOY05`.
+- [ ] **DEPLOY07** Pre-compute 403-host surface features and check in aggregated CSV. Model: `gpt-5.4`. CI image
+      profile: `full-bio`. Depends on tasks: `DEPLOY03`.
+  - Close the stranded draft PR #322 (Codex DEPLOY07 attempt that could not finish the 403-host surface derivation in
+    CI) as "not planned"
+  - Run lyzortx/pipeline/deployment_paired_features/run_all_host_surface.py locally on a machine with the Picard
+    assemblies to derive continuous surface features (O-antigen, receptor, capsule) for all 403 hosts in parallel using
+    pyhmmer
+  - The runner uses pyhmmer for in-process HMMER searches (no subprocess overhead) and translates O-antigen DNA alleles
+    to protein for ~12x faster phmmer search vs the original nhmmer DNA scan; total runtime is ~10 min on a 10-core
+    machine
+  - nhmmer DNA search takes ~72s/host single-threaded (403 hosts = ~48 min with 10 workers); protein phmmer takes
+    ~4.3s/host — infeasible in CI (4-core runner, 10-min Codex timeout)
+  - Aggregate per-host feature rows into a single checked-in CSV at
+    lyzortx/data/deployment_paired_features/403_host_surface_features.csv
+  - The CSV has one row per host, columns matching the DEPLOY03 schema manifest (bacteria key + O-antigen type/score +
+    LPS core type + 12 receptor scores + 99 capsule profile scores)
+  - Commit the aggregated CSV so downstream tasks (DEPLOY08) can load it without re-running HMMER scans in CI
+  - The per-host intermediate outputs (predicted proteins, tblout files) remain in gitignored generated_outputs and are
+    NOT checked in
+- [ ] **DEPLOY08** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY06`, `DEPLOY07`, `DEPLOY04`, `DEPLOY05`.
   - Download the 403 assemblies using the DEPLOY01 function if not already present
   - Load the pre-computed 403-host defense gene counts from the checked-in CSV at
     lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv (produced by DEPLOY06); do NOT re-run
     defense-finder in CI
-  - Run the DEPLOY03-04 feature derivation functions on all 403 hosts; run the DEPLOY05 phage feature derivation on all
+  - Load the pre-computed 403-host surface features from the checked-in CSV at
+    lyzortx/data/deployment_paired_features/403_host_surface_features.csv (produced by DEPLOY07); do NOT re-run HMMER
+    scans in CI
+  - Run the DEPLOY04 host-typing feature derivation on all 403 hosts; run the DEPLOY05 phage feature derivation on all
     96 panel phages
   - Store all feature CSVs in gitignored generated_outputs/deployment_paired_features/
   - Load feature CSVs and schema manifests from DEPLOY02-05; validate that every schema column is present in the CSV and
@@ -717,12 +739,12 @@ graph LR
   - Lock decision — if the deployment-paired model improves over the TL18 baseline on AUC (bootstrap 95% CI for the
     delta excludes zero), lock on the deployment-paired model; otherwise keep TL18 baseline
   - Write the comparison table and lock decision to the track lab notebook
-- [ ] **DEPLOY08** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY07`.
+- [ ] **DEPLOY09** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `DEPLOY08`.
   - Update generalized_inference.py so that training and inference call the exact same feature derivation functions —
     not analogous functions that produce columns with the same names; import from
     lyzortx/pipeline/deployment_paired_features/ for all feature blocks
-  - The locked feature encoding from DEPLOY07 (parity-only or parity+gradient) determines which functions are wired in;
+  - The locked feature encoding from DEPLOY08 (parity-only or parity+gradient) determines which functions are wired in;
     read the lock decision from the saved bundle metadata
   - Validate on the 3 validation hosts — run inference from raw FASTAs, compare feature vectors against training
     features, require zero delta

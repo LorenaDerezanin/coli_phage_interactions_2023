@@ -1274,7 +1274,28 @@ score is a tool artifact." This is approximately true — but system completenes
 artifact; it reflects whether the full defense operon is intact. And sub-threshold hits may identify hosts with
 degraded defense arsenals that look defenseless in the current encoding but still carry partial immunity.
 
-**What to do**: after DEPLOY07 locks the baseline model, run a feature-importance comparison with and without the
+**What to do**: after DEPLOY08 locks the baseline model, run a feature-importance comparison with and without the
 richer defense features. If the additional features improve holdout metrics or shift SHAP rankings meaningfully, add
 them as a DEPLOY track extension. If not, the current counts are sufficient and the extra complexity is not justified.
 The raw outputs are already computed and preserved locally — no re-running of DefenseFinder is needed.
+
+#### 2026-04-04: DEPLOY track renumbered — surface pre-compute inserted as DEPLOY07
+
+The first Codex CI attempt at the full 403-host evaluation (old DEPLOY07, now DEPLOY08) failed because the DEPLOY03
+surface derivation runs nhmmer at ~72s/host — infeasible on a 4-core CI runner. This mirrors the DEPLOY06 situation
+where DefenseFinder was too slow for CI.
+
+**Decision**: insert a new DEPLOY07 (surface pre-compute, `executor: human`) that runs locally and checks in the
+aggregated surface CSV, following the same pattern as DEPLOY06 for defense. Old DEPLOY07 becomes DEPLOY08, old DEPLOY08
+becomes DEPLOY09.
+
+The runner (`run_all_host_surface.py`) uses pyhmmer for in-process HMMER and replaces the nhmmer DNA search with protein
+phmmer (translating O-antigen alleles), cutting per-host scan time from 72s to 6.2s. Total wall time for 403 hosts on a
+10-core Mac: ~10 min.
+
+**Impact on DEPLOY08 (retrain/evaluate)**: DEPLOY08 now loads both pre-computed CSVs (defense + surface) and only needs
+to run DEPLOY04 host-typing and DEPLOY05 phage-RBP derivation in CI. Those are fast enough for the Codex runner.
+
+**Note on done-task references**: done tasks DEPLOY02-06 still reference "DEPLOY07" as the full evaluation task. Per
+done-task immutability policy, those references are historical. The renumbering is tracked in git history and in the
+track_DEPLOY.md notebook entry.

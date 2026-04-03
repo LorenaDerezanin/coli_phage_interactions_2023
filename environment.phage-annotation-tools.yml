@@ -5,6 +5,7 @@ channels:
 dependencies:
   - python=3.12.12
   - aragorn=1.2.41
+  - blast=2.16.0
   - dnaapler=1.3.0
   - hmmer=3.4
   - mash=2.3

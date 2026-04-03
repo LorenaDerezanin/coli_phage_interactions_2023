@@ -82,8 +82,9 @@ constraints:
   host feature code)
 - **DEPLOY05** (phage RBP): switch to continuous mmseqs scores; independent, can run in parallel with DEPLOY02-04
 - **DEPLOY06** (pre-compute defense): run DefenseFinder on all 403 hosts locally, check in aggregated CSV
-- **DEPLOY07** (retrain): 3-way comparison (TL18 baseline vs parity-only vs parity+gradient), lock decision
-- **DEPLOY08** (wire inference): make training and inference call the exact same functions, validate zero-delta parity
+- **DEPLOY07** (pre-compute surface): run pyhmmer surface scans on all 403 hosts locally, check in aggregated CSV
+- **DEPLOY08** (retrain): 3-way comparison (TL18 baseline vs parity-only vs parity+gradient), lock decision
+- **DEPLOY09** (wire inference): make training and inference call the exact same functions, validate zero-delta parity
 
 Each feature task (DEPLOY02-05) outputs a schema manifest (JSON) listing column names and dtypes. DEPLOY06 validates
 the joint schema before assembling the feature matrix.
@@ -416,3 +417,70 @@ decision for DEPLOY07 or beyond — not a pre-compute blocker.
 - Missing columns in per-host CSVs zero-filled during aggregation.
 - Empty output directory raises `FileNotFoundError`.
 - Test fixtures are real DefenseFinder outputs from 3 completed hosts (001-023, 003-026, 013-008).
+
+### 2026-04-04 22:18 UTC: DEPLOY07 pre-compute 403-host surface features (code + plan)
+
+#### Executive summary
+
+Added `run_all_host_surface.py` to pre-compute continuous surface features (O-antigen, receptor, capsule) for all 403
+Picard hosts locally and check in the aggregated CSV. This task was created after the DEPLOY08 (formerly DEPLOY07) Codex
+CI attempt failed because the DEPLOY03 surface derivation (nhmmer O-antigen DNA scan at ~72s/host single-threaded) is
+too slow for a 4-core CI runner. The runner uses pyhmmer for in-process HMMER searches and replaces the nhmmer DNA scan
+with a protein phmmer search (~4.3s/host, 12x faster) by translating O-antigen alleles to protein.
+
+#### Problem: nhmmer is the bottleneck
+
+The original DEPLOY03 surface derivation calls nhmmer to search 84 O-antigen DNA allele queries against each host
+assembly. On a 10-core Mac:
+
+| Scan | Tool | Per-host (1 CPU) | 403 hosts / 10 workers |
+|------|------|-----------------|----------------------|
+| O-antigen | nhmmer | 72s | ~48 min |
+| Receptor | phmmer | 0.7s | ~28s |
+| Capsule | hmmscan | 5.4s | ~3.6 min |
+
+nhmmer accounts for 92% of per-host compute. It uses profile HMMs for DNA-vs-DNA search — no prefilter, pure
+Forward/Backward over the full target. BLAST is not viable (zero significant hits — seed-and-extend cannot match
+nhmmer's profile sensitivity for divergent alleles). mmseqs2 nucleotide mode was killed after 20 min of prefiltering
+against the 2GB concatenated assembly database.
+
+#### Solution: translate alleles to protein, use phmmer
+
+The O-antigen allele sequences are protein-coding genes (wzx, wzy, wzm, wzt). Translating them to protein and using
+phmmer (protein-vs-protein) gives the same O-type calls with stronger E-values (1e-28 vs 1e-9 for nhmmer) and 12x
+faster execution. Biological justification: protein-level conservation is higher than DNA-level for these
+transmembrane/transporter genes, so protein search is actually more sensitive for homolog detection.
+
+Measured timings with pyhmmer (in-process, no subprocess overhead, per-worker query caching):
+
+| Scan | Per-host | 403 hosts / 10 workers |
+|------|---------|----------------------|
+| O-antigen phmmer (protein) | 4.3s | ~4.5 min |
+| Receptor phmmer | 0.5s | included |
+| Capsule hmmscan | 1.4s | included |
+| **Total scans** | **6.2s** | **~10 min** |
+
+The `micromamba run` subprocess approach was 2-3x slower due to 6-10s per-call environment activation overhead. pyhmmer
+eliminates that entirely.
+
+#### Output
+
+- Runner: `lyzortx/pipeline/deployment_paired_features/run_all_host_surface.py`
+- Output CSV: `lyzortx/data/deployment_paired_features/403_host_surface_features.csv` (268K, 403 rows x 115 columns)
+- Schema: bacteria key + O-antigen type/score + LPS core type + 12 receptor scores + 99 capsule profile scores
+
+#### Plan changes
+
+- Inserted new DEPLOY07 (surface pre-compute, `executor: human`)
+- Renumbered old DEPLOY07 -> DEPLOY08 (retrain/evaluate), old DEPLOY08 -> DEPLOY09 (wire inference)
+- DEPLOY08 now depends on both DEPLOY06 (defense CSV) and DEPLOY07 (surface CSV) — no HMMER scans needed in CI
+- Added `blast=2.16.0` to `environment.phage-annotation-tools.yml` (tested but not used in final approach)
+
+#### Tests
+
+- `best_o_antigen_call`: empty hits, single hit O-type extraction, best-score tie-break, cross-O-type selection.
+- `build_surface_feature_row`: full row structure, empty hits, unknown O-type LPS fallback, all 12 receptors present,
+  realistic capsule profile names (KfiA, cluster_94), unknown capsule profile ignored.
+- `_capsule_score_column_name`: simple name, cluster with number, empty name raises ValueError.
+- `_translate_o_antigen_alleles`: DNA to protein translation with stop codon stripping, empty input.
+- `aggregate_host_surface_csvs`: empty rows (header-only), sorted output with correct schema columns and values.
