@@ -156,7 +156,6 @@ def test_project_phage_feature_row_emits_percent_identity_scores_and_hit_count(
             },
         ],
         "matching_policy": {
-            "min_percent_identity": 30.0,
             "min_query_coverage": 0.70,
             "mmseqs_command": ["mmseqs"],
         },
@@ -226,7 +225,6 @@ def test_project_phage_feature_rows_batched_emits_continuous_family_scores(
             }
         ],
         "matching_policy": {
-            "min_percent_identity": 0.0,
             "min_query_coverage": 0.70,
             "mmseqs_command": ["mmseqs"],
         },

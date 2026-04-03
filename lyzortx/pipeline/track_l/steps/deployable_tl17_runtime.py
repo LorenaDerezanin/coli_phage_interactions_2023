@@ -23,7 +23,6 @@ from lyzortx.pipeline.track_l.steps.parse_annotations import classify_rbp_genes,
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MMSEQS_COMMAND: tuple[str, ...] = ("micromamba", "run", "-n", "phage_annotation_tools", "mmseqs")
-DEFAULT_MMSEQS_MIN_IDENTITY = 0.0
 DEFAULT_MMSEQS_MIN_QUERY_COVERAGE = 0.70
 DEFAULT_MIN_FAMILY_PHAGE_SUPPORT = 2
 DEFAULT_MAX_TARGET_SEQS = 20
@@ -378,7 +377,6 @@ def build_runtime_payload(
     *,
     family_rows: Sequence[Tl17FamilyRuntime],
     reference_rows: Sequence[Tl17ReferenceProtein],
-    min_percent_identity: float,
     min_query_coverage: float,
     mmseqs_command: Sequence[str] = DEFAULT_MMSEQS_COMMAND,
 ) -> dict[str, object]:
@@ -407,7 +405,6 @@ def build_runtime_payload(
             for row in reference_rows
         ],
         "matching_policy": {
-            "min_percent_identity": min_percent_identity,
             "min_query_coverage": min_query_coverage,
             "mmseqs_command": list(mmseqs_command),
         },

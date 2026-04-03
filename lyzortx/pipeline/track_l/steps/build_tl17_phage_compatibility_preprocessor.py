@@ -23,7 +23,6 @@ from lyzortx.pipeline.track_l.steps import build_generalized_inference_bundle
 from lyzortx.pipeline.track_l.steps.deployable_tl17_runtime import (
     DEFAULT_MIN_FAMILY_PHAGE_SUPPORT,
     DEFAULT_MMSEQS_COMMAND,
-    DEFAULT_MMSEQS_MIN_IDENTITY,
     DEFAULT_MMSEQS_MIN_QUERY_COVERAGE,
     SUMMARY_HIT_COUNT_COLUMN,
     SCHEMA_MANIFEST_FILENAME,
@@ -90,7 +89,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=list(DEFAULT_MMSEQS_COMMAND),
         help="Command prefix used to invoke mmseqs easy-search.",
     )
-    parser.add_argument("--min-percent-identity", type=float, default=DEFAULT_MMSEQS_MIN_IDENTITY)
     parser.add_argument("--min-query-coverage", type=float, default=DEFAULT_MMSEQS_MIN_QUERY_COVERAGE)
     parser.add_argument(
         "--st02-pair-table-path",
@@ -359,7 +357,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     runtime_payload = build_runtime_payload(
         family_rows=family_rows,
         reference_rows=reference_rows,
-        min_percent_identity=args.min_percent_identity,
         min_query_coverage=args.min_query_coverage,
         mmseqs_command=tuple(args.mmseqs_command),
     )
@@ -460,7 +457,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "matching_policy": {
             "mmseqs_command": list(args.mmseqs_command),
-            "min_percent_identity": args.min_percent_identity,
             "min_query_coverage": args.min_query_coverage,
         },
         "outputs": {
