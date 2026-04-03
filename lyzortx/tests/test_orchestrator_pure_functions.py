@@ -16,6 +16,7 @@ from lyzortx.orchestration.orchestrator import extract_task_id_from_issue
 from lyzortx.orchestration.orchestrator import sync_status_from_issues
 from lyzortx.orchestration.find_pr_for_issue import pr_closes_issue
 from lyzortx.orchestration.parse_model_directive import extract_model
+from lyzortx.orchestration.parse_model_directive import resolve_model
 
 
 def test_extract_task_id_from_body_marker() -> None:
@@ -103,7 +104,7 @@ def _make_task(track: str, task_id: str = "TX01") -> Task:
         acceptance_criteria=[],
         plan_checkbox_text=None,
         track=track,
-        model="gpt-5.4-mini",
+        model="simple",
         ci_image_profile="host-typing",
     )
 
@@ -144,13 +145,13 @@ def test_task_requires_track_and_model() -> None:
 
 
 def test_extract_model_from_issue_body() -> None:
-    body = "<!-- ORCH_TASK_ID: TG04 -->\n<!-- model: gpt-5.4-mini -->\n## Task"
-    assert extract_model(body) == "gpt-5.4-mini"
+    body = "<!-- ORCH_TASK_ID: TG04 -->\n<!-- model: simple -->\n## Task"
+    assert extract_model(body) == "simple"
 
 
-def test_extract_model_full_model() -> None:
-    body = "<!-- model: gpt-5.4 -->\nSome content"
-    assert extract_model(body) == "gpt-5.4"
+def test_extract_model_smart_tier() -> None:
+    body = "<!-- model: smart -->\nSome content"
+    assert extract_model(body) == "smart"
 
 
 def test_extract_model_missing() -> None:
@@ -159,8 +160,34 @@ def test_extract_model_missing() -> None:
 
 
 def test_extract_model_whitespace_tolerance() -> None:
-    body = "<!--  model:  gpt-5.4-mini  -->"
-    assert extract_model(body) == "gpt-5.4-mini"
+    body = "<!--  model:  simple  -->"
+    assert extract_model(body) == "simple"
+
+
+def test_resolve_model_claude_smart() -> None:
+    assert resolve_model("smart", "claude") == "claude-opus-4-6"
+
+
+def test_resolve_model_claude_simple() -> None:
+    assert resolve_model("simple", "claude") == "claude-sonnet-4-6"
+
+
+def test_resolve_model_codex_smart() -> None:
+    assert resolve_model("smart", "codex") == "gpt-5.4"
+
+
+def test_resolve_model_codex_simple() -> None:
+    assert resolve_model("simple", "codex") == "gpt-5.4-mini"
+
+
+def test_resolve_model_unknown_tier() -> None:
+    with pytest.raises(ValueError, match="Unknown model tier"):
+        resolve_model("turbo", "claude")
+
+
+def test_resolve_model_unknown_provider() -> None:
+    with pytest.raises(ValueError, match="Unknown provider"):
+        resolve_model("smart", "gemini")
 
 
 def test_ci_image_profile_from_labels_prefers_prefixed_label() -> None:
@@ -212,7 +239,7 @@ def test_load_pending_tasks_raises_on_missing_acceptance_criteria(tmp_path: Path
     """Pending tasks without acceptance_criteria must cause a ValueError."""
     from lyzortx.orchestration.orchestrator import load_pending_tasks
 
-    plan_path = _write_pending_task_plan(tmp_path, model="gpt-5.4-mini", ci_image_profile="base")
+    plan_path = _write_pending_task_plan(tmp_path, model="simple", ci_image_profile="base")
     with pytest.raises(ValueError, match="missing required 'acceptance_criteria'"):
         load_pending_tasks(plan_path)
 
@@ -223,13 +250,13 @@ def test_load_pending_tasks_accepts_complete_task(tmp_path: Path) -> None:
 
     plan_path = _write_pending_task_plan(
         tmp_path,
-        model="gpt-5.4-mini",
+        model="simple",
         acceptance_criteria=["Output exists"],
         ci_image_profile="base",
     )
     tasks = load_pending_tasks(plan_path)
     assert len(tasks) == 1
-    assert tasks[0].model == "gpt-5.4-mini"
+    assert tasks[0].model == "simple"
     assert tasks[0].acceptance_criteria == ["Output exists"]
     assert tasks[0].ci_image_profile == "base"
 
@@ -247,12 +274,26 @@ def test_load_pending_tasks_parses_ci_image_profile(tmp_path: Path) -> None:
 
     plan_path = _write_pending_task_plan(
         tmp_path,
-        model="gpt-5.4-mini",
+        model="simple",
         acceptance_criteria=["Output exists"],
         ci_image_profile="host-typing",
     )
     tasks = load_pending_tasks(plan_path)
     assert tasks[0].ci_image_profile == "host-typing"
+
+
+def test_load_pending_tasks_rejects_non_tier_model(tmp_path: Path) -> None:
+    """Pending tasks must use semantic tiers, not provider-specific model IDs."""
+    from lyzortx.orchestration.orchestrator import load_pending_tasks
+
+    plan_path = _write_pending_task_plan(
+        tmp_path,
+        model="gpt-5.4-mini",
+        acceptance_criteria=["Output exists"],
+        ci_image_profile="base",
+    )
+    with pytest.raises(ValueError, match="unsupported 'model' tiers"):
+        load_pending_tasks(plan_path)
 
 
 def test_load_pending_tasks_works_on_real_plan() -> None:
@@ -280,7 +321,7 @@ tracks:
       - id: TL15
         title: Build raw-host surface projector
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: full-bio
         acceptance_criteria:
           - Surface projector exists
@@ -288,7 +329,7 @@ tracks:
       - id: TL16
         title: Build host typing projector
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: host-typing
         acceptance_criteria:
           - Host typing projector exists
@@ -296,7 +337,7 @@ tracks:
       - id: TL17
         title: Build phage compatibility projector
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: full-bio
         acceptance_criteria:
           - Phage compatibility projector exists
@@ -304,7 +345,7 @@ tracks:
       - id: TL18
         title: Rebuild deployable bundle
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: full-bio
         acceptance_criteria:
           - Bundle rebuild completes
@@ -337,7 +378,7 @@ tracks:
       - id: TL15
         title: Build raw-host surface projector
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: full-bio
         acceptance_criteria:
           - Surface projector exists
@@ -345,7 +386,7 @@ tracks:
       - id: TL16
         title: Build host typing projector
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: host-typing
         acceptance_criteria:
           - Host typing projector exists
@@ -353,7 +394,7 @@ tracks:
       - id: TL17
         title: Build phage compatibility projector
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: full-bio
         acceptance_criteria:
           - Phage compatibility projector exists
@@ -361,7 +402,7 @@ tracks:
       - id: TL18
         title: Rebuild deployable bundle
         status: pending
-        model: gpt-5.4
+        model: smart
         ci_image_profile: full-bio
         acceptance_criteria:
           - Bundle rebuild completes

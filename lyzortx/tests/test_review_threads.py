@@ -125,6 +125,7 @@ def test_format_prompt_structure() -> None:
     assert "## a.py:" in prompt
     assert "## b.py:" in prompt
     assert "Address every unresolved thread" in prompt
+    assert "Posted by Claude <model>" in prompt
     assert "pytest -q lyzortx/tests/" in prompt
 
 

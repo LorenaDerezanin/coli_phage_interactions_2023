@@ -38,7 +38,7 @@ Layer them as needed — more filters = more precise.
 BRANCH=$(gh pr view 42 --json headRefName --jq '.headRefName')
 RUN_ID=$(gh run list \
   --branch "$BRANCH" \
-  --workflow "codex-implement.yml" \
+  --workflow "claude-implement.yml" \
   --status completed \
   --limit 1 \
   --json databaseId --jq '.[0].databaseId')
@@ -109,9 +109,9 @@ Chain them with pipes. Example — errors in the Codex step of a specific PR's l
 
 ```bash
 BRANCH=$(gh pr view 42 --json headRefName --jq '.headRefName')
-RUN_ID=$(gh run list --branch "$BRANCH" --workflow "codex-pr-lifecycle.yml" --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --branch "$BRANCH" --workflow "claude-pr-lifecycle.yml" --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run view "$RUN_ID" --log 2>&1 \
-  | awk -F'\t' '$2 == "Fix with Codex"' \
+  | awk -F'\t' '$2 == "Fix with Claude"' \
   | grep -i -E '(error|warning|failed)'
 ```
 

@@ -24,8 +24,8 @@ Use:
 
 | Workflow | File | What it does | LLM data available |
 |---|---|---|---|
-| Codex Implement | `codex-implement.yml` | Generates code from orchestrator issues | Total token count + model name |
-| Codex PR Lifecycle | `codex-pr-lifecycle.yml` | Auto-merges PRs after approval | No LLM invocation (just `gh pr merge`) |
+| Claude Implement | `claude-implement.yml` | Generates code from orchestrator issues | `total_cost_usd`, `num_turns`, `duration_ms` |
+| Claude PR Lifecycle | `claude-pr-lifecycle.yml` | Addresses review feedback on PRs | `total_cost_usd`, `num_turns`, `duration_ms` |
 | Claude PR Review | `claude-pr-review.yml` | Reviews PRs via `anthropics/claude-code-action` | `total_cost_usd`, `num_turns`, `duration_ms` |
 
 ## Design decisions
@@ -34,14 +34,12 @@ Use:
 
 The script classifies runs by grepping log content, not by workflow filename or labels:
 
-- **Codex invocation detected** = log contains `tokens used` followed by a number
 - **Claude invocation detected** = log contains `"total_cost_usd"` in a JSON result block
+- **Codex invocation detected** (legacy) = log contains `tokens used` followed by a number
 - **No LLM** = neither marker found
 
 This is robust against workflow renames, label changes, and the fact that a single workflow can have both LLM-invoking
-and non-LLM jobs (e.g. `codex-pr-lifecycle.yml` has an auto-merge job that does no LLM work and a feedback-address job
-that invokes Codex). Model extraction is also gated on finding tokens first — the model regex only runs when `tokens
-used` was detected, avoiding false positives from model names appearing in pip install logs or environment variables.
+and non-LLM jobs. All implementation and lifecycle workflows now use Claude Code action.
 
 ### Two different cost sources
 
@@ -82,14 +80,9 @@ using stale rates without requiring an automated scraping mechanism.
 
 ### Model extraction from logs
 
-The script parses `model: gpt-5.4` or `CODEX_MODEL: gpt-5.4` lines from Codex run logs. This makes the system
-automatically adapt if the orchestrator switches models — no hardcoded model assumption.
-
-### "no LLM" label for lifecycle runs
-
-The Codex PR Lifecycle workflow (`codex-pr-lifecycle.yml`) does not invoke any LLM — it just runs `gh pr merge`. Rather
-than showing a confusing `N/A` in the cost column, the script shows `no LLM` to make clear that the run consumed zero
-LLM resources. Similarly, `skipped` and `cancelled` runs show their status directly.
+The script detects Claude model usage from the `total_cost_usd` JSON field in run logs. For legacy Codex runs, it falls
+back to parsing `model: gpt-5.4` or `CODEX_MODEL: gpt-5.4` lines. `skipped` and `cancelled` runs show their status
+directly.
 
 ### Unified cost column
 

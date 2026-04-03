@@ -111,7 +111,7 @@ graph LR
       `lyzortx/generated_outputs/track_a/labels/{label_set_v2_pairs.csv,label_set_v1_v2_comparison.csv}`.
 - [x] **TA10** Add scripts that regenerate all derived labels from raw data in one command. Implemented in
       `lyzortx/pipeline/track_a/run_track_a.py`.
-- [x] **TA11** Fix label policy for borderline matrix_score=0 pairs. Model: `gpt-5.4-mini`.
+- [x] **TA11** Fix label policy for borderline matrix_score=0 pairs. Model: `simple`.
   - Identify the 2557 pairs where aux_matrix_score_0_to_4=0 but label_hard_any_lysis=1 (single-replicate noise
     positives)
   - Add a label_v3 policy that sets label_hard_any_lysis=0 for these pairs, or add a training weight that downweights
@@ -196,11 +196,11 @@ graph LR
 - **Guiding Principle:** Lock v1 benchmark split and add bootstrap confidence intervals. ST03 already provides
   leakage-safe host-group and phage-family holdouts. TF01/TF02 are done but their metrics are invalidated by the
   label-leakage fix — they will be re-run as part of TG06.
-- [x] **TF01** Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics. Model: `gpt-5.4-mini`.
+- [x] **TF01** Lock ST03 split as v1 benchmark and add bootstrap CIs for all metrics. Model: `simple`.
   - Existing ST03 split locked as the canonical v1 evaluation protocol
   - Bootstrap CIs (1000 resamples of holdout strains) for top-3 hit rate, AUC, Brier score, and ECE
   - Dual-slice reporting (full-label and strict-confidence) for all metrics
-- [x] **TF02** Before/after comparison of v0 vs v1 with error bucket analysis. Model: `gpt-5.4-mini`.
+- [x] **TF02** Before/after comparison of v0 vs v1 with error bucket analysis. Model: `simple`.
   - Side-by-side metrics table for v0 (metadata logreg) vs v1 (genomic GBM)
   - Error bucket analysis showing which v0 holdout misses v1 fixed and why
   - Honest reporting of strains that remain unpredictable
@@ -222,14 +222,14 @@ graph LR
     features
   - Each arm reports AUC, top-3 hit rate, Brier on same holdout split
   - v0 baseline is reference point in all comparisons
-- [x] **TG04** Compute SHAP explanations for per-pair and global feature importance. Model: `gpt-5.4`.
+- [x] **TG04** Compute SHAP explanations for per-pair and global feature importance. Model: `smart`.
   - TreeExplainer SHAP values for GBM model
   - Per-pair explanations answering why each phage was recommended for each strain
   - Global feature importance ranking across the panel
   - Per-strain summary of what makes each strain hard or easy to predict
   - Concrete recommendation of which feature blocks to keep in final v1 model, based on SHAP evidence and TG03 ablation
     results
-- [x] **TG05** Run feature-subset sweep to find best block combination for top-3 ranking. Model: `gpt-5.4`.
+- [x] **TG05** Run feature-subset sweep to find best block combination for top-3 ranking. Model: `smart`.
   - Train models on all 2-block and 3-block combinations of the 4 new feature blocks (defense, OMP, phage-genomic,
     pairwise)
   - Reuse the TG01 winning hyperparameters for all sweep arms — do NOT run per-arm hyperparameter search. The goal is to
@@ -241,7 +241,7 @@ graph LR
     (legacy_label_breadth_count, legacy_receptor_support_count) to measure generalization to truly novel strains
   - Report both panel-evaluation and deployment-realistic metrics for the winning configuration
   - Lock the final v1 feature configuration for downstream Track F and H
-- [x] **TG06** Delete label-leaked features from the feature pipeline. Model: `gpt-5.4-mini`.
+- [x] **TG06** Delete label-leaked features from the feature pipeline. Model: `simple`.
   - Remove legacy_label_breadth_count: delete the (n_infections, legacy_label_breadth_count) rename in
     st02_build_pair_table.py and drop the column from ST02 output
   - Remove legacy_receptor_support_count: delete its construction in build_rbp_receptor_compatibility_feature_block.py
@@ -253,19 +253,19 @@ graph LR
   - Grep the entire lyzortx/ tree for legacy_label_breadth_count and legacy_receptor_support_count — zero hits must
     remain
   - All existing tests pass after deletions
-- [x] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set. Model: `gpt-5.4-mini`.
+- [x] **TG07** Retrain, recalibrate, and re-run SHAP and ablation on the clean feature set. Model: `simple`.
   - Retrain LightGBM on the clean feature set (reuse TG01 hyperparameters)
   - Recalibrate (isotonic + Platt) and report AUC, top-3, Brier, ECE
   - Re-run SHAP explanations on the clean model
   - Re-run feature-block ablation on the clean feature set
   - Update v1_feature_configuration.json with the clean model metrics
-- [x] **TG08** Re-run downstream tracks and verify end-to-end pipeline. Model: `gpt-5.4-mini`.
+- [x] **TG08** Re-run downstream tracks and verify end-to-end pipeline. Model: `simple`.
   - Re-run explained recommendations (Track H) against clean model outputs
   - Re-run v0-vs-v1 evaluation (Track F) against clean model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error on the clean
     pipeline
   - The old label-leaked metrics must not appear in any output
-- [x] **TG09** Fix LightGBM determinism and lock defense + phage_genomic as v1 winner. Model: `gpt-5.4-mini`.
+- [x] **TG09** Fix LightGBM determinism and lock defense + phage_genomic as v1 winner. Model: `simple`.
   - Add deterministic=True to make_lightgbm_estimator in train_v1_binary_classifier.py
   - Remove n_jobs=1 from make_lightgbm_estimator (deterministic=True handles thread safety, force_col_wise=True is
     already set)
@@ -274,12 +274,12 @@ graph LR
   - Remove the feature-subset-sweep step from Track J's run_track_j.py so the lock file is treated as a human decision,
     not a regenerated output
   - Verify two consecutive runs of run_track_g.py --step train-v1-binary produce identical outputs
-- [x] **TG10** Re-run downstream tracks on the stable 2-block lock. Model: `gpt-5.4-mini`.
+- [x] **TG10** Re-run downstream tracks on the stable 2-block lock. Model: `simple`.
   - Re-run Track H explained recommendations against the 2-block model outputs
   - Re-run Track F v0-vs-v1 evaluation against the 2-block model metrics
   - Run python -m lyzortx.pipeline.track_j.run_track_j end-to-end and verify it completes without error
   - Verify v1_feature_configuration.json is unchanged after the Track J run (sweep no longer regenerates it)
-- [x] **TG11** Investigate non-leaky features that close the calibration gap. Model: `gpt-5.4`.
+- [x] **TG11** Investigate non-leaky features that close the calibration gap. Model: `smart`.
   - Pairwise soft leakage context: TE02 defense_evasion_* features (4) and TE01
     receptor_variant_seen_in_training_positives (1) are training-label-derived via collaborative filtering. Do not
     include these in candidate features.
@@ -291,7 +291,7 @@ graph LR
   - Report whether any candidate recovers >50% of the AUC gap between the 2-block model (~0.837) and the old leaked
     model (~0.911) without degrading top-3
   - If no candidate closes the gap, accept the 2-block calibration as the honest v1 baseline
-- [x] **TG12** Delete soft-leaky training-label-derived features from Track E code. Model: `gpt-5.4-mini`.
+- [x] **TG12** Delete soft-leaky training-label-derived features from Track E code. Model: `simple`.
   - Delete the legacy soft-leaky pairwise block from Track E code
   - Remove the exact-variant training-positive flag from the RBP-receptor compatibility block
   - Update downstream tests that assert on removed columns
@@ -303,7 +303,7 @@ graph LR
 - **Guiding Principle:** Top-k recommendations with SHAP-based explanations. TH01/TH02 are done but will be re-run as
   part of TG06 against the clean model.
 - [x] **TH01** Benchmark policy variants for top-k recommendation and lock a non-regressing default
-- [x] **TH02** Add explained recommendations with calibrated P(lysis), CI, and SHAP features. Model: `gpt-5.4-mini`.
+- [x] **TH02** Add explained recommendations with calibrated P(lysis), CI, and SHAP features. Model: `simple`.
   - Each top-3 recommendation includes calibrated P(lysis), 95% CI, and top-3 SHAP features
   - Output format suitable for clinician or CDMO operator review
   - Report covers all holdout strains
@@ -317,23 +317,23 @@ graph LR
       `lyzortx/research_notes/LITERATURE.md`.
 - [x] **TI02** Build source_registry.csv for all external sources. Implemented in
       `lyzortx/research_notes/external_data/source_registry.csv`.
-- [x] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `gpt-5.4`.
+- [x] **TI03** Download and ingest VHRdb pairs with source-fidelity fields. Model: `smart`.
   - Download VHRdb data from https://phage.ee.cityu.edu.hk/ into lyzortx/generated_outputs/track_i/tier_a_ingest/
   - Output CSV contains >0 real bacteria-phage pairs
   - Each row preserves raw global_response and datasource_response without case folding
   - source_datasource_id, source_disagreement_flag, and source_native_record_id populated
   - Raise FileNotFoundError or request error on download failure, never silently skip
-- [x] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `gpt-5.4`.
+- [x] **TI04** Download and ingest Tier A sources: BASEL, KlebPhaCol, GPB. Model: `smart`.
   - Download BASEL from publication supplement, KlebPhaCol from https://klebphacol.com/, GPB from https://phagebank.org/
   - Each source produces an ingested CSV with >0 rows under lyzortx/generated_outputs/track_i/tier_a_ingest/
   - All rows carry source_system provenance
   - Raise on download failure, do not silently produce empty output
-- [x] **TI05** Harmonize Tier A datasets to internal schema. Model: `gpt-5.4`.
+- [x] **TI05** Harmonize Tier A datasets to internal schema. Model: `smart`.
   - Map external bacteria and phage names to canonical IDs via Track A alias resolution
   - Report how many external pairs overlap with the internal 404x96 panel vs are novel
   - Output a harmonized pair table with >0 rows joinable on pair_id
   - Raise ValueError if harmonization produces zero joinable rows
-- [x] **TI06** Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata. Model: `gpt-5.4`.
+- [x] **TI06** Download and ingest Tier B: Virus-Host DB and NCBI BioSample metadata. Model: `smart`.
   - Download Virus-Host DB associations from https://www.genome.jp/virushostdb/
   - Download NCBI Virus/BioSample metadata via Entrez API
   - Each source produces an ingested CSV with >0 rows
@@ -347,7 +347,7 @@ graph LR
   genomes. TL12 dead-ended goal (1) for the current v1 lock: the enrichment-derived pairwise path did not produce an
   honest lift. The remaining Track L question is whether a materially richer, fully deployable bundle with
   genome-derivable compatibility signal can improve round-trip behavior enough to justify broader external validation.
-- [x] **TL01** Annotate all 97 phage genomes with Pharokka. Model: `gpt-5.4-mini`.
+- [x] **TL01** Annotate all 97 phage genomes with Pharokka. Model: `simple`.
   - Add bioconda dependencies (pharokka, mmseqs2, trnascan-se, minced, aragorn, mash, dnaapler) to environment.yml and
     verify pharokka runs in CI
   - Run Pharokka on all 97 FNA files in data/genomics/phages/FNA/
@@ -357,8 +357,7 @@ graph LR
   - Extract per-phage RBP gene list with functional family annotations
   - Extract per-phage anti-defense gene list (anti-restriction, anti-CRISPR, etc.)
   - All 97 phages must produce >0 annotated CDS
-- [x] **TL02** Build annotation-interaction enrichment module and run PHROG x receptor/defense analysis. Model:
-      `gpt-5.4`.
+- [x] **TL02** Build annotation-interaction enrichment module and run PHROG x receptor/defense analysis. Model: `smart`.
   - Build a reusable enrichment module (annotation_interaction_enrichment.py) that takes any (phage binary feature
     matrix, host binary feature matrix, interaction matrix) and produces a Fisher's exact test enrichment table with
     odds ratios, p-values, and Benjamini-Hochberg corrected significance
@@ -371,7 +370,7 @@ graph LR
     lab notebook
   - These results directly inform whether TL03 builds pairwise features from the learned associations or falls back to
     the PHROG binary matrix
-- [x] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `gpt-5.4`.
+- [x] **TL03** Build mechanistic RBP-receptor compatibility features from annotations. Model: `smart`.
   - Collapse duplicate PHROG carrier profiles before feature construction (32 PHROGs reduce to ~25 unique profiles due
     to co-occurrence groups like 136/15437/4465/9017 and 1002/1154/967/972)
   - Use TL02 enrichment results (380 significant RBP PHROG x OMP/LPS associations) to build pairwise features for each
@@ -381,7 +380,7 @@ graph LR
   - Features must be derived from genome annotations only, not from training labels
   - Output CSV joinable on bacteria+phage pair
   - Compare against the existing RBP_list.csv curated annotations as a sanity check
-- [x] **TL04** Build mechanistic defense-evasion features from annotations. Model: `gpt-5.4`.
+- [x] **TL04** Build mechanistic defense-evasion features from annotations. Model: `smart`.
   - Use TL02 enrichment results to build pairwise features for each phage-host pair — does the phage encode anti-defense
     genes whose PHROG families are significantly associated with lysis of hosts carrying specific defense systems?
   - Features must be derived from Pharokka anti-defense annotations, not from training label collaborative filtering
@@ -389,7 +388,7 @@ graph LR
   - Caveat: TL02 found only 27 significant anti-defense x defense associations (2.9%), weaker than the RBP-receptor
     signal. Generic methyltransferase annotations inflate the anti-defense gene set. Treat these as experimental
     candidates — include in TL05 evaluation as a separate optional block
-- [x] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `gpt-5.4-mini`.
+- [x] **TL05** Retrain v1 model with mechanistic pairwise features and measure lift. Model: `simple`.
   - Evaluate TL03 (RBP-receptor) and TL04 (defense-evasion) features separately, not as a bundle — TL04 signal is weaker
     and may hurt rather than help
   - Add features to the locked defense + phage_genomic baseline
@@ -397,7 +396,7 @@ graph LR
   - Report AUC, top-3, Brier delta vs the current locked baseline for each feature block independently and combined
   - If mechanistic features improve metrics, propose a new locked v1 config
   - Run SHAP on the new model to verify mechanistic features contribute signal
-- [x] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `gpt-5.4-mini`.
+- [x] **TL06** Persist fitted transforms for novel-organism feature projection. Model: `simple`.
   - Save the TD02 fitted TruncatedSVD object via joblib alongside the k-mer feature CSV so novel phage FNAs can be
     projected into the existing 24-dim embedding
   - Save the TC01 defense subtype column mask (variance filter thresholds and ordered column list) so novel Defense
@@ -408,7 +407,7 @@ graph LR
     the model-ready host feature vector
   - Round-trip test on one panel phage and one panel host confirms output matches the pre-computed feature table within
     floating-point tolerance
-- [x] **TL07** Build Defense Finder runner for novel E. coli genomes. Model: `gpt-5.4`.
+- [x] **TL07** Build Defense Finder runner for novel E. coli genomes. Model: `smart`.
   - Input is a genome assembly FASTA file for a novel E. coli strain
   - Pipeline runs Pyrodigal for gene prediction then Defense Finder for defense system annotation
   - Output is parsed into the same 79-column defense subtype vector the locked model expects, using the column mask from
@@ -417,7 +416,7 @@ graph LR
   - Test by running on one publicly available E. coli genome (e.g., K-12 MG1655) and verifying >0 defense systems
     detected
   - End-to-end test confirms the output vector has the correct shape and column names matching the training feature set
-- [x] **TL08** Build generalized inference function for arbitrary genomes. Model: `gpt-5.4`.
+- [x] **TL08** Build generalized inference function for arbitrary genomes. Model: `smart`.
   - Function signature: infer(host_genome_path, phage_fna_paths, model_path) returning DataFrame with columns phage,
     p_lysis, rank
   - Computes host defense features via TL07 runner
@@ -427,7 +426,7 @@ graph LR
   - No dependency on the static pair table or the 404-strain panel metadata
   - Integration test using one panel strain genome reproduces the locked model predictions for that strain within
     calibration tolerance
-- [x] **TL09** Validate generalized inference on Virus-Host DB positive pairs. Model: `gpt-5.4`.
+- [x] **TL09** Validate generalized inference on Virus-Host DB positive pairs. Model: `smart`.
   - Mine Virus-Host DB for E. coli strain-level hosts (tax_id != 562) with phage genome accessions on NCBI — expect ~70
     strains, ~900 phage genomes, ~500 positive pairs
   - Download genome assemblies from NCBI for at least 10 novel hosts (strains not in the 404 training panel) that each
@@ -444,7 +443,7 @@ graph LR
   - Document limitations in lab notebook — these are positive-only pairs (no negatives), so AUC and top-3 hit rate
     cannot be computed
 - [x] **TL10** Fix enrichment holdout leak — TL02 uses full interaction matrix including ST03 holdout strains. Model:
-      `gpt-5.4-mini`.
+      `simple`.
   - Bug: TL02 (PR #259) computes PHROG x receptor/defense enrichment on the full 369x96 interaction matrix including
     ST03 holdout strains. The enrichment weights encode holdout outcomes and leak test information into TL03/TL04
     features.
@@ -468,7 +467,7 @@ graph LR
     lyzortx/generated_outputs/track_l/enrichment/
   - Document the before/after significant-hit-count delta in the track_L lab notebook
   - Note: TL03/TL04/TL05 depend on these outputs and will need re-evaluation after this fix (separate tickets)
-- [x] **TL11** Rebuild TL03/TL04 mechanistic feature blocks from holdout-clean enrichment. Model: `gpt-5.4-mini`.
+- [x] **TL11** Rebuild TL03/TL04 mechanistic feature blocks from holdout-clean enrichment. Model: `simple`.
   - Rebuild the TL03 and TL04 outputs using only the TL10 holdout-excluded enrichment CSVs; using any pre-TL10
     enrichment artifact is a failure
   - Write a manifest alongside each rebuilt output recording the exact enrichment input paths, split file, excluded
@@ -480,8 +479,7 @@ graph LR
   - Add at least one fixture where the target host lacks the relevant receptor or defense feature and assert the emitted
     pairwise mechanistic weight is exactly zero rather than silently inherited from another row
   - Document the rebuilt output statistics and the most important changed associations in the Track L lab notebook
-- [x] **TL12** Re-run mechanistic lift evaluation with holdout-clean features and explicit lock rules. Model:
-      `gpt-5.4-mini`.
+- [x] **TL12** Re-run mechanistic lift evaluation with holdout-clean features and explicit lock rules. Model: `simple`.
   - Recompute the baseline, +TL03, +TL04, and +TL03+TL04 arms from the same code path and same label set using the
     rebuilt TL11 features; comparing against stale saved metrics is a failure
   - Report bootstrap confidence intervals over holdout strains for AUC, top-3 hit rate, and Brier score for all four
@@ -495,7 +493,7 @@ graph LR
   - Document the decision, including the rejected arms and why they were rejected, in the Track L and project lab
     notebooks
 - [x] **TL13** Audit and rebuild the generalized inference bundle only if deployable compatibility signal is available.
-      Model: `gpt-5.4`.
+      Model: `smart`.
   - Start by producing a feature-parity audit table for the panel model: every training-time feature block must be
     labeled as deployable now, deployable in this task, or not deployable, with a one-sentence rationale for each
   - The parity audit must explicitly classify the TL11/TL12 mechanistic pairwise path as dead-ended for the current v1
@@ -515,7 +513,7 @@ graph LR
     not satisfy the task
   - Regenerate round-trip reference predictions for a predeclared panel-host cohort with available assemblies and save
     them inside the bundle so downstream validation is not limited by missing reference artifacts
-- [x] **TL14** Run external validation only if TL13 clears the round-trip gate. Model: `gpt-5.4`.
+- [x] **TL14** Run external validation only if TL13 clears the round-trip gate. Model: `smart`.
   - TL14 is only justified if TL13 produced both a materially richer deployable feature set and an improved round-trip
     result on the saved panel-host cohort; if TL13 fails that gate, do not run broad positive-only validation by inertia
   - Materialize and save the exact validation cohort before scoring: host IDs, host assembly accessions, phage
@@ -531,8 +529,8 @@ graph LR
     note explicitly label the result as failed external validation and make no supportive claim about generalization
   - End with one of three explicit conclusions recorded in code outputs and notebooks: deployable bundle validated,
     deployable bundle failed, or validation inconclusive because the cohort contract could not be satisfied
-- [x] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `gpt-5.4`. CI image
-      profile: `full-bio`.
+- [x] **TL15** Build raw-host surface projector for deployable compatibility features. Model: `smart`. CI image profile:
+      `full-bio`.
   - Build an inference-time projector that accepts raw host assembly FASTA input and emits the training-time
     host-surface feature schema needed for downstream deployable compatibility work, including the existing
     receptor-style surface calls the bundle can realistically consume from raw genomes
@@ -547,7 +545,7 @@ graph LR
     approximated by a deployable proxy, or still unsupported, with a one-sentence rationale for each unsupported family
   - Runtime assets, emitted metadata, and validation instructions must resolve relative to checked-in manifests or saved
     outputs rather than hidden repo-root paths, stale gitignored artifacts, or ad hoc local installs
-- [x] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `gpt-5.4`. CI image
+- [x] **TL16** Build genome-derived host typing projector for deployable bundle parity. Model: `smart`. CI image
       profile: `host-typing`.
   - Derive the host-typing subset of the old panel metadata block from raw host assemblies wherever the information is
     extractable with reasonable preprocessing effort, including phylogroup, serotype, and callable capsule-related
@@ -562,7 +560,7 @@ graph LR
     directly, which require a deployable proxy, and which remain noisy or unsupported
   - The implementation must run from checked-in env manifests rather than assuming undeclared local bioinformatics
     installs
-- [x] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `gpt-5.4`. CI image profile:
+- [x] **TL17** Build deployable phage compatibility preprocessor beyond k-mer SVD. Model: `smart`. CI image profile:
       `full-bio`.
   - Start from the phage-side feature-parity gap and justify which deployable raw-genome-derived compatibility block is
     the strongest next candidate beyond tetranucleotide SVD alone; the task fails if it adds a block without making that
@@ -579,7 +577,7 @@ graph LR
     scope
   - Validation must make clear which phage FASTAs were used, what runtime assets were frozen, and why the resulting
     block is a compatibility feature rather than generic annotation enrichment
-- [x] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `gpt-5.4`. CI
+- [x] **TL18** Rebuild the deployable generalized inference bundle with the richer preprocessors. Model: `smart`. CI
       image profile: `full-bio`. Depends on tasks: `TL15`, `TL16`, `TL17`.
   - Start with a feature-parity table for the training-time model that labels every feature block as included directly,
     replaced by a deployable proxy, or explicitly excluded with rationale
@@ -601,10 +599,10 @@ graph LR
 
 - **Guiding Principle:** One-command regeneration and environment freezing for v1 pipeline. TJ01/TJ02 are done but must
   be re-verified after TG06 retrains the clean model.
-- [x] **TJ01** One command to regenerate all v1 outputs from raw data. Model: `gpt-5.4-mini`.
+- [x] **TJ01** One command to regenerate all v1 outputs from raw data. Model: `simple`.
   - Single entry point regenerates feature blocks, model, calibration, recommendations, and report
   - Runs without error on a fresh clone with only phage_env dependencies
-- [x] **TJ02** Freeze environment specs and seeds for v1 benchmark run. Model: `gpt-5.4-mini`.
+- [x] **TJ02** Freeze environment specs and seeds for v1 benchmark run. Model: `simple`.
   - requirements.txt and phage_env environment spec locked for exact versions used
   - Random seeds documented for reproducible model training
 
@@ -687,7 +685,7 @@ graph LR
   - Commit the aggregated CSV so downstream tasks (DEPLOY07) can load it without re-running defense-finder in CI
   - The per-host intermediate outputs (protein FASTAs, raw TSVs) remain in gitignored generated_outputs and are NOT
     checked in
-- [ ] **DEPLOY07** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
+- [ ] **DEPLOY07** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `smart`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY06`, `DEPLOY04`, `DEPLOY05`.
   - Download the 403 assemblies using the DEPLOY01 function if not already present
   - Load the pre-computed 403-host defense gene counts from the checked-in CSV at
@@ -717,7 +715,7 @@ graph LR
   - Lock decision — if the deployment-paired model improves over the TL18 baseline on AUC (bootstrap 95% CI for the
     delta excludes zero), lock on the deployment-paired model; otherwise keep TL18 baseline
   - Write the comparison table and lock decision to the track lab notebook
-- [ ] **DEPLOY08** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
+- [ ] **DEPLOY08** Wire deployment-paired features into the inference runtime. Model: `smart`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY07`.
   - Update generalized_inference.py so that training and inference call the exact same feature derivation functions —
     not analogous functions that produce columns with the same names; import from

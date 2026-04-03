@@ -18,8 +18,8 @@ import sys
 from dataclasses import dataclass
 
 REPO = "LorenaDerezanin/coli_phage_interactions_2023"
-IMPLEMENT_WORKFLOW = "codex-implement.yml"
-LIFECYCLE_WORKFLOW = "codex-pr-lifecycle.yml"
+IMPLEMENT_WORKFLOW = "claude-implement.yml"
+LIFECYCLE_WORKFLOW = "claude-pr-lifecycle.yml"
 REVIEW_WORKFLOW = "claude-pr-review.yml"
 
 ALL_WORKFLOWS = [IMPLEMENT_WORKFLOW, LIFECYCLE_WORKFLOW, REVIEW_WORKFLOW]

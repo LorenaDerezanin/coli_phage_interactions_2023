@@ -191,7 +191,7 @@ PR-edit path. A reversible live test on PR `#297` showed `gh issue edit 297 --ad
 
 ```bash
 gh issue edit 297 --repo OWNER/REPO --add-label "ci-image:host-typing"
-gh issue edit 297 --repo OWNER/REPO --remove-label "codex-review-round-1"
+gh issue edit 297 --repo OWNER/REPO --remove-label "claude-review-round-1"
 ```
 
 Use `gh pr edit` only when you need PR-specific mutations such as title/body/base/reviewers.
@@ -249,7 +249,7 @@ gh api repos/OWNER/REPO/issues/123/comments --jq '.[] | {user: .user.login, body
 ```
 
 **When this matters most:**
-- `codex-pr-lifecycle.yml` currently only reads formal review threads via `review_threads.py`. If Claude posted feedback
+- `claude-pr-lifecycle.yml` currently only reads formal review threads via `review_threads.py`. If Claude posted feedback
   as an issue comment, the lifecycle workflow sees zero unresolved threads and labels the PR `ready-for-human-review` —
   even though actionable feedback exists in the comments.
 - The Codex connector (`chatgpt-codex-connector[bot]`) posts inline review comments at endpoint #2 — these are not

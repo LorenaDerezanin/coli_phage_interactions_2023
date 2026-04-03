@@ -1,12 +1,27 @@
-### 2026-03-31: Codex CI image routing now follows task-level image profiles
+### 2026-03-31: Claude PR review reruns must resume post-review handling on the same SHA
 
 #### Executive summary
 
-The first cut of the prebaked Codex CI image put every environment into one default container image. That worked
-mechanically but over-baked the default path, especially once `serotype_caller` pulled ECTyper's large species-ID
-database during image build. The workflows now route tasks through a small set of named image profiles driven by
-`ci_image_profile` in `lyzortx/orchestration/plan.yml`, mirrored as `ci-image:*` labels on orchestrator issues and
-PRs.
+`.github/workflows/claude-pr-review.yml` briefly regressed into a stuck-rerun state: once Claude had left any review on
+the current head SHA, the workflow skipped the whole job. If the original run failed after posting a `COMMENTED` review
+but before dispatching `claude-pr-lifecycle.yml`, rerunning the workflow on the same commit did nothing and left the PR
+stalled. The workflow now skips only the duplicate-review action step while still running the post-review
+merge-or-dispatch logic.
+
+#### Design decision
+
+Keep the current-head review guard because duplicate formal reviews on rerun are noisy, but scope it narrowly. The
+checkout, `phage_env` bootstrap, helper commands, and downstream review-state handling still run on rerun so the
+workflow can recover from transient failures after review submission.
+
+### 2026-03-31: CI image routing now follows task-level image profiles
+
+#### Executive summary
+
+The first cut of the prebaked CI image put every environment into one default container image. That worked mechanically
+but over-baked the default path, especially once `serotype_caller` pulled ECTyper's large species-ID database during
+image build. The workflows now route tasks through a small set of named image profiles driven by `ci_image_profile` in
+`lyzortx/orchestration/plan.yml`, mirrored as `ci-image:*` labels on orchestrator issues and PRs.
 
 #### Design decision
 
@@ -18,15 +33,15 @@ three image profiles:
 - `full-bio`: `host-typing` plus `phage_annotation_tools`
 
 The orchestrator mirrors that choice into a `ci-image:{profile}` label when it opens the task issue. The implement
-workflow copies the same label onto the PR after Codex creates it. Both Codex workflows now fail loudly if the required
-label is missing or duplicated instead of silently falling back to a default image.
+workflow copies the same label onto the PR after Claude creates it. Both Claude workflows now fail loudly if the
+required label is missing or duplicated instead of silently falling back to a default image.
 
 #### Why this is better
 
 This keeps `phage_env` lightweight and solver-friendly while still allowing specialized tasks to opt into heavier tool
-stacks. It also avoids baking the heaviest bioinformatics and host-typing assets into every single Codex job by
-default. The GHCR publish workflow now builds one image per profile instead of one universal image, and the Codex
-workflows only refresh the envs that exist in the selected profile.
+stacks. It also avoids baking the heaviest bioinformatics and host-typing assets into every single CI job by default.
+The GHCR publish workflow now builds one image per profile instead of one universal image, and the workflows only
+refresh the envs that exist in the selected profile.
 
 ### 2026-03-31: Unit-test workflow now emits slow-test timings and runs pytest in parallel
 
@@ -84,6 +99,41 @@ and makes parallelism opt-in rather than globally reinterpreting the plan.
 - Added an orchestrator `run_once` test proving the next tick would mark `TL15`/`TL16`/`TL17` in progress together and
   leave `TL18` pending.
 - Re-rendered `PLAN.md` support so explicit task dependencies appear in the human-readable plan output.
+
+### 2026-03-31: Switch implementation workflows from Codex to Claude Code
+
+#### Executive summary
+
+Replaced `openai/codex-action@v1` with `anthropics/claude-code-action@v1` in both the task implementation and PR
+lifecycle workflows. Introduced semantic model tiers (`smart`/`simple`) in `plan.yml` to decouple the plan from any
+specific LLM provider. A resolver in `parse_model_directive.py` maps tiers to concrete model IDs per provider
+(`smart` → `gpt-5.4` or `claude-opus-4-6`, `simple` → `gpt-5.4-mini` or `claude-sonnet-4-6`), making future provider
+switches a small config change instead of a plan rewrite.
+
+#### Motivation
+
+Consolidating on a single LLM provider (Claude) for the implementation and fix loop simplifies secrets management and
+lets the automation share the same `AGENTS.md`-aware tooling already used in review. The Codex sandbox workaround
+(AppArmor sysctl on Ubuntu 24.04) is no longer needed.
+
+#### Design decisions
+
+**Semantic model tiers over concrete IDs:** Rather than replacing `gpt-5.4` with provider-specific IDs throughout
+`plan.yml`, the plan now uses provider-agnostic tier names. This means switching providers requires changing only the
+`PROVIDER_MODELS` dict in `parse_model_directive.py`, not 30+ lines in `plan.yml`.
+
+**Keep CI on `phage_env`:** The repo policy for GitHub Actions still applies. The new Claude implement/lifecycle
+workflows bootstrap `phage_env` from `environment.yml` and run repo Python/pytest commands via
+`conda run -n phage_env ...`, just like the previous Codex workflow family.
+
+**Prompt delivery:** Codex used a `prompt-file` input. Claude Code action uses inline `prompt:` with a `gh issue view`
+instruction, letting Claude read the issue directly. This avoids shell quoting issues with large issue bodies.
+
+**Tool allowlist:** Replaced Codex's `sandbox: danger-full-access` with a fine-grained `--allowedTools` list covering
+`Read`, `Write`, `Edit`, `Glob`, `Grep`, and specific Bash patterns (`git:*`, `gh:*`, `python:*`, `pytest:*`, etc.).
+
+**Workflow file rename:** `codex-implement.yml` → `claude-implement.yml`, `codex-pr-lifecycle.yml` →
+`claude-pr-lifecycle.yml`. The dispatch target in `claude-pr-review.yml` was updated accordingly.
 
 ### 2026-03-30: Claude review auto-merge was too permissive for commented approvals
 
