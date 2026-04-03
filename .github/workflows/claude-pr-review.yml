@@ -2,7 +2,7 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -27,6 +27,7 @@ jobs:
     name: Claude Auto Review
     if: >-
       github.event_name == 'pull_request'
+      && github.event.pull_request.draft != true
       && contains(join(github.event.pull_request.labels.*.name, ','), 'orchestrator-task')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
