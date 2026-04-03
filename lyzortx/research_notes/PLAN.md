@@ -657,7 +657,7 @@ graph LR
   - Drop host_capsule_abc_proxy_present and host_abc_serotype_proxy — these are replaced by the continuous capsule
     profile scores above
   - Output a schema manifest (JSON) listing every column name and dtype
-- [ ] **DEPLOY04** Re-derive host typing features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
+- [x] **DEPLOY04** Re-derive host typing features from raw assemblies. Model: `gpt-5.4-mini`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY03`.
   - Write the feature derivation code in lyzortx/pipeline/deployment_paired_features/ and validate it on the 3 committed
     validation FASTAs — the full 403-host run happens in DEPLOY06

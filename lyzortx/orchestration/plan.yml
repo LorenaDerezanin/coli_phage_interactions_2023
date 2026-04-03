@@ -1044,7 +1044,7 @@ tracks:
       - Output a schema manifest (JSON) listing every column name and dtype
     - id: DEPLOY04
       title: Re-derive host typing features from raw assemblies
-      status: pending
+      status: done
       depends_on_tasks:
       - DEPLOY03
       model: gpt-5.4-mini
