@@ -1,3 +1,16 @@
+# First Principles for Every Task
+
+Before thinking, planning, or doing anything, follow these four steps in order:
+
+1. **Question the requirement.** Should we be doing this at all? Is this the right question? Delete the requirement if
+   possible.
+2. **Simplify.** If the requirement survives, strip it to its bare bones. Remove every unnecessary constraint, layer,
+   and edge case.
+3. **Accelerate.** Make the implementation thinner, more elegant, and faster. Optimize the solution, not the process
+   around a bloated solution.
+4. **Automate.** Only after steps 1–3 should you automate. Automating a bad or overcomplicated requirement just locks in
+   waste.
+
 # Documentation Style Rules
 
 - Markdown style relies on tool settings in `.pre-commit-config.yaml` and `.pymarkdown.yaml`.
