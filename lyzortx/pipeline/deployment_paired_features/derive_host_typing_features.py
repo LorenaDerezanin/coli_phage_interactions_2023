@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Sequence
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
@@ -44,7 +44,7 @@ class HostTypingRuntimeOutputs:
     mlst_output_path: Path
 
 
-def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("assembly_path", nargs="?", type=Path, help="Assembly FASTA for one host strain.")
     parser.add_argument("--bacteria-id", type=str, default=None)
@@ -94,12 +94,12 @@ def build_host_typing_feature_row(
     serotype_call: Mapping[str, str],
     mlst_call: Mapping[str, str],
 ) -> dict[str, object]:
-    o_type = tl16._normalize_text(serotype_call.get("o_type", ""))
-    h_type = tl16._normalize_text(serotype_call.get("h_type", ""))
+    o_type = tl16.normalize_text(serotype_call.get("o_type", ""))
+    h_type = tl16.normalize_text(serotype_call.get("h_type", ""))
     return {
         "bacteria": bacteria,
-        "host_clermont_phylo": tl16._normalize_text(phylogroup_call.get("phylogroup", "")),
-        "host_st_warwick": tl16._normalize_text(mlst_call.get("st_warwick", "")),
+        "host_clermont_phylo": tl16.normalize_text(phylogroup_call.get("phylogroup", "")),
+        "host_st_warwick": tl16.normalize_text(mlst_call.get("st_warwick", "")),
         "host_o_type": o_type,
         "host_h_type": h_type,
         "host_serotype": tl16.derive_serotype(o_type, h_type),
@@ -110,17 +110,22 @@ def compare_host_typing_to_panel(
     derived_row: Mapping[str, object],
     panel_row: Mapping[str, str],
 ) -> dict[str, Any]:
-    panel_o_type = tl16._normalize_text(panel_row.get("O-type", ""))
-    panel_h_type = tl16._normalize_text(panel_row.get("H-type", ""))
+    panel_phylogroup = tl16.normalize_text(panel_row.get("Clermont_Phylo", ""))
+    panel_o_type = tl16.normalize_text(panel_row.get("O-type", ""))
+    panel_h_type = tl16.normalize_text(panel_row.get("H-type", ""))
+    panel_st_warwick = tl16.normalize_text(panel_row.get("ST_Warwick", ""))
     panel_serotype = tl16.derive_serotype(panel_o_type, panel_h_type)
+    derived_phylogroup = str(derived_row["host_clermont_phylo"])
+    derived_o_type = str(derived_row["host_o_type"])
+    derived_h_type = str(derived_row["host_h_type"])
+    derived_st_warwick = str(derived_row["host_st_warwick"])
+    derived_serotype = str(derived_row["host_serotype"])
     field_matches = {
-        "phylogroup": tl16._normalize_text(derived_row["host_clermont_phylo"])
-        == tl16._normalize_text(panel_row.get("Clermont_Phylo", "")),
-        "o_type": tl16._normalize_text(derived_row["host_o_type"]) == panel_o_type,
-        "h_type": tl16._normalize_text(derived_row["host_h_type"]) == panel_h_type,
-        "st_warwick": tl16._normalize_text(derived_row["host_st_warwick"])
-        == tl16._normalize_text(panel_row.get("ST_Warwick", "")),
-        "serotype": tl16._normalize_text(derived_row["host_serotype"]) == panel_serotype,
+        "phylogroup": derived_phylogroup == panel_phylogroup,
+        "o_type": derived_o_type == panel_o_type,
+        "h_type": derived_h_type == panel_h_type,
+        "st_warwick": derived_st_warwick == panel_st_warwick,
+        "serotype": derived_serotype == panel_serotype,
     }
     resolved_field_count = sum(
         1
@@ -130,23 +135,23 @@ def compare_host_typing_to_panel(
             panel_row.get("H-type"),
             panel_row.get("ST_Warwick"),
         )
-        if tl16._normalize_text(value)
+        if tl16.normalize_text(value)
     )
     return {
         "bacteria": str(derived_row["bacteria"]),
         "panel_values": {
-            "phylogroup": tl16._normalize_text(panel_row.get("Clermont_Phylo", "")),
+            "phylogroup": panel_phylogroup,
             "o_type": panel_o_type,
             "h_type": panel_h_type,
-            "st_warwick": tl16._normalize_text(panel_row.get("ST_Warwick", "")),
+            "st_warwick": panel_st_warwick,
             "serotype": panel_serotype,
         },
         "derived_values": {
-            "phylogroup": tl16._normalize_text(derived_row["host_clermont_phylo"]),
-            "o_type": tl16._normalize_text(derived_row["host_o_type"]),
-            "h_type": tl16._normalize_text(derived_row["host_h_type"]),
-            "st_warwick": tl16._normalize_text(derived_row["host_st_warwick"]),
-            "serotype": tl16._normalize_text(derived_row["host_serotype"]),
+            "phylogroup": derived_phylogroup,
+            "o_type": derived_o_type,
+            "h_type": derived_h_type,
+            "st_warwick": derived_st_warwick,
+            "serotype": derived_serotype,
         },
         "field_matches": field_matches,
         "exact_match_field_count": sum(int(match) for match in field_matches.values()),
@@ -207,8 +212,8 @@ def derive_host_typing_features(
         mlst_call=tl16.parse_mlst_legacy_output(outputs.mlst_output_path),
     )
 
-    counts_output_path = output_dir / PER_HOST_FEATURES_FILENAME
-    _write_single_row_csv(counts_output_path, feature_row)
+    feature_csv_path = output_dir / PER_HOST_FEATURES_FILENAME
+    _write_single_row_csv(feature_csv_path, feature_row)
 
     panel_row = _validate_host_metadata_row(panel_metadata, resolved_bacteria_id)
     comparison = compare_host_typing_to_panel(feature_row, panel_row)
@@ -224,7 +229,7 @@ def derive_host_typing_features(
             "phylogroup_report_path": str(outputs.phylogroup_report_path),
             "serotype_output_path": str(outputs.serotype_output_path),
             "mlst_output_path": str(outputs.mlst_output_path),
-            "feature_row_csv": str(counts_output_path),
+            "feature_csv_path": str(feature_csv_path),
         },
         "comparison": comparison,
     }

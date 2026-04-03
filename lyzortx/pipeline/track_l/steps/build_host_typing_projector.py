@@ -302,6 +302,12 @@ def _normalize_text(value: object) -> str:
     return text
 
 
+def normalize_text(value: object) -> str:
+    """Public wrapper for normalizing free-text host-typing values."""
+
+    return _normalize_text(value)
+
+
 def derive_serotype(o_type: object, h_type: object) -> str:
     o_value = _normalize_text(o_type)
     h_value = _normalize_text(h_type)
