@@ -175,3 +175,70 @@ Comparison scope: retained 79 subtype columns from the panel CSV, with integer c
 - Unit tests for disagreement reporting (`systems_gained`, `systems_lost`, `count_changes`).
 - Unit tests for the single-assembly derivation path, validating integer counts and schema manifest contents.
 - Unit tests for the 3-host validation subset runner, validating combined CSV/report generation.
+
+### 2026-04-02: DEPLOY03 host surface continuous-score derivation
+
+#### Executive summary
+
+Implemented `derive_host_surface_features()` and `run_validation_subset()` in
+`lyzortx/pipeline/deployment_paired_features/derive_host_surface_features.py`.
+The deployment host-surface block now reuses the existing TL15 raw-genome O-antigen, receptor, and capsule scans but
+emits a reduced continuous schema: categorical `host_o_antigen_type` and `host_lps_core_type`, one continuous
+`host_o_antigen_score`, 12 continuous receptor phmmer bit scores, and 99 continuous capsule-profile HMM scores. The
+schema manifest is written to `lyzortx/generated_outputs/deployment_paired_features/host_surface/schema_manifest.json`.
+
+The 3-host validation run completed cleanly on the committed FASTAs (`55989`, `EDL933`, `LF82`). All three derived
+O-antigen calls matched the legacy surface labels exactly, all three derived LPS proxy calls matched exactly, and the
+continuous receptor block preserved perfect binary parity with the old presence/absence panel (`0.0` receptor
+zero/nonzero mismatches per host on average).
+
+#### Implementation
+
+- Reused the TL15 raw-genome assets and CLI paths instead of inventing a second surface-calling stack:
+  `nhmmer` for O-antigen alleles, `phmmer` for receptor proteins, and `hmmscan` for the vendored ABC capsule HMMs.
+- Kept O-antigen typing categorical but added `host_o_antigen_score`, defined as the summed best-family `nhmmer` bit
+  score for the top-supported O-type candidate. Zero means no supporting allele hits.
+- Replaced the 12 receptor binary columns with 12 continuous `host_receptor_*_score` columns, using the best
+  `phmmer` bit score per receptor reference. Missing receptors are encoded as `0.0`.
+- Replaced thresholded capsule presence/serotype outputs with 99 continuous
+  `host_capsule_profile_<profile>_score` columns, one per vendored capsule HMM profile, keeping only the best score
+  per profile and deliberately avoiding locus-synteny interpretation.
+- Dropped the audited duplicate/derived/proxy columns:
+  `host_o_type`, `host_surface_lps_core_type`, `host_capsule_abc_present`, `host_o_antigen_present`,
+  `host_lps_core_present`, `host_k_antigen_type_source`, `host_capsule_abc_proxy_present`,
+  `host_abc_serotype_proxy`, `host_k_antigen_present`, `host_k_antigen_type`, and `host_k_antigen_proxy_present`.
+  The last three were removed because the acceptance criterion explicitly forbids thresholding capsule profiles into
+  present/absent or typed-locus calls.
+
+#### Validation comparison
+
+Schema size: 115 columns total = `bacteria` + 2 categorical feature columns + 1 continuous O-antigen score + 12
+continuous receptor scores + 99 continuous capsule-profile scores.
+
+- `55989`: `host_o_antigen_type=O104`, `host_lps_core_type=R3`, `host_o_antigen_score=2206.1`. All 12 receptor scores
+  were nonzero. Fourteen capsule profiles were nonzero; strongest signals were `cluster_53=564.0`,
+  `cluster_48=527.2`, and `cluster_97=136.7`.
+- `EDL933`: `host_o_antigen_type=O157`, `host_lps_core_type=R3`, `host_o_antigen_score=2428.7`. All 12 receptor
+  scores were nonzero. Fourteen capsule profiles were nonzero; strongest signals were `cluster_53=562.0`,
+  `cluster_48=527.5`, and `cluster_97=77.3`.
+- `LF82`: `host_o_antigen_type=O83`, `host_lps_core_type=R1`, `host_o_antigen_score=2529.6`. All 12 receptor scores
+  were nonzero. Twenty-two capsule profiles were nonzero; strongest signals were `cluster_27=935.3`,
+  `cluster_25=927.3`, `cluster_26=893.8`, and `cluster_19=674.3`.
+
+#### Interpretation
+
+- The categorical part of the block is stable on the validation hosts: exact agreement for all 3 O-types and all 3
+  LPS proxy calls indicates the raw-genome O-antigen path is aligned with the legacy labels on the committed gate set.
+- The receptor validation outcome is informative: zero binary mismatches means the continuous block preserves the old
+  presence/absence support, but every validation host had all 12 receptor scores nonzero. The old receptor binaries are
+  therefore saturated on this gate set, while the new score magnitudes expose variation the model can actually learn.
+- The capsule profile block is intentionally richer and noisier than the legacy capsule proxies. The nonzero profile
+  counts (14, 14, and 22) show why reducing this biology to a single binary proxy or serotype call throws away a large
+  amount of information.
+
+#### Tests
+
+- Unit tests for schema construction, including the continuous receptor/capsule columns and the dropped legacy fields.
+- Unit tests for O-antigen score aggregation and unresolved-call behavior.
+- Unit tests for receptor best-hit score selection and zero-filling.
+- Unit tests for feature-row construction and validation-report generation.
