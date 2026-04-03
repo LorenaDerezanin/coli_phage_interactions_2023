@@ -3,6 +3,10 @@ from pathlib import Path
 import pytest
 
 from lyzortx.pipeline.deployment_paired_features.run_deploy07_full_evaluation import (
+    BASELINE_ARM_ID,
+    BASELINE_ARM_TYPE,
+    DEPLOYMENT_ARM_ID,
+    DEPLOYMENT_ARM_TYPE,
     FeatureBlock,
     PHAGE_BASELINE_FAMILY_COUNT_COLUMN,
     _derive_validation_host_block_rows,
@@ -10,6 +14,7 @@ from lyzortx.pipeline.deployment_paired_features.run_deploy07_full_evaluation im
     _load_aggregated_rows,
     build_baseline_phage_rows_from_continuous,
     build_baseline_defense_rows_from_counts,
+    select_arm_type_for_winning_arm_id,
     select_winning_arm_id_from_auc_ci,
     validate_no_duplicate_block_columns,
     validate_schema_columns,
@@ -150,6 +155,16 @@ def test_select_winning_arm_id_from_auc_ci_only_promotes_when_ci_excludes_zero()
         )
         == "deployment"
     )
+
+
+def test_select_arm_type_for_winning_arm_id_uses_bundle_constants() -> None:
+    assert select_arm_type_for_winning_arm_id(BASELINE_ARM_ID) == BASELINE_ARM_TYPE
+    assert select_arm_type_for_winning_arm_id(DEPLOYMENT_ARM_ID) == DEPLOYMENT_ARM_TYPE
+
+
+def test_select_arm_type_for_winning_arm_id_rejects_unknown_arm_id() -> None:
+    with pytest.raises(ValueError, match="Unknown winning arm_id"):
+        select_arm_type_for_winning_arm_id("unexpected")
 
 
 def test_load_aggregated_rows_rejects_missing_values(tmp_path: Path) -> None:

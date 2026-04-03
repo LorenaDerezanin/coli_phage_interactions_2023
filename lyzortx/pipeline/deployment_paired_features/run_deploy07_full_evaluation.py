@@ -257,6 +257,14 @@ def select_winning_arm_id_from_auc_ci(
     return baseline_arm_id
 
 
+def select_arm_type_for_winning_arm_id(winning_arm_id: str) -> str:
+    if winning_arm_id == BASELINE_ARM_ID:
+        return BASELINE_ARM_TYPE
+    if winning_arm_id == DEPLOYMENT_ARM_ID:
+        return DEPLOYMENT_ARM_TYPE
+    raise ValueError(f"Unknown winning arm_id: {winning_arm_id!r}")
+
+
 def build_baseline_phage_rows_from_continuous(
     rows: Sequence[Mapping[str, object]],
     *,
@@ -1369,8 +1377,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "baseline_phage": {"rows": baseline_phage_block.rows, "schema": baseline_phage_block.schema},
         "deployment_phage": {"rows": phage_block.rows, "schema": phage_block.schema},
     }
+    bundle_payload["arm_type"] = select_arm_type_for_winning_arm_id(winning_arm_id)
     if winning_arm_id == BASELINE_ARM_ID:
-        bundle_payload["arm_type"] = "baseline"
         bundle_payload["baseline_runtime"] = {
             "defense_rows": baseline_host_defense_block.rows,
             "tl15_payload": build_tl15_runtime_payload(
@@ -1398,7 +1406,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "schema": baseline_phage_block.schema,
         }
     else:
-        bundle_payload["arm_type"] = "deployment"
         bundle_payload["deployment_runtime"] = {"defense_rows": defense_block.rows}
         bundle_payload["training_blocks"]["selected_host"] = {
             "rows": deployment_host_block.rows,
