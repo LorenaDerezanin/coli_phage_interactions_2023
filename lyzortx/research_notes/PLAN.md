@@ -687,8 +687,12 @@ graph LR
   - Assemble the joint feature matrix by joining host blocks on bacteria and phage blocks on phage, then merging with
     the ST02 pair table
   - Train two LightGBM models using the same hyperparameters, ST03 holdout split, calibration fold, and random seed as
-    TL18 — (a) TL18 baseline using panel features for reference, (b) deployment-paired model using raw-derived features
-    with continuous encoding from DEPLOY02-05
+    TL18 — (a) TL18 baseline using the original panel features for reference, (b) deployment-paired model using ALL
+    DEPLOY02-05 feature blocks for BOTH host and phage sides. Specifically the deployment arm must use DEPLOY02 integer
+    defense counts (not panel binary), DEPLOY03 continuous receptor/capsule/O-antigen scores (not panel binary),
+    DEPLOY04 raw-derived typing categoricals (not panel picard metadata), AND DEPLOY05 continuous RBP percent-identity
+    scores (not TL17 binary presence). Do not hold any feature block constant between the two arms — the TL18 baseline
+    uses the old encoding everywhere, the deployment arm uses the new encoding everywhere
   - Report holdout AUC, top-3 hit rate, and Brier score with bootstrap CIs (2000 strain-level resamples) for both models
     in one comparison table
   - Validate training/inference parity on the 3 validation hosts — run inference from raw FASTAs using the winning model
