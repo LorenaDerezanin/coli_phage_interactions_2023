@@ -1252,3 +1252,29 @@ This matters immediately because the saved TL13 round-trip artifacts recorded on
 `EDL933`. That means the current repo state does **not** support a broad external-validation claim for the richer
 deployable bundle. Until TL13's saved reference-backed panel cohort is rebuilt to at least 3 hosts, the honest project-
 level reading is: **validation inconclusive because the cohort contract could not be satisfied**.
+
+#### Future: richer defense features from DefenseFinder raw outputs
+
+**Trigger**: revisit when DEPLOY07 evaluation is complete and the baseline defense-count features are locked.
+
+DEPLOY06 checked in integer gene counts per defense subtype (79 columns), but DefenseFinder produces three additional
+output files per host that are preserved locally in
+`lyzortx/generated_outputs/deployment_paired_features/host_defense/`:
+
+1. **Gene-level HMM scores** (`*_defense_finder_genes.tsv`): `hit_score`, `i_eval`, `hit_profile_cov`, `hit_seq_cov`,
+   `sys_wholeness`, `sys_score`. These could yield per-subtype continuous detection-confidence features (analogous to
+   the receptor phmmer scores in DEPLOY03) and system-completeness features.
+2. **Sub-threshold HMM hits** (`*_defense_finder_hmmer.tsv`): all hits including those below DefenseFinder's
+   co-localization threshold. Degenerate or partial defense systems that the current pipeline ignores entirely.
+3. **Total defense gene count**: simple sum of defense-associated genes per host, a proxy for overall defense
+   investment that the model currently cannot see.
+
+The current integer-count encoding was chosen because the plan's design principle says "count is real biology, HMM
+score is a tool artifact." This is approximately true — but system completeness (`sys_wholeness`) is not a detection
+artifact; it reflects whether the full defense operon is intact. And sub-threshold hits may identify hosts with
+degraded defense arsenals that look defenseless in the current encoding but still carry partial immunity.
+
+**What to do**: after DEPLOY07 locks the baseline model, run a feature-importance comparison with and without the
+richer defense features. If the additional features improve holdout metrics or shift SHAP rankings meaningfully, add
+them as a DEPLOY track extension. If not, the current counts are sufficient and the extra complexity is not justified.
+The raw outputs are already computed and preserved locally — no re-running of DefenseFinder is needed.

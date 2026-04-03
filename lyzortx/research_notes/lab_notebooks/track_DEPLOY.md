@@ -71,7 +71,8 @@ found:
 
 #### Task structure and gating
 
-7 tasks (DEPLOY01-07), reorganized from an initial 8-task plan based on review of acceptance criteria quality:
+8 tasks (DEPLOY01-08), reorganized from an initial plan based on review of acceptance criteria quality and CI runtime
+constraints:
 
 - **DEPLOY01** (download): assembly download script, no manifest
 - **DEPLOY02** (defense, **gate**): re-derive defense features from raw assemblies; if DefenseFinder disagreement
@@ -80,8 +81,9 @@ found:
 - **DEPLOY04** (typing): re-derive host typing; depends on DEPLOY03 (sequential to avoid merge conflicts on shared
   host feature code)
 - **DEPLOY05** (phage RBP): switch to continuous mmseqs scores; independent, can run in parallel with DEPLOY02-04
-- **DEPLOY06** (retrain): 3-way comparison (TL18 baseline vs parity-only vs parity+gradient), lock decision
-- **DEPLOY07** (wire inference): make training and inference call the exact same functions, validate zero-delta parity
+- **DEPLOY06** (pre-compute defense): run DefenseFinder on all 403 hosts locally, check in aggregated CSV
+- **DEPLOY07** (retrain): 3-way comparison (TL18 baseline vs parity-only vs parity+gradient), lock decision
+- **DEPLOY08** (wire inference): make training and inference call the exact same functions, validate zero-delta parity
 
 Each feature task (DEPLOY02-05) outputs a schema manifest (JSON) listing column names and dtypes. DEPLOY06 validates
 the joint schema before assembling the feature matrix.
@@ -277,7 +279,7 @@ Aggregate field matches across the 3 validation hosts:
 - The only miss is the unresolved MLST assignment for `EDL933`; the raw caller output is auditable in
   `lyzortx/generated_outputs/deployment_paired_features/host_typing/EDL933/sequence_type/mlst_legacy.tsv` and shows
   `ST = -`. That is a caller/data limitation, not a schema or parsing failure.
-- The feature block is ready for the full 403-host DEPLOY06 run, with the `EDL933` MLST caveat documented for review.
+- The feature block is ready for the full 403-host DEPLOY07 run, with the `EDL933` MLST caveat documented for review.
 
 #### Tests
 
@@ -323,3 +325,94 @@ assembly download step, because the committed phage FNAs in `data/genomics/phage
 - Unit tests for schema construction and schema-manifest emission.
 - Unit tests for single-phage and batched TL17 projection with continuous family scores.
 - Unit tests for TL17 validation-summary aggregation on the family score columns.
+
+### 2026-04-03: DEPLOY06 pre-compute 403-host defense features
+
+#### Executive summary
+
+Ran DefenseFinder on all 403 Picard collection hosts locally (10 parallel workers, ~114 min total, 0 failures) and
+checked in the aggregated integer gene counts CSV at
+`lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv`. This task was created after the first
+DEPLOY07 (originally DEPLOY06) Codex CI attempt failed because DefenseFinder is too slow for a 4-core CI runner with
+a 10-minute Codex timeout.
+
+#### Why this task exists
+
+The first Codex attempt at the full retrain task (GitHub Actions run 23935738906) spent its entire 77-minute window
+debugging DefenseFinder environment issues and waiting for HMM searches, without reaching the training/evaluation
+phase. The root cause is architectural: DefenseFinder runs `hmmsearch` once per HMM profile (~1,178 profiles) against
+each host's predicted proteome (~2,500 proteins). At ~50 seconds per host with `--workers 1`, the full 403-host run
+takes ~35 minutes on 10 cores — far beyond what a 4-core CI runner can deliver within the Codex session timeout.
+
+Specific failures observed in the CI run:
+
+- **DefenseFinder model installation race**: parallel per-host workers all tried to install models simultaneously
+- **Anonymous GitHub API rate limit**: model downloads hit the unauthenticated rate limit in CI
+- **Source vs release tarball confusion**: the GitHub source tarball contains only 1 HMM profile; the release asset
+  contains the full 1,178
+- **Stale `.old` model directories**: `macsydata` leaves rename artifacts that confuse the CLI's package counter
+- **Per-host HMM scaling**: 403 separate DefenseFinder runs × 1,178 hmmsearch calls each is infeasible on a 4-core
+  runner even after fixing all environment issues
+
+The Codex agent attempted several increasingly sophisticated fixes (authenticated model fetch, batch mode over a
+combined gembase, parallel Pyrodigal), all of which improved things incrementally but could not make the fundamental
+compute requirement fit the CI window.
+
+#### Implementation
+
+`lyzortx/pipeline/deployment_paired_features/run_all_host_defense.py` — parallel driver that:
+
+- Pre-installs DefenseFinder models once before fanning out workers
+- Runs `derive_host_defense_features()` per host with `--workers 1` across `max_workers` parallel processes
+  (defaults to `os.cpu_count()`)
+- Skips hosts that already have `host_defense_gene_counts.csv` (resume-safe)
+- Aggregates all per-host CSVs into a single checked-in CSV sorted by bacteria ID
+- Supports `--aggregate-only` to re-aggregate without re-running derivation
+
+#### Runtime profile
+
+- **Machine**: 10-core macOS, `phage_env` conda environment with DefenseFinder + hmmsearch
+- **Total hosts**: 403 (402 processed + 1 pre-existing from a test run)
+- **Failures**: 0
+- **Wall time**: 6,819 seconds (~114 minutes)
+- **Throughput**: ~6.1 hosts/min (10 parallel workers)
+- **Per-host average**: ~17 seconds effective (including Pyrodigal gene prediction + DefenseFinder HMM search)
+
+#### Output
+
+`lyzortx/data/deployment_paired_features/403_host_defense_gene_counts.csv`:
+
+- 403 rows, 80 columns (bacteria key + 79 retained defense subtype integer counts)
+- Schema matches the DEPLOY02 manifest exactly
+- Integer counts (not binary): e.g., `RM_Type_IV=2` for hosts with two copies
+- Sorted by bacteria ID
+
+Per-host intermediate outputs (protein FASTAs, raw DefenseFinder TSVs, hmmer TSVs, manifests) remain in gitignored
+`lyzortx/generated_outputs/deployment_paired_features/host_defense/` and are not checked in.
+
+#### Unused DefenseFinder outputs — future feature candidates
+
+The checked-in CSV captures only integer gene counts per defense subtype. DefenseFinder produces richer per-host
+outputs that are preserved locally but not yet mined for features:
+
+- **HMM hit scores** (`*_defense_finder_genes.tsv`): per-gene `hit_score`, `i_eval`, `hit_profile_cov`,
+  `hit_seq_cov`. These are continuous detection-confidence signals. A CRISPR system with HMM score 500 vs 50 may
+  reflect different system integrity, though the score is a detection artifact rather than a direct measure of defense
+  strength.
+- **System completeness** (`sys_wholeness` in genes TSV): ranges 0.0-1.0, indicating what fraction of the expected
+  subunits were found. A complete RM system (all subunits) behaves differently from a partial one (just the REase).
+- **Sub-threshold HMM hits** (`*_defense_finder_hmmer.tsv`): all hits including those that did not pass
+  DefenseFinder's co-localization filter. May contain degenerate or incomplete defense systems.
+- **Total defense gene count**: raw number of defense-associated genes (not subtypes) per host, a proxy for overall
+  defense investment.
+
+These are candidates for richer defense features in a future task, but extracting them is a feature-engineering
+decision for DEPLOY07 or beyond — not a pre-compute blocker.
+
+#### Tests
+
+- Aggregation of per-host CSVs into a single sorted output with correct schema columns.
+- Integer counts preserved through aggregation (not collapsed to binary).
+- Missing columns in per-host CSVs zero-filled during aggregation.
+- Empty output directory raises `FileNotFoundError`.
+- Test fixtures are real DefenseFinder outputs from 3 completed hosts (001-023, 003-026, 013-008).
