@@ -72,6 +72,9 @@ DEFAULT_VALIDATION_FASTA_DIR = Path("data/genomics/bacteria/validation_subset/fa
 DEFAULT_VALIDATION_HOSTS: tuple[str, ...] = ("55989", "EDL933", "LF82")
 BASELINE_ARM_ID = "tl18_legacy_encoding_reference"
 DEPLOYMENT_ARM_ID = "deploy07_deployment_paired"
+BASELINE_ARM_TYPE = "baseline"
+DEPLOYMENT_ARM_TYPE = "deployment"
+VALIDATION_ARM_TYPES = frozenset({BASELINE_ARM_TYPE, DEPLOYMENT_ARM_TYPE})
 KEY_COLUMNS = frozenset({"bacteria", "phage"})
 PHAGE_BASELINE_FAMILY_COUNT_COLUMN = "tl17_rbp_family_count"
 SCHEMA_VALIDATION_FILENAME = "schema_validation_summary.json"
@@ -87,6 +90,7 @@ SURFACE_AGGREGATED_FILENAME = "403_host_surface_features.csv"
 TYPING_AGGREGATED_FILENAME = "403_host_typing_features.csv"
 PHAGE_AGGREGATED_FILENAME = "96_panel_phage_rbp_features.csv"
 PHAGE_RUNTIME_FILENAME = "tl17_runtime_payload.joblib"
+DEFENSE_DISAGREEMENT_GATE_MAX = 3.0
 
 
 @dataclass(frozen=True)
@@ -161,7 +165,11 @@ def _schema_column_names(schema: Mapping[str, Any]) -> list[str]:
 
 
 def _load_aggregated_rows(path: Path) -> list[dict[str, object]]:
-    frame = pd.read_csv(path).fillna("")
+    frame = pd.read_csv(path)
+    missing_mask = frame.isnull()
+    if missing_mask.values.any():
+        missing_columns = ", ".join(sorted(str(column) for column in frame.columns[missing_mask.any()]))
+        raise ValueError(f"Unexpected NaN values in {path}: {missing_columns}")
     if frame.empty:
         raise ValueError(f"No rows found in {path}")
     return frame.to_dict("records")
@@ -901,9 +909,11 @@ def _derive_validation_host_block_rows(
     validation_fasta_dir: Path,
 ) -> FeatureBlock:
     arm_type = str(bundle_payload["arm_type"])
+    if arm_type not in VALIDATION_ARM_TYPES:
+        raise ValueError(f"Unknown arm_type in bundle: {arm_type!r}")
     hosts = tuple(str(host) for host in bundle_payload["validation_hosts"])
     rows: list[dict[str, object]] = []
-    if arm_type == "baseline":
+    if arm_type == BASELINE_ARM_TYPE:
         tl15_payload = bundle_payload["baseline_runtime"]["tl15_payload"]
         tl16_payload = bundle_payload["baseline_runtime"]["tl16_payload"]
         bundle_dir = Path(bundle_payload["bundle_dir"])
@@ -979,6 +989,9 @@ def _derive_validation_host_block_rows(
 
 
 def _derive_validation_phage_block_rows(bundle_payload: Mapping[str, object]) -> FeatureBlock:
+    arm_type = str(bundle_payload["arm_type"])
+    if arm_type not in VALIDATION_ARM_TYPES:
+        raise ValueError(f"Unknown arm_type in bundle: {arm_type!r}")
     runtime_payload = joblib.load(Path(bundle_payload["phage_runtime"]["runtime_path"]))
     reference_fasta_path = Path(bundle_payload["phage_runtime"]["reference_fasta_path"])
     phage_rows = tl17_runtime.project_panel_feature_rows(
@@ -989,8 +1002,7 @@ def _derive_validation_phage_block_rows(bundle_payload: Mapping[str, object]) ->
         reference_fasta_path=reference_fasta_path,
         scratch_root=Path(bundle_payload["bundle_dir"]) / "runtime_validation" / "phage_runtime",
     )
-    arm_type = str(bundle_payload["arm_type"])
-    if arm_type == "baseline":
+    if arm_type == BASELINE_ARM_TYPE:
         training_schema = bundle_payload["training_blocks"]["baseline_phage"]["schema"]
         converted_rows, _ = build_baseline_phage_rows_from_continuous(
             phage_rows,
@@ -1207,7 +1219,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         schema=defense_schema,
     )
     write_json(args.output_dir / DEFENSE_DISAGREEMENT_FILENAME, defense_disagreement)
-    if float(defense_disagreement["average_disagreement_subtype_count"]) > 3.0:
+    if float(defense_disagreement["average_disagreement_subtype_count"]) > DEFENSE_DISAGREEMENT_GATE_MAX:
         raise ValueError(
             "Average defense disagreement exceeds the DEPLOY gate: "
             f"{defense_disagreement['average_disagreement_subtype_count']}"

@@ -1,5 +1,13 @@
+from pathlib import Path
+
+import pytest
+
 from lyzortx.pipeline.deployment_paired_features.run_deploy07_full_evaluation import (
+    FeatureBlock,
     PHAGE_BASELINE_FAMILY_COUNT_COLUMN,
+    _derive_validation_host_block_rows,
+    _derive_validation_phage_block_rows,
+    _load_aggregated_rows,
     build_baseline_phage_rows_from_continuous,
     build_baseline_defense_rows_from_counts,
     select_winning_arm_id_from_auc_ci,
@@ -29,38 +37,35 @@ def test_validate_schema_columns_reports_extra_columns_but_requires_schema_colum
 
 
 def test_validate_no_duplicate_block_columns_rejects_duplicate_non_key_columns() -> None:
-    block_a = type("Block", (), {})()
-    block_a.block_id = "a"
-    block_a.key_column = "bacteria"
-    block_a.schema = {
-        "columns": [
-            {"name": "bacteria", "dtype": "string"},
-            {"name": "shared_feature", "dtype": "float64"},
-        ]
-    }
-    block_a.rows = [{"bacteria": "host1", "shared_feature": 1.0}]
-    block_a.categorical_columns = ()
-    block_a.numeric_columns = ("shared_feature",)
+    block_a = FeatureBlock(
+        block_id="a",
+        key_column="bacteria",
+        schema={
+            "columns": [
+                {"name": "bacteria", "dtype": "string"},
+                {"name": "shared_feature", "dtype": "float64"},
+            ]
+        },
+        rows=[{"bacteria": "host1", "shared_feature": 1.0}],
+        categorical_columns=(),
+        numeric_columns=("shared_feature",),
+    )
+    block_b = FeatureBlock(
+        block_id="b",
+        key_column="bacteria",
+        schema={
+            "columns": [
+                {"name": "bacteria", "dtype": "string"},
+                {"name": "shared_feature", "dtype": "float64"},
+            ]
+        },
+        rows=[{"bacteria": "host1", "shared_feature": 2.0}],
+        categorical_columns=(),
+        numeric_columns=("shared_feature",),
+    )
 
-    block_b = type("Block", (), {})()
-    block_b.block_id = "b"
-    block_b.key_column = "bacteria"
-    block_b.schema = {
-        "columns": [
-            {"name": "bacteria", "dtype": "string"},
-            {"name": "shared_feature", "dtype": "float64"},
-        ]
-    }
-    block_b.rows = [{"bacteria": "host1", "shared_feature": 2.0}]
-    block_b.categorical_columns = ()
-    block_b.numeric_columns = ("shared_feature",)
-
-    try:
+    with pytest.raises(ValueError, match="shared_feature"):
         validate_no_duplicate_block_columns((block_a, block_b))
-    except ValueError as exc:
-        assert "shared_feature" in str(exc)
-    else:
-        raise AssertionError("Expected duplicate column validation to fail")
 
 
 def test_build_baseline_phage_rows_from_continuous_binarizes_family_scores() -> None:
@@ -145,3 +150,24 @@ def test_select_winning_arm_id_from_auc_ci_only_promotes_when_ci_excludes_zero()
         )
         == "deployment"
     )
+
+
+def test_load_aggregated_rows_rejects_missing_values(tmp_path: Path) -> None:
+    csv_path = tmp_path / "aggregated.csv"
+    csv_path.write_text("bacteria,feature_a\nhost1,\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Unexpected NaN values"):
+        _load_aggregated_rows(csv_path)
+
+
+def test_derive_validation_host_block_rows_rejects_unknown_arm_type(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Unknown arm_type"):
+        _derive_validation_host_block_rows(
+            bundle_payload={"arm_type": "unexpected", "validation_hosts": (), "bundle_dir": str(tmp_path)},
+            validation_fasta_dir=tmp_path,
+        )
+
+
+def test_derive_validation_phage_block_rows_rejects_unknown_arm_type() -> None:
+    with pytest.raises(ValueError, match="Unknown arm_type"):
+        _derive_validation_phage_block_rows({"arm_type": "unexpected"})
