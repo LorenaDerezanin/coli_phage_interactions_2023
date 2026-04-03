@@ -9,10 +9,40 @@ description: >
 
 # GitHub Actions Log Reading
 
-Assume the relevant logs already exist under `.scratch/gh-actions-logs/`. If
-they do not, use the `gh` skill first to fetch them.
+## Extract and clean Codex logs
 
-## First-pass workflow
+Use `lyzortx.orchestration.github_logs` to extract the Codex session from a run
+and strip noise (diffs, exec output, ANSI codes). This is the fastest way to
+understand what a Codex run did.
+
+```bash
+# From a GitHub Actions URL — fetches, extracts, cleans, saves to .scratch/
+python -m lyzortx.orchestration.github_logs extract-codex \
+    https://github.com/LyzorTx/coli_phage_interactions_2023/actions/runs/<run>/job/<job>
+
+# From an already-downloaded log file
+python -m lyzortx.orchestration.github_logs extract-codex --local \
+    .scratch/gh-actions-logs/<run-id>/<job-id>.log
+
+# Only Codex reasoning (drops exec blocks entirely)
+python -m lyzortx.orchestration.github_logs extract-codex --codex-only <URL-or-path>
+
+# Keep full exec output (default strips it, keeping only command + status)
+python -m lyzortx.orchestration.github_logs extract-codex --keep-exec-output <URL-or-path>
+```
+
+Output files are saved to `.scratch/gh-actions-logs/<run-id>/`:
+- `<job-id>.cleaned.log` — reasoning + commands (no diffs, no exec output, no ANSI)
+- `<job-id>.codex-only.log` — just the Codex commentary and patch summaries
+
+**Always start with the cleaned or codex-only log** before falling back to raw
+log inspection. These are typically 100-500 lines vs 100K+ raw.
+
+## Raw log inspection
+
+If the cleaned log is insufficient, fall back to raw logs under
+`.scratch/gh-actions-logs/`. If they do not exist, use the `gh` skill first to
+fetch them.
 
 1. Identify the exact run/job log file you need.
 2. Use `rg -n` to find failure markers before reading large chunks.
@@ -20,8 +50,6 @@ they do not, use the `gh` skill first to fetch them.
 4. Separate the first real failure from wrapper noise that appears later.
 5. Only after locating the real failure, decide whether timeout, quota, CI
    plumbing, or application logic was the actual blocker.
-
-Start with searches like:
 
 ```bash
 rg -n "##\\[error\\]|Traceback|ERROR:|FAILED|exited [1-9]|timed out|Quota exceeded|tokens used" \
