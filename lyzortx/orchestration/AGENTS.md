@@ -4,13 +4,6 @@
 - The README contains a Mermaid state diagram of the full automation lifecycle and descriptions of all components. Keep
   both in sync with the actual workflow logic.
 
-# Plan-Driven Execution
-
-- The main project driver is `lyzortx/orchestration/plan.yml`, rendered to `lyzortx/research_notes/PLAN.md`.
-- Follow the plan for task sequencing; the orchestrator updates checklist states automatically.
-- When scope is ambiguous, prefer alignment with the plan unless the user overrides.
-- Use the `/replan` skill when completed work is questioned or assumptions are invalidated.
-
 # Plan Rendering Completeness
 
 - Every field in `plan.yml` must appear in the rendered `PLAN.md`. If a field exists in the YAML, the renderer must
@@ -72,12 +65,6 @@
 - If a later task changes the codebase in ways that make a done task's criteria look stale (e.g., deleting features that
   a done task created), that is expected. The done task records what was true when it was completed; the later task
   records what changed. Git history tells the full story.
-
-# PR Creation for Orchestrator Tasks
-
-- Create PRs with `gh pr create`. Title pattern: `[ORCH][TASK_ID] Brief description`.
-- PR body MUST include `Closes #<issue_number>`. Add `--label orchestrator-task`.
-- Always use a HEREDOC for the body. Use the `/gh create-pr` command for the canonical template.
 
 # Orchestration Robustness vs Fail-Fast
 

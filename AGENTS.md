@@ -14,21 +14,23 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 
 # Code Placement Policy
 
-- All new code goes under `lyzortx/`. This is a fork; new work stays separated from upstream sources.
-- Do not add pipeline code at repository root or in original upstream directories.
+- All new content (code, data, and other resources) goes under `lyzortx/`. Only what must be outside goes outside
+  (e.g., root `AGENTS.md`, `.github/workflows/`, environment manifests).
+- This is a fork; keeping new work under `lyzortx/` separates it from upstream sources.
 - Modify code outside `lyzortx/` only when fixing a bug in the original repository code.
 
 # Environment Policy
 
-- **Local development:** The `phage_env` conda env is auto-activated via direnv (`.envrc`). No `conda run` needed
-  locally.
-- **Codex shells:** If `python`/`pytest` are not from `phage_env`, source conda explicitly first, then
-  `conda activate phage_env`.
-- **GitHub Actions:** Bootstrap with `conda env create -f environment.yml -n phage_env`, then use
-  `conda run -n phage_env ...` (always `-n`, never `-p <path>`).
+- **Local development:** The `phage_env` micromamba env is auto-activated via direnv (`.envrc`). No `micromamba run`
+  needed locally.
+- **Codex shells:** If `python`/`pytest` are not from `phage_env`, source micromamba explicitly first, then
+  `micromamba activate phage_env`.
+- **GitHub Actions:** Bootstrap with `micromamba env create -f environment.yml -n phage_env`, then use
+  `micromamba run -n phage_env ...` (always `-n`, never `-p <path>`).
 - **Prebaked CI images:** If a tool is missing, add the dependency to the appropriate `environment*.yml` manifest.
   Never weaken validation to work around a missing tool.
-- `conda run` does not source activation scripts — tools needing them (e.g., openjdk) require `conda activate` instead.
+- `micromamba run` does not source activation scripts — tools needing them (e.g., openjdk) require
+  `micromamba activate` instead.
 - Detect CI: check `GITHUB_ACTIONS=true`. Git identity is pre-configured in CI; do not set it.
 - **Long-running local jobs:** Run `caffeinate -dims -w <pid> &` to prevent macOS idle sleep.
 - **Generated outputs do not exist in CI.** Tasks must regenerate them or fail loudly — never silently produce empty
@@ -36,8 +38,8 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 
 # Dependency Policies
 
-- **Never run `pip install` or `conda install` directly.** Add dependencies to `requirements.txt` (pip) or
-  `environment*.yml` (conda), then install from the manifest.
+- **Never run `pip install` or `micromamba install` directly.** Add dependencies to `requirements.txt` (pip) or
+  `environment*.yml` (micromamba), then install from the manifest.
 - Keep `requirements.txt` alphabetically sorted. Pin every dependency to an exact version (e.g., `ruff==0.11.6`).
 - Prefer library-based approaches when they improve quality or maintainability — do not degrade implementations to
   avoid adding dependencies.
@@ -58,6 +60,19 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 - After every push to a PR branch, update the PR title and body to reflect all commits.
 - Any PR addressing a tracked issue must include `Closes #<issue_number>` in the description.
 - Do not remove a worktree until its PR is merged or the user explicitly abandons it.
+
+# Plan-Driven Execution
+
+- The main project driver is `lyzortx/orchestration/plan.yml`, rendered to `lyzortx/research_notes/PLAN.md`.
+- Follow the plan for task sequencing; the orchestrator updates checklist states automatically.
+- When scope is ambiguous, prefer alignment with the plan unless the user overrides.
+- Use the `/replan` skill when completed work is questioned or assumptions are invalidated.
+
+# PR Creation for Orchestrator Tasks
+
+- Create PRs with `gh pr create`. Title pattern: `[ORCH][TASK_ID] Brief description`.
+- PR body MUST include `Closes #<issue_number>`. Add `--label orchestrator-task`.
+- Always use a HEREDOC for the body. Use the `/gh create-pr` command for the canonical template.
 
 # Issue Closure Policy
 
