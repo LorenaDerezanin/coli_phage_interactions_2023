@@ -42,10 +42,3 @@
   via push-and-wait.
 - Run shell snippets (`gh pr view`, `printf`, variable substitutions) against real PRs to verify behavior.
 - Document non-trivial devops changes in `lyzortx/research_notes/lab_notebooks/devops.md`.
-
-# Codex Review Connector
-
-- The `chatgpt-codex-connector` GitHub App auto-reviews every PR with `state: "COMMENTED"`.
-- When Codex has suggestions, it posts inline comments. When it finds no issues, the review body contains only
-  boilerplate with no inline comments.
-- Re-review by commenting `@codex review` on the PR.
