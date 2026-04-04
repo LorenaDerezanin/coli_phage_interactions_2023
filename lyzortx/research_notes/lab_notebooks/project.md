@@ -1299,3 +1299,42 @@ to run DEPLOY04 host-typing and DEPLOY05 phage-RBP derivation in CI. Those are f
 **Note on done-task references**: done tasks DEPLOY02-06 still reference "DEPLOY07" as the full evaluation task. Per
 done-task immutability policy, those references are historical. The renumbering is tracked in git history and in the
 track_DEPLOY.md notebook entry.
+
+### 2026-04-04 20:45 UTC: Added a strict autoresearch-readiness track instead of forcing cloud search into Codex CI
+
+#### Executive summary
+
+We added Track AR to the plan as a strict `autoresearch` preparation track rather than pretending the first paid
+single-GPU search already fits the normal orchestrator workflow. The key decision is architectural: keep the
+`autoresearch` contract literal inside a tiny sealed sandbox, keep ST03 holdout labels outside the search workspace,
+and add a dedicated RunPod workflow/environment path instead of broadening `codex-implement.yml` with spend-bearing
+cloud secrets.
+
+This keeps the project honest on two fronts. First, the search loop cannot quietly benchmark-hack the real holdout.
+Second, we avoid making every ordinary orchestrator task capable of provisioning paid GPU infrastructure just because
+one late-stage experimental track needs it.
+
+#### What changed in the plan
+
+- Added **Track AR: Strict Autoresearch Readiness** after DEPLOY.
+- `AR01` builds the sealed sandbox and exports only `train` and `inner_val` splits from frozen deployment-paired
+  artifacts.
+- `AR02` defines the one-file baseline contract: fixed `prepare.py`, editable `train.py`, human-owned `program.md`,
+  fixed wall-clock budget, one scalar inner-loop metric.
+- `AR03` adds the dedicated RunPod workflow and GitHub environment contract, explicitly separate from
+  `.github/workflows/codex-implement.yml`.
+- `AR04` adds the champion import and sealed-holdout replication harness so any RunPod winner must still clear the real
+  repo benchmark before it can influence the main pipeline.
+
+#### Why this is the right cut
+
+The repo's current orchestrator is built around Codex implementation tasks, PRs, and CI-image labels. That is a poor
+fit for literal `autoresearch`, whose contract is "one machine, one GPU, one editable training file, one fixed-time
+inner loop." The right integration point is therefore not "let ordinary Codex implement tasks spin up cloud GPUs"; it
+is "build a tiny off-ramp and a strict re-entry point."
+
+That gives us a bounded experimental surface:
+
+- the search workspace stays tiny and comparable run-to-run;
+- paid cloud secrets stay environment-scoped instead of repo-global; and
+- only replicated winners are allowed back into the main evaluation path.

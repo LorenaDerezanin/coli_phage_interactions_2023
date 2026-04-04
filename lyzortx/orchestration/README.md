@@ -131,6 +131,9 @@ Plan authors should size tasks by boundary risk, not just by how small the diff 
   - a negative test proving strict failure still happens outside that use
 - When a task consumes generated artifacts, acceptance criteria should say whether stale default artifacts must be
   regenerated or rejected.
+- Do not route paid cloud GPU experiments through `.github/workflows/codex-implement.yml`. If a track needs
+  cloud-infrastructure provisioning or spend-bearing secrets (for example RunPod), add a separate manual workflow and a
+  dedicated GitHub environment with environment-scoped secrets instead of broadening the default Codex workflow.
 
 ## CLI Usage
 

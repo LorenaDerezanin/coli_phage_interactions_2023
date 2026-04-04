@@ -34,6 +34,10 @@ graph LR
     tdeploy["Track DEPLOY: Deployment-Paired Feature Pipeline"]
   end
 
+  subgraph s5["Stage 5"]
+    tar["Track AR: Strict Autoresearch Readiness"]
+  end
+
   ta --> tb
   ta --> tc
   ta --> td
@@ -50,6 +54,7 @@ graph LR
   tg --> tj
   tl --> tdeploy
   tg --> tdeploy
+  tdeploy --> tar
 ```
 
 ## Track ST: Steel Thread v0
@@ -752,3 +757,59 @@ graph LR
     repo-root dependencies
   - Filter inference to the 96 panel phages via the metadata CSV; the extra 411_P3.fna in the FNA directory must not
     appear in predictions
+
+## Track AR: Strict Autoresearch Readiness
+
+- **Guiding Principle:** Literal autoresearch preparation track. Build a tiny sealed sandbox that follows the
+  autoresearch contract as closely as possible inside this repo: one fixed `prepare.py`, one editable `train.py`, one
+  human-owned `program.md`, one scalar inner-loop validation metric, and one fixed single-GPU wall-clock budget. The
+  first tranche stops at ready-to-run infrastructure and replication tooling; the paid overnight RunPod search itself
+  should not be dispatched through the normal Codex implement workflow until a dedicated manual workflow and
+  environment-scoped secret path exist.
+- [ ] **AR01** Build a sealed autoresearch sandbox from frozen deployment-paired artifacts. Model: `gpt-5.4`. CI image
+      profile: `base`.
+  - Create `lyzortx/autoresearch_strict/` with exactly `prepare.py`, `train.py`, `program.md`, and `README.md` as the
+    core sandbox files
+  - `prepare.py` exports an autoresearch cache from frozen DEPLOY-era artifacts only; do not pull in panel-only metadata
+    or label-derived pairwise features
+  - The export contains only `train` and `inner_val` splits for the search workspace; ST03 holdout labels and
+    holdout-ready evaluation tables are excluded entirely
+  - Write a manifest recording upstream artifact paths, schema hash, split IDs, and export hash so the sandbox input is
+    auditable
+  - One command regenerates the sandbox cache from a clean checkout and writes all outputs under
+    `lyzortx/generated_outputs/autoresearch_strict/`
+- [ ] **AR02** Implement the one-file baseline model and strict search contract. Model: `gpt-5.4`. CI image profile:
+      `base`. Depends on tasks: `AR01`.
+  - `train.py` contains the full baseline model, optimizer, training loop, and inner-validation evaluation for the
+    sandbox cache from `AR01`
+  - `train.py` is the only file the search agent is allowed to modify; `prepare.py` stays fixed and the baseline
+    `program.md` explicitly says so
+  - The baseline model uses one host encoder, one phage encoder, and one learned pair scorer rather than reintroducing
+    bespoke enrichment-weight tables or panel-parity shims
+  - Every run emits one scalar inner-validation metric under a fixed wall-clock budget so search candidates are
+    comparable on the same machine
+  - Add guard tests proving the sandbox cannot read ST03 holdout labels and cannot silently bypass the fixed split
+    contract
+- [ ] **AR03** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
+      profile: `base`. Depends on tasks: `AR02`.
+  - Add a separate manual workflow for strict autoresearch runs instead of wiring cloud provisioning into
+    `.github/workflows/codex-implement.yml`
+  - The workflow uses a dedicated GitHub environment for RunPod access and expects `RUNPOD_API_KEY` there, not as a
+    broad repo-wide Codex secret
+  - The workflow provisions one fixed single-GPU pod type, syncs only the autoresearch sandbox, runs a bounded
+    experiment command, collects artifacts, and tears the pod down
+  - RunPod credentials are used only in narrow provisioning and teardown steps; they are not injected into the generic
+    Codex action environment
+  - Document the required GitHub environment, secret names, approval gate, and pod-spec contract in
+    `lyzortx/orchestration/README.md`
+- [ ] **AR04** Build champion import and sealed-holdout replication harness. Model: `gpt-5.4`. CI image profile: `base`.
+      Depends on tasks: `AR03`.
+  - Add one command that imports a candidate `train.py` plus its RunPod experiment metadata back into
+    `lyzortx/generated_outputs/autoresearch_strict/candidates/`
+  - Re-run imported candidates locally against the sealed ST03 holdout and the current DEPLOY baseline using the repo's
+    standard AUC, top-3, Brier, and bootstrap comparison path
+  - Promotion requires a predeclared primary-metric improvement without material regression on top-3 hit rate or Brier
+    score; otherwise the decision artifact must say `no_honest_lift`
+  - Output a single auditable decision bundle containing the imported candidate metadata, replication metrics, bootstrap
+    summary, and final promote/reject decision
+  - Document the strict autoresearch handoff and replication rule in the Track AR and project lab notebooks
