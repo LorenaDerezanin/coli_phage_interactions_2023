@@ -1351,3 +1351,58 @@ AR01 records the exact locked comparator benchmark for AR09 and requires bacteri
 as the primary search metric, and AR03-AR06 explicitly separate CI-scale correctness checks from full-scale runtime
 measurement. That should reduce both timeout risk and benchmark ambiguity before the first AUTORESEARCH issue is even
 opened.
+
+### 2026-04-05 09:30 UTC: Antiphage-landscape preprint supports adsorption-first modeling and weaker defense negatives
+
+#### Executive summary
+
+We reviewed the January 8, 2025 preprint _Protein and genomic language models chart a vast landscape of antiphage
+defenses_ and its public repo. The paper is important for this project, but not as a new strain-level host-range
+matrix. Its main project-level implication is that our adsorption-first strategy still looks right for _E. coli_ lysis
+prediction, while current defense annotations should be treated as incomplete positive evidence rather than as
+near-complete antiviral catalogs.
+
+#### What changed in our interpretation
+
+The 2024 Nature _Escherichia_ paper and the 2025 antiphage-landscape preprint answer different questions:
+
+- the 2024 paper is about pairwise lysis prediction in _Escherichia_;
+- the 2025 preprint is about discovering unknown antiphage systems in bacterial genomes.
+
+These are not contradictory. The 2024 paper can still be right that adsorption factors dominate current supervised
+prediction in _E. coli_, while the 2025 preprint is also right that the defense universe is much larger than today's
+annotation tools capture.
+
+#### Project-level implications
+
+1. Keep adsorption and RBP features as the main modeling axis.
+2. Keep defense features, but stop reading defense-feature absence as strong biological evidence.
+3. Treat LM-based defense discovery as a candidate-generation resource, not as a reason to center the main classifier
+   on defense burden.
+4. The next likely high-value feature increment is finer phage-side RBP resolution from FASTAs, not a broad defense
+   feature expansion.
+
+#### Data implications
+
+The preprint does not add a new strain-by-strain host-range matrix that can drop directly into training. Its wet-lab
+validation is on _Streptomyces albus_ expressing candidate systems against a small phage panel. For supervised data
+priority, the project should still rank:
+
+1. highest-fidelity ingestion of the 2024 _Escherichia_ source package;
+2. BASEL plus BASEL completion as same-host-genus external supervision;
+3. PhageHostLearn as transfer/robustness data;
+4. GPB and broader collections as secondary stress-test cohorts.
+
+#### Recommendations
+
+1. Keep the repo adsorption-first.
+2. In analyses and write-ups, treat defense absences as weak evidence.
+3. Do not describe our approach as generically better than the preprint's approach; describe it as better aligned to
+   the repo's task.
+4. Prioritize a future branch for higher-resolution RBP FASTA features.
+
+#### Sources
+
+- Preprint: https://www.biorxiv.org/content/10.1101/2025.01.08.631966v1
+- Paper repo: https://github.com/mdmparis/antiphage_landscape_2025
+- Core 2024 _Escherichia_ paper: https://doi.org/10.1038/s41564-024-01832-5

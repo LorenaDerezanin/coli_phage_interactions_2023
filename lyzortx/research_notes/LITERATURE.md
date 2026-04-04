@@ -1,6 +1,6 @@
 # Phage-Host Data and Literature Map (Performance-First)
 
-Last updated: 2026-02-15
+Last updated: 2026-04-05
 
 ## Objective
 
@@ -213,6 +213,26 @@ Last updated: 2026-02-15
   - Core paper (Data availability): `https://www.nature.com/articles/s41564-024-01832-5`
 - Recommended role:
   - Optional but high-value label-audit enhancer before large-scale weak-label ingestion.
+
+### 14) Antiphage Landscape 2025 (defense-discovery LM resource)
+
+- Why it matters:
+  - Strong recent defense-discovery paper from the same broader group/community as the core _Escherichia_ work.
+  - Provides a public code repo, supplementary candidate tables, and an interactive map of predicted antiphage protein
+    space.
+  - Relevant mainly as a feature-discovery and hypothesis-generation resource, not as a direct supervised host-range
+    matrix.
+- Access:
+  - Preprint: `https://www.biorxiv.org/content/10.1101/2025.01.08.631966v1`
+  - Code/data repo: `https://github.com/mdmparis/antiphage_landscape_2025`
+  - Interactive map: `https://mdmparis.github.io/antiphage-landscape/`
+- Caveats:
+  - As of 2026-04-05 this still appears to be a preprint rather than a verified journal publication.
+  - The paper does not provide a new strain-level _E. coli_ lysis matrix for direct training.
+  - The models are discovery-oriented and low-precision enough that manual curation remains central.
+- Recommended role:
+  - Use for candidate defense-feature mining and background biological calibration, after adsorption-side features and
+    same-host-genus supervised data are addressed.
 
 ## Literature Shortlist with Direct Project Relevance
 
