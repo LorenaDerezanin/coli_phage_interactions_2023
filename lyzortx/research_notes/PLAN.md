@@ -775,9 +775,9 @@ graph LR
   - Materialize one canonical pair table keyed by `bacteria` and `phage` that records label, training weight, host FASTA
     path, phage FASTA path, and explicit exclusion reasons for any unmatched raw rows; fail loudly if a retained
     training pair lacks a FASTA on either side
-  - Predeclare `train`, `inner_val`, and sealed `holdout` splits before any model search, and write a manifest with row
-    counts, bacteria/phage counts, split hashes, and input-file checksums under
-    `lyzortx/generated_outputs/autoresearch/`
+  - Predeclare `train`, `inner_val`, and sealed `holdout` splits before any model search, require that no bacterium
+    appears in more than one split, and write a manifest with row counts, bacteria/phage counts, split hashes, and
+    input-file checksums under `lyzortx/generated_outputs/autoresearch/`
   - Record in that split/benchmark manifest the exact comparator artifact identifier, path, or manifest key for the
     current locked production-intent benchmark that AR09 must compare against on the sealed holdout
   - Remove any conceptual dependency on DEPLOY artifacts from the AUTORESEARCH track; code reuse is allowed, but

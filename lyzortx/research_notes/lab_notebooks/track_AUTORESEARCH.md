@@ -2,11 +2,10 @@
 
 #### Executive summary
 
-Track AUTORESEARCH was rewritten from a DEPLOY-artifact sandbox into a raw-input search track. The new contract is:
-start from raw interactions, host FASTAs, and phage FASTAs; freeze all preprocessing in `prepare.py`; let the search
-loop mutate `train.py` only; and keep only those feature builders that can be rerun on unseen genomes at inference
-time. The practical outcome is that AUTORESEARCH now depends on Track A labels but no longer depends on DEPLOY outputs
-or checked-in feature CSVs as scientific inputs.
+Track AUTORESEARCH now starts from the raw interaction table plus host and phage FASTAs, not from DEPLOY outputs. The
+feature contract is frozen in `prepare.py`, the search loop is restricted to `train.py`, and only inference-safe
+feature builders survive into the track. The sealed benchmark is explicitly bacteria-disjoint, so the holdout cannot
+quietly reuse host identity seen during training.
 
 #### Design decisions
 
@@ -39,8 +38,8 @@ or checked-in feature CSVs as scientific inputs.
   preprocessing task.
 - **Tighten criteria before dispatch, not after the first failed implement run.** The current plan now names the search
   metric, requires AR01 to record the exact locked comparator benchmark, fixes AR02's schema-composability contract,
-  and states explicitly that AR03-AR06 validate correctness on fixtures/subsets in CI while full-panel scale is
-  measured outside CI.
+  states explicitly that AR03-AR06 validate correctness on fixtures/subsets in CI while full-panel scale is measured
+  outside CI, and requires bacteria-disjoint splits so the sealed holdout stays scientifically meaningful.
 
 #### Immediate task sequence
 
@@ -56,8 +55,8 @@ or checked-in feature CSVs as scientific inputs.
 
 #### Interpretation
 
-This is a cleaner AUTORESEARCH track than the earlier "strict readiness from DEPLOY artifacts" version because it
-matches the real scientific question: can a small search loop find a better learner over a frozen, deployable
-raw-genome feature contract? It also makes the failure modes legible. If a future winner is real, it won because the
-model got better on train-inference-parity features, not because the search workspace quietly inherited panel-only
-metadata or preblessed artifact tables.
+The point of the replan is to separate reusable biological signal from DEPLOY-specific scaffolding. AUTORESEARCH keeps
+the label policy, host/phage FASTA acquisition, and raw-sequence featurizers that can be rerun on new genomes; it cuts
+panel-shaped schemas, checked-in feature tables as scientific inputs, and any benchmark contract that would allow host
+identity leakage. If a future AUTORESEARCH model wins, it should win on the strength of a better learner over a frozen
+train-inference-parity cache, not because the search workspace inherited hidden structure from an earlier pipeline.

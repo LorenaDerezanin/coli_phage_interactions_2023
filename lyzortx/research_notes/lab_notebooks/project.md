@@ -1304,20 +1304,18 @@ track_DEPLOY.md notebook entry.
 
 #### Executive summary
 
-We rewrote Track AUTORESEARCH away from "consume frozen DEPLOY artifacts in a strict sandbox" and toward a cleaner
-scientific contract: train from raw interactions plus raw host/phage FASTAs, reuse only feature builders that can run
-on unseen genomes, freeze that preprocessing in `prepare.py`, and let the search loop mutate `train.py` only. The
-strategic consequence is that AUTORESEARCH now depends on Track A labels rather than on DEPLOY outputs, while still
-keeping cloud GPU search outside the normal Codex implementation workflow.
-
-This is the more honest cut. It preserves train-inference parity as the main product constraint, and it stops treating
-old DEPLOY CSVs or panel-shaped schemas as if they were the scientific starting point for model search.
+We replanned AUTORESEARCH around the raw interaction table plus host and phage FASTAs. Track A still supplies the
+label policy, but DEPLOY outputs no longer define the model-search substrate; preprocessing is frozen in `prepare.py`
+and the search loop is restricted to `train.py`. The benchmark contract is now explicit as well: the holdout is
+bacteria-disjoint, the comparator artifact is named up front, and CI correctness checks are separated from full-scale
+runtime measurement.
 
 #### What changed in the plan
 
 - Renamed the track intent to **Track AUTORESEARCH: Raw-FASTA Autoresearch**.
 - Removed the track-level dependency on DEPLOY artifacts and replaced it with a dependency on Track A's label policy.
-- `AR01` now freezes the raw corpus, label policy, FASTA inventory, and sealed split contract.
+- `AR01` now freezes the raw corpus, label policy, FASTA inventory, comparator benchmark reference, and a bacteria-disjoint
+  sealed split contract.
 - `AR02` now freezes the sandbox and cache contract before any feature-family implementation starts.
 - `AR03`-`AR06` split the cache build by runtime-risk boundary: host defense, host surface, host typing/stats, and
   phage projection/stats.
@@ -1328,12 +1326,11 @@ old DEPLOY CSVs or panel-shaped schemas as if they were the scientific starting 
 
 #### Why this is the right cut
 
-The earlier AUTORESEARCH draft was too artifact-centric. It preserved the `autoresearch` control surface, but it still
-treated DEPLOY-era outputs as the natural substrate for search. That kept too much of the old abstraction alive. If the
-goal is to find a better deployable learner, the right substrate is the raw corpus plus frozen feature builders that can
-run identically at inference time.
+The earlier AUTORESEARCH draft still treated DEPLOY-era outputs as the natural substrate for search. That would have
+preserved too much of the old abstraction. If the goal is to find a better deployable learner, the substrate has to be
+the raw corpus plus feature builders that can be rerun unchanged at inference time.
 
-This replan keeps the useful engineering from DEPLOY without inheriting DEPLOY's conceptual baggage:
+This replan keeps the useful engineering from DEPLOY without keeping DEPLOY as the scientific starting point:
 
 - Track A supplies a fixed label policy instead of reopening the labeling debate.
 - Raw-FASTA helper code survives when it is inference-safe.
@@ -1342,14 +1339,15 @@ This replan keeps the useful engineering from DEPLOY without inheriting DEPLOY's
 
 We also tightened the AUTORESEARCH acceptance criteria to reflect the runtime lessons already written down in
 `track_DEPLOY.md`: DefenseFinder-scale preprocessing does not belong inside the search loop, repeated environment setup
-is real overhead, and the wrong algorithmic shape can dominate wall time even before the model trains. Those are now
+is real overhead, and the wrong algorithmic shape can dominate wall time before the model trains. Those are now
 explicit plan constraints instead of implicit tribal knowledge.
 
 We then split the middle of the track further because "implement prepare.py" was still too coarse. Host defense,
 surface, typing, and phage projection are not one risk surface; they fail with different dependencies, runtimes, and
 optimization levers. The finer split should make orchestrator issues more honest and reviews more surgical.
 
-We also tightened the dispatch contract after review: AR02 now fixes the cache schema composition boundary up front,
-AR01 records the exact locked comparator benchmark for AR09, AR07 names ROC-AUC as the primary search metric, and
-AR03-AR06 explicitly separate CI-scale correctness checks from full-scale runtime measurement. That should reduce both
-timeout risk and benchmark ambiguity before the first AUTORESEARCH issue is even opened.
+We then tightened the dispatch contract after review: AR02 now fixes the cache schema composition boundary up front,
+AR01 records the exact locked comparator benchmark for AR09 and requires bacteria-disjoint splits, AR07 names ROC-AUC
+as the primary search metric, and AR03-AR06 explicitly separate CI-scale correctness checks from full-scale runtime
+measurement. That should reduce both timeout risk and benchmark ambiguity before the first AUTORESEARCH issue is even
+opened.
