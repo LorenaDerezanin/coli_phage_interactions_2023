@@ -11,6 +11,7 @@ from lyzortx.pipeline.deployment_paired_features.run_all_host_surface import (
     aggregate_host_surface_csvs,
     best_o_antigen_call,
     build_surface_feature_row,
+    build_surface_feature_row_from_scan_results,
 )
 from lyzortx.pipeline.deployment_paired_features.derive_host_surface_features import (
     _capsule_score_column_name,
@@ -134,6 +135,23 @@ class TestBuildSurfaceFeatureRow:
         )
         assert row["host_capsule_profile_kpsc_score"] == 0.0
         assert "host_capsule_profile_unknownprofile_score" not in row
+
+    def test_build_surface_feature_row_from_scan_results_can_drop_lps_proxy(self):
+        row = build_surface_feature_row_from_scan_results(
+            bacteria_id="test-host",
+            o_antigen_result={"o_type": "O157", "continuous_score": 42.5},
+            receptor_scores={"BTUB": 100.0},
+            capsule_scores={"KpsC": 30.0},
+            lps_lookup={"O157": {"proxy_type": "R3"}},
+            capsule_profile_names=["KpsC"],
+            include_lps_core_type=False,
+        )
+
+        assert row["host_o_antigen_type"] == "O157"
+        assert row["host_o_antigen_score"] == 42.5
+        assert row["host_receptor_btub_score"] == 100.0
+        assert row["host_capsule_profile_kpsc_score"] == 30.0
+        assert "host_lps_core_type" not in row
 
 
 class TestCapsuleScoreColumnName:

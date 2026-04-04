@@ -17,6 +17,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
+from lyzortx.pipeline.deployment_paired_features import run_all_host_surface
 from lyzortx.pipeline.deployment_paired_features.derive_host_defense_features import (
     DEFAULT_PANEL_DEFENSE_SUBTYPES_PATH,
     PER_HOST_COUNTS_FILENAME,
@@ -44,6 +45,7 @@ INNER_VAL_PAIR_TABLE_FILENAME = "inner_val_pairs.csv"
 ENTITY_INDEX_FILENAME = "entity_index.csv"
 SLOT_SCHEMA_FILENAME = "schema_manifest.json"
 SLOT_FEATURE_TABLE_FILENAME = "feature_table.csv"
+SLOT_FEATURES_FILENAME = "features.csv"
 HOST_DEFENSE_BUILD_MANIFEST_FILENAME = "host_defense_build_manifest.json"
 
 TASK_ID = "AR02"
@@ -54,6 +56,7 @@ HOLDOUT_HANDLING_RULE = "sealed_holdout_outside_workspace"
 SUPPORTED_SEARCH_SPLITS = (build_contract.TRAIN_SPLIT, build_contract.INNER_VAL_SPLIT)
 DISALLOWED_SEARCH_SPLITS = (build_contract.HOLDOUT_SPLIT,)
 PAIR_KEY = ("pair_id", "bacteria", "phage")
+HOST_SURFACE_BUILD_DIRNAME = "host_surface_cache_build"
 
 
 @dataclass(frozen=True)
@@ -213,6 +216,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--host-defense-aggregate-only",
         action="store_true",
         help="Skip host-defense worker execution and rebuild the slot artifact from existing per-host outputs only.",
+    )
+    parser.add_argument(
+        "--host-surface-build-dir",
+        type=Path,
+        default=None,
+        help="Optional directory for cached host-surface intermediates; defaults under the output root.",
+    )
+    parser.add_argument(
+        "--host-surface-max-workers",
+        type=int,
+        default=max(1, os.cpu_count() or 1),
+        help="Worker count for the host-surface pyhmmer fast path.",
     )
     return parser.parse_args(argv)
 
@@ -472,6 +487,49 @@ def load_csv_header(path: Path) -> list[str]:
         return next(reader)
 
 
+def build_entity_path_map(
+    *,
+    selected_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    entity_key: str,
+    path_key: str,
+) -> dict[str, Path]:
+    entity_paths: dict[str, Path] = {}
+    for split_rows in selected_rows.values():
+        for row in split_rows:
+            if str(row["retained_for_autoresearch"]) != "1":
+                continue
+            entity_id = str(row[entity_key])
+            path = Path(str(row[path_key]))
+            existing = entity_paths.get(entity_id)
+            if existing is not None and existing != path:
+                raise ValueError(f"Entity {entity_id!r} resolved to multiple {path_key} values: {existing} vs {path}")
+            entity_paths[entity_id] = path
+    if not entity_paths:
+        raise ValueError(f"No retained entities resolved for {entity_key}/{path_key}.")
+    return entity_paths
+
+
+def namespace_slot_feature_rows(
+    *,
+    rows: Sequence[Mapping[str, object]],
+    slot_spec: SlotSpec,
+) -> tuple[list[str], list[dict[str, object]]]:
+    namespaced_rows: list[dict[str, object]] = []
+    feature_columns: list[str] = []
+    for row in rows:
+        namespaced_row: dict[str, object] = {slot_spec.entity_key: row[slot_spec.entity_key]}
+        for key, value in row.items():
+            if key == slot_spec.entity_key:
+                continue
+            column_name = f"{slot_spec.column_prefix}{key}"
+            namespaced_row[column_name] = value
+            if column_name not in feature_columns:
+                feature_columns.append(column_name)
+        namespaced_rows.append(namespaced_row)
+    feature_columns.sort()
+    return feature_columns, namespaced_rows
+
+
 def write_split_pair_tables(cache_dir: Path, split_rows: Mapping[str, Sequence[Mapping[str, str]]]) -> dict[str, Any]:
     pair_table_dir = cache_dir / "search_pairs"
     ensure_directory(pair_table_dir)
@@ -695,6 +753,111 @@ def _build_host_defense_slot_artifact(
     }
 
 
+def build_entity_path_map(
+    *,
+    selected_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    entity_key: str,
+    path_key: str,
+) -> dict[str, Path]:
+    entity_paths: dict[str, Path] = {}
+    for split_rows in selected_rows.values():
+        for row in split_rows:
+            if str(row["retained_for_autoresearch"]) != "1":
+                continue
+            entity_id = str(row[entity_key])
+            path = Path(str(row[path_key]))
+            existing = entity_paths.get(entity_id)
+            if existing is not None and existing != path:
+                raise ValueError(f"Entity {entity_id!r} resolved to multiple {path_key} values: {existing} vs {path}")
+            entity_paths[entity_id] = path
+    if not entity_paths:
+        raise ValueError(f"No retained entities resolved for {entity_key}/{path_key}.")
+    return entity_paths
+
+
+def namespace_slot_feature_rows(
+    *,
+    rows: Sequence[Mapping[str, object]],
+    slot_spec: SlotSpec,
+) -> tuple[list[str], list[dict[str, object]]]:
+    namespaced_rows: list[dict[str, object]] = []
+    feature_columns: list[str] = []
+    for row in rows:
+        namespaced_row: dict[str, object] = {slot_spec.entity_key: row[slot_spec.entity_key]}
+        for key, value in row.items():
+            if key == slot_spec.entity_key:
+                continue
+            column_name = f"{slot_spec.column_prefix}{key}"
+            namespaced_row[column_name] = value
+            if column_name not in feature_columns:
+                feature_columns.append(column_name)
+        namespaced_rows.append(namespaced_row)
+    feature_columns.sort()
+    return feature_columns, namespaced_rows
+
+
+def materialize_host_surface_slot(
+    *,
+    cache_dir: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    max_workers: int,
+    build_dir: Path,
+) -> dict[str, Any]:
+    slot_spec = SLOT_SPEC_BY_NAME["host_surface"]
+    host_fasta_by_bacteria = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="host_fasta_path",
+    )
+    assemblies = [host_fasta_by_bacteria[bacteria] for bacteria in sorted(host_fasta_by_bacteria)]
+    fast_path_result = run_all_host_surface.build_host_surface_rows_fast_path(
+        assemblies=assemblies,
+        output_dir=build_dir,
+        max_workers=max(1, min(len(assemblies), max_workers)),
+        include_lps_core_type=False,
+    )
+    if len(fast_path_result["rows"]) != len(assemblies):
+        raise ValueError(
+            "Host-surface fast path returned the wrong row count: "
+            f"expected {len(assemblies)}, got {len(fast_path_result['rows'])}"
+        )
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=fast_path_result["rows"], slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "source_runtime_id": fast_path_result["runtime_metadata"]["runtime_id"],
+        "legacy_nhmmer_path_forbidden": fast_path_result["runtime_metadata"]["legacy_nhmmer_path_forbidden"],
+        "source_schema_includes_lps_core_type": fast_path_result["schema"]["includes_lps_core_type"],
+        "source_columns_dropped_for_autoresearch": ["host_lps_core_type"],
+        "rebuildable_from_raw_fastas": True,
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_runtime": dict(fast_path_result["runtime_metadata"]),
+        "build_dir": str(build_dir),
+    }
+
+
 def write_slot_indexes(
     cache_dir: Path,
     split_rows: Mapping[str, Sequence[Mapping[str, str]]],
@@ -826,6 +989,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     schema_manifest_path = args.cache_dir / SCHEMA_MANIFEST_FILENAME
     write_json(schema_manifest_path, schema_manifest)
+
+    host_surface_build_dir = args.host_surface_build_dir or (args.output_root / HOST_SURFACE_BUILD_DIRNAME)
+    slot_summaries["host_surface"] = materialize_host_surface_slot(
+        cache_dir=args.cache_dir,
+        split_rows=split_rows,
+        max_workers=args.host_surface_max_workers,
+        build_dir=host_surface_build_dir,
+    )
 
     warm_cache_validation = None
     if args.warm_cache_manifest_path is not None:

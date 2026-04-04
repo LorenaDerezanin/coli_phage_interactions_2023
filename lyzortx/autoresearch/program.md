@@ -25,6 +25,7 @@ The default output root is `lyzortx/generated_outputs/autoresearch/`.
 - `search_cache_v1/search_pairs/train_pairs.csv`
 - `search_cache_v1/search_pairs/inner_val_pairs.csv`
 - `search_cache_v1/feature_slots/<slot>/entity_index.csv`
+- `search_cache_v1/feature_slots/<slot>/features.csv` (when a slot has been materialized)
 - `search_cache_v1/feature_slots/<slot>/schema_manifest.json`
 
 ## Frozen slot contract
@@ -42,6 +43,15 @@ The slot names, join keys, and namespace prefixes are fixed in AR02:
 
 Future tasks may add columns inside these slots, but they may not rename a slot, change its join key, or change its
 column-family prefix.
+
+## Implemented slot behavior
+
+- `host_surface` is now materialized by `prepare.py` from raw host FASTAs using the pyhmmer fast path recorded in the
+  DEPLOY notebook. The exported columns stay inside the `host_surface__` namespace and intentionally exclude
+  `host_lps_core_type`, which still depends on Picard lookup tables rather than raw-sequence evidence.
+- The host-surface build caches `predicted_proteins.faa` under
+  `lyzortx/generated_outputs/autoresearch/host_surface_cache_build/` so retries do not rerun the front half of the
+  pipeline.
 
 ## Search-space boundary
 

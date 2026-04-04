@@ -29,8 +29,10 @@ import pyhmmer
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.deployment_paired_features.derive_host_surface_features import (
     RECEPTOR_SCORE_COLUMNS,
+    build_host_surface_feature_row,
     build_host_surface_schema,
     prepare_host_surface_runtime_inputs,
+    summarize_o_antigen_result,
     summarize_receptor_scores,
     _capsule_score_column_name,
     _column_names_from_schema,
@@ -43,6 +45,7 @@ ASSEMBLIES_DIR = Path("lyzortx/data/assemblies/picard")
 DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/deployment_paired_features/host_surface")
 EXPECTED_HOST_COUNT = 403
 AGGREGATED_CSV_PATH = Path("lyzortx/data/deployment_paired_features/403_host_surface_features.csv")
+FAST_PATH_RUNTIME_ID = "deploy07_pyhmmer_surface_fast_path_v1"
 _CODON_TABLE: dict[str, str] = {
     "TTT": "F",
     "TTC": "F",
@@ -210,12 +213,41 @@ def build_surface_feature_row(
     return row
 
 
+def build_surface_feature_row_from_scan_results(
+    *,
+    bacteria_id: str,
+    o_antigen_result: dict[str, object],
+    receptor_scores: dict[str, float],
+    capsule_scores: dict[str, float],
+    lps_lookup: dict[str, dict[str, object]],
+    capsule_profile_names: Sequence[str],
+    include_lps_core_type: bool = True,
+) -> dict[str, Any]:
+    schema = build_host_surface_schema(
+        capsule_profile_names,
+        include_lps_core_type=include_lps_core_type,
+    )
+    return build_host_surface_feature_row(
+        bacteria=bacteria_id,
+        schema=schema,
+        o_antigen_type=str(o_antigen_result.get("o_type", "")),
+        o_antigen_score=float(o_antigen_result.get("continuous_score", 0.0) or 0.0),
+        lps_core_type=(
+            str(lps_lookup.get(str(o_antigen_result.get("o_type", "")), {}).get("proxy_type", ""))
+            if include_lps_core_type
+            else ""
+        ),
+        receptor_scores=receptor_scores,
+        capsule_profile_scores=capsule_scores,
+    )
+
+
 def _process_one_host(
     bacteria_id: str,
     proteins_path_str: str,
     assets: dict,
-) -> tuple[str, bool, dict | str]:
-    """Run all 3 pyhmmer scans for one host. Returns (bacteria_id, success, row_or_error)."""
+) -> tuple[str, bool, dict[str, Any] | str]:
+    """Run all 3 pyhmmer scans for one host. Returns raw scan summaries or an error string."""
     try:
         cache = _get_worker_cache(assets)
         amino = cache["amino"]
@@ -225,22 +257,34 @@ def _process_one_host(
             targets = sf.read_block()
 
         # 1. O-antigen phmmer (protein-translated alleles)
-        o_hits: dict[str, float] = {}
+        o_antigen_hits: list[tl15.HmmerHit] = []
         for top_hits in pyhmmer.hmmer.phmmer(cache["o_queries"], targets, cpus=1):
-            query_name = top_hits.query.name
+            query_name = top_hits.query.name.decode()
             for hit in top_hits:
                 if hit.evalue < 1e-5:
-                    if query_name not in o_hits or hit.score > o_hits[query_name]:
-                        o_hits[query_name] = hit.score
+                    o_antigen_hits.append(
+                        tl15.HmmerHit(
+                            target_name=hit.name.decode(),
+                            query_name=query_name,
+                            evalue=hit.evalue,
+                            score=hit.score,
+                            description="",
+                        )
+                    )
+        o_antigen_result = summarize_o_antigen_result(
+            hits=o_antigen_hits,
+            references=assets["references"],
+            o_type_contract=assets["o_type_contract"],
+        )
 
         # 2. Receptor phmmer
         receptor_raw_hits = []
         for top_hits in pyhmmer.hmmer.phmmer(cache["omp_queries"], targets, cpus=1):
-            query_name = top_hits.query.name
+            query_name = top_hits.query.name.decode()
             for hit in top_hits:
                 receptor_raw_hits.append(
                     tl15.HmmerHit(
-                        target_name=hit.name,
+                        target_name=hit.name.decode(),
                         query_name=query_name,
                         evalue=hit.evalue,
                         score=hit.score,
@@ -254,18 +298,17 @@ def _process_one_host(
         for top_hits in pyhmmer.hmmer.hmmscan(targets, cache["hmms"], cpus=1):
             for hit in top_hits:
                 if hit.evalue < tl15.HMMSCAN_EVALUE_THRESHOLD:
-                    name = hit.name
+                    name = hit.name.decode()
                     capsule_scores[name] = max(capsule_scores.get(name, 0.0), hit.score)
-
-        row = build_surface_feature_row(
-            bacteria_id=bacteria_id,
-            o_hits=o_hits,
-            receptor_scores=receptor_scores,
-            capsule_scores=capsule_scores,
-            lps_lookup=assets["lps_lookup"],
-            capsule_profile_names=assets["capsule_profile_names"],
+        return (
+            bacteria_id,
+            True,
+            {
+                "o_antigen_result": o_antigen_result,
+                "receptor_scores": receptor_scores,
+                "capsule_scores": capsule_scores,
+            },
         )
-        return bacteria_id, True, row
 
     except Exception as exc:
         return bacteria_id, False, str(exc)
@@ -305,6 +348,129 @@ def aggregate_host_surface_csvs(
     return len(rows_sorted)
 
 
+def build_host_surface_rows_fast_path(
+    *,
+    assemblies: Sequence[Path],
+    output_dir: Path,
+    max_workers: int,
+    include_lps_core_type: bool = True,
+) -> dict[str, Any]:
+    if not assemblies:
+        raise ValueError("Host-surface fast path requires at least one assembly.")
+
+    LOGGER.info(
+        "Building host-surface rows via %s for %d assemblies with %d workers",
+        FAST_PATH_RUNTIME_ID,
+        len(assemblies),
+        max_workers,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    start = datetime.now(timezone.utc)
+    protein_tasks = [
+        (assembly.stem, str(assembly), str(output_dir / assembly.stem / "predicted_proteins.faa"))
+        for assembly in assemblies
+    ]
+    protein_cache_hits = 0
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_predict_proteins_one, task): task[0] for task in protein_tasks}
+        for future in as_completed(futures):
+            bacteria_id, ok, message = future.result()
+            if not ok:
+                raise RuntimeError(f"Protein prediction failed for {bacteria_id}: {message}")
+            if message == "cached":
+                protein_cache_hits += 1
+
+    prodigal_elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+    LOGGER.info(
+        "Host-surface protein prediction finished in %.1fs (%d/%d cached)",
+        prodigal_elapsed,
+        protein_cache_hits,
+        len(protein_tasks),
+    )
+
+    assets_dir = output_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    runtime_inputs = prepare_host_surface_runtime_inputs(
+        assets_output_dir=assets_dir,
+        picard_metadata_path=tl15.DEFAULT_PICARD_METADATA_PATH,
+        o_type_output_path=tl15.DEFAULT_O_TYPE_OUTPUT_PATH,
+        o_type_allele_path=tl15.DEFAULT_O_TYPE_ALLELE_PATH,
+        o_antigen_override_path=tl15.DEFAULT_O_ANTIGEN_OVERRIDE_PATH,
+        abc_capsule_profile_dir=tl15.DEFAULT_ABC_CAPSULE_PROFILE_DIR,
+        omp_reference_path=tl15.DEFAULT_OMP_REFERENCE_PATH,
+    )
+    o_antigen_prot_path = assets_dir / "o_antigen_protein_queries.faa"
+    allele_count = _translate_o_antigen_alleles(runtime_inputs.o_antigen_query_path, o_antigen_prot_path)
+
+    serializable_assets = {
+        "o_antigen_prot_path": str(o_antigen_prot_path),
+        "omp_reference_path": str(tl15.DEFAULT_OMP_REFERENCE_PATH),
+        "capsule_hmm_path": str(runtime_inputs.capsule_hmm_bundle_path),
+        "capsule_profile_names": list(runtime_inputs.capsule_profile_names),
+        "lps_lookup": {key: dict(value) for key, value in runtime_inputs.lps_lookup.items()},
+        "references": list(runtime_inputs.references),
+        "o_type_contract": dict(runtime_inputs.o_type_contract),
+    }
+
+    scan_start = datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    failures: list[tuple[str, str]] = []
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        futures = {
+            pool.submit(
+                _process_one_host,
+                assembly.stem,
+                str(output_dir / assembly.stem / "predicted_proteins.faa"),
+                serializable_assets,
+            ): assembly.stem
+            for assembly in assemblies
+        }
+        for future in as_completed(futures):
+            bacteria_id, ok, result = future.result()
+            if not ok:
+                failures.append((bacteria_id, str(result)))
+                continue
+            scan_result = dict(result)
+            rows.append(
+                build_surface_feature_row_from_scan_results(
+                    bacteria_id=bacteria_id,
+                    o_antigen_result=scan_result["o_antigen_result"],
+                    receptor_scores=scan_result["receptor_scores"],
+                    capsule_scores=scan_result["capsule_scores"],
+                    lps_lookup=serializable_assets["lps_lookup"],
+                    capsule_profile_names=runtime_inputs.capsule_profile_names,
+                    include_lps_core_type=include_lps_core_type,
+                )
+            )
+
+    if failures:
+        formatted = "; ".join(f"{bacteria}: {message}" for bacteria, message in sorted(failures))
+        raise RuntimeError(f"Host-surface fast path failed for {len(failures)} assemblies: {formatted}")
+
+    scan_elapsed = (datetime.now(timezone.utc) - scan_start).total_seconds()
+    total_elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+    schema = build_host_surface_schema(
+        runtime_inputs.capsule_profile_names,
+        include_lps_core_type=include_lps_core_type,
+    )
+    return {
+        "rows": sorted(rows, key=lambda row: str(row["bacteria"])),
+        "schema": schema,
+        "runtime_metadata": {
+            "runtime_id": FAST_PATH_RUNTIME_ID,
+            "legacy_nhmmer_path_forbidden": True,
+            "host_count": len(assemblies),
+            "protein_cache_hit_count": protein_cache_hits,
+            "o_antigen_allele_count": allele_count,
+            "include_lps_core_type": include_lps_core_type,
+            "prodigal_elapsed_seconds": round(prodigal_elapsed, 6),
+            "scan_elapsed_seconds": round(scan_elapsed, 6),
+            "total_elapsed_seconds": round(total_elapsed, 6),
+        },
+    }
+
+
 def main() -> int:
     setup_logging()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -318,111 +484,24 @@ def main() -> int:
     assemblies = sorted(ASSEMBLIES_DIR.glob("*.fasta"))
     if len(assemblies) != EXPECTED_HOST_COUNT:
         LOGGER.warning("Expected %d assemblies, found %d", EXPECTED_HOST_COUNT, len(assemblies))
-
-    # Phase 1: Predict proteins for all hosts
-    LOGGER.info("Phase 1: Predicting proteins for %d hosts with %d workers", len(assemblies), args.max_workers)
-    start = datetime.now(timezone.utc)
-
-    protein_tasks = [(a.stem, str(a), str(args.output_dir / a.stem / "predicted_proteins.faa")) for a in assemblies]
-    with ProcessPoolExecutor(max_workers=args.max_workers) as pool:
-        futures = {pool.submit(_predict_proteins_one, t): t[0] for t in protein_tasks}
-        done = 0
-        for f in as_completed(futures):
-            done += 1
-            bid, ok, msg = f.result()
-            if not ok:
-                LOGGER.error("Prodigal failed for %s: %s", bid, msg)
-                return 1
-            if done % 50 == 0 or done == len(futures):
-                elapsed = (datetime.now(timezone.utc) - start).total_seconds()
-                LOGGER.info("  Prodigal: %d/%d done (%.0fs)", done, len(futures), elapsed)
-
-    prodigal_elapsed = (datetime.now(timezone.utc) - start).total_seconds()
-    LOGGER.info("Phase 1 done: %.0fs", prodigal_elapsed)
-
-    # Prepare shared assets
-    LOGGER.info("Preparing shared assets (O-antigen queries, capsule HMMs)...")
-    assets_dir = args.output_dir / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-
-    ri = prepare_host_surface_runtime_inputs(
-        assets_output_dir=assets_dir,
-        picard_metadata_path=tl15.DEFAULT_PICARD_METADATA_PATH,
-        o_type_output_path=tl15.DEFAULT_O_TYPE_OUTPUT_PATH,
-        o_type_allele_path=tl15.DEFAULT_O_TYPE_ALLELE_PATH,
-        o_antigen_override_path=tl15.DEFAULT_O_ANTIGEN_OVERRIDE_PATH,
-        abc_capsule_profile_dir=tl15.DEFAULT_ABC_CAPSULE_PROFILE_DIR,
-        omp_reference_path=tl15.DEFAULT_OMP_REFERENCE_PATH,
+    result = build_host_surface_rows_fast_path(
+        assemblies=assemblies,
+        output_dir=args.output_dir,
+        max_workers=args.max_workers,
+        include_lps_core_type=True,
     )
+    rows = result["rows"]
+    schema = result["schema"]
+    runtime_metadata = result["runtime_metadata"]
 
-    # Translate O-antigen alleles to protein
-    o_antigen_prot_path = assets_dir / "o_antigen_protein_queries.faa"
-    allele_count = _translate_o_antigen_alleles(ri.o_antigen_query_path, o_antigen_prot_path)
-    LOGGER.info("Translated %d O-antigen alleles to protein", allele_count)
-
-    schema = build_host_surface_schema(ri.capsule_profile_names)
-
-    # Serializable assets dict for worker processes
-    serializable_assets = {
-        "o_antigen_prot_path": str(o_antigen_prot_path),
-        "omp_reference_path": str(tl15.DEFAULT_OMP_REFERENCE_PATH),
-        "capsule_hmm_path": str(ri.capsule_hmm_bundle_path),
-        "capsule_profile_names": list(ri.capsule_profile_names),
-        "lps_lookup": {k: dict(v) for k, v in ri.lps_lookup.items()},
-    }
-
-    # Phase 2: pyhmmer scans for all hosts
-    LOGGER.info("Phase 2: pyhmmer scans for %d hosts with %d workers", len(assemblies), args.max_workers)
-    scan_start = datetime.now(timezone.utc)
-
-    rows: list[dict] = []
-    failed = 0
-    failures: list[tuple[str, str]] = []
-
-    with ProcessPoolExecutor(max_workers=args.max_workers) as pool:
-        futures = {
-            pool.submit(
-                _process_one_host,
-                a.stem,
-                str(args.output_dir / a.stem / "predicted_proteins.faa"),
-                serializable_assets,
-            ): a.stem
-            for a in assemblies
-        }
-        done = 0
-        for f in as_completed(futures):
-            done += 1
-            bid, ok, result = f.result()
-            if ok:
-                rows.append(result)
-            else:
-                failed += 1
-                failures.append((bid, str(result)))
-                LOGGER.error("FAILED %s: %s", bid, result)
-            if done % 50 == 0 or done == len(futures):
-                elapsed = (datetime.now(timezone.utc) - scan_start).total_seconds()
-                LOGGER.info("  Scans: %d/%d done (%.0fs, %d failed)", done, len(futures), elapsed, failed)
-
-    scan_elapsed = (datetime.now(timezone.utc) - scan_start).total_seconds()
-    LOGGER.info("Phase 2 done: %.0fs (%d succeeded, %d failed)", scan_elapsed, len(rows), failed)
-
-    if failures:
-        LOGGER.error("Failed hosts:")
-        for bid, msg in failures:
-            LOGGER.error("  %s: %s", bid, msg)
-        return 1
-
-    # Aggregate into checked-in CSV
     count = aggregate_host_surface_csvs(rows, AGGREGATED_CSV_PATH, schema)
     if count != EXPECTED_HOST_COUNT:
         LOGGER.warning("Expected %d hosts in aggregated CSV, got %d", EXPECTED_HOST_COUNT, count)
-
-    total_elapsed = (datetime.now(timezone.utc) - start).total_seconds()
     LOGGER.info(
         "All done in %.0fs: prodigal %.0fs + scans %.0fs, %d rows written to %s",
-        total_elapsed,
-        prodigal_elapsed,
-        scan_elapsed,
+        runtime_metadata["total_elapsed_seconds"],
+        runtime_metadata["prodigal_elapsed_seconds"],
+        runtime_metadata["scan_elapsed_seconds"],
         count,
         AGGREGATED_CSV_PATH,
     )

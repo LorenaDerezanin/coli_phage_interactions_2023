@@ -139,6 +139,50 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         "COMPARATOR_BENCHMARK",
         write_locked_comparator_artifacts(comparator_root),
     )
+    fast_path_calls: list[dict[str, object]] = []
+
+    def fake_build_host_surface_rows_fast_path(
+        *,
+        assemblies,
+        output_dir,
+        max_workers,
+        include_lps_core_type,
+    ) -> dict[str, object]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fast_path_calls.append(
+            {
+                "assemblies": tuple(path.stem for path in assemblies),
+                "output_dir": output_dir,
+                "max_workers": max_workers,
+                "include_lps_core_type": include_lps_core_type,
+            }
+        )
+        return {
+            "rows": [
+                {
+                    "bacteria": path.stem,
+                    "host_o_antigen_type": f"{path.stem}_O",
+                    "host_o_antigen_score": 10.0 + index,
+                    "host_receptor_btub_score": float(index),
+                    "host_capsule_profile_kpsc_score": 0.0,
+                }
+                for index, path in enumerate(sorted(assemblies), start=1)
+            ],
+            "schema": {
+                "includes_lps_core_type": False,
+            },
+            "runtime_metadata": {
+                "runtime_id": "test_fast_path",
+                "legacy_nhmmer_path_forbidden": True,
+                "total_elapsed_seconds": 1.0,
+            },
+        }
+
+    monkeypatch.setattr(
+        prepare_cache.run_all_host_surface,
+        "build_host_surface_rows_fast_path",
+        fake_build_host_surface_rows_fast_path,
+    )
 
     def fake_build_host_defense_slot_artifact(
         *,
@@ -213,6 +257,13 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     assert provenance["build_mode"] == "raw_inputs_only"
     assert provenance["sealed_holdout"]["exported_to_search_cache"] is False
     assert provenance["sealed_holdout"]["retained_row_count"] > 0
+    assert (
+        provenance["search_workspace"]["feature_slots"]["host_surface"]["build_runtime"]["runtime_id"]
+        == "test_fast_path"
+    )
+    assert provenance["search_workspace"]["feature_slots"]["host_surface"]["build_runtime"][
+        "legacy_nhmmer_path_forbidden"
+    ]
 
     host_index_rows = read_csv_rows(cache_dir / "feature_slots" / "host_surface" / prepare_cache.ENTITY_INDEX_FILENAME)
     exported_bacteria = {row["bacteria"] for row in host_index_rows}
@@ -220,6 +271,26 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     holdout_bacteria = {row["bacteria"] for row in source_pair_rows if row["split"] == "holdout"}
     assert exported_bacteria
     assert exported_bacteria.isdisjoint(holdout_bacteria)
+    assert len(fast_path_calls) == 1
+    assert fast_path_calls[0]["include_lps_core_type"] is False
+    assert set(fast_path_calls[0]["assemblies"]) == exported_bacteria
+
+    feature_rows = read_csv_rows(cache_dir / "feature_slots" / "host_surface" / prepare_cache.SLOT_FEATURES_FILENAME)
+    assert {key for key in feature_rows[0]} == {
+        "bacteria",
+        "host_surface__host_o_antigen_type",
+        "host_surface__host_o_antigen_score",
+        "host_surface__host_receptor_btub_score",
+        "host_surface__host_capsule_profile_kpsc_score",
+    }
+    assert "host_surface__host_lps_core_type" not in feature_rows[0]
+
+    slot_schema = json.loads(
+        (cache_dir / "feature_slots" / "host_surface" / prepare_cache.SLOT_SCHEMA_FILENAME).read_text(encoding="utf-8")
+    )
+    assert slot_schema["reserved_feature_column_count"] == 4
+    assert slot_schema["materialization"]["legacy_nhmmer_path_forbidden"] is True
+    assert slot_schema["materialization"]["source_columns_dropped_for_autoresearch"] == ["host_lps_core_type"]
 
     schema = json.loads((cache_dir / prepare_cache.SCHEMA_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert schema["feature_slots"]["host_defense"]["reserved_feature_columns"] == ["host_defense__AbiD"]
