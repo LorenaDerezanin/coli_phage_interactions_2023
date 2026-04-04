@@ -35,7 +35,7 @@ graph LR
   end
 
   subgraph s5["Stage 5"]
-    tautoresearch["Track AUTORESEARCH: Strict Autoresearch Readiness"]
+    tautoresearch["Track AUTORESEARCH: Raw-FASTA Autoresearch"]
   end
 
   ta --> tb
@@ -54,7 +54,7 @@ graph LR
   tg --> tj
   tl --> tdeploy
   tg --> tdeploy
-  tdeploy --> tautoresearch
+  ta --> tautoresearch
 ```
 
 ## Track ST: Steel Thread v0
@@ -758,58 +758,76 @@ graph LR
   - Filter inference to the 96 panel phages via the metadata CSV; the extra 411_P3.fna in the FNA directory must not
     appear in predictions
 
-## Track AUTORESEARCH: Strict Autoresearch Readiness
+## Track AUTORESEARCH: Raw-FASTA Autoresearch
 
-- **Guiding Principle:** Literal autoresearch preparation track. Build a tiny sealed sandbox that follows the
-  autoresearch contract as closely as possible inside this repo: one fixed `prepare.py`, one editable `train.py`, one
-  human-owned `program.md`, one scalar inner-loop validation metric, and one fixed single-GPU wall-clock budget. The
-  first tranche stops at ready-to-run infrastructure and replication tooling; the paid overnight RunPod search itself
-  should not be dispatched through the normal Codex implement workflow until a dedicated manual workflow and
-  environment-scoped secret path exist.
-- [ ] **AR01** Build a sealed autoresearch sandbox from frozen deployment-paired artifacts. Model: `gpt-5.4`. CI image
+- **Guiding Principle:** Replan AUTORESEARCH as a raw-input search track instead of a DEPLOY-artifact consumer. The
+  scientific contract is train-inference parity: start from raw interactions, host FASTAs, and phage FASTAs; reuse only
+  helper code that extracts features from unseen genomes at runtime; freeze that preprocessing in `prepare.py`; let
+  `autoresearch` mutate `train.py` only. Checked-in DEPLOY CSVs are optional warm caches at most, never source-of-truth
+  inputs.
+- [ ] **AR01** Lock the AUTORESEARCH corpus, label policy, and sealed split contract. Model: `gpt-5.4`. CI image
       profile: `base`.
-  - Create `lyzortx/autoresearch_strict/` with exactly `prepare.py`, `train.py`, `program.md`, and `README.md` as the
-    core sandbox files
-  - `prepare.py` exports an autoresearch cache from frozen DEPLOY-era artifacts only; do not pull in panel-only metadata
-    or label-derived pairwise features
-  - The export contains only `train` and `inner_val` splits for the search workspace; ST03 holdout labels and
-    holdout-ready evaluation tables are excluded entirely
-  - Write a manifest recording upstream artifact paths, schema hash, split IDs, and export hash so the sandbox input is
-    auditable
-  - One command regenerates the sandbox cache from a clean checkout and writes all outputs under
-    `lyzortx/generated_outputs/autoresearch_strict/`
-- [ ] **AR02** Implement the one-file baseline model and strict search contract. Model: `gpt-5.4`. CI image profile:
-      `base`. Depends on tasks: `AR01`.
-  - `train.py` contains the full baseline model, optimizer, training loop, and inner-validation evaluation for the
-    sandbox cache from `AR01`
-  - `train.py` is the only file the search agent is allowed to modify; `prepare.py` stays fixed and the baseline
-    `program.md` explicitly says so
-  - The baseline model uses one host encoder, one phage encoder, and one learned pair scorer rather than reintroducing
-    bespoke enrichment-weight tables or panel-parity shims
-  - Every run emits one scalar inner-validation metric under a fixed wall-clock budget so search candidates are
-    comparable on the same machine
-  - Add guard tests proving the sandbox cannot read ST03 holdout labels and cannot silently bypass the fixed split
-    contract
-- [ ] **AR03** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
+  - Freeze the AUTORESEARCH input contract to exactly `data/interactions/raw/raw_interactions.csv`, host assemblies
+    resolved via `lyzortx/pipeline/deployment_paired_features/download_picard_assemblies.py`, and phage FASTAs under
+    `data/genomics/phages/FNA/`
+  - Reuse the Track A `label_set_v1` pair-label semantics plus `training_weight_v3` as the v1 AUTORESEARCH label policy;
+    document the exact handling of `score='n'` and make labels read-only for all downstream search tasks
+  - Materialize one canonical pair table keyed by `bacteria` and `phage` that records label, training weight, host FASTA
+    path, phage FASTA path, and explicit exclusion reasons for any unmatched raw rows; fail loudly if a retained
+    training pair lacks a FASTA on either side
+  - Predeclare `train`, `inner_val`, and sealed `holdout` splits before any model search, and write a manifest with row
+    counts, bacteria/phage counts, split hashes, and input-file checksums under
+    `lyzortx/generated_outputs/autoresearch/`
+  - Remove any conceptual dependency on DEPLOY artifacts from the AUTORESEARCH track; code reuse is allowed, but
+    training inputs must be reproducible from the raw contract
+- [ ] **AR02** Freeze prepare.py around inference-safe raw-FASTA featurizers. Model: `gpt-5.4`. CI image profile:
+      `full-bio`. Depends on tasks: `AR01`.
+  - Create `lyzortx/autoresearch/` with `prepare.py`, `train.py`, `program.md`, and `README.md` as the sandbox surface,
+    and make `prepare.py` the only supported path from raw inputs to the search cache
+  - `prepare.py` may reuse raw-FASTA helper code from the repo, but only for feature families that are callable on
+    unseen genomes: host DefenseFinder counts, host typing from assembly callers, raw host
+    O-antigen/receptor/capsule-profile scans, simple host/phage sequence stats, and TL17 phage RBP family projection
+    including `tl17_rbp_reference_hit_count`
+  - Explicitly exclude feature families that depend on panel-only metadata or undeployable proxies; in particular do not
+    export `host_lps_core_type` or any other surface/type field whose current implementation is derived from Picard
+    lookup tables rather than the query FASTA itself
+  - Checked-in DEPLOY feature CSVs may be used only as optional warm-cache accelerators; the acceptance path must prove
+    that the AUTORESEARCH cache can be regenerated from raw inputs alone and that any warm cache is manifest-matched to
+    the same schema
+  - The search cache written by `prepare.py` must contain `train` and `inner_val` only; sealed holdout labels and
+    holdout-ready evaluation tables stay outside the RunPod workspace entirely
+- [ ] **AR03** Implement the one-file baseline and strict autoresearch search contract. Model: `gpt-5.4`. CI image
       profile: `base`. Depends on tasks: `AR02`.
-  - Add a separate manual workflow for strict autoresearch runs instead of wiring cloud provisioning into
+  - `train.py` is the only file the search agent may modify; `prepare.py` stays fixed, and `program.md` states that
+    labels, splits, feature extraction, and evaluation code are out of bounds
+  - The baseline model uses one host encoder, one phage encoder, and one learned pair scorer over the frozen cache from
+    `AR02`; do not reintroduce pairwise enrichment tables, panel-parity shims, or mutable bioinformatics preprocessing
+  - Every search run executes under one fixed single-GPU wall-clock budget and emits one scalar inner-validation metric
+    so candidates are comparable on the same machine
+  - One bootstrap command prepares the cache and one training command runs the baseline end to end on a single GPU; both
+    commands are documented in `lyzortx/autoresearch/README.md`
+  - Add guard tests proving the sandbox cannot read sealed holdout labels, cannot silently change split membership, and
+    cannot bypass the frozen cache schema
+- [ ] **AR04** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
+      profile: `base`. Depends on tasks: `AR03`.
+  - Add a separate manual workflow for AUTORESEARCH runs instead of wiring cloud provisioning into
     `.github/workflows/codex-implement.yml`
   - The workflow uses a dedicated GitHub environment for RunPod access and expects `RUNPOD_API_KEY` there, not as a
     broad repo-wide Codex secret
-  - The workflow provisions one fixed single-GPU pod type, syncs only the autoresearch sandbox, runs a bounded
-    experiment command, collects artifacts, and tears the pod down
+  - The workflow provisions one fixed single-GPU pod type, syncs only the AUTORESEARCH sandbox plus its frozen cache
+    artifacts, runs a bounded experiment command, collects candidate artifacts, and tears the pod down
   - RunPod credentials are used only in narrow provisioning and teardown steps; they are not injected into the generic
     Codex action environment
-  - Document the required GitHub environment, secret names, approval gate, and pod-spec contract in
-    `lyzortx/orchestration/README.md`
-- [ ] **AR04** Build champion import and sealed-holdout replication harness. Model: `gpt-5.4`. CI image profile: `base`.
-      Depends on tasks: `AR03`.
+  - Document the required GitHub environment, secret names, approval gate, pod-spec contract, and local-versus-RunPod
+    handoff in `lyzortx/orchestration/README.md`
+- [ ] **AR05** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
+      Depends on tasks: `AR04`.
   - Add one command that imports a candidate `train.py` plus its RunPod experiment metadata back into
-    `lyzortx/generated_outputs/autoresearch_strict/candidates/`
-  - Re-run imported candidates locally against the sealed ST03 holdout and the current DEPLOY baseline using the repo's
-    standard AUC, top-3, Brier, and bootstrap comparison path
+    `lyzortx/generated_outputs/autoresearch/candidates/`
+  - Re-run imported candidates from a clean checkout with repeated seeds against the sealed holdout and the current
+    locked repo benchmark using the repo's standard AUC, top-3, Brier, and bootstrap comparison path
   - Promotion requires a predeclared primary-metric improvement without material regression on top-3 hit rate or Brier
     score; otherwise the decision artifact must say `no_honest_lift`
-  - Output a single auditable decision bundle containing the imported candidate metadata, replication metrics, bootstrap
-    summary, and final promote/reject decision
-  - Document the strict autoresearch handoff and replication rule in the Track AUTORESEARCH and project lab notebooks
+  - Output a single auditable decision bundle containing candidate provenance, replication metrics, bootstrap summary,
+    and final promote/reject decision
+  - Document the raw-input AUTORESEARCH handoff and replication rule in the Track AUTORESEARCH and project lab notebooks
