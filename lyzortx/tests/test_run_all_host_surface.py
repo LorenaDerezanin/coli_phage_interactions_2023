@@ -9,8 +9,6 @@ import pytest
 from lyzortx.pipeline.deployment_paired_features.run_all_host_surface import (
     _translate_o_antigen_alleles,
     aggregate_host_surface_csvs,
-    best_o_antigen_call,
-    build_surface_feature_row,
     build_surface_feature_row_from_scan_results,
 )
 from lyzortx.pipeline.deployment_paired_features.derive_host_surface_features import (
@@ -19,42 +17,11 @@ from lyzortx.pipeline.deployment_paired_features.derive_host_surface_features im
 )
 
 
-class TestBestOAntigenCall:
-    def test_no_hits_returns_empty(self):
-        o_type, score = best_o_antigen_call({})
-        assert o_type == ""
-        assert score == 0.0
-
-    def test_single_hit_extracts_o_type(self):
-        o_type, score = best_o_antigen_call({"O157__wzt__O157-1-wzt": 45.3})
-        assert o_type == "O157"
-        assert score == 45.3
-
-    def test_picks_highest_score(self):
-        hits = {
-            "O9__wzt__O9-20-wzt": 98.2,
-            "O9__wzt__O9-23-wzt": 92.4,
-            "O89__wzt__O89-4-wzt": 33.4,
-        }
-        o_type, score = best_o_antigen_call(hits)
-        assert o_type == "O9"
-        assert score == 98.2
-
-    def test_different_o_types_picks_best(self):
-        hits = {
-            "O6__wzx__O6-1-wzx": 10.0,
-            "O104__wzy__O104-3-wzy": 50.0,
-        }
-        o_type, score = best_o_antigen_call(hits)
-        assert o_type == "O104"
-        assert score == 50.0
-
-
-class TestBuildSurfaceFeatureRow:
+class TestBuildSurfaceFeatureRowFromScanResults:
     def test_basic_row_structure(self):
-        row = build_surface_feature_row(
+        row = build_surface_feature_row_from_scan_results(
             bacteria_id="test-host",
-            o_hits={"O157__wzt__O157-1": 42.5},
+            o_antigen_result={"o_type": "O157", "continuous_score": 42.5},
             receptor_scores={"BTUB": 100.0, "OMPC": 50.0},
             capsule_scores={"KpsC": 30.0},
             lps_lookup={"O157": {"proxy_type": "R3"}},
@@ -71,9 +38,9 @@ class TestBuildSurfaceFeatureRow:
         assert row["host_capsule_profile_kpsd_score"] == 0.0
 
     def test_empty_hits_gives_empty_o_type(self):
-        row = build_surface_feature_row(
+        row = build_surface_feature_row_from_scan_results(
             bacteria_id="empty",
-            o_hits={},
+            o_antigen_result={},
             receptor_scores={},
             capsule_scores={},
             lps_lookup={},
@@ -84,9 +51,9 @@ class TestBuildSurfaceFeatureRow:
         assert row["host_lps_core_type"] == ""
 
     def test_unknown_o_type_gives_empty_lps(self):
-        row = build_surface_feature_row(
+        row = build_surface_feature_row_from_scan_results(
             bacteria_id="x",
-            o_hits={"O999__wzt__O999-1": 10.0},
+            o_antigen_result={"o_type": "O999", "continuous_score": 10.0},
             receptor_scores={},
             capsule_scores={},
             lps_lookup={"O157": {"proxy_type": "R3"}},
@@ -96,9 +63,9 @@ class TestBuildSurfaceFeatureRow:
         assert row["host_lps_core_type"] == ""
 
     def test_all_12_receptors_present(self):
-        row = build_surface_feature_row(
+        row = build_surface_feature_row_from_scan_results(
             bacteria_id="x",
-            o_hits={},
+            o_antigen_result={},
             receptor_scores={},
             capsule_scores={},
             lps_lookup={},
@@ -110,9 +77,9 @@ class TestBuildSurfaceFeatureRow:
     def test_capsule_column_names_match_real_profiles(self):
         """Verify column naming for realistic profile names (KfiA, cluster_94)."""
         real_profiles = ["KfiA", "KpsC", "cluster_94", "KfoF"]
-        row = build_surface_feature_row(
+        row = build_surface_feature_row_from_scan_results(
             bacteria_id="x",
-            o_hits={},
+            o_antigen_result={},
             receptor_scores={},
             capsule_scores={"cluster_94": 12.5, "KfiA": 8.0},
             lps_lookup={},
@@ -125,9 +92,9 @@ class TestBuildSurfaceFeatureRow:
 
     def test_capsule_score_not_in_profile_list_ignored(self):
         """A capsule hit for a profile not in the schema should not appear in the row."""
-        row = build_surface_feature_row(
+        row = build_surface_feature_row_from_scan_results(
             bacteria_id="x",
-            o_hits={},
+            o_antigen_result={},
             receptor_scores={},
             capsule_scores={"UnknownProfile": 99.0},
             lps_lookup={},
@@ -136,7 +103,7 @@ class TestBuildSurfaceFeatureRow:
         assert row["host_capsule_profile_kpsc_score"] == 0.0
         assert "host_capsule_profile_unknownprofile_score" not in row
 
-    def test_build_surface_feature_row_from_scan_results_can_drop_lps_proxy(self):
+    def test_can_drop_lps_proxy(self):
         row = build_surface_feature_row_from_scan_results(
             bacteria_id="test-host",
             o_antigen_result={"o_type": "O157", "continuous_score": 42.5},
@@ -217,17 +184,17 @@ class TestAggregateHostSurfaceCsvs:
     def test_writes_sorted_csv_with_schema_columns(self, tmp_path):
         schema = build_host_surface_schema(("KpsC", "KpsD"))
         rows = [
-            build_surface_feature_row(
+            build_surface_feature_row_from_scan_results(
                 bacteria_id="host-B",
-                o_hits={"O6__wzx__O6-1": 20.0},
+                o_antigen_result={"o_type": "O6", "continuous_score": 20.0},
                 receptor_scores={},
                 capsule_scores={},
                 lps_lookup={},
                 capsule_profile_names=["KpsC", "KpsD"],
             ),
-            build_surface_feature_row(
+            build_surface_feature_row_from_scan_results(
                 bacteria_id="host-A",
-                o_hits={},
+                o_antigen_result={},
                 receptor_scores={"BTUB": 100.0},
                 capsule_scores={"KpsC": 5.0},
                 lps_lookup={},

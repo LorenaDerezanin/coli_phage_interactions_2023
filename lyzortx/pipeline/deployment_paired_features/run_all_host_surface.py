@@ -28,13 +28,11 @@ import pyhmmer
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.deployment_paired_features.derive_host_surface_features import (
-    RECEPTOR_SCORE_COLUMNS,
     build_host_surface_feature_row,
     build_host_surface_schema,
     prepare_host_surface_runtime_inputs,
     summarize_o_antigen_result,
     summarize_receptor_scores,
-    _capsule_score_column_name,
     _column_names_from_schema,
 )
 from lyzortx.pipeline.track_l.steps import build_raw_host_surface_projector as tl15
@@ -172,45 +170,6 @@ def _get_worker_cache(assets: dict) -> dict:
             _worker_cache["hmms"] = list(hf)
         _worker_cache["amino"] = amino
     return _worker_cache
-
-
-def best_o_antigen_call(o_hits: dict[str, float]) -> tuple[str, float]:
-    """Pick the best O-antigen allele hit and extract O-type.
-
-    Returns (o_type, best_score).  Empty string and 0.0 when no hits pass threshold.
-    """
-    if not o_hits:
-        return "", 0.0
-    best_allele = max(o_hits, key=o_hits.get)
-    best_score = o_hits[best_allele]
-    o_type = best_allele.split("__")[0] if best_allele else ""
-    return o_type, round(float(best_score), 6)
-
-
-def build_surface_feature_row(
-    *,
-    bacteria_id: str,
-    o_hits: dict[str, float],
-    receptor_scores: dict[str, float],
-    capsule_scores: dict[str, float],
-    lps_lookup: dict[str, dict[str, object]],
-    capsule_profile_names: Sequence[str],
-) -> dict[str, Any]:
-    """Build a single feature-row dict from scan results.  Pure function — no I/O."""
-    o_type, o_score = best_o_antigen_call(o_hits)
-    lps_entry = lps_lookup.get(o_type, {})
-
-    row: dict[str, Any] = {
-        "bacteria": bacteria_id,
-        "host_o_antigen_type": o_type,
-        "host_o_antigen_score": o_score,
-        "host_lps_core_type": str(lps_entry.get("proxy_type", "")),
-    }
-    for receptor_name, col_name in RECEPTOR_SCORE_COLUMNS:
-        row[col_name] = round(float(receptor_scores.get(receptor_name, 0.0)), 6)
-    for pname in capsule_profile_names:
-        row[_capsule_score_column_name(pname)] = round(float(capsule_scores.get(pname, 0.0)), 6)
-    return row
 
 
 def build_surface_feature_row_from_scan_results(

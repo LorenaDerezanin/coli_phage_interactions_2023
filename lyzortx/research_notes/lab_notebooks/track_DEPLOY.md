@@ -527,9 +527,9 @@ eliminates that entirely.
 
 #### Tests
 
-- `best_o_antigen_call`: empty hits, single hit O-type extraction, best-score tie-break, cross-O-type selection.
-- `build_surface_feature_row`: full row structure, empty hits, unknown O-type LPS fallback, all 12 receptors present,
-  realistic capsule profile names (KfiA, cluster_94), unknown capsule profile ignored.
+- `build_surface_feature_row_from_scan_results`: full row structure, empty O-antigen result, unknown O-type LPS
+  fallback, all 12 receptors present, realistic capsule profile names (KfiA, cluster_94), unknown capsule profile
+  ignored, optional LPS-core exclusion.
 - `_capsule_score_column_name`: simple name, cluster with number, empty name raises ValueError.
 - `_translate_o_antigen_alleles`: DNA to protein translation with stop codon stripping, empty input.
 - `aggregate_host_surface_csvs`: empty rows (header-only), sorted output with correct schema columns and values.

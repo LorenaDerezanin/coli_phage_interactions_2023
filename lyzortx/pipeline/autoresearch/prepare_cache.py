@@ -753,49 +753,6 @@ def _build_host_defense_slot_artifact(
     }
 
 
-def build_entity_path_map(
-    *,
-    selected_rows: Mapping[str, Sequence[Mapping[str, str]]],
-    entity_key: str,
-    path_key: str,
-) -> dict[str, Path]:
-    entity_paths: dict[str, Path] = {}
-    for split_rows in selected_rows.values():
-        for row in split_rows:
-            if str(row["retained_for_autoresearch"]) != "1":
-                continue
-            entity_id = str(row[entity_key])
-            path = Path(str(row[path_key]))
-            existing = entity_paths.get(entity_id)
-            if existing is not None and existing != path:
-                raise ValueError(f"Entity {entity_id!r} resolved to multiple {path_key} values: {existing} vs {path}")
-            entity_paths[entity_id] = path
-    if not entity_paths:
-        raise ValueError(f"No retained entities resolved for {entity_key}/{path_key}.")
-    return entity_paths
-
-
-def namespace_slot_feature_rows(
-    *,
-    rows: Sequence[Mapping[str, object]],
-    slot_spec: SlotSpec,
-) -> tuple[list[str], list[dict[str, object]]]:
-    namespaced_rows: list[dict[str, object]] = []
-    feature_columns: list[str] = []
-    for row in rows:
-        namespaced_row: dict[str, object] = {slot_spec.entity_key: row[slot_spec.entity_key]}
-        for key, value in row.items():
-            if key == slot_spec.entity_key:
-                continue
-            column_name = f"{slot_spec.column_prefix}{key}"
-            namespaced_row[column_name] = value
-            if column_name not in feature_columns:
-                feature_columns.append(column_name)
-        namespaced_rows.append(namespaced_row)
-    feature_columns.sort()
-    return feature_columns, namespaced_rows
-
-
 def materialize_host_surface_slot(
     *,
     cache_dir: Path,
