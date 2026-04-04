@@ -158,7 +158,7 @@ jobs:
           micromamba run -n phage_env python --version
           micromamba run -n phage_env pip --version
 
-      - name: Check for unresolved review feedback
+      - name: Check for PR feedback comments
         id: comments
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
@@ -166,23 +166,16 @@ jobs:
           PR_NUM="${{ steps.pr.outputs.number }}"
           OWNER="${{ github.repository_owner }}"
           REPO="${{ github.event.repository.name }}"
-          UNRESOLVED_COUNT=$(micromamba run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" /dev/null --count-only)
-
-          # Also check for review feedback in top-level Claude comments.
-          # When Claude fails to submit a formal review, feedback lands in
-          # the sticky comment instead of in review threads.
-          COMMENT_FEEDBACK=$(gh api "repos/${OWNER}/${REPO}/issues/${PR_NUM}/comments" \
-            --jq '[.[] | select(.user.login == "claude[bot]") | select(.body | test("### Issues|### Overall Assessment"))] | length')
-          COMMENT_FEEDBACK=${COMMENT_FEEDBACK:-0}
+          FEEDBACK_COUNT=$(micromamba run -n phage_env python -m lyzortx.orchestration.pr_feedback \
+            "$OWNER" "$REPO" "$PR_NUM" /dev/null --count-only)
 
           HAS_FEEDBACK=false
-          if [ "$UNRESOLVED_COUNT" -gt 0 ] || [ "$COMMENT_FEEDBACK" -gt 0 ]; then
+          if [ "$FEEDBACK_COUNT" -gt 0 ]; then
             HAS_FEEDBACK=true
           fi
           echo "has_feedback=${HAS_FEEDBACK}" >> "$GITHUB_OUTPUT"
-          echo "has_comment_feedback=$([[ $COMMENT_FEEDBACK -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "unresolved_thread_count=${UNRESOLVED_COUNT}" >> "$GITHUB_OUTPUT"
-          echo "Unresolved threads: ${UNRESOLVED_COUNT}, Claude comments with feedback: ${COMMENT_FEEDBACK}"
+          echo "feedback_count=${FEEDBACK_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "PR feedback artifacts: ${FEEDBACK_COUNT}"
 
       - name: No feedback — label as clean
         if: steps.comments.outputs.has_feedback == 'false'
@@ -213,7 +206,7 @@ jobs:
               --add-label "needs-human-review"
           fi
 
-      - name: Collect unresolved review feedback
+      - name: Collect PR feedback comments
         if: steps.comments.outputs.has_feedback == 'true' && fromJSON(steps.round.outputs.round) < 3
         env:
           GITHUB_TOKEN: ${{ steps.czarphage.outputs.token }}
@@ -224,19 +217,11 @@ jobs:
           PROFILE="${{ needs.resolve-ci-image.outputs.ci_image_profile }}"
           IMAGE_LABEL="${{ needs.resolve-ci-image.outputs.ci_image_label }}"
           RAW_FEEDBACK=.scratch/ci/codex_feedback_raw.txt
-          micromamba run -n phage_env python -m lyzortx.orchestration.review_threads "$OWNER" "$REPO" "$PR_NUM" "$RAW_FEEDBACK"
-
-          # If no review threads but Claude posted feedback in a top-level comment,
-          # extract that comment as the feedback source.
-          if [ "${{ steps.comments.outputs.unresolved_thread_count }}" -eq 0 ] \
-             && [ "${{ steps.comments.outputs.has_comment_feedback }}" = "true" ]; then
-            echo "# Review feedback from Claude's PR comment" > "$RAW_FEEDBACK"
-            echo "" >> "$RAW_FEEDBACK"
-            echo "(Claude did not submit a formal review; feedback was posted in a top-level comment.)" >> "$RAW_FEEDBACK"
-            echo "" >> "$RAW_FEEDBACK"
-            gh api "repos/${OWNER}/${REPO}/issues/${PR_NUM}/comments" \
-              --jq '[.[] | select(.user.login == "claude[bot]") | select(.body | test("### Issues|### Overall Assessment"))] | last | .body' \
-              >> "$RAW_FEEDBACK"
+          FEEDBACK_COUNT=$(micromamba run -n phage_env python -m lyzortx.orchestration.pr_feedback \
+            "$OWNER" "$REPO" "$PR_NUM" "$RAW_FEEDBACK")
+          if [ "$FEEDBACK_COUNT" -eq 0 ]; then
+            echo "::error::Expected PR feedback, but pr_feedback.py returned zero artifacts."
+            exit 1
           fi
 
           {

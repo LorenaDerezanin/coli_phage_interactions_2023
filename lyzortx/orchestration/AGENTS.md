@@ -73,3 +73,11 @@
 - But robustness means retrying on transient errors, not tolerating missing data or silently skipping work. If the
   orchestrator cannot dispatch a task because its inputs are missing, that is an error to surface, not a condition to
   swallow.
+
+# PR Lifecycle Feedback Contract
+
+- `codex-pr-lifecycle.yml` is not the merge gate. `claude-pr-review.yml` decides whether to auto-merge or dispatch the
+  lifecycle workflow.
+- Keep lifecycle feedback detection simple: read visible PR feedback surfaces (top-level PR comments, inline review
+  comments, and non-empty review bodies) and do not reintroduce unresolved-thread counting as the criterion for
+  whether there is work to do.

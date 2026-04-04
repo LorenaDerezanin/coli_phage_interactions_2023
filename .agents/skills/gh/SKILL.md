@@ -249,9 +249,9 @@ gh api repos/OWNER/REPO/issues/123/comments --jq '.[] | {user: .user.login, body
 ```
 
 **When this matters most:**
-- `codex-pr-lifecycle.yml` currently only reads formal review threads via `review_threads.py`. If Claude posted feedback
-  as an issue comment, the lifecycle workflow sees zero unresolved threads and labels the PR `ready-for-human-review` —
-  even though actionable feedback exists in the comments.
+- `codex-pr-lifecycle.yml` should read visible PR feedback surfaces across review bodies, inline review comments, and
+  issue comments. If a lifecycle implementation only checks one of those surfaces, it can still label a PR
+  `ready-for-human-review` while actionable feedback exists elsewhere on the PR.
 - The Codex connector (`chatgpt-codex-connector[bot]`) posts inline review comments at endpoint #2 — these are not
   visible via endpoint #1 or #3.
 - Any script or workflow that checks "did Claude approve this PR?" must check all three endpoints.
