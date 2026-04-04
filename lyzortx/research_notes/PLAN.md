@@ -782,7 +782,7 @@ graph LR
     current locked production-intent benchmark that AR09 must compare against on the sealed holdout
   - Remove any conceptual dependency on DEPLOY artifacts from the AUTORESEARCH track; code reuse is allowed, but
     training inputs must be reproducible from the raw contract
-- [ ] **AR02** Scaffold the sandbox and freeze the cache and manifest contract. Model: `gpt-5.4`. CI image profile:
+- [x] **AR02** Scaffold the sandbox and freeze the cache and manifest contract. Model: `gpt-5.4`. CI image profile:
       `base`. Depends on tasks: `AR01`.
   - Create `lyzortx/autoresearch/` with `prepare.py`, `train.py`, `program.md`, and `README.md` as the sandbox surface,
     and make `prepare.py` the only supported path from raw inputs to the search cache

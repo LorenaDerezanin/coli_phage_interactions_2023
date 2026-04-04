@@ -1234,7 +1234,7 @@ tracks:
         the raw contract
     - id: AR02
       title: Scaffold the sandbox and freeze the cache and manifest contract
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: base
       depends_on_tasks:
