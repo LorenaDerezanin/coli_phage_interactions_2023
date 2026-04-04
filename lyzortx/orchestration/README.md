@@ -94,6 +94,9 @@ stateDiagram-v2
   workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
 - `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
+- `review_threads.py` — fetches unresolved PR review threads via GitHub GraphQL, paginates across thread pages, filters
+  to unresolved non-outdated threads, and formats them into a Codex feedback prompt. This remains the merge-gate helper
+  used by `claude-pr-review.yml`.
 - `pr_feedback.py` — fetches top-level PR conversation comments, inline review comments, and non-empty review bodies,
   then formats them into a Codex feedback prompt so lifecycle runs read every visible PR feedback surface.
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
