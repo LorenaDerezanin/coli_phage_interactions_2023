@@ -137,6 +137,9 @@ Plan authors should size tasks by boundary risk, not just by how small the diff 
 - For AUTORESEARCH-style tasks, treat raw inputs plus frozen featurizer code as the source of truth. Checked-in feature
   CSVs may be optional warm caches only; acceptance criteria should require rebuildability from raw data and should
   exclude panel-only metadata or proxies that cannot run on unseen FASTAs.
+- For AUTORESEARCH plan design, split cache-building tasks by runtime-risk boundary when the stages use different
+  toolchains or cost profiles. In this repo that means separate tickets for host defense, host surface, host typing,
+  and phage projection instead of one broad "implement prepare.py" task.
 
 ## CLI Usage
 

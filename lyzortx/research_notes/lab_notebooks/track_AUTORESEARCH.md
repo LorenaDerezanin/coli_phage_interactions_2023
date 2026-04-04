@@ -33,14 +33,22 @@ or checked-in feature CSVs as scientific inputs.
   until the algorithmic shape changed, and that repeated environment/bootstrap work mattered. AUTORESEARCH therefore
   must state up front that cache building is separate from the search loop, heavy steps must be batched or resume-safe,
   and RunPod time must not be burned redoing known one-time preprocessing.
+- **Split the cache work by runtime-risk boundary, not by file count.** Host defense, host surface, host typing, and
+  phage projection now live in separate plan tasks because they have different toolchains, different performance
+  characteristics, and different known failure modes. The previous 5-ticket plan hid too much risk inside one broad
+  preprocessing task.
 
 #### Immediate task sequence
 
 1. `AR01`: freeze the raw corpus, label policy, and sealed split contract.
-2. `AR02`: build `prepare.py` around the inference-safe raw-FASTA featurizer allowlist.
-3. `AR03`: define the one-file baseline and strict search contract.
-4. `AR04`: add the dedicated RunPod workflow and secret boundary.
-5. `AR05`: import candidates back and replicate on the sealed holdout.
+2. `AR02`: scaffold the sandbox and freeze the cache contract.
+3. `AR03`: add host-defense cache building.
+4. `AR04`: add host-surface cache building.
+5. `AR05`: add host typing and simple host stats.
+6. `AR06`: add phage projection and simple phage stats.
+7. `AR07`: define the one-file baseline and strict search contract.
+8. `AR08`: add the dedicated RunPod workflow and secret boundary.
+9. `AR09`: import candidates back and replicate on the sealed holdout.
 
 #### Interpretation
 

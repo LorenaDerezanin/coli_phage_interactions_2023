@@ -780,57 +780,97 @@ graph LR
     `lyzortx/generated_outputs/autoresearch/`
   - Remove any conceptual dependency on DEPLOY artifacts from the AUTORESEARCH track; code reuse is allowed, but
     training inputs must be reproducible from the raw contract
-- [ ] **AR02** Freeze prepare.py around inference-safe raw-FASTA featurizers. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `AR01`.
+- [ ] **AR02** Scaffold the sandbox and freeze the cache and manifest contract. Model: `gpt-5.4`. CI image profile:
+      `base`. Depends on tasks: `AR01`.
   - Create `lyzortx/autoresearch/` with `prepare.py`, `train.py`, `program.md`, and `README.md` as the sandbox surface,
     and make `prepare.py` the only supported path from raw inputs to the search cache
-  - `prepare.py` may reuse raw-FASTA helper code from the repo, but only for feature families that are callable on
-    unseen genomes: host DefenseFinder counts, host typing from assembly callers, raw host
-    O-antigen/receptor/capsule-profile scans, simple host/phage sequence stats, and TL17 phage RBP family projection
-    including `tl17_rbp_reference_hit_count`
-  - Build the cache with the DEPLOY runtime lessons made explicit in the contract: heavy feature extraction is a
-    one-time pre-search step, must be resume-safe, must preinstall shared assets once before parallel fan-out, and must
-    avoid per-item environment activation or model-download work inside worker loops
-  - Explicitly exclude feature families that depend on panel-only metadata or undeployable proxies; in particular do not
-    export `host_lps_core_type` or any other surface/type field whose current implementation is derived from Picard
-    lookup tables rather than the query FASTA itself
+  - Freeze the cache layout, schema-manifest format, and provenance metadata under
+    `lyzortx/generated_outputs/autoresearch/` before any feature-family implementation
+  - `prepare.py` must separate one-time cache building from the many short `train.py` experiment runs; heavy
+    preprocessing is outside the fixed search budget by contract
   - Checked-in DEPLOY feature CSVs may be used only as optional warm-cache accelerators; the acceptance path must prove
     that the AUTORESEARCH cache can be regenerated from raw inputs alone and that any warm cache is manifest-matched to
     the same schema
-  - Encode the known algorithmic speedups from the DEPLOY notebook instead of repeating the slow paths by accident:
-    batch phage-side projection work where the runtime already supports it, prefer in-process/cached sequence scans over
-    repeated subprocess activation, and document a wall-clock breakdown for the cold-cache build
   - The search cache written by `prepare.py` must contain `train` and `inner_val` only; sealed holdout labels and
     holdout-ready evaluation tables stay outside the RunPod workspace entirely
-- [ ] **AR03** Implement the one-file baseline and strict autoresearch search contract. Model: `gpt-5.4`. CI image
-      profile: `base`. Depends on tasks: `AR02`.
+- [ ] **AR03** Add host-defense cache building with explicit one-time runtime controls. Model: `gpt-5.4`. CI image
+      profile: `full-bio`. Depends on tasks: `AR02`.
+  - Reuse the raw-FASTA host DefenseFinder path, but make the AUTORESEARCH cache builder preinstall shared models once
+    before worker fan-out and avoid per-host model installation inside worker loops
+  - The host-defense step must be resume-safe, aggregate per-host outputs into the frozen cache schema, and support
+    re-aggregation without rerunning all host jobs
+  - Document and test the known DEPLOY failure modes as forbidden regressions: model-install races, release-vs-source
+    model confusion, and hidden downloads inside parallel workers
+  - Record a cold-cache wall-clock profile for the host-defense stage so future RunPod planning is grounded in measured
+    cost rather than guesswork
+  - Keep the exported defense block inference-safe: no panel metadata, no label-derived pair features, and no dependence
+    on checked-in aggregate CSVs as source of truth
+- [ ] **AR04** Add host-surface cache building with the fast path only. Model: `gpt-5.4`. CI image profile: `full-bio`.
+      Depends on tasks: `AR03`.
+  - Reuse only the inference-safe raw host surface outputs: O-antigen, receptor, and capsule-profile scans plus simple
+    derived scores; do not export `host_lps_core_type` or any other field whose value comes from Picard lookup tables
+  - The acceptance path must explicitly forbid the old slow per-host `nhmmer` shape; use the recorded fast path from
+    DEPLOY planning instead of silently regressing to the 70s/host scan design
+  - Prefer in-process or cached sequence-scan execution over repeated subprocess environment activation, and record a
+    cold-cache wall-clock profile for the stage
+  - Keep the stage resume-safe and cache predicted proteins or equivalent intermediates so retries do not redo the full
+    front half of the work
+  - Validate that the exported host-surface block matches the frozen AUTORESEARCH schema and remains fully rebuildable
+    from raw FASTAs alone
+- [ ] **AR05** Add host typing and simple host sequence statistics to prepare.py. Model: `gpt-5.4`. CI image profile:
+      `host-typing`. Depends on tasks: `AR04`.
+  - Reuse the raw-assembly host-typing callers for phylogroup, serotype, and MLST, but keep panel metadata limited to
+    optional comparison/validation paths rather than runtime feature construction
+  - Add a small host sequence-stats block in `prepare.py` from the assembly itself so AUTORESEARCH has a low-cost
+    baseline feature family alongside the heavier calls
+  - The host-typing and host-stats outputs must conform to the frozen cache contract and be rebuildable from raw FASTAs
+    without hidden local state
+  - Record unresolved caller caveats that affect runtime semantics, such as hosts where MLST may be blank, in the
+    manifest rather than silently coercing values
+  - Add tests proving the host-side cache still loads and joins correctly when these categorical and simple numeric
+    features are present
+- [ ] **AR06** Add phage projection and simple phage sequence statistics to prepare.py. Model: `gpt-5.4`. CI image
+      profile: `full-bio`. Depends on tasks: `AR05`.
+  - Reuse the TL17 phage RBP-family projection runtime as a frozen phage-side feature builder, including
+    `tl17_rbp_reference_hit_count`, with no panel-only host metadata or label-derived pair features
+  - The phage projection step must use the batched runtime path where supported and must not rebuild avoidable shared
+    indices or reference assets for each phage independently
+  - Add a small phage sequence-stats block in `prepare.py` so the phage side has a low-cost baseline family alongside
+    TL17 projection
+  - Record a cold-cache wall-clock profile for the phage stage and write the frozen reference-bank provenance into the
+    cache manifest
+  - Validate that the phage block is fully rebuildable from the committed phage FASTAs and the frozen runtime payload,
+    with no dependence on checked-in projection CSVs
+- [ ] **AR07** Implement the one-file baseline and strict autoresearch search contract. Model: `gpt-5.4`. CI image
+      profile: `base`. Depends on tasks: `AR06`.
   - `train.py` is the only file the search agent may modify; `prepare.py` stays fixed, and `program.md` states that
     labels, splits, feature extraction, and evaluation code are out of bounds
   - The baseline model uses one host encoder, one phage encoder, and one learned pair scorer over the frozen cache from
-    `AR02`; do not reintroduce pairwise enrichment tables, panel-parity shims, or mutable bioinformatics preprocessing
+    `AR02`-`AR06`; do not reintroduce pairwise enrichment tables, panel-parity shims, or mutable bioinformatics
+    preprocessing
   - Every search run executes under one fixed single-GPU wall-clock budget and emits one scalar inner-validation metric
-    so candidates are comparable on the same machine; the one-time cache build from `AR02` is outside that budget and
-    must not rerun for ordinary train.py-only experiments
+    so candidates are comparable on the same machine; the one-time cache build is outside that budget and must not rerun
+    for ordinary `train.py`-only experiments
   - One bootstrap command prepares the cache and one training command runs the baseline end to end on a single GPU; both
     commands are documented in `lyzortx/autoresearch/README.md`
   - Add guard tests proving the sandbox cannot read sealed holdout labels, cannot silently change split membership, and
     cannot bypass the frozen cache schema
-- [ ] **AR04** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
-      profile: `base`. Depends on tasks: `AR03`.
+- [ ] **AR08** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
+      profile: `base`. Depends on tasks: `AR07`.
   - Add a separate manual workflow for AUTORESEARCH runs instead of wiring cloud provisioning into
     `.github/workflows/codex-implement.yml`
   - The workflow uses a dedicated GitHub environment for RunPod access and expects `RUNPOD_API_KEY` there, not as a
     broad repo-wide Codex secret
   - The workflow provisions one fixed single-GPU pod type, syncs only the AUTORESEARCH sandbox plus its frozen cache
     artifacts, runs a bounded experiment command, collects candidate artifacts, and tears the pod down
-  - The workflow separates infrequent cache-build/provisioning work from many short train.py experiment runs so RunPod
-    time is not wasted redoing 30-100+ minute preprocessing steps already identified in the DEPLOY notebook
+  - The workflow separates infrequent cache-build/provisioning work from many short `train.py` experiment runs so RunPod
+    time is not wasted redoing the measured host-side preprocessing stages from `AR03`-`AR06`
   - RunPod credentials are used only in narrow provisioning and teardown steps; they are not injected into the generic
     Codex action environment
   - Document the required GitHub environment, secret names, approval gate, pod-spec contract, and local-versus-RunPod
     handoff in `lyzortx/orchestration/README.md`
-- [ ] **AR05** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
-      Depends on tasks: `AR04`.
+- [ ] **AR09** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
+      Depends on tasks: `AR08`.
   - Add one command that imports a candidate `train.py` plus its RunPod experiment metadata back into
     `lyzortx/generated_outputs/autoresearch/candidates/`
   - Re-run imported candidates from a clean checkout with repeated seeds against the sealed holdout and the current

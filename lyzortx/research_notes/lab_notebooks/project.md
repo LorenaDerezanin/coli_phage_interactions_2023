@@ -1318,11 +1318,13 @@ old DEPLOY CSVs or panel-shaped schemas as if they were the scientific starting 
 - Renamed the track intent to **Track AUTORESEARCH: Raw-FASTA Autoresearch**.
 - Removed the track-level dependency on DEPLOY artifacts and replaced it with a dependency on Track A's label policy.
 - `AR01` now freezes the raw corpus, label policy, FASTA inventory, and sealed split contract.
-- `AR02` now freezes `prepare.py` around an explicit allowlist of inference-safe raw-FASTA featurizers.
-- `AR03` keeps the strict one-file search contract, but the model now searches over a raw-input cache instead of a
+- `AR02` now freezes the sandbox and cache contract before any feature-family implementation starts.
+- `AR03`-`AR06` split the cache build by runtime-risk boundary: host defense, host surface, host typing/stats, and
+  phage projection/stats.
+- `AR07` keeps the strict one-file search contract, but the model now searches over a raw-input cache instead of a
   DEPLOY-era artifact export.
-- `AR04` still owns the dedicated RunPod workflow and environment boundary.
-- `AR05` imports winners back through sealed-holdout replication before any promotion decision.
+- `AR08` still owns the dedicated RunPod workflow and environment boundary.
+- `AR09` imports winners back through sealed-holdout replication before any promotion decision.
 
 #### Why this is the right cut
 
@@ -1342,3 +1344,7 @@ We also tightened the AUTORESEARCH acceptance criteria to reflect the runtime le
 `track_DEPLOY.md`: DefenseFinder-scale preprocessing does not belong inside the search loop, repeated environment setup
 is real overhead, and the wrong algorithmic shape can dominate wall time even before the model trains. Those are now
 explicit plan constraints instead of implicit tribal knowledge.
+
+We then split the middle of the track further because "implement prepare.py" was still too coarse. Host defense,
+surface, typing, and phage projection are not one risk surface; they fail with different dependencies, runtimes, and
+optimization levers. The finer split should make orchestrator issues more honest and reviews more surgical.
