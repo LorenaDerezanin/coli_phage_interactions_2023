@@ -60,3 +60,29 @@ the label policy, host/phage FASTA acquisition, and raw-sequence featurizers tha
 panel-shaped schemas, checked-in feature tables as scientific inputs, and any benchmark contract that would allow host
 identity leakage. If a future AUTORESEARCH model wins, it should win on the strength of a better learner over a frozen
 train-inference-parity cache, not because the search workspace inherited hidden structure from an earlier pipeline.
+
+### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
+
+#### Executive summary
+
+We kept host defense in AUTORESEARCH, but removed it as the gate for the first runnable search loop. The task graph now
+lets host surface, host typing/stats, and phage projection/stats reach the first honest baseline before the slower
+DefenseFinder block lands. This is a critical-path change, not a philosophical demotion of defense.
+
+#### Design decision
+
+- **Unblock first search from the slowest optional cache family.** `AR04` now depends on `AR02` instead of `AR03`, so
+  the adsorption-first path no longer waits on host defense.
+- **Keep defense in the schema and in the plan.** `host_defense` remains a reserved cache block from `AR02`; it is
+  still intended as additive signal, but not as the prerequisite for the first runnable baseline in `AR07`.
+- **Make the first AUTORESEARCH baseline explicitly adsorption-first.** The minimum cache for first search is now
+  `host_surface + host_typing + host_stats + phage_projection + phage_stats`.
+- **Clarify what defense absence means.** `AR03` now states directly that defense hits are useful positive evidence,
+  while defense-feature absences are annotation-limited rather than clean biological absence.
+
+#### Interpretation
+
+This keeps the track aligned with the repo's actual prediction problem. If the first AUTORESEARCH loop cannot beat the
+current benchmark with adsorption-first and phage-side features, we learn that cheaply and honestly. If defense helps,
+it should help as an additive block later, not by delaying the first serious search behind the slowest preprocessing
+path in the track.

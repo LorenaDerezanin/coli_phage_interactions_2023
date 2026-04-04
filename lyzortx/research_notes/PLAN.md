@@ -812,8 +812,10 @@ graph LR
     bad, document the cause and whether the regression is acceptable
   - Keep the exported defense block inference-safe: no panel metadata, no label-derived pair features, and no dependence
     on checked-in aggregate CSVs as source of truth
+  - Record explicitly that defense hits are useful positive evidence, but defense-feature absences are
+    annotation-limited and must not be interpreted as clean biological absence
 - [ ] **AR04** Add host-surface cache building with the fast path only. Model: `gpt-5.4`. CI image profile: `full-bio`.
-      Depends on tasks: `AR03`.
+      Depends on tasks: `AR02`.
   - Reuse only the inference-safe raw host surface outputs: O-antigen, receptor, and capsule-profile scans plus simple
     derived scores; do not export `host_lps_core_type` or any other field whose value comes from Picard lookup tables
   - Standard CI acceptance does not require full-panel cold-cache regeneration. Validate correctness on fixtures or a
@@ -862,9 +864,10 @@ graph LR
       profile: `base`. Depends on tasks: `AR06`.
   - `train.py` is the only file the search agent may modify; `prepare.py` stays fixed, and `program.md` states that
     labels, splits, feature extraction, and evaluation code are out of bounds
-  - The baseline model uses one host encoder, one phage encoder, and one learned pair scorer over the frozen cache from
-    `AR02`-`AR06`; do not reintroduce pairwise enrichment tables, panel-parity shims, or mutable bioinformatics
-    preprocessing
+  - The first runnable baseline must use one host encoder, one phage encoder, and one learned pair scorer over an
+    adsorption-first minimum cache from `AR04`-`AR06` (`host_surface`, `host_typing`, `host_stats`, `phage_projection`,
+    `phage_stats`); `host_defense` remains a reserved schema block from `AR02` and may join later as an additive
+    ablation, but must not gate the first honest search run
   - Every search run executes under one fixed single-GPU wall-clock budget and emits one scalar inner-validation metric
     so candidates are comparable on the same machine; the one-time cache build is outside that budget and must not rerun
     for ordinary `train.py`-only experiments

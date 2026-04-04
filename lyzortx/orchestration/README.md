@@ -140,7 +140,9 @@ Plan authors should size tasks by boundary risk, not just by how small the diff 
 - For AUTORESEARCH plan design, split cache-building tasks by runtime-risk boundary when the stages use different
   toolchains or cost profiles. In this repo that means separate tickets for host defense, host surface, host typing,
   and phage projection instead of one broad "implement prepare.py" task.
-
+- For AUTORESEARCH critical-path design, make the adsorption-first minimum cache sufficient for the first baseline when
+  that is the most credible early substrate. Slower optional blocks such as host defense can join later as additive
+  ablations instead of gating the first runnable search.
 ## CLI Usage
 
 ```bash

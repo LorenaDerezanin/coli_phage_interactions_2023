@@ -1406,3 +1406,27 @@ priority, the project should still rank:
 - Preprint: https://www.biorxiv.org/content/10.1101/2025.01.08.631966v1
 - Paper repo: https://github.com/mdmparis/antiphage_landscape_2025
 - Core 2024 _Escherichia_ paper: https://doi.org/10.1038/s41564-024-01832-5
+
+### 2026-04-05 11:35 UTC: AUTORESEARCH no longer blocks first search on host defense
+
+#### Executive summary
+
+We refined the AUTORESEARCH plan after the antiphage-landscape read: defense stays in the track, but the first honest
+search loop should not be blocked on the slowest defense path. The adsorption-first host/phage cache is now sufficient
+for the initial baseline, and host defense becomes an additive block rather than the critical-path gate.
+
+#### What changed
+
+- `AR04` now depends on `AR02` instead of `AR03`, which unblocks host-surface work from DefenseFinder runtime.
+- `AR07` now defines its first runnable baseline over the adsorption-first minimum cache:
+  `host_surface`, `host_typing`, `host_stats`, `phage_projection`, and `phage_stats`.
+- `AR03` now says explicitly that defense-feature absences are annotation-limited evidence, not clean biological
+  absence.
+- `host_defense` remains part of the frozen cache schema from `AR02`, so this is not a defense deletion or a schema
+  contraction.
+
+#### Interpretation
+
+This is the smallest plan change that actually changes the AUTORESEARCH critical path. It preserves defense as possible
+additive signal while moving the first serious search onto the feature families that are both more adsorption-aligned
+and operationally easier to get running quickly.
