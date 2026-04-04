@@ -1193,7 +1193,7 @@ tracks:
         inference still works without repo-root dependencies
       - Filter inference to the 96 panel phages via the metadata CSV; the extra 411_P3.fna
         in the FNA directory must not appear in predictions
-  AR:
+  AUTORESEARCH:
     name: Strict Autoresearch Readiness
     description: 'Literal autoresearch preparation track. Build a tiny sealed sandbox
       that follows the autoresearch contract as closely as possible inside this repo:
@@ -1281,4 +1281,4 @@ tracks:
         metadata, replication metrics, bootstrap summary, and final promote/reject
         decision
       - Document the strict autoresearch handoff and replication rule in the Track
-        AR and project lab notebooks
+        AUTORESEARCH and project lab notebooks

@@ -35,7 +35,7 @@ graph LR
   end
 
   subgraph s5["Stage 5"]
-    tar["Track AR: Strict Autoresearch Readiness"]
+    tautoresearch["Track AUTORESEARCH: Strict Autoresearch Readiness"]
   end
 
   ta --> tb
@@ -54,7 +54,7 @@ graph LR
   tg --> tj
   tl --> tdeploy
   tg --> tdeploy
-  tdeploy --> tar
+  tdeploy --> tautoresearch
 ```
 
 ## Track ST: Steel Thread v0
@@ -758,7 +758,7 @@ graph LR
   - Filter inference to the 96 panel phages via the metadata CSV; the extra 411_P3.fna in the FNA directory must not
     appear in predictions
 
-## Track AR: Strict Autoresearch Readiness
+## Track AUTORESEARCH: Strict Autoresearch Readiness
 
 - **Guiding Principle:** Literal autoresearch preparation track. Build a tiny sealed sandbox that follows the
   autoresearch contract as closely as possible inside this repo: one fixed `prepare.py`, one editable `train.py`, one
@@ -812,4 +812,4 @@ graph LR
     score; otherwise the decision artifact must say `no_honest_lift`
   - Output a single auditable decision bundle containing the imported candidate metadata, replication metrics, bootstrap
     summary, and final promote/reject decision
-  - Document the strict autoresearch handoff and replication rule in the Track AR and project lab notebooks
+  - Document the strict autoresearch handoff and replication rule in the Track AUTORESEARCH and project lab notebooks

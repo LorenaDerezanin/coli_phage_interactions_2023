@@ -1,8 +1,8 @@
-### 2026-04-04 20:45 UTC: AR track rationale — strict autoresearch readiness
+### 2026-04-04 20:45 UTC: AUTORESEARCH track rationale — strict autoresearch readiness
 
 #### Executive summary
 
-Track AR was added as a literal `autoresearch` preparation track, not as a vague "agentic research" bucket. The design
+Track AUTORESEARCH was added as a literal `autoresearch` preparation track, not as a vague "agentic research" bucket. The design
 goal is to preserve the small-surface-area contract from `karpathy/autoresearch`: fixed `prepare.py`, single editable
 `train.py`, human-owned `program.md`, fixed single-GPU wall-clock budget, and one scalar inner-loop validation metric.
 The repo adaptation is that ST03 holdout labels must stay outside the search workspace entirely, so any cloud-search

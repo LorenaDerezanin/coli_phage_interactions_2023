@@ -1304,7 +1304,7 @@ track_DEPLOY.md notebook entry.
 
 #### Executive summary
 
-We added Track AR to the plan as a strict `autoresearch` preparation track rather than pretending the first paid
+We added Track AUTORESEARCH to the plan as a strict `autoresearch` preparation track rather than pretending the first paid
 single-GPU search already fits the normal orchestrator workflow. The key decision is architectural: keep the
 `autoresearch` contract literal inside a tiny sealed sandbox, keep ST03 holdout labels outside the search workspace,
 and add a dedicated RunPod workflow/environment path instead of broadening `codex-implement.yml` with spend-bearing
@@ -1316,7 +1316,7 @@ one late-stage experimental track needs it.
 
 #### What changed in the plan
 
-- Added **Track AR: Strict Autoresearch Readiness** after DEPLOY.
+- Added **Track AUTORESEARCH: Strict Autoresearch Readiness** after DEPLOY.
 - `AR01` builds the sealed sandbox and exports only `train` and `inner_val` splits from frozen deployment-paired
   artifacts.
 - `AR02` defines the one-file baseline contract: fixed `prepare.py`, editable `train.py`, human-owned `program.md`,
