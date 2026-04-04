@@ -30,6 +30,7 @@ from lyzortx.pipeline.deployment_paired_features.derive_host_defense_features im
 )
 from lyzortx.pipeline.track_l.steps.run_novel_host_defense_finder import (
     DEFAULT_MODELS_DIR,
+    MODEL_INSTALL_MODE_FORBID,
     _read_panel_defense_rows,
     ensure_defense_finder_models,
 )
@@ -58,6 +59,7 @@ def _process_one_host(
             models_dir=models_dir,
             workers=1,
             force_model_update=False,
+            model_install_mode=MODEL_INSTALL_MODE_FORBID,
             force_run=False,
             preserve_raw=False,
         )
@@ -66,36 +68,68 @@ def _process_one_host(
         return bacteria_id, False, str(exc)
 
 
+def load_host_defense_rows(
+    per_host_output_dir: Path,
+    panel_defense_subtypes_path: Path,
+    *,
+    bacteria_ids: list[str] | None = None,
+) -> tuple[dict[str, object], list[str], list[dict[str, str]]]:
+    panel_rows = _read_panel_defense_rows(panel_defense_subtypes_path)
+    schema = build_host_defense_schema(panel_rows)
+    columns = [col["name"] for col in schema["columns"]]
+
+    requested = None if bacteria_ids is None else set(bacteria_ids)
+    seen: set[str] = set()
+    rows: list[dict[str, str]] = []
+    for host_dir in sorted(per_host_output_dir.iterdir()):
+        if not host_dir.is_dir():
+            continue
+        if requested is not None and host_dir.name not in requested:
+            continue
+        counts_path = host_dir / PER_HOST_COUNTS_FILENAME
+        if not counts_path.exists():
+            continue
+        with counts_path.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                bacteria = str(row.get("bacteria", "")).strip()
+                if not bacteria:
+                    raise ValueError(f"Missing bacteria key in {counts_path}")
+                seen.add(bacteria)
+                rows.append(row)
+
+    if not rows:
+        raise FileNotFoundError(
+            f"No per-host output directories with {PER_HOST_COUNTS_FILENAME} found in {per_host_output_dir}"
+        )
+
+    if requested is not None:
+        missing = sorted(requested - seen)
+        if missing:
+            raise FileNotFoundError(
+                "Missing per-host host-defense outputs for requested bacteria: " + ", ".join(missing)
+            )
+
+    rows.sort(key=lambda r: r.get("bacteria", ""))
+    return schema, columns, rows
+
+
 def aggregate_host_defense_csvs(
     per_host_output_dir: Path,
     aggregated_csv_path: Path,
     panel_defense_subtypes_path: Path,
+    *,
+    bacteria_ids: list[str] | None = None,
 ) -> int:
     """Collect all per-host gene count CSVs into a single aggregated CSV.
 
     Returns the number of rows written.
     """
-    panel_rows = _read_panel_defense_rows(panel_defense_subtypes_path)
-    schema = build_host_defense_schema(panel_rows)
-    columns = [col["name"] for col in schema["columns"]]
-
-    host_dirs = sorted(
-        d for d in per_host_output_dir.iterdir() if d.is_dir() and (d / PER_HOST_COUNTS_FILENAME).exists()
+    _, columns, rows = load_host_defense_rows(
+        per_host_output_dir,
+        panel_defense_subtypes_path,
+        bacteria_ids=bacteria_ids,
     )
-    if not host_dirs:
-        raise FileNotFoundError(
-            f"No per-host output directories with {PER_HOST_COUNTS_FILENAME} found in {per_host_output_dir}"
-        )
-
-    rows: list[dict[str, str]] = []
-    for host_dir in host_dirs:
-        counts_path = host_dir / PER_HOST_COUNTS_FILENAME
-        with counts_path.open("r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                rows.append(row)
-
-    rows.sort(key=lambda r: r.get("bacteria", ""))
 
     aggregated_csv_path.parent.mkdir(parents=True, exist_ok=True)
     with aggregated_csv_path.open("w", encoding="utf-8", newline="") as f:

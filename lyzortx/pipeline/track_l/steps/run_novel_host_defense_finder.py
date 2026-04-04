@@ -52,6 +52,9 @@ PINNED_MODEL_REQUIREMENTS: Tuple[Tuple[str, str, str], ...] = (
     ("macsy-models", "CasFinder", "3.1.0"),
 )
 ANNOTATION_TOOLS_ENV_NAME = "phage_annotation_tools"
+MODEL_INSTALL_MODE_ENSURE = "ensure"
+MODEL_INSTALL_MODE_FORBID = "forbid"
+MODEL_INSTALL_MODES: Tuple[str, str] = (MODEL_INSTALL_MODE_ENSURE, MODEL_INSTALL_MODE_FORBID)
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -101,6 +104,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--force-model-update",
         action="store_true",
         help="Re-download Defense Finder models even if they already exist.",
+    )
+    parser.add_argument(
+        "--model-install-mode",
+        choices=MODEL_INSTALL_MODES,
+        default=MODEL_INSTALL_MODE_ENSURE,
+        help=(
+            "Model runtime policy. 'ensure' installs pinned release models when needed; "
+            "'forbid' requires preinstalled pinned models and blocks hidden downloads."
+        ),
     )
     parser.add_argument(
         "--force-run",
@@ -212,6 +224,45 @@ def _read_installed_model_version(models_dir: Path, package_name: str) -> str | 
             if line.startswith("vers:"):
                 return line.split(":", maxsplit=1)[1].strip()
     return None
+
+
+def validate_pinned_defense_finder_models(models_dir: Path) -> str:
+    if not models_dir.exists():
+        raise FileNotFoundError(
+            f"Defense Finder models directory does not exist: {models_dir}. "
+            "Preinstall the pinned release models before running with model-install-mode=forbid."
+        )
+
+    for _, package_name, expected_version in PINNED_MODEL_REQUIREMENTS:
+        installed_version = _read_installed_model_version(models_dir, package_name)
+        if installed_version is None:
+            raise FileNotFoundError(
+                f"Missing pinned Defense Finder model metadata for {package_name} in {models_dir}. "
+                "This usually means the path points at a source checkout or partial copy rather than a "
+                "macsydata-installed release model directory."
+            )
+        if installed_version != expected_version:
+            raise ValueError(
+                f"Defense Finder model version mismatch for {package_name}: "
+                f"expected {expected_version}, found {installed_version} in {models_dir}"
+            )
+    logger.info("Defense Finder models already pinned correctly in %s", models_dir)
+    return "preinstalled_pinned"
+
+
+def resolve_defense_finder_model_status(
+    *,
+    models_dir: Path,
+    force_update: bool,
+    model_install_mode: str,
+) -> str:
+    if model_install_mode == MODEL_INSTALL_MODE_ENSURE:
+        return ensure_defense_finder_models(models_dir=models_dir, force_update=force_update)
+    if model_install_mode != MODEL_INSTALL_MODE_FORBID:
+        raise ValueError(f"Unsupported model install mode: {model_install_mode}")
+    if force_update:
+        raise ValueError("force_update cannot be used when model-install-mode=forbid")
+    return validate_pinned_defense_finder_models(models_dir)
 
 
 def ensure_defense_finder_models(
@@ -430,6 +481,7 @@ def run_novel_host_defense_finder(
     models_dir: Path,
     workers: int,
     force_model_update: bool,
+    model_install_mode: str,
     force_run: bool,
     preserve_raw: bool,
 ) -> dict[str, object]:
@@ -438,7 +490,11 @@ def run_novel_host_defense_finder(
 
     resolved_bacteria_id = bacteria_id or assembly_path.stem
     ensure_directory(output_dir)
-    model_status = ensure_defense_finder_models(models_dir=models_dir, force_update=force_model_update)
+    model_status = resolve_defense_finder_model_status(
+        models_dir=models_dir,
+        force_update=force_model_update,
+        model_install_mode=model_install_mode,
+    )
     resolved_mask_path, mask_status = resolve_defense_mask(
         column_mask_path=column_mask_path,
         panel_defense_subtypes_path=panel_defense_subtypes_path,
@@ -510,6 +566,7 @@ def run_novel_host_defense_finder(
             "gene_finder_modes": protein_metadata["gene_finder_modes"],
             "used_cached_systems": protein_metadata["used_cached_systems"],
             "model_status": model_status,
+            "model_install_mode": model_install_mode,
             "mask_status": mask_status,
             "workers": workers,
             "preserve_raw": preserve_raw,
@@ -533,6 +590,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         models_dir=args.models_dir,
         workers=args.workers,
         force_model_update=args.force_model_update,
+        model_install_mode=args.model_install_mode,
         force_run=args.force_run,
         preserve_raw=args.preserve_raw,
     )

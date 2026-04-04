@@ -136,6 +136,7 @@ def test_run_novel_host_defense_finder_projects_expected_feature_columns(
         models_dir=tmp_path / "models",
         workers=0,
         force_model_update=False,
+        model_install_mode=run_novel_host_defense_finder.MODEL_INSTALL_MODE_ENSURE,
         force_run=False,
         preserve_raw=False,
     )
@@ -200,3 +201,29 @@ def test_run_defense_finder_on_assembly_skips_pyrodigal_when_cached(
         "gene_finder_modes": [],
         "used_cached_systems": True,
     }
+
+
+def test_validate_pinned_defense_finder_models_rejects_source_checkout_shape(tmp_path: Path) -> None:
+    models_dir = tmp_path / "models"
+    (models_dir / "defense-finder-models").mkdir(parents=True)
+    (models_dir / "CasFinder").mkdir(parents=True)
+
+    try:
+        run_novel_host_defense_finder.validate_pinned_defense_finder_models(models_dir)
+    except FileNotFoundError as exc:
+        assert "source checkout" in str(exc)
+    else:
+        raise AssertionError("Expected validate_pinned_defense_finder_models to reject missing metadata")
+
+
+def test_resolve_defense_finder_model_status_forbid_rejects_force_update(tmp_path: Path) -> None:
+    try:
+        run_novel_host_defense_finder.resolve_defense_finder_model_status(
+            models_dir=tmp_path / "models",
+            force_update=True,
+            model_install_mode=run_novel_host_defense_finder.MODEL_INSTALL_MODE_FORBID,
+        )
+    except ValueError as exc:
+        assert "force_update cannot be used" in str(exc)
+    else:
+        raise AssertionError("Expected force_update to be rejected when model-install-mode=forbid")
