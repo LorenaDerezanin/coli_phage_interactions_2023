@@ -1337,3 +1337,8 @@ This replan keeps the useful engineering from DEPLOY without inheriting DEPLOY's
 - Raw-FASTA helper code survives when it is inference-safe.
 - Panel-only metadata fields and metadata-derived proxies are cut, even if they once looked predictive.
 - The `autoresearch` loop remains small and comparable run-to-run because expensive preprocessing stays frozen.
+
+We also tightened the AUTORESEARCH acceptance criteria to reflect the runtime lessons already written down in
+`track_DEPLOY.md`: DefenseFinder-scale preprocessing does not belong inside the search loop, repeated environment setup
+is real overhead, and the wrong algorithmic shape can dominate wall time even before the model trains. Those are now
+explicit plan constraints instead of implicit tribal knowledge.

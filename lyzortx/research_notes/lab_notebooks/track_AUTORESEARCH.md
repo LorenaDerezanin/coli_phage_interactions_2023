@@ -28,6 +28,11 @@ or checked-in feature CSVs as scientific inputs.
 - **Keep autoresearch focused on model search, not on mutating bioinformatics preprocessing.** Heavy feature extraction
   is compatible with `autoresearch` only if it happens once in fixed `prepare.py` or an equivalent frozen cache step.
   It is explicitly out of scope for the search loop to rewrite or rerun expensive feature-building logic on every trial.
+- **Carry forward the DEPLOY runtime scars into the acceptance criteria.** The DEPLOY notebook recorded that
+  DefenseFinder took ~114 minutes for 403 hosts even on 10 cores, that naive surface derivation was too slow for CI
+  until the algorithmic shape changed, and that repeated environment/bootstrap work mattered. AUTORESEARCH therefore
+  must state up front that cache building is separate from the search loop, heavy steps must be batched or resume-safe,
+  and RunPod time must not be burned redoing known one-time preprocessing.
 
 #### Immediate task sequence
 

@@ -788,12 +788,18 @@ graph LR
     unseen genomes: host DefenseFinder counts, host typing from assembly callers, raw host
     O-antigen/receptor/capsule-profile scans, simple host/phage sequence stats, and TL17 phage RBP family projection
     including `tl17_rbp_reference_hit_count`
+  - Build the cache with the DEPLOY runtime lessons made explicit in the contract: heavy feature extraction is a
+    one-time pre-search step, must be resume-safe, must preinstall shared assets once before parallel fan-out, and must
+    avoid per-item environment activation or model-download work inside worker loops
   - Explicitly exclude feature families that depend on panel-only metadata or undeployable proxies; in particular do not
     export `host_lps_core_type` or any other surface/type field whose current implementation is derived from Picard
     lookup tables rather than the query FASTA itself
   - Checked-in DEPLOY feature CSVs may be used only as optional warm-cache accelerators; the acceptance path must prove
     that the AUTORESEARCH cache can be regenerated from raw inputs alone and that any warm cache is manifest-matched to
     the same schema
+  - Encode the known algorithmic speedups from the DEPLOY notebook instead of repeating the slow paths by accident:
+    batch phage-side projection work where the runtime already supports it, prefer in-process/cached sequence scans over
+    repeated subprocess activation, and document a wall-clock breakdown for the cold-cache build
   - The search cache written by `prepare.py` must contain `train` and `inner_val` only; sealed holdout labels and
     holdout-ready evaluation tables stay outside the RunPod workspace entirely
 - [ ] **AR03** Implement the one-file baseline and strict autoresearch search contract. Model: `gpt-5.4`. CI image
@@ -803,7 +809,8 @@ graph LR
   - The baseline model uses one host encoder, one phage encoder, and one learned pair scorer over the frozen cache from
     `AR02`; do not reintroduce pairwise enrichment tables, panel-parity shims, or mutable bioinformatics preprocessing
   - Every search run executes under one fixed single-GPU wall-clock budget and emits one scalar inner-validation metric
-    so candidates are comparable on the same machine
+    so candidates are comparable on the same machine; the one-time cache build from `AR02` is outside that budget and
+    must not rerun for ordinary train.py-only experiments
   - One bootstrap command prepares the cache and one training command runs the baseline end to end on a single GPU; both
     commands are documented in `lyzortx/autoresearch/README.md`
   - Add guard tests proving the sandbox cannot read sealed holdout labels, cannot silently change split membership, and
@@ -816,6 +823,8 @@ graph LR
     broad repo-wide Codex secret
   - The workflow provisions one fixed single-GPU pod type, syncs only the AUTORESEARCH sandbox plus its frozen cache
     artifacts, runs a bounded experiment command, collects candidate artifacts, and tears the pod down
+  - The workflow separates infrequent cache-build/provisioning work from many short train.py experiment runs so RunPod
+    time is not wasted redoing 30-100+ minute preprocessing steps already identified in the DEPLOY notebook
   - RunPod credentials are used only in narrow provisioning and teardown steps; they are not injected into the generic
     Codex action environment
   - Document the required GitHub environment, secret names, approval gate, pod-spec contract, and local-versus-RunPod
