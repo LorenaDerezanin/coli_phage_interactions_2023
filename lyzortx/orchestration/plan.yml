@@ -1261,7 +1261,7 @@ tracks:
         the RunPod workspace entirely
     - id: AR03
       title: Add host-defense cache building with explicit one-time runtime controls
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: full-bio
       depends_on_tasks:

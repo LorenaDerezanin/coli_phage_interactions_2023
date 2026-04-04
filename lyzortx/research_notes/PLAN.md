@@ -798,7 +798,7 @@ graph LR
     the same schema
   - The search cache written by `prepare.py` must contain `train` and `inner_val` only; sealed holdout labels and
     holdout-ready evaluation tables stay outside the RunPod workspace entirely
-- [ ] **AR03** Add host-defense cache building with explicit one-time runtime controls. Model: `gpt-5.4`. CI image
+- [x] **AR03** Add host-defense cache building with explicit one-time runtime controls. Model: `gpt-5.4`. CI image
       profile: `full-bio`. Depends on tasks: `AR02`.
   - Reuse the raw-FASTA host DefenseFinder path, but make the AUTORESEARCH cache builder preinstall shared models once
     before worker fan-out and avoid per-host model installation inside worker loops
