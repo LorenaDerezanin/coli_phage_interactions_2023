@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   # ── Auto-review on orchestrator-task PRs ─────────────────────────────
-  # Opus for the first review (opened), Sonnet for re-reviews (synchronize).
+  # Opus for first review (opened/ready_for_review), Sonnet for re-reviews (synchronize).
   # Only triggers for PRs with the 'orchestrator-task' label.
   auto-review:
     name: Claude Auto Review
@@ -46,10 +46,10 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         id: model
         run: |
-          if [ "${{ github.event.action }}" = "opened" ]; then
-            echo "name=claude-opus-4-6" >> "$GITHUB_OUTPUT"
-          else
+          if [ "${{ github.event.action }}" = "synchronize" ]; then
             echo "name=claude-sonnet-4-6" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=claude-opus-4-6" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v6
