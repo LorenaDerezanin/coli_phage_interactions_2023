@@ -61,6 +61,75 @@ panel-shaped schemas, checked-in feature tables as scientific inputs, and any be
 identity leakage. If a future AUTORESEARCH model wins, it should win on the strength of a better learner over a frozen
 train-inference-parity cache, not because the search workspace inherited hidden structure from an earlier pipeline.
 
+### 2026-04-04 22:05 UTC: AR01 locked the AUTORESEARCH pair table, label policy, and bacteria-disjoint split contract
+
+#### Executive summary
+
+AR01 now has a dedicated contract builder at `lyzortx/pipeline/autoresearch/build_contract.py`. It freezes the
+AUTORESEARCH source-of-truth inputs to raw interactions plus resolved host/phage FASTAs, emits one canonical pair table
+keyed by `bacteria` and `phage`, records explicit exclusion reasons, and predeclares deterministic `train`,
+`inner_val`, and sealed `holdout` splits before any model search.
+
+#### What changed
+
+- **Added a dedicated AR01 contract builder instead of reusing ST0.2/ST0.3 outputs directly.** The new builder reuses
+  Track A `label_set_v1` semantics through `compute_label_v1()` and reuses the Picard assembly resolver from
+  `download_picard_assemblies.py`, but it does not inherit the wider steel-thread metadata feature joins.
+- **Locked labels as read-only search inputs.** The emitted policy manifest marks labels immutable for downstream
+  AUTORESEARCH tasks and documents exact `score='n'` handling:
+  - `score='n'` never creates a positive label.
+  - `score='n'` does not count toward the `>=5` interpretable observations needed for a hard negative.
+  - `score='n'` only contributes uncertainty flags; pairs that stay below the negative-support threshold remain
+    unresolved and are excluded.
+- **Removed the hidden `interaction_matrix.csv` dependency from `training_weight_v3`.** TA11's original weight used the
+  matrix-backed `aux_matrix_score_0_to_4==0` rule, which is incompatible with AR01's raw-only input contract. AR01
+  therefore freezes a raw-only equivalent: any positive pair with no repeated lysis support inside a dilution
+  (`>=2 score='1'` at the same dilution) gets `training_weight_v3=0.1`; all other pairs get `1.0`.
+- **Locked the current production-intent comparator for AR09.** The manifest now points AR09 at the clean Track G v1
+  benchmark artifacts:
+  - `lyzortx/generated_outputs/track_g/tg02_gbm_calibration/tg02_benchmark_summary.json`
+  - `lyzortx/generated_outputs/track_g/tg05_feature_subset_sweep/tg05_locked_v1_feature_config.json`
+  - `lyzortx/generated_outputs/track_g/tg01_v1_binary_classifier/tg01_model_summary.json`
+
+#### Findings
+
+Running the pure contract logic against `data/interactions/raw/raw_interactions.csv` and the checked-in phage FASTAs
+produced the following locked cohort counts:
+
+- Observed pair rows: `35,424`
+- Distinct bacteria: `369`
+- Distinct panel phages: `96`
+- Labels:
+  - positive `1`: `9,720`
+  - negative `0`: `25,546`
+  - unresolved/excluded: `158`
+- Split sizes by bacterium:
+  - `train`: `221` bacteria, `21,216` rows, `21,125` retained labeled rows
+  - `inner_val`: `74` bacteria, `7,104` rows, `7,040` retained labeled rows
+  - sealed `holdout`: `74` bacteria, `7,104` rows, `7,101` retained labeled rows
+- Raw-only borderline-noise downweighted positives (`training_weight_v3=0.1`): `2,685`
+
+All three splits cover the same `96` panel phages, and the split assignment is bacteria-disjoint by construction.
+
+#### Validation
+
+- Added `lyzortx/tests/test_autoresearch_contract.py` to cover:
+  - Track A v1 label reuse on aggregated raw pairs
+  - raw-only `training_weight_v3` behavior
+  - unresolved/missing-FASTA exclusion reasons
+  - bacteria-disjoint split assignment and manifest writing
+- Full repo validation passed in CI shell:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/`
+  - Result: `421 passed`
+
+#### Interpretation
+
+AR01 deliberately chooses a thinner contract than the earlier panel pipelines. That is the right simplification. The
+search track now has exactly one immutable label table and exactly one sealed benchmark boundary, both derivable from
+raw interactions plus FASTAs. The only substantive policy deviation from prior work is the raw-only
+`training_weight_v3` rule; that is intentional and preferable to carrying `interaction_matrix.csv` as an undeclared
+fourth source input.
+
 ### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
 
 #### Executive summary
