@@ -1006,3 +1006,32 @@ this single file, though at 4.5MB the current approach is also not a real proble
 **What to do if triggered:** Replace the `ProcessPoolExecutor` loop in `run_pharokka.py` with a single
 `pharokka.py --meta --split` call on a concatenated FASTA, then split the combined TSV by the `contig` column to
 produce per-phage files compatible with existing downstream parsers.
+
+### 2026-04-04 22:26 UTC: PR lifecycle should scan visible PR feedback, not unresolved-thread state
+
+#### Executive summary
+
+The lifecycle workflow was still carrying an older assumption from when it also owned the merge decision: it counted
+unresolved review threads to decide whether a PR was clean. That is now the wrong abstraction. `claude-pr-review.yml`
+either merges the PR itself or dispatches `codex-pr-lifecycle.yml`, so the lifecycle job only needs to answer one
+question: "is there any visible feedback on the PR that Codex should read before saying nothing to do?"
+
+#### Trigger
+
+GitHub Actions run `23988591888` on PR #331 answered that question incorrectly. The job printed `Unresolved threads: 0,
+Claude comments with feedback: 0`, then posted "Review passed with no issues" even though the PR already contained a
+top-level Claude review comment and a formal `COMMENTED` review body with actionable feedback.
+
+#### Design decision
+
+Simplified the lifecycle contract:
+
+- `claude-pr-review.yml` remains the merge gate.
+- `codex-pr-lifecycle.yml` now treats visible PR feedback surfaces as its source of truth.
+- The workflow reads top-level PR comments, inline review comments, and non-empty review bodies from non-`czarphage`
+  authors.
+- It should not re-derive PR cleanliness from unresolved-thread state, because that confuses "merge eligibility" with
+  "feedback exists somewhere on the PR."
+
+This change keeps the lifecycle aligned with the current responsibility split: Claude decides approve/merge vs dispatch;
+Codex only addresses whatever feedback is already visible on the PR.

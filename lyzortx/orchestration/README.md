@@ -94,9 +94,8 @@ stateDiagram-v2
   workflows and available as a CLI: `echo "$BODY" | python -m lyzortx.orchestration.parse_model_directive`.
 - `render_plan.py` — generates `PLAN.md` from `plan.yml` with Mermaid DAG and track checklists.
 - `orchestrator.py` — CLI runner that dispatches tasks as GitHub issues.
-- `review_threads.py` — fetches unresolved PR review threads via GitHub GraphQL, paginates across thread pages, filters
-  to unresolved non-outdated threads, and formats them into a Codex feedback prompt. Includes a signing instruction so
-  Codex identifies itself in every reply ("Posted by Codex \<model\>").
+- `pr_feedback.py` — fetches top-level PR conversation comments, inline review comments, and non-empty review bodies,
+  then formats them into a Codex feedback prompt so lifecycle runs read every visible PR feedback surface.
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
 - `ci_token_usage.py` — CLI for token/cost analysis across all LLM-invoking workflows (Codex + Claude).
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.
@@ -212,10 +211,11 @@ in-progress Codex run via the concurrency group.
 
 The `address-feedback` job runs the Codex fix loop. A concurrency group ensures only one lifecycle run per PR at a time,
 preventing race conditions on the review round cap.
-If the review has unresolved threads, Codex addresses them (up to 3 rounds). If no unresolved threads, the PR is
-labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled `needs-human-review`. The fix loop extracts
-the model from the linked issue (via the PR body's `Closes #N` reference) to use the same model as the original
-implementation.
+If the PR has any top-level PR comments, inline review comments, or non-empty review bodies from non-`czarphage`
+authors, Codex reads them and addresses the feedback (up to 3 rounds). Only PRs with zero visible feedback artifacts
+across those surfaces are labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled
+`needs-human-review`. The fix loop extracts the model from the linked issue (via the PR body's `Closes #N` reference)
+to use the same model as the original implementation.
 
 Both Codex workflows now resolve their container image from `ci-image:*` labels mirrored from `plan.yml` into issues
 and then onto PRs. The current image profiles are:
