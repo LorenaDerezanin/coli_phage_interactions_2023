@@ -135,6 +135,9 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 # Documentation Style Rules
 
 - Line-length: 120 characters for prose. See `.pre-commit-config.yaml` and `.pymarkdown.yaml` for tool settings.
+- On a feature branch or open PR, notebook-style research documents being developed in that branch are mutable until
+  merge. Edit them in place so the merged version reflects the final state; once merged to `main`, they become
+  historical records.
 
 # Agent Scratch Space
 

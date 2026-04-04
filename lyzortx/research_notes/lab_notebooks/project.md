@@ -1299,3 +1299,55 @@ to run DEPLOY04 host-typing and DEPLOY05 phage-RBP derivation in CI. Those are f
 **Note on done-task references**: done tasks DEPLOY02-06 still reference "DEPLOY07" as the full evaluation task. Per
 done-task immutability policy, those references are historical. The renumbering is tracked in git history and in the
 track_DEPLOY.md notebook entry.
+
+### 2026-04-04 20:45 UTC: Replanned AUTORESEARCH as a raw-input track with frozen featurizers
+
+#### Executive summary
+
+We replanned AUTORESEARCH around the raw interaction table plus host and phage FASTAs. Track A still supplies the
+label policy, but DEPLOY outputs no longer define the model-search substrate; preprocessing is frozen in `prepare.py`
+and the search loop is restricted to `train.py`. The benchmark contract is now explicit as well: the holdout is
+bacteria-disjoint, the comparator artifact is named up front, and CI correctness checks are separated from full-scale
+runtime measurement.
+
+#### What changed in the plan
+
+- Renamed the track intent to **Track AUTORESEARCH: Raw-FASTA Autoresearch**.
+- Removed the track-level dependency on DEPLOY artifacts and replaced it with a dependency on Track A's label policy.
+- `AR01` now freezes the raw corpus, label policy, FASTA inventory, comparator benchmark reference, and a bacteria-disjoint
+  sealed split contract.
+- `AR02` now freezes the sandbox and cache contract before any feature-family implementation starts.
+- `AR03`-`AR06` split the cache build by runtime-risk boundary: host defense, host surface, host typing/stats, and
+  phage projection/stats.
+- `AR07` keeps the strict one-file search contract, but the model now searches over a raw-input cache instead of a
+  DEPLOY-era artifact export.
+- `AR08` still owns the dedicated RunPod workflow and environment boundary.
+- `AR09` imports winners back through sealed-holdout replication before any promotion decision.
+
+#### Why this is the right cut
+
+The earlier AUTORESEARCH draft still treated DEPLOY-era outputs as the natural substrate for search. That would have
+preserved too much of the old abstraction. If the goal is to find a better deployable learner, the substrate has to be
+the raw corpus plus feature builders that can be rerun unchanged at inference time.
+
+This replan keeps the useful engineering from DEPLOY without keeping DEPLOY as the scientific starting point:
+
+- Track A supplies a fixed label policy instead of reopening the labeling debate.
+- Raw-FASTA helper code survives when it is inference-safe.
+- Panel-only metadata fields and metadata-derived proxies are cut, even if they once looked predictive.
+- The `autoresearch` loop remains small and comparable run-to-run because expensive preprocessing stays frozen.
+
+We also tightened the AUTORESEARCH acceptance criteria to reflect the runtime lessons already written down in
+`track_DEPLOY.md`: DefenseFinder-scale preprocessing does not belong inside the search loop, repeated environment setup
+is real overhead, and the wrong algorithmic shape can dominate wall time before the model trains. Those are now
+explicit plan constraints instead of implicit tribal knowledge.
+
+We then split the middle of the track further because "implement prepare.py" was still too coarse. Host defense,
+surface, typing, and phage projection are not one risk surface; they fail with different dependencies, runtimes, and
+optimization levers. The finer split should make orchestrator issues more honest and reviews more surgical.
+
+We then tightened the dispatch contract after review: AR02 now fixes the cache schema composition boundary up front,
+AR01 records the exact locked comparator benchmark for AR09 and requires bacteria-disjoint splits, AR07 names ROC-AUC
+as the primary search metric, and AR03-AR06 explicitly separate CI-scale correctness checks from full-scale runtime
+measurement. That should reduce both timeout risk and benchmark ambiguity before the first AUTORESEARCH issue is even
+opened.

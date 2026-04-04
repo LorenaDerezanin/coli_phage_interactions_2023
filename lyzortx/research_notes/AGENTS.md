@@ -24,13 +24,14 @@ or restructured, and why). Include source citations (URLs + quotes) for any clai
 
 ## In-flight entry editing
 
-When an entry was added within the current PR and subsequent work in the same PR invalidates statements in that entry
-(e.g., a metric turned out to be wrong, a method was replaced), delete the false statements and replace them with
-correct ones. Do not preserve stale claims with "initially we thought X" hedging — the git history records the
+When working on a feature branch or open PR, treat notebook entries touched in that branch as mutable working
+documents. If subsequent work in the same branch invalidates statements in an in-flight entry (e.g., a metric was
+wrong, a method was replaced, the split contract changed), delete the stale statements and replace them with the final
+correct ones. Do not preserve churn with "initially we thought X" hedging — the git history already records the
 evolution. The entry as merged should read as a clean, accurate record of the final state.
 
-This applies only to entries added in the current PR. Entries from prior PRs are historical records and must not be
-modified (see Done Task Immutability in the orchestration AGENTS.md).
+This applies only to entries being developed in the current branch/PR. Entries that were already merged to `main` are
+historical records and must not be modified (see Done Task Immutability in the orchestration AGENTS.md).
 
 ## Entry format
 
