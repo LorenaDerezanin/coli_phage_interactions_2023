@@ -209,11 +209,12 @@ review or any unresolved review threads remain, it dispatches `codex-pr-lifecycl
   PR number.
 
 The `workflow_dispatch`-only trigger prevents a self-cancellation loop: when Codex replies to review threads, GitHub
-emits `pull_request_review` events. Previously these events re-triggered the lifecycle workflow and cancelled the
-in-progress Codex run via the concurrency group.
+emits `pull_request_review` events. Previously these events could re-trigger the lifecycle workflow while another
+lifecycle run was already active for the same PR.
 
 The `address-feedback` job runs the Codex fix loop. A concurrency group ensures only one lifecycle run per PR at a time,
-preventing race conditions on the review round cap.
+queueing newer runs behind the active one to prevent race conditions on the review round cap without canceling
+in-flight Codex work.
 If the PR has any top-level PR comments, inline review comments, or non-empty review bodies from non-`czarphage`
 authors, Codex reads them and addresses the feedback (up to 3 rounds). Only PRs with zero visible feedback artifacts
 across those surfaces are labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled
