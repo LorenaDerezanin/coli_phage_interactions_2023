@@ -130,6 +130,59 @@ raw interactions plus FASTAs. The only substantive policy deviation from prior w
 `training_weight_v3` rule; that is intentional and preferable to carrying `interaction_matrix.csv` as an undeclared
 fourth source input.
 
+### 2026-04-04 23:00 UTC: AR02 froze the sandbox surface and the search-cache composability contract
+
+#### Executive summary
+
+AR02 now fixes the AUTORESEARCH sandbox to `lyzortx/autoresearch/{prepare.py,train.py,README.md,program.md}` and
+adds a dedicated cache builder at `lyzortx/pipeline/autoresearch/prepare_cache.py`. `prepare.py` rebuilds AR01 from
+raw inputs, exports only `train` and `inner_val` pair tables into `search_cache_v1/`, and freezes the slot names,
+join keys, namespace prefixes, and provenance metadata that downstream feature-family tasks must honor.
+
+#### What changed
+
+- **Made `prepare.py` the only supported raw-input path into the search workspace.** The user-facing entry point now
+  rebuilds the AR01 contract first, then materializes the AR02 cache from that contract. `train.py` is explicitly the
+  short experiment loop and fails fast if the prepared cache is missing.
+- **Froze the cache layout under `lyzortx/generated_outputs/autoresearch/search_cache_v1/`.** AR02 now writes:
+  - `ar02_search_cache_manifest_v1.json`
+  - `ar02_schema_manifest_v1.json`
+  - `ar02_provenance_manifest_v1.json`
+  - `search_pairs/train_pairs.csv`
+  - `search_pairs/inner_val_pairs.csv`
+  - `feature_slots/<slot>/entity_index.csv`
+  - `feature_slots/<slot>/schema_manifest.json`
+- **Locked the named feature-slot contract before any columns exist.** The frozen slots are:
+  - host-side: `host_defense`, `host_surface`, `host_typing`, `host_stats`
+  - phage-side: `phage_projection`, `phage_stats`
+  Each slot now has a fixed join key and column-family prefix, so AR03-AR06 may add columns inside a slot but may not
+  change the slot boundary itself.
+- **Kept warm caches optional and subordinate to raw-input reproducibility.** `prepare.py` now accepts an optional
+  warm-cache manifest, validates that its `schema_manifest_id`, join keys, prefixes, and CSV headers match the frozen
+  AR02 contract, and records the result in provenance. That preserves the option to reuse checked-in DEPLOY CSVs as
+  accelerators without turning them into source-of-truth inputs.
+- **Sealed holdout outputs stay outside the search cache.** The provenance manifest records the omitted holdout row
+  counts explicitly, but no holdout pair table or holdout-ready evaluation artifact is exported into the workspace that
+  `train.py` consumes.
+
+#### Validation
+
+- Added `lyzortx/tests/test_autoresearch_prepare_cache.py` to cover:
+  - frozen top-level slot contract
+  - raw-only cache generation from fixture interactions and FASTAs
+  - exclusion of holdout bacteria from exported host-side slot indexes
+  - warm-cache manifest mismatch and match cases
+- Full repo validation passed in CI shell:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/`
+  - Result: `434 passed`
+
+#### Interpretation
+
+This is the smallest honest AR02 implementation. It fixes the contract surface that matters for later work, but avoids
+pretending that feature-family semantics already exist. Downstream tasks can now fill reserved slots incrementally
+without reopening the more dangerous questions of how raw inputs enter the cache, whether holdout data leaks into the
+workspace, or whether a warm cache silently changes the schema.
+
 ### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
 
 #### Executive summary
