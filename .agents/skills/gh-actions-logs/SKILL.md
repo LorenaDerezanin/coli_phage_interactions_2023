@@ -31,7 +31,18 @@ When the user shares a GitHub Actions URL or asks about a run:
    mkdir -p "$RUN_DIR"
    gh run view "$RUN_ID" --job "$JOB_ID" --log-failed > "$RUN_DIR/${JOB_ID}.failed.log"
    ```
-5. **Read and interpret** the logs, then report findings to the user.
+5. **If logs look truncated** — fetch the run-attempt archive before assuming the
+   missing lines are gone:
+   ```bash
+   ATTEMPT=1
+   RUN_DIR=".scratch/gh-actions-logs/$RUN_ID"
+   mkdir -p "$RUN_DIR"
+   gh api "repos/LyzorTx/coli_phage_interactions_2023/actions/runs/$RUN_ID/attempts/$ATTEMPT/logs" \
+     > "$RUN_DIR/attempt${ATTEMPT}.zip"
+   unzip -l "$RUN_DIR/attempt${ATTEMPT}.zip"
+   unzip -o "$RUN_DIR/attempt${ATTEMPT}.zip" -d "$RUN_DIR/attempt${ATTEMPT}/"
+   ```
+6. **Read and interpret** the logs, then report findings to the user.
 
 ## Extract and clean Codex logs
 
@@ -73,6 +84,21 @@ mkdir -p "$RUN_DIR"
 gh run view "$RUN_ID" --job "$JOB_ID" --log > "$RUN_DIR/${JOB_ID}.log"
 ```
 
+If the per-job log looks suspiciously short, stops before the interesting step,
+or `extract-codex` says `No Codex step lines found in log`, fetch the run-attempt
+archive as well:
+
+```bash
+ATTEMPT=1
+gh api "repos/LyzorTx/coli_phage_interactions_2023/actions/runs/$RUN_ID/attempts/$ATTEMPT/logs" \
+  > "$RUN_DIR/attempt${ATTEMPT}.zip"
+unzip -l "$RUN_DIR/attempt${ATTEMPT}.zip"
+unzip -o "$RUN_DIR/attempt${ATTEMPT}.zip" -d "$RUN_DIR/attempt${ATTEMPT}/"
+```
+
+That archive is a ZIP of per-step text files, which is often easier to inspect
+than the flattened `gh run view --log` output.
+
 1. Identify the exact run/job log file you need.
 2. Use `rg -n` to find failure markers before reading large chunks.
 3. Read narrow windows with `sed -n '<start>,<end>p'`.
@@ -98,6 +124,11 @@ Prefer local targeted reads over dumping whole logs.
 - `gh run view --log` may label lines as `UNKNOWN STEP`; that is often a GitHub
   log-format limitation rather than evidence that the workflow itself lost step
   metadata.
+- The run-attempt ZIP can still be incomplete for cancelled Codex jobs. In run
+  `23966232040`, both `gh run view --log` and
+  `GET /actions/runs/<run_id>/attempts/<attempt>/logs` stopped after step 11 and
+  never included `Implement task with Codex`, so use job metadata, PR/issue
+  context, and local notes when the archive confirms the truncation.
 
 ## References
 
