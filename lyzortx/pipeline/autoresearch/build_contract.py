@@ -63,6 +63,7 @@ COMPARATOR_BENCHMARK = {
     "locked_feature_blocks": ["defense", "phage_genomic"],
     "selection_source": "TG05/TG09 clean v1 lock carried forward as the current production-intent comparator",
 }
+COMPARATOR_BENCHMARK_PATH_KEYS = ("benchmark_summary_path", "feature_lock_path", "model_summary_path")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -173,7 +174,7 @@ def build_fasta_checksums(paths_by_id: Mapping[str, Path], *, root: Path) -> Dic
 
 
 def stable_float_string(value: float) -> str:
-    return f"{value:.6f}".rstrip("0").rstrip(".") if "." in f"{value:.6f}" else f"{value:.6f}"
+    return f"{value:.6f}".rstrip("0").rstrip(".")
 
 
 def build_dilution_counts(rows: Sequence[Dict[str, str]]) -> Dict[int, Counter[str]]:
@@ -236,9 +237,23 @@ def assign_bacteria_splits(
     return assignments
 
 
-def _required_column(row: Dict[str, object], key: str) -> str:
+def to_str_column(row: Dict[str, object], key: str) -> str:
     value = row[key]
     return "" if value is None else str(value)
+
+
+def build_locked_comparator_benchmark(benchmark: Mapping[str, object]) -> Dict[str, object]:
+    resolved_benchmark = dict(benchmark)
+    artifact_checksums: Dict[str, str] = {}
+    for path_key in COMPARATOR_BENCHMARK_PATH_KEYS:
+        artifact_path = Path(str(benchmark[path_key]))
+        if not artifact_path.exists():
+            raise FileNotFoundError(f"Locked comparator artifact not found: {artifact_path}")
+        if not artifact_path.is_file():
+            raise FileNotFoundError(f"Locked comparator artifact is not a file: {artifact_path}")
+        artifact_checksums[path_key] = sha256_file(artifact_path)
+    resolved_benchmark["artifact_checksums"] = artifact_checksums
+    return resolved_benchmark
 
 
 def aggregate_raw_pairs(
@@ -401,15 +416,15 @@ def build_split_summary(pair_table_rows: Sequence[Dict[str, object]]) -> Dict[st
     split_retained_rows: Dict[str, List[str]] = {split: [] for split in SPLIT_ORDER}
 
     for row in pair_table_rows:
-        split = _required_column(row, "split")
-        bacteria = _required_column(row, "bacteria")
-        phage = _required_column(row, "phage")
-        pair_id = _required_column(row, "pair_id")
+        split = to_str_column(row, "split")
+        bacteria = to_str_column(row, "bacteria")
+        phage = to_str_column(row, "phage")
+        pair_id = to_str_column(row, "pair_id")
 
         split_bacteria[split].add(bacteria)
         split_phages[split].add(phage)
         split_rows[split].append(pair_id)
-        if _required_column(row, "retained_for_autoresearch") == "1":
+        if to_str_column(row, "retained_for_autoresearch") == "1":
             split_retained_rows[split].append(pair_id)
 
     bacteria_overlap_counts = {}
@@ -443,6 +458,20 @@ def build_split_summary(pair_table_rows: Sequence[Dict[str, object]]) -> Dict[st
     }
 
 
+def validate_split_contract(split_summary: Mapping[str, object]) -> None:
+    leakage_checks = split_summary["leakage_checks"]
+    if not isinstance(leakage_checks, Mapping) or leakage_checks["max_overlap_count"] != 0:
+        raise ValueError("Bacterium overlap detected across AUTORESEARCH splits.")
+
+    retained_row_counts = split_summary["retained_row_counts"]
+    if not isinstance(retained_row_counts, Mapping):
+        raise ValueError("AUTORESEARCH split summary is missing retained_row_counts.")
+
+    empty_retained_splits = [split for split in SPLIT_ORDER if retained_row_counts[split] == 0]
+    if empty_retained_splits:
+        raise ValueError("AUTORESEARCH retained split(s) empty after exclusions: " + ", ".join(empty_retained_splits))
+
+
 def build_contract_manifest(
     *,
     raw_interactions_path: Path,
@@ -458,8 +487,7 @@ def build_contract_manifest(
     inner_val_fraction: float,
 ) -> Dict[str, object]:
     split_summary = build_split_summary(pair_table_rows)
-    if split_summary["leakage_checks"]["max_overlap_count"] != 0:
-        raise ValueError("Bacterium overlap detected across AUTORESEARCH splits.")
+    validate_split_contract(split_summary)
 
     return {
         "task_id": "AR01",
@@ -490,7 +518,7 @@ def build_contract_manifest(
             "train_fraction": 1.0 - holdout_fraction - inner_val_fraction,
             **split_summary,
         },
-        "current_locked_comparator_benchmark": dict(COMPARATOR_BENCHMARK),
+        "current_locked_comparator_benchmark": build_locked_comparator_benchmark(COMPARATOR_BENCHMARK),
         "output_dir": str(output_dir),
     }
 
