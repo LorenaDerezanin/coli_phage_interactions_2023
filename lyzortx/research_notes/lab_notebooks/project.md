@@ -1348,3 +1348,8 @@ explicit plan constraints instead of implicit tribal knowledge.
 We then split the middle of the track further because "implement prepare.py" was still too coarse. Host defense,
 surface, typing, and phage projection are not one risk surface; they fail with different dependencies, runtimes, and
 optimization levers. The finer split should make orchestrator issues more honest and reviews more surgical.
+
+We also tightened the dispatch contract after review: AR02 now fixes the cache schema composition boundary up front,
+AR01 records the exact locked comparator benchmark for AR09, AR07 names ROC-AUC as the primary search metric, and
+AR03-AR06 explicitly separate CI-scale correctness checks from full-scale runtime measurement. That should reduce both
+timeout risk and benchmark ambiguity before the first AUTORESEARCH issue is even opened.

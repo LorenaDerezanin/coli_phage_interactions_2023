@@ -764,7 +764,7 @@ graph LR
   scientific contract is train-inference parity: start from raw interactions, host FASTAs, and phage FASTAs; reuse only
   helper code that extracts features from unseen genomes at runtime; freeze that preprocessing in `prepare.py`; let
   `autoresearch` mutate `train.py` only. Checked-in DEPLOY CSVs are optional warm caches at most, never source-of-truth
-  inputs.
+  inputs. Post-AR09 promotion into the main pipeline is a human decision, not an automated step.
 - [ ] **AR01** Lock the AUTORESEARCH corpus, label policy, and sealed split contract. Model: `gpt-5.4`. CI image
       profile: `base`.
   - Freeze the AUTORESEARCH input contract to exactly `data/interactions/raw/raw_interactions.csv`, host assemblies
@@ -778,6 +778,8 @@ graph LR
   - Predeclare `train`, `inner_val`, and sealed `holdout` splits before any model search, and write a manifest with row
     counts, bacteria/phage counts, split hashes, and input-file checksums under
     `lyzortx/generated_outputs/autoresearch/`
+  - Record in that split/benchmark manifest the exact comparator artifact identifier, path, or manifest key for the
+    current locked production-intent benchmark that AR09 must compare against on the sealed holdout
   - Remove any conceptual dependency on DEPLOY artifacts from the AUTORESEARCH track; code reuse is allowed, but
     training inputs must be reproducible from the raw contract
 - [ ] **AR02** Scaffold the sandbox and freeze the cache and manifest contract. Model: `gpt-5.4`. CI image profile:
@@ -786,6 +788,9 @@ graph LR
     and make `prepare.py` the only supported path from raw inputs to the search cache
   - Freeze the cache layout, schema-manifest format, and provenance metadata under
     `lyzortx/generated_outputs/autoresearch/` before any feature-family implementation
+  - The frozen schema must pre-declare named column-family slots for each downstream feature block: host_defense,
+    host_surface, host_typing, host_stats, phage_projection, and phage_stats. Columns within each slot may be defined by
+    AR03-AR06, but the slot names, join keys, and composability contract are fixed in AR02
   - `prepare.py` must separate one-time cache building from the many short `train.py` experiment runs; heavy
     preprocessing is outside the fixed search budget by contract
   - Checked-in DEPLOY feature CSVs may be used only as optional warm-cache accelerators; the acceptance path must prove
@@ -799,20 +804,25 @@ graph LR
     before worker fan-out and avoid per-host model installation inside worker loops
   - The host-defense step must be resume-safe, aggregate per-host outputs into the frozen cache schema, and support
     re-aggregation without rerunning all host jobs
+  - Standard CI acceptance does not require full-panel cold-cache regeneration. Validate correctness on fixtures or a
+    small host subset in CI tests; record full-run wall-clock from dedicated manual or benchmark runs instead of from CI
   - Document and test the known DEPLOY failure modes as forbidden regressions: model-install races, release-vs-source
     model confusion, and hidden downloads inside parallel workers
-  - Record a cold-cache wall-clock profile for the host-defense stage so future RunPod planning is grounded in measured
-    cost rather than guesswork
+  - If cold-cache wall-clock is materially worse than the DEPLOY defense reference or obviously makes RunPod economics
+    bad, document the cause and whether the regression is acceptable
   - Keep the exported defense block inference-safe: no panel metadata, no label-derived pair features, and no dependence
     on checked-in aggregate CSVs as source of truth
 - [ ] **AR04** Add host-surface cache building with the fast path only. Model: `gpt-5.4`. CI image profile: `full-bio`.
       Depends on tasks: `AR03`.
   - Reuse only the inference-safe raw host surface outputs: O-antigen, receptor, and capsule-profile scans plus simple
     derived scores; do not export `host_lps_core_type` or any other field whose value comes from Picard lookup tables
+  - Standard CI acceptance does not require full-panel cold-cache regeneration. Validate correctness on fixtures or a
+    small host subset in CI tests; record full-run wall-clock from dedicated manual or benchmark runs instead of from CI
   - The acceptance path must explicitly forbid the old slow per-host `nhmmer` shape; use the recorded fast path from
     DEPLOY planning instead of silently regressing to the 70s/host scan design
-  - Prefer in-process or cached sequence-scan execution over repeated subprocess environment activation, and record a
-    cold-cache wall-clock profile for the stage
+  - Prefer in-process or cached sequence-scan execution over repeated subprocess environment activation, and if
+    cold-cache wall-clock is materially worse than the DEPLOY surface reference or obviously makes RunPod economics bad,
+    document the cause and whether the regression is acceptable
   - Keep the stage resume-safe and cache predicted proteins or equivalent intermediates so retries do not redo the full
     front half of the work
   - Validate that the exported host-surface block matches the frozen AUTORESEARCH schema and remains fully rebuildable
@@ -823,6 +833,9 @@ graph LR
     optional comparison/validation paths rather than runtime feature construction
   - Add a small host sequence-stats block in `prepare.py` from the assembly itself so AUTORESEARCH has a low-cost
     baseline feature family alongside the heavier calls
+  - Standard CI acceptance does not require full-panel cold-cache regeneration. Validate correctness on fixtures or a
+    small host subset in CI tests; record any full-run wall-clock observations from dedicated manual or benchmark runs
+    instead of from CI
   - The host-typing and host-stats outputs must conform to the frozen cache contract and be rebuildable from raw FASTAs
     without hidden local state
   - Record unresolved caller caveats that affect runtime semantics, such as hosts where MLST may be blank, in the
@@ -835,9 +848,13 @@ graph LR
     `tl17_rbp_reference_hit_count`, with no panel-only host metadata or label-derived pair features
   - The phage projection step must use the batched runtime path where supported and must not rebuild avoidable shared
     indices or reference assets for each phage independently
+  - Standard CI acceptance does not require full-panel cold-cache regeneration. Validate correctness on fixtures or a
+    small phage subset in CI tests; record full-run wall-clock from dedicated manual or benchmark runs instead of from
+    CI
   - Add a small phage sequence-stats block in `prepare.py` so the phage side has a low-cost baseline family alongside
     TL17 projection
-  - Record a cold-cache wall-clock profile for the phage stage and write the frozen reference-bank provenance into the
+  - If cold-cache wall-clock is materially worse than the DEPLOY/TL17 reference or obviously makes RunPod economics bad,
+    document the cause and whether the regression is acceptable; write the frozen reference-bank provenance into the
     cache manifest
   - Validate that the phage block is fully rebuildable from the committed phage FASTAs and the frozen runtime payload,
     with no dependence on checked-in projection CSVs
@@ -851,6 +868,8 @@ graph LR
   - Every search run executes under one fixed single-GPU wall-clock budget and emits one scalar inner-validation metric
     so candidates are comparable on the same machine; the one-time cache build is outside that budget and must not rerun
     for ordinary `train.py`-only experiments
+  - The primary search metric is ROC-AUC, consistent with the repo's existing evaluation paths. Top-3 hit rate and Brier
+    score are secondary report-only metrics, not optimization targets
   - One bootstrap command prepares the cache and one training command runs the baseline end to end on a single GPU; both
     commands are documented in `lyzortx/autoresearch/README.md`
   - Add guard tests proving the sandbox cannot read sealed holdout labels, cannot silently change split membership, and
@@ -865,6 +884,8 @@ graph LR
     artifacts, runs a bounded experiment command, collects candidate artifacts, and tears the pod down
   - The workflow separates infrequent cache-build/provisioning work from many short `train.py` experiment runs so RunPod
     time is not wasted redoing the measured host-side preprocessing stages from `AR03`-`AR06`
+  - Document the chosen pod type, GPU VRAM, hourly cost, and the reasoning for the choice. The pod spec is a
+    human-approved lock decision, not an auto-selected default
   - RunPod credentials are used only in narrow provisioning and teardown steps; they are not injected into the generic
     Codex action environment
   - Document the required GitHub environment, secret names, approval gate, pod-spec contract, and local-versus-RunPod
@@ -874,7 +895,8 @@ graph LR
   - Add one command that imports a candidate `train.py` plus its RunPod experiment metadata back into
     `lyzortx/generated_outputs/autoresearch/candidates/`
   - Re-run imported candidates from a clean checkout with repeated seeds against the sealed holdout and the current
-    locked repo benchmark using the repo's standard AUC, top-3, Brier, and bootstrap comparison path
+    locked production-intent benchmark artifact named in AR01's split/benchmark manifest, using the same AUC, top-3,
+    Brier, and bootstrap comparison path for both candidate and comparator
   - Promotion requires a predeclared primary-metric improvement without material regression on top-3 hit rate or Brier
     score; otherwise the decision artifact must say `no_honest_lift`
   - Output a single auditable decision bundle containing candidate provenance, replication metrics, bootstrap summary,

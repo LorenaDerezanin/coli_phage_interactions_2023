@@ -37,6 +37,10 @@ or checked-in feature CSVs as scientific inputs.
   phage projection now live in separate plan tasks because they have different toolchains, different performance
   characteristics, and different known failure modes. The previous 5-ticket plan hid too much risk inside one broad
   preprocessing task.
+- **Tighten criteria before dispatch, not after the first failed implement run.** The current plan now names the search
+  metric, requires AR01 to record the exact locked comparator benchmark, fixes AR02's schema-composability contract,
+  and states explicitly that AR03-AR06 validate correctness on fixtures/subsets in CI while full-panel scale is
+  measured outside CI.
 
 #### Immediate task sequence
 
