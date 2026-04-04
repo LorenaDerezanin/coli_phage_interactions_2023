@@ -415,3 +415,78 @@ def test_build_host_defense_slot_artifact_supports_reaggregation_without_worker_
     assert all(row["host_defense__AbiD"] == "1" for row in artifact_rows)
     assert all(row["host_defense__RM_Type_I"] == "0" for row in artifact_rows)
     assert all(column == "bacteria" or column.startswith("host_defense__") for column in artifact_rows[0])
+
+
+def test_build_host_defense_slot_artifact_wraps_process_pool_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    cache_dir = tmp_path / "cache"
+    output_root = tmp_path / "outputs"
+    process_error = OSError("spawn failed")
+    logged_errors: list[str] = []
+
+    class FakeFuture:
+        def result(self) -> tuple[str, bool, str]:
+            raise process_error
+
+    class FakeProcessPoolExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            self.max_workers = max_workers
+
+        def __enter__(self) -> FakeProcessPoolExecutor:
+            return self
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+            return None
+
+        def submit(self, *args: object, **kwargs: object) -> FakeFuture:
+            return FakeFuture()
+
+    def fake_as_completed(futures: dict[FakeFuture, str]) -> list[FakeFuture]:
+        return list(futures)
+
+    def fake_ensure_defense_finder_models(*args: object, **kwargs: object) -> str:
+        return "already_present"
+
+    def fail_if_called(*args: object, **kwargs: object) -> None:
+        raise AssertionError("aggregate_host_defense_csvs should not run when a worker process fails")
+
+    monkeypatch.setattr(prepare_cache, "ProcessPoolExecutor", FakeProcessPoolExecutor)
+    monkeypatch.setattr(prepare_cache, "as_completed", fake_as_completed)
+    monkeypatch.setattr(prepare_cache, "ensure_defense_finder_models", fake_ensure_defense_finder_models)
+    monkeypatch.setattr(prepare_cache, "aggregate_host_defense_csvs", fail_if_called)
+    monkeypatch.setattr(
+        prepare_cache.LOGGER,
+        "error",
+        lambda message, *args: logged_errors.append(message % args),
+    )
+
+    args = prepare_cache.parse_args(
+        [
+            "--output-root",
+            str(output_root),
+            "--cache-dir",
+            str(cache_dir),
+            "--skip-host-assembly-resolution",
+        ]
+    )
+    split_rows = {
+        "train": [
+            {
+                "bacteria": "B1",
+                "host_fasta_path": str(tmp_path / "hosts" / "B1.fna"),
+                "retained_for_autoresearch": "1",
+            }
+        ],
+        "inner_val": [],
+    }
+
+    with pytest.raises(RuntimeError, match="AR03 host-defense cache build failed for B1"):
+        prepare_cache._build_host_defense_slot_artifact(
+            args=args,
+            cache_dir=cache_dir,
+            split_rows=split_rows,
+        )
+
+    assert logged_errors == ["AR03 host defense failed for B1: worker process error: spawn failed"]

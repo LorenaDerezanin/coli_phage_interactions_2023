@@ -607,7 +607,10 @@ def _build_host_defense_slot_artifact(
                 }
                 for future in as_completed(futures):
                     bacteria_id = futures[future]
-                    _, ok, message = future.result()
+                    try:
+                        _, ok, message = future.result()
+                    except Exception as exc:
+                        ok, message = False, f"worker process error: {exc}"
                     if not ok:
                         failure_messages.append({"bacteria": bacteria_id, "message": message})
                         LOGGER.error("AR03 host defense failed for %s: %s", bacteria_id, message)

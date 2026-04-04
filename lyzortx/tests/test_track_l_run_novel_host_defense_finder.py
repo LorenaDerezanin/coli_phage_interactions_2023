@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 
 import joblib
+import pytest
 
 from lyzortx.pipeline.track_l.steps import run_novel_host_defense_finder
 
@@ -208,22 +209,14 @@ def test_validate_pinned_defense_finder_models_rejects_source_checkout_shape(tmp
     (models_dir / "defense-finder-models").mkdir(parents=True)
     (models_dir / "CasFinder").mkdir(parents=True)
 
-    try:
+    with pytest.raises(FileNotFoundError, match="source checkout"):
         run_novel_host_defense_finder.validate_pinned_defense_finder_models(models_dir)
-    except FileNotFoundError as exc:
-        assert "source checkout" in str(exc)
-    else:
-        raise AssertionError("Expected validate_pinned_defense_finder_models to reject missing metadata")
 
 
 def test_resolve_defense_finder_model_status_forbid_rejects_force_update(tmp_path: Path) -> None:
-    try:
+    with pytest.raises(ValueError, match="force_update cannot be used"):
         run_novel_host_defense_finder.resolve_defense_finder_model_status(
             models_dir=tmp_path / "models",
             force_update=True,
             model_install_mode=run_novel_host_defense_finder.MODEL_INSTALL_MODE_FORBID,
         )
-    except ValueError as exc:
-        assert "force_update cannot be used" in str(exc)
-    else:
-        raise AssertionError("Expected force_update to be rejected when model-install-mode=forbid")
