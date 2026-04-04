@@ -183,6 +183,67 @@ pretending that feature-family semantics already exist. Downstream tasks can now
 without reopening the more dangerous questions of how raw inputs enter the cache, whether holdout data leaks into the
 workspace, or whether a warm cache silently changes the schema.
 
+### 2026-04-04 23:23 UTC: AR03 added host-defense cache building with one-time model controls
+
+#### Executive summary
+
+`lyzortx/pipeline/autoresearch/prepare_cache.py` now builds the `host_defense` feature slot from retained raw host
+FASTAs instead of leaving that slot empty. The coordinator preinstalls pinned DefenseFinder release models once, workers
+run with model installation explicitly forbidden, and the cache can be re-aggregated from per-host outputs without
+rerunning every host. CI validation stayed on fixtures and mocked small-subset paths as intended; the required full
+repo suite passed with `440` tests, while full-panel cold-cache wall-clock remains a dedicated manual benchmark rather
+than a CI metric.
+
+#### What changed
+
+- **Filled the AR02 `host_defense` slot with real cache artifacts.** `prepare.py` now writes
+  `feature_slots/host_defense/feature_table.csv` plus a dedicated
+  `feature_slots/host_defense/host_defense_build_manifest.json`. The exported columns are namespaced as
+  `host_defense__*`, keyed only by `bacteria`, and the top-level/schema manifests now record those frozen columns.
+- **Separated one-time model installation from per-host work.** The shared DefenseFinder runtime now exposes explicit
+  `model_install_mode` control:
+  - `ensure` installs pinned release models when needed.
+  - `forbid` requires a preinstalled pinned model directory and raises if the path looks like a source checkout or wrong
+    version.
+  AUTORESEARCH uses `ensure` once on the coordinator, then fans out workers with `forbid` so model-install races and
+  hidden downloads cannot occur inside the parallel loop.
+- **Made host-defense aggregation reusable.** `run_all_host_defense.py` now supports loading or aggregating a requested
+  subset of per-host outputs, which lets AUTORESEARCH rebuild the slot artifact from completed host jobs without
+  rerunning DefenseFinder.
+- **Kept the block inference-safe.** The slot is built from raw FASTAs and pinned release models, not from checked-in
+  DEPLOY aggregate CSVs, and it exports only defense-subtype count columns. No panel metadata fields, no
+  label-derived pair features, and no pair-table labels are mixed into the host-defense block itself.
+
+#### Forbidden regressions covered
+
+- **Model-install races / hidden worker downloads.** Added tests proving AUTORESEARCH workers call the host-defense
+  builder with `model_install_mode="forbid"` and that aggregate-only mode can rebuild the slot artifact without calling
+  model installation.
+- **Release-vs-source model confusion.** Added tests that reject model directories missing pinned release metadata and
+  reject `force_update` when install mode is `forbid`.
+- **Re-aggregation without rerun.** Added tests for subset aggregation and missing-host failure behavior in
+  `lyzortx/tests/test_run_all_host_defense.py`.
+
+#### Validation and runtime interpretation
+
+- CI validation:
+  - focused host-defense/AUTORESEARCH regression tests passed
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/` passed with `440 passed`
+- Full-panel cold-cache wall-clock was deliberately **not** recorded in CI. That matches the AR03 acceptance rule: CI
+  should validate correctness on fixtures or a small subset, while the real wall-clock belongs to a manual or benchmark
+  run on hardware that can actually represent RunPod economics.
+- This change removes one known DEPLOY inefficiency rather than adding one: coordinator-only preinstall eliminates
+  repeated model bootstrapping inside workers. I did not record a new 403-host benchmark in this CI run, so I cannot
+  claim a numeric runtime delta yet, but there is no code-path regression on the specific failure mode that previously
+  risked wasting parallel runtime.
+
+#### Interpretation
+
+Defense hits remain useful positive evidence for the model, especially when a subtype is confidently detected from the
+assembly. The inverse is weaker: a zero in the exported `host_defense__*` block means "not detected by this pinned
+annotation path under this schema," not "clean biological absence." That caveat is now written directly into the
+AR03 build manifest so downstream search code cannot silently overinterpret missing defense features.
+
 ### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
 
 #### Executive summary

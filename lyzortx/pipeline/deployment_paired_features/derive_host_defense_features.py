@@ -15,8 +15,9 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import build_defense_column_mask
 from lyzortx.pipeline.track_l.steps.run_novel_host_defense_finder import (
     DEFAULT_MODELS_DIR,
+    MODEL_INSTALL_MODE_ENSURE,
     build_defense_subtype_count_row,
-    ensure_defense_finder_models,
+    resolve_defense_finder_model_status,
     run_defense_finder_on_assembly,
     _read_defense_finder_system_rows,
     _read_panel_defense_rows,
@@ -47,6 +48,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--models-dir", type=Path, default=DEFAULT_MODELS_DIR)
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--force-model-update", action="store_true")
+    parser.add_argument(
+        "--model-install-mode",
+        choices=(MODEL_INSTALL_MODE_ENSURE, "forbid"),
+        default=MODEL_INSTALL_MODE_ENSURE,
+        help="Whether to install pinned release models when missing or require a preinstalled pinned models directory.",
+    )
     parser.add_argument("--force-run", action="store_true")
     parser.add_argument("--preserve-raw", action="store_true")
     parser.add_argument(
@@ -127,6 +134,7 @@ def derive_host_defense_features(
     models_dir: Path = DEFAULT_MODELS_DIR,
     workers: int = 0,
     force_model_update: bool = False,
+    model_install_mode: str = MODEL_INSTALL_MODE_ENSURE,
     force_run: bool = False,
     preserve_raw: bool = False,
 ) -> dict[str, Any]:
@@ -141,7 +149,11 @@ def derive_host_defense_features(
     ensure_directory(output_dir)
     write_json(output_dir / SCHEMA_MANIFEST_FILENAME, schema)
 
-    model_status = ensure_defense_finder_models(models_dir=models_dir, force_update=force_model_update)
+    model_status = resolve_defense_finder_model_status(
+        models_dir=models_dir,
+        force_update=force_model_update,
+        model_install_mode=model_install_mode,
+    )
     systems_path, protein_metadata = run_defense_finder_on_assembly(
         assembly_path,
         output_dir=output_dir,
@@ -188,6 +200,7 @@ def derive_host_defense_features(
         "unmatched_detected_subtypes": unmatched_detected_subtypes,
         "provenance": {
             "model_status": model_status,
+            "model_install_mode": model_install_mode,
             "used_cached_systems": protein_metadata["used_cached_systems"],
             "gene_finder_modes": protein_metadata["gene_finder_modes"],
             "workers": workers,
@@ -252,6 +265,7 @@ def run_validation_subset(
     models_dir: Path = DEFAULT_MODELS_DIR,
     workers: int = 0,
     force_model_update: bool = False,
+    model_install_mode: str = MODEL_INSTALL_MODE_ENSURE,
     force_run: bool = False,
     preserve_raw: bool = False,
 ) -> dict[str, Any]:
@@ -280,6 +294,7 @@ def run_validation_subset(
             models_dir=models_dir,
             workers=workers,
             force_model_update=force_model_update,
+            model_install_mode=model_install_mode,
             force_run=force_run,
             preserve_raw=preserve_raw,
         )
@@ -331,6 +346,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             models_dir=args.models_dir,
             workers=args.workers,
             force_model_update=args.force_model_update,
+            model_install_mode=args.model_install_mode,
             force_run=args.force_run,
             preserve_raw=args.preserve_raw,
         )
@@ -351,6 +367,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         models_dir=args.models_dir,
         workers=args.workers,
         force_model_update=args.force_model_update,
+        model_install_mode=args.model_install_mode,
         force_run=args.force_run,
         preserve_raw=args.preserve_raw,
     )

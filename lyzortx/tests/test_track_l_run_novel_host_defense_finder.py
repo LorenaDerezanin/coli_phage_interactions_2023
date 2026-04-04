@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 
 import joblib
+import pytest
 
 from lyzortx.pipeline.track_l.steps import run_novel_host_defense_finder
 
@@ -136,6 +137,7 @@ def test_run_novel_host_defense_finder_projects_expected_feature_columns(
         models_dir=tmp_path / "models",
         workers=0,
         force_model_update=False,
+        model_install_mode=run_novel_host_defense_finder.MODEL_INSTALL_MODE_ENSURE,
         force_run=False,
         preserve_raw=False,
     )
@@ -200,3 +202,21 @@ def test_run_defense_finder_on_assembly_skips_pyrodigal_when_cached(
         "gene_finder_modes": [],
         "used_cached_systems": True,
     }
+
+
+def test_validate_pinned_defense_finder_models_rejects_source_checkout_shape(tmp_path: Path) -> None:
+    models_dir = tmp_path / "models"
+    (models_dir / "defense-finder-models").mkdir(parents=True)
+    (models_dir / "CasFinder").mkdir(parents=True)
+
+    with pytest.raises(FileNotFoundError, match="source checkout"):
+        run_novel_host_defense_finder.validate_pinned_defense_finder_models(models_dir)
+
+
+def test_resolve_defense_finder_model_status_forbid_rejects_force_update(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="force_update cannot be used"):
+        run_novel_host_defense_finder.resolve_defense_finder_model_status(
+            models_dir=tmp_path / "models",
+            force_update=True,
+            model_install_mode=run_novel_host_defense_finder.MODEL_INSTALL_MODE_FORBID,
+        )

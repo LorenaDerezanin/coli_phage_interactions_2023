@@ -7,7 +7,9 @@ import argparse
 import csv
 import json
 import logging
+import os
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +17,19 @@ from typing import Any, Mapping, Optional, Sequence
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
+from lyzortx.pipeline.deployment_paired_features.derive_host_defense_features import (
+    DEFAULT_PANEL_DEFENSE_SUBTYPES_PATH,
+    PER_HOST_COUNTS_FILENAME,
+)
+from lyzortx.pipeline.deployment_paired_features.run_all_host_defense import (
+    aggregate_host_defense_csvs,
+)
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_csv, write_json
+from lyzortx.pipeline.track_l.steps.run_novel_host_defense_finder import (
+    DEFAULT_MODELS_DIR,
+    MODEL_INSTALL_MODE_FORBID,
+    ensure_defense_finder_models,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +43,8 @@ TRAIN_PAIR_TABLE_FILENAME = "train_pairs.csv"
 INNER_VAL_PAIR_TABLE_FILENAME = "inner_val_pairs.csv"
 ENTITY_INDEX_FILENAME = "entity_index.csv"
 SLOT_SCHEMA_FILENAME = "schema_manifest.json"
+SLOT_FEATURE_TABLE_FILENAME = "feature_table.csv"
+HOST_DEFENSE_BUILD_MANIFEST_FILENAME = "host_defense_build_manifest.json"
 
 TASK_ID = "AR02"
 CACHE_CONTRACT_ID = "autoresearch_search_cache_v1"
@@ -160,6 +176,44 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Skip download_picard_assemblies() and trust the provided host assembly directory as-is.",
     )
+    parser.add_argument(
+        "--host-defense-output-dir",
+        type=Path,
+        default=None,
+        help="Per-host raw host-defense cache root. Defaults to <output-root>/host_defense.",
+    )
+    parser.add_argument(
+        "--host-defense-models-dir",
+        type=Path,
+        default=DEFAULT_MODELS_DIR,
+        help="Pinned Defense Finder models directory shared across host-defense workers.",
+    )
+    parser.add_argument(
+        "--host-defense-max-workers",
+        type=int,
+        default=max(1, os.cpu_count() or 1),
+        help="Process fan-out for host-defense cache building.",
+    )
+    parser.add_argument(
+        "--host-defense-force-model-update",
+        action="store_true",
+        help="Force a one-time coordinator-side model refresh before worker fan-out.",
+    )
+    parser.add_argument(
+        "--host-defense-force-run",
+        action="store_true",
+        help="Re-run Defense Finder even when a per-host systems TSV already exists.",
+    )
+    parser.add_argument(
+        "--host-defense-preserve-raw",
+        action="store_true",
+        help="Preserve raw MacSyFinder outputs from Defense Finder.",
+    )
+    parser.add_argument(
+        "--host-defense-aggregate-only",
+        action="store_true",
+        help="Skip host-defense worker execution and rebuild the slot artifact from existing per-host outputs only.",
+    )
     return parser.parse_args(argv)
 
 
@@ -242,7 +296,13 @@ def build_slot_index_rows(
     return [{slot_spec.entity_key: value} for value in sorted(values)]
 
 
-def build_slot_schema_manifest(slot_spec: SlotSpec, row_count: int) -> dict[str, Any]:
+def build_slot_schema_manifest(
+    slot_spec: SlotSpec,
+    row_count: int,
+    *,
+    reserved_feature_columns: Sequence[str] = (),
+) -> dict[str, Any]:
+    resolved_columns = [str(column) for column in reserved_feature_columns]
     return {
         "task_id": TASK_ID,
         "schema_manifest_id": SCHEMA_MANIFEST_ID,
@@ -252,8 +312,8 @@ def build_slot_schema_manifest(slot_spec: SlotSpec, row_count: int) -> dict[str,
         "join_keys": slot_spec.join_keys,
         "column_family_prefix": slot_spec.column_prefix,
         "block_role": slot_spec.block_role,
-        "reserved_feature_columns": [],
-        "reserved_feature_column_count": 0,
+        "reserved_feature_columns": resolved_columns,
+        "reserved_feature_column_count": len(resolved_columns),
         "entity_index_row_count": row_count,
         "composability_contract": {
             "join_type": "left",
@@ -267,7 +327,14 @@ def build_slot_schema_manifest(slot_spec: SlotSpec, row_count: int) -> dict[str,
     }
 
 
-def build_top_level_schema_manifest() -> dict[str, Any]:
+def build_top_level_schema_manifest(
+    *,
+    slot_feature_columns: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, Any]:
+    resolved_columns = {} if slot_feature_columns is None else slot_feature_columns
+    resolved_slot_entries = {
+        spec.slot_name: [str(column) for column in resolved_columns.get(spec.slot_name, ())] for spec in SLOT_SPECS
+    }
     return {
         "task_id": TASK_ID,
         "schema_manifest_id": SCHEMA_MANIFEST_ID,
@@ -300,8 +367,8 @@ def build_top_level_schema_manifest() -> dict[str, Any]:
                 "join_keys": spec.join_keys,
                 "column_family_prefix": spec.column_prefix,
                 "block_role": spec.block_role,
-                "reserved_feature_columns": [],
-                "reserved_feature_column_count": 0,
+                "reserved_feature_columns": resolved_slot_entries[spec.slot_name],
+                "reserved_feature_column_count": len(resolved_slot_entries[spec.slot_name]),
             }
             for spec in SLOT_SPECS
         },
@@ -435,7 +502,205 @@ def summarize_pair_table(path: Path, rows: Sequence[Mapping[str, str]]) -> dict[
     }
 
 
-def write_slot_indexes(cache_dir: Path, split_rows: Mapping[str, Sequence[Mapping[str, str]]]) -> dict[str, Any]:
+def _retained_host_fastas(split_rows: Mapping[str, Sequence[Mapping[str, str]]]) -> dict[str, Path]:
+    host_paths: dict[str, Path] = {}
+    for rows in split_rows.values():
+        for row in rows:
+            if str(row["retained_for_autoresearch"]) != "1":
+                continue
+            bacteria = str(row["bacteria"])
+            host_fasta_path = Path(str(row["host_fasta_path"]))
+            if bacteria in host_paths and host_paths[bacteria] != host_fasta_path:
+                raise ValueError(
+                    f"Host {bacteria} resolved to multiple FASTA paths: {host_paths[bacteria]} vs {host_fasta_path}"
+                )
+            host_paths[bacteria] = host_fasta_path
+    if not host_paths:
+        raise ValueError("AUTORESEARCH retained set has zero host FASTAs for host-defense cache building.")
+    return dict(sorted(host_paths.items()))
+
+
+def _process_one_host_defense_cache_entry(
+    assembly_path: Path,
+    bacteria_id: str,
+    output_dir: Path,
+    panel_path: Path,
+    models_dir: Path,
+    force_run: bool,
+    preserve_raw: bool,
+) -> tuple[str, bool, str]:
+    try:
+        from lyzortx.pipeline.deployment_paired_features.derive_host_defense_features import (
+            derive_host_defense_features,
+        )
+
+        derive_host_defense_features(
+            assembly_path,
+            bacteria_id=bacteria_id,
+            output_dir=output_dir / bacteria_id,
+            panel_defense_subtypes_path=panel_path,
+            models_dir=models_dir,
+            workers=1,
+            force_model_update=False,
+            model_install_mode=MODEL_INSTALL_MODE_FORBID,
+            force_run=force_run,
+            preserve_raw=preserve_raw,
+        )
+        return bacteria_id, True, "ok"
+    except Exception as exc:
+        return bacteria_id, False, str(exc)
+
+
+def _build_host_defense_slot_artifact(
+    *,
+    args: argparse.Namespace,
+    cache_dir: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+) -> dict[str, Any]:
+    slot_dir = cache_dir / "feature_slots" / "host_defense"
+    ensure_directory(slot_dir)
+    per_host_output_dir = (
+        args.host_defense_output_dir if args.host_defense_output_dir is not None else args.output_root / "host_defense"
+    )
+    host_fastas = _retained_host_fastas(split_rows)
+    bacteria_ids = list(host_fastas.keys())
+    coordinator_model_status = "not_requested"
+    pending_host_count = 0
+    skipped_host_count = 0
+    failure_messages: list[dict[str, str]] = []
+    cold_cache_elapsed_seconds = None
+
+    if not args.host_defense_aggregate_only:
+        LOGGER.info(
+            "AR03 host defense: ensuring pinned release models once in %s before %d-worker fan-out",
+            args.host_defense_models_dir,
+            args.host_defense_max_workers,
+        )
+        coordinator_model_status = ensure_defense_finder_models(
+            models_dir=args.host_defense_models_dir,
+            force_update=args.host_defense_force_model_update,
+        )
+        pending: list[tuple[str, Path]] = []
+        for bacteria_id, assembly_path in host_fastas.items():
+            counts_path = per_host_output_dir / bacteria_id / PER_HOST_COUNTS_FILENAME
+            if counts_path.exists() and not args.host_defense_force_run:
+                skipped_host_count += 1
+                continue
+            pending.append((bacteria_id, assembly_path))
+
+        pending_host_count = len(pending)
+        if pending:
+            start = datetime.now(timezone.utc)
+            with ProcessPoolExecutor(max_workers=args.host_defense_max_workers) as pool:
+                futures = {
+                    pool.submit(
+                        _process_one_host_defense_cache_entry,
+                        assembly_path,
+                        bacteria_id,
+                        per_host_output_dir,
+                        DEFAULT_PANEL_DEFENSE_SUBTYPES_PATH,
+                        args.host_defense_models_dir,
+                        args.host_defense_force_run,
+                        args.host_defense_preserve_raw,
+                    ): bacteria_id
+                    for bacteria_id, assembly_path in pending
+                }
+                for future in as_completed(futures):
+                    bacteria_id = futures[future]
+                    try:
+                        _, ok, message = future.result()
+                    except Exception as exc:
+                        ok, message = False, f"worker process error: {exc}"
+                    if not ok:
+                        failure_messages.append({"bacteria": bacteria_id, "message": message})
+                        LOGGER.error("AR03 host defense failed for %s: %s", bacteria_id, message)
+            cold_cache_elapsed_seconds = round((datetime.now(timezone.utc) - start).total_seconds(), 3)
+            if failure_messages:
+                raise RuntimeError(
+                    "AR03 host-defense cache build failed for "
+                    + ", ".join(entry["bacteria"] for entry in failure_messages)
+                )
+        else:
+            LOGGER.info("AR03 host defense: all retained hosts already have per-host outputs; skipping worker fan-out")
+
+    aggregate_path = slot_dir / SLOT_FEATURE_TABLE_FILENAME
+    aggregate_host_defense_csvs(
+        per_host_output_dir,
+        aggregate_path,
+        DEFAULT_PANEL_DEFENSE_SUBTYPES_PATH,
+        bacteria_ids=bacteria_ids,
+    )
+
+    raw_rows = load_csv_rows(aggregate_path)
+    if len(raw_rows) != len(bacteria_ids):
+        raise ValueError(
+            f"AR03 host-defense aggregation row count mismatch: expected {len(bacteria_ids)}, got {len(raw_rows)}"
+        )
+    exported_columns = [
+        f"{SLOT_SPEC_BY_NAME['host_defense'].column_prefix}{column}" for column in raw_rows[0] if column != "bacteria"
+    ]
+    projected_rows = []
+    for row in raw_rows:
+        projected_row = {"bacteria": str(row["bacteria"])}
+        for column in raw_rows[0]:
+            if column == "bacteria":
+                continue
+            projected_row[f"{SLOT_SPEC_BY_NAME['host_defense'].column_prefix}{column}"] = row[column]
+        projected_rows.append(projected_row)
+    write_csv(aggregate_path, fieldnames=["bacteria", *exported_columns], rows=projected_rows)
+
+    build_manifest = {
+        "task_id": "AR03",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": "host_defense",
+        "per_host_output_dir": str(per_host_output_dir),
+        "slot_artifact_path": str(aggregate_path),
+        "retained_host_count": len(bacteria_ids),
+        "retained_hosts": bacteria_ids,
+        "runtime_controls": {
+            "aggregate_only": args.host_defense_aggregate_only,
+            "max_workers": args.host_defense_max_workers,
+            "force_model_update": args.host_defense_force_model_update,
+            "force_run": args.host_defense_force_run,
+            "preserve_raw": args.host_defense_preserve_raw,
+            "worker_model_install_mode": MODEL_INSTALL_MODE_FORBID,
+        },
+        "coordinator_model_status": coordinator_model_status,
+        "cold_cache_elapsed_seconds": cold_cache_elapsed_seconds,
+        "pending_host_count": pending_host_count,
+        "skipped_host_count": skipped_host_count,
+        "failure_messages": failure_messages,
+        "guardrails": {
+            "source_of_truth": "raw host FASTAs plus pinned Defense Finder release models",
+            "forbidden_regressions": [
+                "per-host model installation inside parallel workers",
+                "source-checkout model directory confusion",
+                "hidden model downloads during worker execution",
+            ],
+            "interpretation_limits": (
+                "Detected defense hits are useful positive evidence. Zero counts are annotation-limited absences and "
+                "must not be interpreted as clean biological absence."
+            ),
+        },
+    }
+    write_json(slot_dir / HOST_DEFENSE_BUILD_MANIFEST_FILENAME, build_manifest)
+    return {
+        "artifact_path": str(aggregate_path),
+        "artifact_sha256": build_contract.sha256_file(aggregate_path),
+        "columns": exported_columns,
+        "column_count": len(exported_columns),
+        "entity_count": len(projected_rows),
+        "build_manifest_path": str(slot_dir / HOST_DEFENSE_BUILD_MANIFEST_FILENAME),
+    }
+
+
+def write_slot_indexes(
+    cache_dir: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    *,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
     slot_root = cache_dir / "feature_slots"
     ensure_directory(slot_root)
     slot_summaries: dict[str, Any] = {}
@@ -447,7 +712,19 @@ def write_slot_indexes(cache_dir: Path, split_rows: Mapping[str, Sequence[Mappin
         index_path = slot_dir / ENTITY_INDEX_FILENAME
         write_csv(index_path, fieldnames=slot_spec.join_keys, rows=rows)
 
-        schema_manifest = build_slot_schema_manifest(slot_spec, row_count=len(rows))
+        slot_artifact_summary = {}
+        if slot_spec.slot_name == "host_defense":
+            slot_artifact_summary = _build_host_defense_slot_artifact(
+                args=args,
+                cache_dir=cache_dir,
+                split_rows=split_rows,
+            )
+
+        schema_manifest = build_slot_schema_manifest(
+            slot_spec,
+            row_count=len(rows),
+            reserved_feature_columns=slot_artifact_summary.get("columns", ()),
+        )
         schema_path = slot_dir / SLOT_SCHEMA_FILENAME
         write_json(schema_path, schema_manifest)
 
@@ -457,6 +734,9 @@ def write_slot_indexes(cache_dir: Path, split_rows: Mapping[str, Sequence[Mappin
             "schema_manifest_path": str(schema_path),
             "entity_count": len(rows),
             "sha256": build_contract.sha256_file(index_path),
+            "columns": list(schema_manifest["reserved_feature_columns"]),
+            "column_count": schema_manifest["reserved_feature_column_count"],
+            **slot_artifact_summary,
         }
 
     return slot_summaries
@@ -538,12 +818,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     pair_rows = load_csv_rows(pair_table_path)
     split_rows = select_search_rows(pair_rows)
 
-    schema_manifest = build_top_level_schema_manifest()
+    split_pair_tables = write_split_pair_tables(args.cache_dir, split_rows)
+    slot_summaries = write_slot_indexes(args.cache_dir, split_rows, args=args)
+
+    schema_manifest = build_top_level_schema_manifest(
+        slot_feature_columns={slot_name: summary["columns"] for slot_name, summary in slot_summaries.items()}
+    )
     schema_manifest_path = args.cache_dir / SCHEMA_MANIFEST_FILENAME
     write_json(schema_manifest_path, schema_manifest)
-
-    split_pair_tables = write_split_pair_tables(args.cache_dir, split_rows)
-    slot_summaries = write_slot_indexes(args.cache_dir, split_rows)
 
     warm_cache_validation = None
     if args.warm_cache_manifest_path is not None:

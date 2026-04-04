@@ -100,6 +100,38 @@ class TestAggregateHostDefenseCsvs:
         assert rows[0]["RM_Type_I"] == "5"
         assert rows[0]["AbiD"] == "0"
 
+    def test_can_reaggregate_requested_subset_without_rerunning_workers(
+        self,
+        three_host_output_dir: Path,
+        tmp_path: Path,
+    ) -> None:
+        out_csv = tmp_path / "out" / "aggregated.csv"
+        count = aggregate_host_defense_csvs(
+            three_host_output_dir,
+            out_csv,
+            PANEL_DEFENSE_SUBTYPES_PATH,
+            bacteria_ids=["003-026", "013-008"],
+        )
+
+        assert count == 2
+        with out_csv.open("r", encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+        assert [row["bacteria"] for row in rows] == ["003-026", "013-008"]
+
+    def test_requested_subset_fails_when_per_host_output_is_missing(
+        self,
+        three_host_output_dir: Path,
+        tmp_path: Path,
+    ) -> None:
+        out_csv = tmp_path / "out" / "aggregated.csv"
+        with pytest.raises(FileNotFoundError, match="requested bacteria: missing-host"):
+            aggregate_host_defense_csvs(
+                three_host_output_dir,
+                out_csv,
+                PANEL_DEFENSE_SUBTYPES_PATH,
+                bacteria_ids=["001-023", "missing-host"],
+            )
+
 
 class TestAggregatedCsvPath:
     def test_path_is_under_lyzortx_data(self) -> None:

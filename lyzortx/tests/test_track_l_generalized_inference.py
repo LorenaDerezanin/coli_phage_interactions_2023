@@ -359,11 +359,13 @@ def test_infer_reproduces_locked_panel_predictions_for_panel_host(tmp_path: Path
         models_dir: Path,
         workers: int,
         force_model_update: bool,
+        model_install_mode: str,
         force_run: bool,
         preserve_raw: bool,
     ) -> dict[str, object]:
         assert panel_defense_subtypes_path == bundle_output_dir / tl08_bundle.PANEL_DEFENSE_SUBTYPES_FILENAME
         assert models_dir == bundle_output_dir / tl08_bundle.DEFENSE_FINDER_MODELS_DIRNAME
+        assert model_install_mode == tl08_infer.run_novel_host_defense_finder.MODEL_INSTALL_MODE_ENSURE
         single_row_path = output_dir / "raw_defense.csv"
         write_csv(single_row_path, list(defense_row.keys()), [defense_row])
         projected = project_novel_host(single_row_path, column_mask_path)

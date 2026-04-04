@@ -68,8 +68,8 @@ def test_derive_host_defense_features_outputs_integer_counts_without_summary_fea
 
     monkeypatch.setattr(
         derive_host_defense_features,
-        "ensure_defense_finder_models",
-        lambda *, models_dir, force_update: "existing",
+        "resolve_defense_finder_model_status",
+        lambda *, models_dir, force_update, model_install_mode: "existing",
     )
 
     def fake_run_defense_finder_on_assembly(
@@ -183,6 +183,7 @@ def test_run_validation_subset_writes_combined_counts_and_report(monkeypatch, tm
         models_dir: Path,
         workers: int,
         force_model_update: bool,
+        model_install_mode: str,
         force_run: bool,
         preserve_raw: bool,
     ) -> dict[str, object]:

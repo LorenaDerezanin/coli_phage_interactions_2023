@@ -212,6 +212,7 @@ def project_host_features(
         "models_dir": runtime.models_dir,
         "workers": 0,
         "force_model_update": False,
+        "model_install_mode": run_novel_host_defense_finder.MODEL_INSTALL_MODE_ENSURE,
         "force_run": False,
         "preserve_raw": False,
     }
