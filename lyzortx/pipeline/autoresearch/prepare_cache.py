@@ -172,14 +172,6 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def resolve_cache_dir(output_root: Path, cache_dir: Path) -> Path:
-    if cache_dir.is_absolute():
-        return cache_dir
-    if cache_dir.parts and cache_dir.parts[0] == output_root.parts[0]:
-        return cache_dir
-    return cache_dir
-
-
 def run_ar01_contract(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     LOGGER.info("AR02 starting: refreshing AR01 raw-input contract under %s", args.output_root)
     exit_code = build_contract.main(
