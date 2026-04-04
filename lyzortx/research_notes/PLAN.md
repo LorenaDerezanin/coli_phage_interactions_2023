@@ -765,7 +765,7 @@ graph LR
   helper code that extracts features from unseen genomes at runtime; freeze that preprocessing in `prepare.py`; let
   `autoresearch` mutate `train.py` only. Checked-in DEPLOY CSVs are optional warm caches at most, never source-of-truth
   inputs. Post-AR09 promotion into the main pipeline is a human decision, not an automated step.
-- [ ] **AR01** Lock the AUTORESEARCH corpus, label policy, and sealed split contract. Model: `gpt-5.4`. CI image
+- [x] **AR01** Lock the AUTORESEARCH corpus, label policy, and sealed split contract. Model: `gpt-5.4`. CI image
       profile: `base`.
   - Freeze the AUTORESEARCH input contract to exactly `data/interactions/raw/raw_interactions.csv`, host assemblies
     resolved via `lyzortx/pipeline/deployment_paired_features/download_picard_assemblies.py`, and phage FASTAs under
