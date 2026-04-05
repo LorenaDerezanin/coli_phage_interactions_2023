@@ -108,6 +108,11 @@ jobs:
         with:
           app-id: ${{ secrets.CZARPHAGE_APP_ID }}
           private-key: ${{ secrets.CZARPHAGE_PRIVATE_KEY }}
+          permissions: >-
+            contents:write,
+            pull-requests:write,
+            issues:write,
+            workflows:write
 
       - name: Checkout repository
         uses: actions/checkout@v6
