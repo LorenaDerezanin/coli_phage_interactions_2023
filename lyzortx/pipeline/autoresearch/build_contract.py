@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from lyzortx.log_config import setup_logging
+from lyzortx.pipeline.autoresearch import runtime_contract
 from lyzortx.pipeline.deployment_paired_features.download_picard_assemblies import (
     DEFAULT_ASSEMBLY_DIR,
     FASTA_SUFFIXES,
@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_RAW_INTERACTIONS_PATH = Path("data/interactions/raw/raw_interactions.csv")
 DEFAULT_PHAGE_FASTA_DIR = Path("data/genomics/phages/FNA")
-DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/autoresearch")
+DEFAULT_OUTPUT_DIR = runtime_contract.DEFAULT_OUTPUT_ROOT
 
 PAIR_TABLE_FILENAME = "ar01_canonical_pair_table_v1.csv"
 CONTRACT_MANIFEST_FILENAME = "ar01_split_benchmark_manifest_v1.json"
@@ -39,10 +39,10 @@ SPLIT_CONTRACT_ID = "autoresearch_bacteria_disjoint_split_v1"
 PAIR_TABLE_ID = "autoresearch_pair_table_v1"
 INPUT_CONTRACT_ID = "autoresearch_raw_corpus_contract_v1"
 
-TRAIN_SPLIT = "train"
-INNER_VAL_SPLIT = "inner_val"
-HOLDOUT_SPLIT = "holdout"
-SPLIT_ORDER = (TRAIN_SPLIT, INNER_VAL_SPLIT, HOLDOUT_SPLIT)
+TRAIN_SPLIT = runtime_contract.TRAIN_SPLIT
+INNER_VAL_SPLIT = runtime_contract.INNER_VAL_SPLIT
+HOLDOUT_SPLIT = runtime_contract.HOLDOUT_SPLIT
+SPLIT_ORDER = runtime_contract.SPLIT_ORDER
 
 DEFAULT_HOLDOUT_FRACTION = 0.2
 DEFAULT_INNER_VAL_FRACTION = 0.2
@@ -118,25 +118,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return runtime_contract.sha256_file(path)
 
 
 def normalized_hash_01(text: str) -> float:
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    value = int.from_bytes(digest[:8], byteorder="big", signed=False)
-    return value / float(2**64 - 1)
+    return runtime_contract.normalized_hash_01(text)
 
 
 def sha256_strings(values: Iterable[str]) -> str:
-    digest = hashlib.sha256()
-    for value in values:
-        digest.update(value.encode("utf-8"))
-        digest.update(b"\n")
-    return digest.hexdigest()
+    return runtime_contract.sha256_strings(values)
 
 
 def discover_fasta_map(root: Path) -> Dict[str, Path]:

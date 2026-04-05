@@ -1035,3 +1035,12 @@ Simplified the lifecycle contract:
 
 This change keeps the lifecycle aligned with the current responsibility split: Claude decides approve/merge vs dispatch;
 Codex only addresses whatever feedback is already visible on the PR.
+
+### 2026-04-05 20:25 UTC: AUTORESEARCH RunPod workflow moved cloud spend behind a dedicated environment gate
+
+#### Executive summary
+
+Added `.github/workflows/autoresearch-runpod.yml` as a manual-only workflow for AUTORESEARCH GPU search. The workflow
+stages a frozen bundle, uses the dedicated `runpod-autoresearch` GitHub environment with `RUNPOD_API_KEY`, provisions
+one fixed RunPod pod, uploads a candidate artifact bundle, and tears the pod down. This keeps paid cloud credentials
+and provisioning logic out of the generic Codex issue/PR automation path.
