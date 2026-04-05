@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -58,6 +60,19 @@ def test_import_runpod_candidate_copies_bundle_and_writes_manifest(tmp_path: Pat
     manifest = json.loads((destination / candidate_replay.IMPORT_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert manifest["candidate_id"] == "runpod_run_12345_attempt_2"
     assert manifest["runpod_inner_val_summary"]["search_metric"]["value"] == 0.71
+
+
+def test_candidate_source_root_rejects_path_traversal_archive(tmp_path: Path) -> None:
+    archive_path = tmp_path / "malicious_candidate.tgz"
+    with tarfile.open(archive_path, "w:gz") as archive:
+        payload = b"unsafe"
+        member = tarfile.TarInfo("../escape.txt")
+        member.size = len(payload)
+        archive.addfile(member, io.BytesIO(payload))
+
+    with pytest.raises(tarfile.OutsideDestinationError):
+        with candidate_replay.candidate_source_root(archive_path):
+            pass
 
 
 def test_resolve_feature_lock_path_uses_only_narrow_default_fallback(

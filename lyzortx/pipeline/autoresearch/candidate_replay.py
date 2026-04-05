@@ -185,7 +185,7 @@ def candidate_source_root(candidate_bundle: Path) -> Iterator[Path]:
     with tempfile.TemporaryDirectory(prefix="ar09_candidate_import_") as temp_dir:
         temp_root = Path(temp_dir)
         with tarfile.open(candidate_bundle, "r:gz") as archive:
-            archive.extractall(temp_root)
+            archive.extractall(temp_root, filter="data")
         yield temp_root
 
 
