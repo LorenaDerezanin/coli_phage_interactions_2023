@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, write_json
-from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import _gc_content
+from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import gc_content
 from lyzortx.pipeline.track_d.steps.build_phage_protein_sets import read_fasta_records
 
 DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/deployment_paired_features/host_stats")
@@ -90,7 +90,7 @@ def build_host_stats_feature_row(assembly_path: Path, *, bacteria_id: str | None
         "bacteria": bacteria_id or assembly_path.stem,
         "host_sequence_record_count": len(records),
         "host_genome_length_nt": genome_length_nt,
-        "host_gc_content": round(_gc_content(sequences), 6),
+        "host_gc_content": round(gc_content(sequences), 6),
         "host_n50_contig_length_nt": _compute_n50(lengths),
     }
 

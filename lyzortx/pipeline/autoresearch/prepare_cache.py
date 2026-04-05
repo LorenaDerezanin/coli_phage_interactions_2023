@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import joblib
 import logging
 import os
 from collections import Counter
@@ -15,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
+
+import joblib
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
@@ -70,7 +71,6 @@ HOST_SURFACE_BUILD_DIRNAME = "host_surface_cache_build"
 HOST_TYPING_BUILD_DIRNAME = "host_typing_cache_build"
 HOST_STATS_BUILD_DIRNAME = "host_stats_cache_build"
 PHAGE_PROJECTION_BUILD_DIRNAME = "phage_projection_cache_build"
-PHAGE_STATS_BUILD_DIRNAME = "phage_stats_cache_build"
 
 
 @dataclass(frozen=True)
@@ -1179,16 +1179,14 @@ def materialize_phage_stats_slot(
         entity_key=slot_spec.entity_key,
         path_key="phage_fasta_path",
     )
-    build_dir = output_root / PHAGE_STATS_BUILD_DIRNAME
     rows: list[dict[str, object]] = []
     for phage in sorted(phage_fasta_by_phage):
         fasta_path = phage_fasta_by_phage[phage]
-        result = derive_phage_stats_features.derive_phage_stats_features(
+        feature_row = derive_phage_stats_features.build_phage_stats_feature_row(
             fasta_path,
             phage_id=phage,
-            output_dir=build_dir / phage,
         )
-        rows.append(dict(result["feature_row"]))
+        rows.append(dict(feature_row))
     if len(rows) != len(phage_fasta_by_phage):
         raise ValueError(
             f"Phage-stats materialization row count mismatch: expected {len(phage_fasta_by_phage)}, got {len(rows)}"
@@ -1206,9 +1204,10 @@ def materialize_phage_stats_slot(
     )
     schema_manifest["materialization"] = {
         "feature_csv_path": str(feature_path),
-        "per_phage_output_dir": str(build_dir),
         "rebuildable_from_raw_fastas": True,
         "low_cost_baseline_feature_family": True,
+        "direct_feature_row_path_used": True,
+        "per_phage_intermediate_artifacts_written": False,
     }
     schema_path = slot_dir / SLOT_SCHEMA_FILENAME
     write_json(schema_path, schema_manifest)
@@ -1218,7 +1217,6 @@ def materialize_phage_stats_slot(
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "cache_contract_id": CACHE_CONTRACT_ID,
         "slot_name": slot_spec.slot_name,
-        "per_phage_output_dir": str(build_dir),
         "slot_artifact_path": str(feature_path),
         "retained_phage_count": len(rows),
         "retained_phages": sorted(phage_fasta_by_phage),
@@ -1226,6 +1224,7 @@ def materialize_phage_stats_slot(
             "source_of_truth": "raw phage FASTAs only",
             "panel_metadata_used": False,
             "low_cost_baseline_feature_family": True,
+            "per_phage_intermediate_artifacts_written": False,
         },
         "exported_numeric_columns": feature_columns,
     }
@@ -1245,7 +1244,6 @@ def materialize_phage_stats_slot(
         "materialized_feature_columns": feature_columns,
         "materialized_feature_column_count": len(feature_columns),
         "build_manifest_path": str(build_manifest_path),
-        "build_dir": str(build_dir),
     }
 
 

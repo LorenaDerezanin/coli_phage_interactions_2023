@@ -410,30 +410,32 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         lambda *_args, **_kwargs: pytest.fail("Per-phage TL17 projection path should not be used"),
     )
 
-    def fake_derive_phage_stats_features(
+    phage_stats_row_calls: list[dict[str, object]] = []
+
+    def fake_build_phage_stats_feature_row(
         phage_fasta_path: Path,
         *,
         phage_id: str | None = None,
-        output_dir: Path,
     ) -> dict[str, object]:
         phage = phage_id or phage_fasta_path.stem
-        output_dir.mkdir(parents=True, exist_ok=True)
+        phage_stats_row_calls.append({"phage": phage, "path": phage_fasta_path})
         return {
-            "schema": {"feature_block": "phage_stats"},
-            "feature_row": {
-                "phage": phage,
-                "phage_sequence_record_count": len(phage),
-                "phage_genome_length_nt": len(phage) * 100,
-                "phage_gc_content": round(len(phage) / 10, 3),
-                "phage_n50_contig_length_nt": len(phage) * 50,
-            },
-            "manifest": {},
+            "phage": phage,
+            "phage_sequence_record_count": len(phage),
+            "phage_genome_length_nt": len(phage) * 100,
+            "phage_gc_content": round(len(phage) / 10, 3),
+            "phage_n50_contig_length_nt": len(phage) * 50,
         }
 
     monkeypatch.setattr(
         prepare_cache.derive_phage_stats_features,
+        "build_phage_stats_feature_row",
+        fake_build_phage_stats_feature_row,
+    )
+    monkeypatch.setattr(
+        prepare_cache.derive_phage_stats_features,
         "derive_phage_stats_features",
-        fake_derive_phage_stats_features,
+        lambda *_args, **_kwargs: pytest.fail("Per-phage phage-stats artifact writes should not be used"),
     )
 
     exit_code = prepare_cache.main(
@@ -507,6 +509,7 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     assert len(phage_projection_calls) == 1
     assert set(phage_projection_calls[0]["phages"]) == exported_phages
     assert phage_projection_calls[0]["reference_fasta_path"] == tl17_output_dir / "tl17_rbp_reference_bank.faa"
+    assert {call["phage"] for call in phage_stats_row_calls} == exported_phages
 
     feature_rows = read_csv_rows(cache_dir / "feature_slots" / "host_surface" / prepare_cache.SLOT_FEATURES_FILENAME)
     assert {key for key in feature_rows[0]} == {
@@ -604,6 +607,18 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     assert phage_projection_manifest["reference_bank_provenance"]["reference_fasta_path"] == str(
         tl17_output_dir / "tl17_rbp_reference_bank.faa"
     )
+
+    phage_stats_manifest = json.loads(
+        (cache_dir / "feature_slots" / "phage_stats" / prepare_cache.PHAGE_STATS_BUILD_MANIFEST_FILENAME).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert phage_stats_manifest["guardrails"]["per_phage_intermediate_artifacts_written"] is False
+
+    phage_stats_schema = json.loads(
+        (cache_dir / "feature_slots" / "phage_stats" / prepare_cache.SLOT_SCHEMA_FILENAME).read_text(encoding="utf-8")
+    )
+    assert phage_stats_schema["materialization"]["direct_feature_row_path_used"] is True
 
 
 def test_validate_warm_cache_manifest_rejects_schema_mismatch(tmp_path: Path) -> None:
