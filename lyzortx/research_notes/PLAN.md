@@ -814,7 +814,7 @@ graph LR
     on checked-in aggregate CSVs as source of truth
   - Record explicitly that defense hits are useful positive evidence, but defense-feature absences are
     annotation-limited and must not be interpreted as clean biological absence
-- [ ] **AR04** Add host-surface cache building with the fast path only. Model: `gpt-5.4`. CI image profile: `full-bio`.
+- [x] **AR04** Add host-surface cache building with the fast path only. Model: `gpt-5.4`. CI image profile: `full-bio`.
       Depends on tasks: `AR02`.
   - Reuse only the inference-safe raw host surface outputs: O-antigen, receptor, and capsule-profile scans plus simple
     derived scores; do not export `host_lps_core_type` or any other field whose value comes from Picard lookup tables
@@ -829,7 +829,7 @@ graph LR
     front half of the work
   - Validate that the exported host-surface block matches the frozen AUTORESEARCH schema and remains fully rebuildable
     from raw FASTAs alone
-- [ ] **AR05** Add host typing and simple host sequence statistics to prepare.py. Model: `gpt-5.4`. CI image profile:
+- [x] **AR05** Add host typing and simple host sequence statistics to prepare.py. Model: `gpt-5.4`. CI image profile:
       `host-typing`. Depends on tasks: `AR04`.
   - Reuse the raw-assembly host-typing callers for phylogroup, serotype, and MLST, but keep panel metadata limited to
     optional comparison/validation paths rather than runtime feature construction
@@ -844,7 +844,7 @@ graph LR
     manifest rather than silently coercing values
   - Add tests proving the host-side cache still loads and joins correctly when these categorical and simple numeric
     features are present
-- [ ] **AR06** Add phage projection and simple phage sequence statistics to prepare.py. Model: `gpt-5.4`. CI image
+- [x] **AR06** Add phage projection and simple phage sequence statistics to prepare.py. Model: `gpt-5.4`. CI image
       profile: `full-bio`. Depends on tasks: `AR05`.
   - Reuse the TL17 phage RBP-family projection runtime as a frozen phage-side feature builder, including
     `tl17_rbp_reference_hit_count`, with no panel-only host metadata or label-derived pair features
@@ -860,7 +860,7 @@ graph LR
     cache manifest
   - Validate that the phage block is fully rebuildable from the committed phage FASTAs and the frozen runtime payload,
     with no dependence on checked-in projection CSVs
-- [ ] **AR07** Implement the one-file baseline and strict autoresearch search contract. Model: `gpt-5.4`. CI image
+- [x] **AR07** Implement the one-file baseline and strict autoresearch search contract. Model: `gpt-5.4`. CI image
       profile: `base`. Depends on tasks: `AR06`.
   - `train.py` is the only file the search agent may modify; `prepare.py` stays fixed, and `program.md` states that
     labels, splits, feature extraction, and evaluation code are out of bounds
