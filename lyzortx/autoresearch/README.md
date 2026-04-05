@@ -3,8 +3,11 @@
 `lyzortx/autoresearch/` is the fixed sandbox surface for the raw-input AUTORESEARCH track.
 
 - `prepare.py` is the only supported path from raw inputs to the search cache.
-- `train.py` is the short-loop experiment surface. It consumes a prepared cache and must not rebuild it.
+- `train.py` is the only short-loop experiment surface. It consumes a prepared cache and must not rebuild it.
 - `program.md` freezes the cache layout, schema contract, provenance metadata, and warm-cache policy.
+
+For ordinary AUTORESEARCH search work, only `train.py` is in bounds for model changes. Labels, split membership,
+feature extraction, and evaluation policy stay frozen.
 
 ## Commands
 
@@ -15,7 +18,7 @@ micromamba run -n phage_env python lyzortx/autoresearch/prepare.py \
   --skip-host-assembly-resolution
 ```
 
-Validate or consume an existing cache for short experiments:
+Run the first end-to-end adsorption-first baseline on one GPU:
 
 ```bash
 micromamba run -n phage_env python lyzortx/autoresearch/train.py
@@ -35,7 +38,23 @@ micromamba run -n phage_env python lyzortx/autoresearch/train.py
   unresolved caller outputs recorded in a slot build manifest instead of being coerced to placeholders.
 - `host_stats` is currently built from raw host FASTAs as a low-cost numeric baseline block
   (`record_count`, `genome_length_nt`, `gc_content`, `n50_contig_length_nt`).
+- `phage_projection` is currently built from retained phage FASTAs plus the frozen TL17 runtime bank as the phage-side
+  adsorption block.
+- `phage_stats` is currently built from raw phage FASTAs as a low-cost numeric baseline block
+  (`record_count`, `genome_length_nt`, `gc_content`, `n50_contig_length_nt`).
+- The first baseline in `train.py` uses the adsorption-first minimum cache:
+  `host_surface + host_typing + host_stats + phage_projection + phage_stats`.
+- `host_defense` remains reserved for later additive ablations and is ignored by the first honest baseline unless
+  `--include-host-defense` is passed explicitly.
 - Sealed holdout labels and holdout-ready evaluation tables stay outside the search workspace entirely.
+
+## Search contract
+
+- `train.py` validates the frozen cache schema before training and rejects silent split or schema drift.
+- `train.py` reports one scalar inner-validation search metric: ROC-AUC.
+- Inner-validation top-3 hit rate and Brier score are emitted as report-only diagnostics.
+- Each `train.py` run executes under a fixed `1800`-second single-GPU wall-clock budget.
+- The cache build remains outside that budget and should not rerun during ordinary `train.py`-only experiments.
 
 ## Warm caches
 
