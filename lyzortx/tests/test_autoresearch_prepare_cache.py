@@ -273,7 +273,7 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
                 if str(row["retained_for_autoresearch"]) == "1"
             }
         )
-        artifact_path = slot_dir / prepare_cache.SLOT_FEATURE_TABLE_FILENAME
+        artifact_path = slot_dir / prepare_cache.SLOT_FEATURES_FILENAME
         with artifact_path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=["bacteria", "host_defense__AbiD"])
             writer.writeheader()
@@ -554,7 +554,7 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         "phage_stats__phage_sequence_record_count",
     ]
     host_defense_rows = read_csv_rows(
-        cache_dir / "feature_slots" / "host_defense" / prepare_cache.SLOT_FEATURE_TABLE_FILENAME
+        cache_dir / "feature_slots" / "host_defense" / prepare_cache.SLOT_FEATURES_FILENAME
     )
     assert {row["bacteria"] for row in host_defense_rows} == exported_bacteria
 
@@ -800,9 +800,7 @@ def test_build_host_defense_slot_artifact_supports_reaggregation_without_worker_
     )
 
     assert summary["column_count"] > 0
-    artifact_rows = read_csv_rows(
-        cache_dir / "feature_slots" / "host_defense" / prepare_cache.SLOT_FEATURE_TABLE_FILENAME
-    )
+    artifact_rows = read_csv_rows(cache_dir / "feature_slots" / "host_defense" / prepare_cache.SLOT_FEATURES_FILENAME)
     assert [row["bacteria"] for row in artifact_rows] == ["B1", "B2"]
     assert all(row["host_defense__AbiD"] == "1" for row in artifact_rows)
     assert all(row["host_defense__RM_Type_I"] == "0" for row in artifact_rows)

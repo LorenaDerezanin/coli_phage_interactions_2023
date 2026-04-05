@@ -2,7 +2,7 @@
 
 ## Scope
 
-AR02 freezes the AUTORESEARCH sandbox before feature-family implementation. The fixed surface is:
+AR07 freezes the AUTORESEARCH search contract after the first runnable adsorption-first baseline. The fixed surface is:
 
 - `lyzortx/autoresearch/prepare.py`
 - `lyzortx/autoresearch/train.py`
@@ -10,6 +10,15 @@ AR02 freezes the AUTORESEARCH sandbox before feature-family implementation. The 
 - `lyzortx/autoresearch/program.md`
 
 `prepare.py` owns the one-time cache build. `train.py` owns the repeated short experiment loop.
+
+For ordinary AUTORESEARCH model-search work, `train.py` is the only file the search agent may modify. The following
+stay out of bounds for that loop unless the plan is explicitly reopened:
+
+- labels and label policy
+- split membership and sealed-holdout handling
+- cache schema, slot names, join keys, and namespace prefixes
+- feature extraction code and cache-building logic in `prepare.py`
+- evaluation code, primary metric choice, and report-only metric definitions
 
 ## Frozen cache layout
 
@@ -64,3 +73,19 @@ column-family prefix.
 - Sealed holdout labels and holdout-ready evaluation tables never enter the search workspace.
 - Warm caches are optional accelerators only and must declare the same `schema_manifest_id` plus the same slot
   contract.
+
+## AR07 baseline contract
+
+- The first honest baseline is adsorption-first and uses this minimum cache:
+  - `host_surface`
+  - `host_typing`
+  - `host_stats`
+  - `phage_projection`
+  - `phage_stats`
+- `host_defense` remains a reserved schema block from AR02. It may join later as an additive ablation, but it does not
+  gate the first baseline.
+- The baseline architecture is exactly one host encoder, one phage encoder, and one learned pair scorer.
+- Every `train.py` run executes under one fixed single-GPU wall-clock budget. The one-time cache build is outside that
+  budget and must not rerun for ordinary `train.py` experiments.
+- The primary search metric is inner-validation ROC-AUC.
+- Top-3 hit rate and Brier score are secondary report-only metrics, not optimization targets.

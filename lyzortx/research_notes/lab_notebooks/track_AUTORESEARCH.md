@@ -197,7 +197,7 @@ than a CI metric.
 #### What changed
 
 - **Filled the AR02 `host_defense` slot with real cache artifacts.** `prepare.py` now writes
-  `feature_slots/host_defense/feature_table.csv` plus a dedicated
+  `feature_slots/host_defense/features.csv` plus a dedicated
   `feature_slots/host_defense/host_defense_build_manifest.json`. The exported columns are namespaced as
   `host_defense__*`, keyed only by `bacteria`, and the top-level/schema manifests now record those frozen columns.
 - **Separated one-time model installation from per-host work.** The shared DefenseFinder runtime now exposes explicit
@@ -418,3 +418,50 @@ This keeps the track aligned with the repo's actual prediction problem. If the f
 current benchmark with adsorption-first and phage-side features, we learn that cheaply and honestly. If defense helps,
 it should help as an additive block later, not by delaying the first serious search behind the slowest preprocessing
 path in the track.
+
+### 2026-04-05 13:10 UTC: AR07 locked the one-file baseline and strict search contract
+
+#### Executive summary
+
+`lyzortx/autoresearch/train.py` is now the only ordinary AUTORESEARCH experiment surface. It validates the frozen
+cache/schema/split contract before training, runs one adsorption-first baseline with a host encoder, a phage encoder,
+and a learned pair scorer, and emits one scalar inner-validation ROC-AUC under a fixed search-time budget. The
+baseline ignores `host_defense` by default, treating it as a later additive ablation rather than the prerequisite for
+the first honest run.
+
+#### What changed
+
+- **Made `train.py` the full short-loop baseline instead of a cache-presence stub.** The file now loads the prepared
+  cache, joins only the adsorption-first minimum slot set
+  (`host_surface`, `host_typing`, `host_stats`, `phage_projection`, `phage_stats`), fits one host encoder plus one
+  phage encoder, and trains one LightGBM pair scorer on the resulting pair features.
+- **Locked the search contract around the frozen cache rather than trusting convention.** `train.py` now refuses to
+  run if:
+  - a holdout-named pair table appears inside `search_cache_v1/search_pairs/`;
+  - retained `train` or `inner_val` pair IDs no longer match the AR01 split hashes; or
+  - a slot feature table header no longer matches the frozen schema manifest.
+- **Kept `host_defense` additive instead of gating the first baseline.** The default baseline does not consume
+  `host_defense`; it only joins that block when `--include-host-defense` is requested explicitly.
+- **Fixed the search metric and report-only metrics in the runtime output.** `train.py` now writes a baseline summary
+  that declares inner-validation ROC-AUC as the primary search metric and records top-3 hit rate plus Brier score as
+  secondary diagnostics only.
+- **Documented the bootstrap and train commands in the AUTORESEARCH README and tightened `program.md`.** The docs now
+  say directly that labels, splits, feature extraction, and evaluation policy are out of bounds for ordinary
+  `train.py`-only search work.
+
+#### Validation
+
+- Added `lyzortx/tests/test_autoresearch_train_contract.py` to cover:
+  - successful adsorption-first baseline execution without requiring `host_defense`;
+  - rejection of sealed holdout pair-table leakage into the cache;
+  - rejection of silent split-membership drift relative to AR01; and
+  - rejection of slot feature tables whose headers bypass the frozen cache schema.
+- Planned full-suite validation command for this task:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/`
+
+#### Interpretation
+
+AR07 deliberately chooses a thinner baseline than a "search everything" sandbox. That is the right requirement cut.
+If AUTORESEARCH cannot produce useful lift with one frozen adsorption-first cache and one honest comparable metric, the
+answer is not to reopen labels, splits, or featurizers mid-search. The right next step is to improve the learner
+inside `train.py` or add clearly bounded ablations such as `host_defense` after the first baseline is reproducible.
