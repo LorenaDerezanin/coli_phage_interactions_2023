@@ -760,7 +760,7 @@ def _build_host_defense_slot_artifact(
         else:
             LOGGER.info("AR03 host defense: all retained hosts already have per-host outputs; skipping worker fan-out")
 
-    aggregate_path = slot_dir / SLOT_FEATURE_TABLE_FILENAME
+    aggregate_path = slot_dir / SLOT_FEATURES_FILENAME
     aggregate_host_defense_csvs(
         per_host_output_dir,
         aggregate_path,

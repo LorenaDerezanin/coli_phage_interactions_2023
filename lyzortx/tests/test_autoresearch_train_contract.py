@@ -274,6 +274,27 @@ def create_minimal_autoresearch_cache(tmp_path: Path) -> Path:
     return cache_dir
 
 
+def materialize_legacy_host_defense_slot(cache_dir: Path) -> None:
+    slot_dir = cache_dir / "feature_slots" / "host_defense"
+    legacy_rows = [
+        {"bacteria": bacteria, "host_defense__AbiD": value}
+        for bacteria, value in (("B1", "1"), ("B2", "1"), ("B3", "0"), ("B4", "0"), ("B5", "1"))
+    ]
+    write_csv_rows(slot_dir / prepare_cache.SLOT_FEATURE_TABLE_FILENAME, legacy_rows)
+
+    slot_schema_path = slot_dir / prepare_cache.SLOT_SCHEMA_FILENAME
+    slot_schema = json.loads(slot_schema_path.read_text(encoding="utf-8"))
+    slot_schema["reserved_feature_columns"] = ["host_defense__AbiD"]
+    slot_schema["reserved_feature_column_count"] = 1
+    write_json(slot_schema_path, slot_schema)
+
+    top_level_schema_path = cache_dir / prepare_cache.SCHEMA_MANIFEST_FILENAME
+    top_level_schema = json.loads(top_level_schema_path.read_text(encoding="utf-8"))
+    top_level_schema["feature_slots"]["host_defense"]["reserved_feature_columns"] = ["host_defense__AbiD"]
+    top_level_schema["feature_slots"]["host_defense"]["reserved_feature_column_count"] = 1
+    write_json(top_level_schema_path, top_level_schema)
+
+
 def test_train_runs_adsorption_first_baseline_without_host_defense(tmp_path: Path) -> None:
     cache_dir = create_minimal_autoresearch_cache(tmp_path)
     output_dir = tmp_path / "train_outputs"
@@ -357,3 +378,40 @@ def test_train_rejects_schema_bypass(tmp_path: Path) -> None:
         autoresearch_train.main(
             ["--cache-dir", str(cache_dir), "--output-dir", str(tmp_path / "out"), "--device-type", "cpu"]
         )
+
+
+def test_train_ignores_legacy_host_defense_artifact_when_ablation_is_off(tmp_path: Path) -> None:
+    cache_dir = create_minimal_autoresearch_cache(tmp_path)
+    materialize_legacy_host_defense_slot(cache_dir)
+
+    exit_code = autoresearch_train.main(
+        [
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--device-type",
+            "cpu",
+        ]
+    )
+
+    assert exit_code == 0
+
+
+def test_train_reads_legacy_host_defense_artifact_when_ablation_is_on(tmp_path: Path) -> None:
+    cache_dir = create_minimal_autoresearch_cache(tmp_path)
+    materialize_legacy_host_defense_slot(cache_dir)
+
+    exit_code = autoresearch_train.main(
+        [
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--device-type",
+            "cpu",
+            "--include-host-defense",
+        ]
+    )
+
+    assert exit_code == 0

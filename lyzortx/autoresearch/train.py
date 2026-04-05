@@ -35,9 +35,9 @@ from lyzortx.pipeline.autoresearch.prepare_cache import (
     SCHEMA_MANIFEST_FILENAME,
     SCHEMA_MANIFEST_ID,
     SEARCH_PAIR_TABLE_ID,
+    SLOT_FEATURE_TABLE_FILENAME,
     SLOT_FEATURES_FILENAME,
     SLOT_SPEC_BY_NAME,
-    SLOT_SPECS,
     SUPPORTED_SEARCH_SPLITS,
 )
 
@@ -310,7 +310,7 @@ def load_slot_artifact(
         raise ValueError(f"AUTORESEARCH slot {slot_name} bypassed the frozen top-level cache schema.")
 
     slot_dir = cache_dir / "feature_slots" / slot_name
-    features_path = slot_dir / SLOT_FEATURES_FILENAME
+    features_path = resolve_slot_features_path(slot_dir=slot_dir, slot_name=slot_name)
     if require_materialized_features and not feature_columns:
         raise ValueError(f"AUTORESEARCH baseline requires materialized columns for slot {slot_name}.")
     if not feature_columns:
@@ -318,7 +318,9 @@ def load_slot_artifact(
             slot_name=slot_name, entity_key=slot_spec.entity_key, feature_columns=(), frame=pd.DataFrame()
         )
     if not features_path.exists():
-        raise FileNotFoundError(f"AUTORESEARCH slot {slot_name} is missing its materialized feature table.")
+        raise FileNotFoundError(
+            f"AUTORESEARCH slot {slot_name} is missing its materialized feature table at {features_path}."
+        )
 
     frame = load_csv_frame(features_path)
     expected_header = [slot_spec.entity_key, *feature_columns]
@@ -337,6 +339,17 @@ def load_slot_artifact(
         feature_columns=feature_columns,
         frame=frame,
     )
+
+
+def resolve_slot_features_path(*, slot_dir: Path, slot_name: str) -> Path:
+    features_path = slot_dir / SLOT_FEATURES_FILENAME
+    if features_path.exists():
+        return features_path
+    if slot_name == "host_defense":
+        legacy_features_path = slot_dir / SLOT_FEATURE_TABLE_FILENAME
+        if legacy_features_path.exists():
+            return legacy_features_path
+    return features_path
 
 
 def load_and_validate_cache(*, cache_dir: Path, include_host_defense: bool) -> CacheContext:
@@ -359,12 +372,10 @@ def load_and_validate_cache(*, cache_dir: Path, include_host_defense: bool) -> C
             schema_manifest=schema_manifest,
             cache_manifest=cache_manifest,
             slot_name=slot_name,
-            require_materialized_features=slot_name in REQUIRED_BASELINE_SLOTS or include_host_defense,
+            require_materialized_features=True,
         )
-        for slot_name in [spec.slot_name for spec in SLOT_SPECS]
+        for slot_name in selected_slots
     }
-    if include_host_defense and not slot_artifacts["host_defense"].feature_columns:
-        raise ValueError("Requested host_defense ablation, but the slot has no materialized features.")
 
     return CacheContext(
         cache_dir=cache_dir,

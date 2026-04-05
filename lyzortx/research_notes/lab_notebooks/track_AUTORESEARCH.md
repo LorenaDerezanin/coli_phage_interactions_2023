@@ -197,7 +197,7 @@ than a CI metric.
 #### What changed
 
 - **Filled the AR02 `host_defense` slot with real cache artifacts.** `prepare.py` now writes
-  `feature_slots/host_defense/feature_table.csv` plus a dedicated
+  `feature_slots/host_defense/features.csv` plus a dedicated
   `feature_slots/host_defense/host_defense_build_manifest.json`. The exported columns are namespaced as
   `host_defense__*`, keyed only by `bacteria`, and the top-level/schema manifests now record those frozen columns.
 - **Separated one-time model installation from per-host work.** The shared DefenseFinder runtime now exposes explicit
