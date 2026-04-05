@@ -107,7 +107,7 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 
 Do NOT nitpick style — ruff handles formatting. Focus on substantive issues only. Do not invent problems.
 
-- Do not approve a PR unless all CI checks pass.
+- Approve the PR based on code quality alone. Do not wait for CI checks — auto-merge already gates on CI.
 - Every time an agent creates a PR or pushes an update, it must self-review against these guidelines before considering
   the PR ready.
 - Before raising an issue, check existing review threads — do not re-raise concerns already addressed.
