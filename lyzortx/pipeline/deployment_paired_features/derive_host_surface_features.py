@@ -85,7 +85,11 @@ def _capsule_score_column_name(profile_name: str) -> str:
     return f"host_capsule_profile_{token}_score"
 
 
-def build_host_surface_schema(capsule_profile_names: Sequence[str]) -> dict[str, Any]:
+def build_host_surface_schema(
+    capsule_profile_names: Sequence[str],
+    *,
+    include_lps_core_type: bool = True,
+) -> dict[str, Any]:
     receptor_columns = [{"name": column_name, "dtype": FLOAT_DTYPE} for _, column_name in RECEPTOR_SCORE_COLUMNS]
     capsule_columns = [
         {"name": _capsule_score_column_name(profile_name), "dtype": FLOAT_DTYPE}
@@ -95,19 +99,24 @@ def build_host_surface_schema(capsule_profile_names: Sequence[str]) -> dict[str,
         {"name": "bacteria", "dtype": STRING_DTYPE},
         {"name": "host_o_antigen_type", "dtype": STRING_DTYPE},
         {"name": "host_o_antigen_score", "dtype": FLOAT_DTYPE},
-        {"name": "host_lps_core_type", "dtype": STRING_DTYPE},
         *receptor_columns,
         *capsule_columns,
     ]
+    if include_lps_core_type:
+        columns.insert(3, {"name": "host_lps_core_type", "dtype": STRING_DTYPE})
+    categorical_columns = ["host_o_antigen_type"]
+    if include_lps_core_type:
+        categorical_columns.append("host_lps_core_type")
     return {
         "feature_block": "host_surface",
         "key_column": "bacteria",
         "column_count": len(columns),
         "columns": columns,
-        "categorical_columns": ["host_o_antigen_type", "host_lps_core_type"],
+        "categorical_columns": categorical_columns,
         "receptor_score_columns": [column["name"] for column in receptor_columns],
         "capsule_score_columns": [column["name"] for column in capsule_columns],
         "capsule_profile_names": list(capsule_profile_names),
+        "includes_lps_core_type": include_lps_core_type,
         "dropped_legacy_columns": list(LEGACY_COLUMNS_DROPPED),
     }
 
@@ -354,8 +363,9 @@ def build_host_surface_feature_row(
         "bacteria": bacteria,
         "host_o_antigen_type": o_antigen_type,
         "host_o_antigen_score": round(float(o_antigen_score), 6),
-        "host_lps_core_type": lps_core_type,
     }
+    if bool(schema.get("includes_lps_core_type", True)):
+        row["host_lps_core_type"] = lps_core_type
     for receptor_name, column_name in RECEPTOR_SCORE_COLUMNS:
         row[column_name] = round(float(receptor_scores.get(receptor_name, 0.0)), 6)
     for profile_name in schema["capsule_profile_names"]:

@@ -244,6 +244,52 @@ assembly. The inverse is weaker: a zero in the exported `host_defense__*` block 
 annotation path under this schema," not "clean biological absence." That caveat is now written directly into the
 AR03 build manifest so downstream search code cannot silently overinterpret missing defense features.
 
+### 2026-04-04 23:22 UTC: AR04 materialized the raw-only host-surface cache with the pyhmmer fast path
+
+#### Executive summary
+
+`prepare.py` now materializes the `host_surface` slot instead of leaving it empty. The exported block is namespaced as
+`host_surface__*`, built directly from retained host FASTAs with the pyhmmer/protein fast path from DEPLOY07, and
+explicitly drops `host_lps_core_type` so AUTORESEARCH no longer depends on Picard lookup tables for host-surface
+features.
+
+#### What changed
+
+- **Filled the `host_surface` slot from raw FASTAs inside `prepare_cache.py`.** The cache builder now resolves the
+  retained train/inner-val host FASTAs from the AR01 pair table, runs the reusable fast-path surface builder, writes
+  `search_cache_v1/feature_slots/host_surface/features.csv`, and updates the slot schema manifest with the realized
+  column list and provenance.
+- **Pinned the build to the fast path and recorded that choice in provenance.** The slot manifest and cache
+  provenance now record the fast-path runtime ID plus `legacy_nhmmer_path_forbidden=true`, so the old slow
+  per-host `nhmmer` route cannot quietly reappear as an implementation detail.
+- **Kept only inference-safe raw signals in the exported block.** The materialized slot keeps O-antigen type/score,
+  receptor scores, and capsule-profile scores, but not `host_lps_core_type`. That field still comes from an O-type to
+  LPS proxy lookup rooted in Picard metadata, so exporting it would violate the raw-FASTA rebuildability rule.
+- **Made retries cheaper without weakening correctness.** The fast path caches `predicted_proteins.faa` under
+  `lyzortx/generated_outputs/autoresearch/host_surface_cache_build/`, so a rerun does not redo the full gene-calling
+  front half before the pyhmmer scans.
+
+#### Validation
+
+- Added unit coverage for the raw-only host-surface schema and row builder in
+  `lyzortx/tests/test_deployment_paired_host_surface_features.py`.
+- Added AUTORESEARCH cache tests in `lyzortx/tests/test_autoresearch_prepare_cache.py` proving that:
+  - `prepare.py` writes a real `host_surface` slot artifact with prefixed columns;
+  - the exported slot omits `host_surface__host_lps_core_type`;
+  - the cache provenance records the fast-path runtime and the explicit `legacy_nhmmer_path_forbidden` guard.
+- Added `run_all_host_surface.py` coverage for the raw-only row emission path in
+  `lyzortx/tests/test_run_all_host_surface.py`.
+- Focused validation command:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/test_deployment_paired_host_surface_features.py lyzortx/tests/test_run_all_host_surface.py lyzortx/tests/test_autoresearch_prepare_cache.py`
+  - Result: `30 passed`
+
+#### Runtime interpretation
+
+AR04 does not claim a new full-panel cold-cache number from CI. Instead it reuses the DEPLOY07 fast-path shape already
+recorded in `lyzortx/research_notes/lab_notebooks/track_DEPLOY.md`: roughly `6.2s/host` for the scan phase and about
+`10 min` for `403` hosts on a 10-core local benchmark, versus the rejected `~72s/host` `nhmmer` design. That is the
+runtime boundary AUTORESEARCH now enforces.
+
 ### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
 
 #### Executive summary

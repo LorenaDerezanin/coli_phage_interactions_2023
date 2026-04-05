@@ -25,6 +25,23 @@ def test_build_host_surface_schema_uses_continuous_scores_and_drops_legacy_dupli
     assert "host_k_antigen_type" in schema["dropped_legacy_columns"]
 
 
+def test_build_host_surface_schema_can_exclude_picard_derived_lps_proxy() -> None:
+    schema = derive_host_surface_features.build_host_surface_schema(
+        ["KfiA"],
+        include_lps_core_type=False,
+    )
+
+    assert [column["name"] for column in schema["columns"][:4]] == [
+        "bacteria",
+        "host_o_antigen_type",
+        "host_o_antigen_score",
+        "host_receptor_btub_score",
+    ]
+    assert schema["includes_lps_core_type"] is False
+    assert schema["categorical_columns"] == ["host_o_antigen_type"]
+    assert all(column["name"] != "host_lps_core_type" for column in schema["columns"])
+
+
 def test_summarize_o_antigen_result_uses_best_total_score_and_retains_score_when_call_unresolved() -> None:
     references = [
         derive_host_surface_features.tl15.OAlleleReference(
@@ -108,6 +125,25 @@ def test_build_host_surface_feature_row_emits_zero_filled_continuous_schema() ->
     assert row["host_receptor_fadL_score"] == 0.0
     assert row["host_capsule_profile_kfia_score"] == 88.1
     assert row["host_capsule_profile_kpsc_2_score"] == 0.0
+
+
+def test_build_host_surface_feature_row_omits_lps_when_schema_excludes_it() -> None:
+    schema = derive_host_surface_features.build_host_surface_schema(
+        ["KfiA"],
+        include_lps_core_type=False,
+    )
+
+    row = derive_host_surface_features.build_host_surface_feature_row(
+        bacteria="LF82",
+        schema=schema,
+        o_antigen_type="O83",
+        o_antigen_score=812.4,
+        lps_core_type="R1",
+        receptor_scores={"BTUB": 120.5},
+        capsule_profile_scores={"KfiA": 88.1},
+    )
+
+    assert "host_lps_core_type" not in row
 
 
 def test_run_validation_subset_writes_feature_csv_and_report(monkeypatch, tmp_path: Path) -> None:

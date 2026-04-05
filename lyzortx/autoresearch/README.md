@@ -28,6 +28,9 @@ micromamba run -n phage_env python lyzortx/autoresearch/train.py
 - AR01 raw-input contract artifacts at the output root.
 - AR02 search cache artifacts under `search_cache_v1/`.
 - Only `train` and `inner_val` pair tables are exported into the search cache.
+- Materialized feature slots write `feature_slots/<slot>/features.csv` plus updated slot schema manifests.
+- `host_surface` is currently built from raw host FASTAs with the pyhmmer fast path and excludes Picard-derived
+  `host_lps_core_type`.
 - Sealed holdout labels and holdout-ready evaluation tables stay outside the search workspace entirely.
 
 ## Warm caches
