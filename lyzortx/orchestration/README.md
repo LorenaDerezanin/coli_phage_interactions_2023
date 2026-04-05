@@ -107,8 +107,8 @@ stateDiagram-v2
 - `.github/workflows/codex-pr-lifecycle.yml` — CI trigger: Codex addresses review feedback on PRs.
 - `.github/workflows/autoresearch-runpod.yml` — manual GPU experiment runner for AUTORESEARCH. It either builds a
   fresh host-side cache bundle or reuses one from a prior workflow run, then provisions a fixed RunPod pod, copies only
-  the AUTORESEARCH runtime bundle plus frozen cache artifacts, runs one bounded `train.py` command, uploads candidate
-  outputs, and deletes the pod.
+  the AUTORESEARCH runtime bundle plus frozen cache artifacts, runs one bounded `train.py` command, serializes
+  workflow-dispatch metadata via `jq` instead of shell-built JSON, uploads candidate outputs, and deletes the pod.
 - `.github/workflows/ci-duplicate-check.yml` — informational CI check: runs pylint `symilar` to detect duplicate code
   in `lyzortx/`. Does not block PRs (`continue-on-error: true`).
 
