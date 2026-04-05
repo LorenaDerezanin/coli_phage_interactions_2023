@@ -69,6 +69,7 @@ stateDiagram-v2
 | `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews every PR (installed on repo owner's account). Always posts `COMMENTED` reviews, never `APPROVED`. |
 | `claude-pr-review.yml` | GitHub Actions workflow | Auto-reviews every PR on open/push via `claude-code-action`. Claude (Opus 4.6) submits formal `APPROVE`/`COMMENT` reviews and manages thread resolution. Posts as `claude[bot]`. |
 | `codex-pr-lifecycle.yml` | GitHub Actions workflow | Dispatched by `claude-pr-review.yml` after a COMMENTED review; orchestrates Codex fix rounds and labels PRs. Uses concurrency groups to prevent parallel runs per PR. |
+| `autoresearch-runpod.yml` | GitHub Actions workflow | Manual AUTORESEARCH search runner: stages a frozen cache bundle, provisions a locked RunPod pod behind an environment approval gate, executes one bounded `train.py` command, uploads candidate artifacts, and tears the pod down |
 | Human reviewer | Person | Final approval and merge for non-Codex PRs or when auto-merge fails |
 
 ## Architecture
@@ -104,6 +105,10 @@ stateDiagram-v2
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.
 - `.github/workflows/codex-implement.yml` — CI trigger: Codex implements new `orchestrator-task` issues.
 - `.github/workflows/codex-pr-lifecycle.yml` — CI trigger: Codex addresses review feedback on PRs.
+- `.github/workflows/autoresearch-runpod.yml` — manual GPU experiment runner for AUTORESEARCH. It either builds a
+  fresh host-side cache bundle or reuses one from a prior workflow run, then provisions a fixed RunPod pod, copies only
+  the AUTORESEARCH runtime bundle plus frozen cache artifacts, runs one bounded `train.py` command, serializes
+  workflow-dispatch metadata via `jq` instead of shell-built JSON, uploads candidate outputs, and deletes the pod.
 - `.github/workflows/ci-duplicate-check.yml` — informational CI check: runs pylint `symilar` to detect duplicate code
   in `lyzortx/`. Does not block PRs (`continue-on-error: true`).
 
@@ -230,6 +235,50 @@ and then onto PRs. The current image profiles are:
 
 Each job still executes env refreshes on startup, but only for the envs that belong to the selected profile, so repo
 dependency changes can land without waiting for a new image publish.
+
+### autoresearch-runpod.yml
+
+- `workflow_dispatch`: manual AUTORESEARCH GPU search only.
+
+This workflow is deliberately outside the generic Codex issue/PR loop. It has two phases:
+
+1. **Stage the frozen host-side bundle.** Either:
+   - build a fresh AUTORESEARCH cache on the GitHub-hosted side with `prepare.py`, then package the minimal runtime
+     bundle; or
+   - download a previously staged `autoresearch-runpod-bundle` artifact from an earlier workflow run.
+2. **Run one bounded pod-side experiment.** After environment approval, provision one locked single-GPU RunPod pod,
+   copy only the staged bundle, create `phage_env` inside the pod, run one bounded `train.py` command, pull candidate
+   outputs back as a workflow artifact, and delete the pod.
+
+The workflow exists to keep expensive, infrequent host-side cache building separate from many short `train.py` search
+runs. Repeated experiments should normally point at an existing staged bundle instead of rebuilding AR03-AR06 outputs.
+
+## AUTORESEARCH RunPod Contract
+
+This is a human-approved lock, not an auto-selected cloud default.
+
+- **Required GitHub environment:** `runpod-autoresearch`
+- **Required environment secret:** `RUNPOD_API_KEY`
+- **Approval gate:** configure required reviewers on the `runpod-autoresearch` GitHub environment. The workflow's
+  RunPod job will not start until that environment is approved.
+- **Locked pod spec:** community-cloud single-GPU `NVIDIA A40`, `48 GB` VRAM, `1` GPU, `50 GB` container disk,
+  `20 GB` volume, public IP enabled, image `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04`.
+- **Locked hourly price point:** `$0.35/hr` on RunPod's official GPU pricing page at the time AR08 was implemented.
+- **Why this pod:** `train.py` is now a thin cache consumer, so it does not need the cheapest possible auto-selected
+  GPU. The A40 lock buys more memory headroom than the nearby 24 GB options for essentially the same hourly cost, while
+  staying within a single-GPU community-cloud budget.
+- **Secret boundary:** `RUNPOD_API_KEY` is referenced only on the provisioning, status-polling, and teardown steps in
+  `autoresearch-runpod.yml`. It is not injected into `codex-implement.yml`, `codex-pr-lifecycle.yml`, or the generic
+  Codex action environment.
+- **Host-to-RunPod handoff:** the host side packages exactly one bundle artifact containing:
+  - `lyzortx/autoresearch/{prepare.py,train.py,README.md,program.md}`
+  - minimal runtime support files (`environment.yml`, `requirements.txt`, `pyproject.toml`,
+    `lyzortx/log_config.py`, `lyzortx/pipeline/autoresearch/runtime_contract.py`)
+  - the frozen `lyzortx/generated_outputs/autoresearch/search_cache_v1/` tree
+- **Pod-side responsibilities:** unpack the bundle, create `phage_env`, run the bounded `train.py` command, collect
+  `ar07_baseline_summary.json`, `ar07_inner_val_predictions.csv`, the exact `train.py`, and RunPod metadata.
+- **Out of bounds for the pod:** `prepare.py`, Picard assembly download, DefenseFinder execution, host typing calls,
+  host-surface derivation, and phage projection rebuilding. Those stay on the host side or in prior staged bundles.
 
 ## Cutover Policy
 

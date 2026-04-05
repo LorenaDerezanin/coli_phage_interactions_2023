@@ -465,3 +465,79 @@ AR07 deliberately chooses a thinner baseline than a "search everything" sandbox.
 If AUTORESEARCH cannot produce useful lift with one frozen adsorption-first cache and one honest comparable metric, the
 answer is not to reopen labels, splits, or featurizers mid-search. The right next step is to improve the learner
 inside `train.py` or add clearly bounded ablations such as `host_defense` after the first baseline is reproducible.
+
+### 2026-04-05 20:20 UTC: AR08 locked the dedicated RunPod workflow, pod spec, and secret boundary
+
+#### Executive summary
+
+AR08 adds a separate manual workflow at `.github/workflows/autoresearch-runpod.yml` instead of broadening
+`codex-implement.yml` with cloud spend and provisioning logic. The workflow now stages a frozen host-side
+AUTORESEARCH bundle, gates RunPod access behind a dedicated GitHub environment, provisions one fixed `NVIDIA A40`
+community-cloud pod, runs one bounded `train.py` command, uploads a candidate artifact bundle, and deletes the pod.
+I also split the AUTORESEARCH runtime contract into a lightweight `runtime_contract.py` module so the pod-side bundle
+can honestly contain only the sandbox files plus the frozen search cache rather than dragging along wider repo code.
+
+#### What changed
+
+- **Added one dedicated manual RunPod workflow instead of touching the Codex workflows.** The new workflow is strictly
+  `workflow_dispatch` only. It never injects RunPod credentials into `codex-implement.yml` or
+  `codex-pr-lifecycle.yml`.
+- **Locked the RunPod secret boundary to a dedicated GitHub environment.** The required environment is
+  `runpod-autoresearch`; the required environment-scoped secret is `RUNPOD_API_KEY`. Approval happens at the GitHub
+  environment boundary before any paid cloud step starts.
+- **Separated host-side cache staging from pod-side search.** The workflow can either:
+  - build a fresh frozen AUTORESEARCH cache and package it as `autoresearch-runpod-bundle`; or
+  - reuse that bundle artifact from a previous run.
+  The pod only receives the staged bundle and never reruns `prepare.py`, Picard assembly resolution, DefenseFinder,
+  host typing, host surface derivation, or TL17 projection.
+- **Made the runtime bundle small enough to match the acceptance text.** Before AR08, `train.py` imported broad
+  preprocessing modules indirectly through `prepare_cache.py` and `build_contract.py`, so “sync only the sandbox plus
+  its frozen cache artifacts” was not actually true. AR08 moves the shared split/cache constants and hash helpers into
+  `lyzortx/pipeline/autoresearch/runtime_contract.py`, which lets the RunPod bundle include just:
+  - `lyzortx/autoresearch/{prepare.py,train.py,README.md,program.md}`
+  - `environment.yml`, `requirements.txt`, `pyproject.toml`
+  - `lyzortx/log_config.py`
+  - `lyzortx/pipeline/autoresearch/runtime_contract.py`
+  - `lyzortx/generated_outputs/autoresearch/search_cache_v1/`
+- **Collected a candidate bundle shaped for AR09 import.** Each RunPod run now pulls back:
+  - the exact `train.py` used on the pod
+  - `ar07_baseline_summary.json`
+  - `ar07_inner_val_predictions.csv`
+  - the staged bundle manifest
+  - local workflow metadata
+  - pod execution metadata
+  - the remote experiment log
+
+#### Locked pod decision
+
+- **Chosen GPU:** `NVIDIA A40`
+- **VRAM:** `48 GB`
+- **RunPod on-demand price at lock time:** `$0.35/hr`
+- **Nearby alternatives on the same pricing page:** `RTX 4090` at `$0.34/hr` with `24 GB` VRAM and `RTX A5000` at
+  `$0.16/hr` with `24 GB` VRAM
+- **Why the A40 lock is the right simplification:** AR07 search runs are now thin cache consumers, so the pod no
+  longer needs the absolute cheapest option at any cost. The A40 buys 2x the VRAM of the nearby `RTX 4090` for a
+  `$0.01/hr` premium, which is a better human-approved safety margin for future additive ablations than auto-selecting
+  the cheapest 24 GB card at dispatch time.
+
+#### Interpretation
+
+This is the smallest honest cloud contract for AUTORESEARCH. Host-side preprocessing is expensive and mostly fixed, so
+the right architecture is to freeze it once, stage it once, and let RunPod spend only on the short search loop. The
+separate environment gate matters as much as the pod lock: it keeps paid infrastructure credentials out of the generic
+Codex automation path and makes human approval explicit before any external GPU is provisioned.
+
+#### References
+
+- RunPod GPU pricing page: `https://www.runpod.io/gpu-pricing`
+  - Quote: `A40 ... 48 GB VRAM ... $ 0.35 /hr`
+  - Quote: `RTX 4090 ... 24 GB VRAM ... $ 0.34 /hr`
+- RunPod SSH docs: `https://docs.runpod.io/pods/configuration/use-ssh`
+  - Quote: `If you prefer to use a different public key for a specific Pod, you can override the default by setting the SSH_PUBLIC_KEY environment variable for that Pod.`
+  - Quote: `If you're using a Runpod official template such as Runpod PyTorch ... full SSH access is already configured for you`
+- RunPod environment-variable docs: `https://docs.runpod.io/pods/templates/environment-variables`
+  - Quote: ``RUNPOD_PUBLIC_IP`Public IP address (if available).`
+  - Quote: ``RUNPOD_TCP_PORT_22`Public port mapped to SSH.`
+- LightGBM docs: `https://lightgbm.readthedocs.io/en/v4.6.0/Installation-Guide.html`
+  - Quote: `The original GPU version of LightGBM (device_type=gpu) is based on OpenCL.`
+  - Quote: `The CUDA-based version (device_type=cuda) is a separate implementation.`

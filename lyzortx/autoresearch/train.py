@@ -25,25 +25,28 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from lyzortx.log_config import setup_logging
-from lyzortx.pipeline.autoresearch import build_contract
-from lyzortx.pipeline.autoresearch.prepare_cache import (
+from lyzortx.pipeline.autoresearch.runtime_contract import (
     CACHE_CONTRACT_ID,
     CACHE_MANIFEST_FILENAME,
+    DEFAULT_CACHE_DIR,
     DEFAULT_OUTPUT_ROOT,
     DISALLOWED_SEARCH_SPLITS,
+    INNER_VAL_SPLIT,
     PROVENANCE_MANIFEST_FILENAME,
     SCHEMA_MANIFEST_FILENAME,
     SCHEMA_MANIFEST_ID,
     SEARCH_PAIR_TABLE_ID,
     SLOT_FEATURE_TABLE_FILENAME,
     SLOT_FEATURES_FILENAME,
+    SLOT_SCHEMA_FILENAME,
     SLOT_SPEC_BY_NAME,
     SUPPORTED_SEARCH_SPLITS,
+    TRAIN_SPLIT,
+    sha256_strings,
 )
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path("lyzortx/generated_outputs/autoresearch/search_cache_v1")
 DEFAULT_TRAIN_OUTPUT_DIR = DEFAULT_OUTPUT_ROOT / "train_runs" / "ar07_baseline"
 
 BASELINE_ID = "ar07_host_phage_encoder_lightgbm_pair_scorer_v1"
@@ -261,7 +264,7 @@ def validate_split_pair_table(
         raise ValueError(f"AUTORESEARCH split {split_name} has non-binary retained labels.")
 
     expected_hash = contract_manifest["split_contract"]["split_hashes"][split_name]["retained_pair_ids_sha256"]
-    actual_hash = build_contract.sha256_strings(sorted(str(value) for value in retained["pair_id"]))
+    actual_hash = sha256_strings(sorted(str(value) for value in retained["pair_id"]))
     if actual_hash != expected_hash:
         raise ValueError(
             f"AUTORESEARCH split membership drift detected for {split_name}: retained pair IDs no longer match AR01."
@@ -293,6 +296,10 @@ def load_slot_artifact(
         raise ValueError(f"AUTORESEARCH cache manifest is missing slot {slot_name}.")
 
     schema_path = Path(str(slot_summary["schema_manifest_path"]))
+    if not schema_path.exists():
+        fallback_schema_path = cache_dir / "feature_slots" / slot_name / SLOT_SCHEMA_FILENAME
+        if fallback_schema_path.exists():
+            schema_path = fallback_schema_path
     if not schema_path.exists():
         raise FileNotFoundError(f"AUTORESEARCH slot schema manifest not found for {slot_name}: {schema_path}")
     slot_schema = read_json(schema_path)
@@ -593,15 +600,9 @@ def run_baseline(
     host_table = build_entity_feature_table(context.slot_artifacts, slot_names=host_slots, entity_key="bacteria")
     phage_table = build_entity_feature_table(context.slot_artifacts, slot_names=phage_slots, entity_key="phage")
 
-    train_pairs = (
-        context.split_frames[build_contract.TRAIN_SPLIT]
-        .loc[lambda frame: frame["retained_for_autoresearch"] == "1"]
-        .copy()
-    )
+    train_pairs = context.split_frames[TRAIN_SPLIT].loc[lambda frame: frame["retained_for_autoresearch"] == "1"].copy()
     inner_val_pairs = (
-        context.split_frames[build_contract.INNER_VAL_SPLIT]
-        .loc[lambda frame: frame["retained_for_autoresearch"] == "1"]
-        .copy()
+        context.split_frames[INNER_VAL_SPLIT].loc[lambda frame: frame["retained_for_autoresearch"] == "1"].copy()
     )
 
     train_bacteria = sorted(train_pairs["bacteria"].unique().tolist())

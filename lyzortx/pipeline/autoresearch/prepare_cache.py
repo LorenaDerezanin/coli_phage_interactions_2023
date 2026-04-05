@@ -10,7 +10,6 @@ import logging
 import os
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
@@ -20,6 +19,7 @@ import joblib
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
 from lyzortx.pipeline.autoresearch import derive_phage_stats_features
+from lyzortx.pipeline.autoresearch import runtime_contract
 from lyzortx.pipeline.deployment_paired_features import derive_host_stats_features
 from lyzortx.pipeline.deployment_paired_features import derive_host_typing_features
 from lyzortx.pipeline.deployment_paired_features import run_all_host_surface
@@ -41,18 +41,18 @@ from lyzortx.pipeline.track_l.steps import deployable_tl17_runtime as tl17_runti
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_ROOT = build_contract.DEFAULT_OUTPUT_DIR
-DEFAULT_CACHE_DIR = DEFAULT_OUTPUT_ROOT / "search_cache_v1"
+DEFAULT_OUTPUT_ROOT = runtime_contract.DEFAULT_OUTPUT_ROOT
+DEFAULT_CACHE_DIR = runtime_contract.DEFAULT_CACHE_DIR
 
-CACHE_MANIFEST_FILENAME = "ar02_search_cache_manifest_v1.json"
-SCHEMA_MANIFEST_FILENAME = "ar02_schema_manifest_v1.json"
-PROVENANCE_MANIFEST_FILENAME = "ar02_provenance_manifest_v1.json"
-TRAIN_PAIR_TABLE_FILENAME = "train_pairs.csv"
-INNER_VAL_PAIR_TABLE_FILENAME = "inner_val_pairs.csv"
-ENTITY_INDEX_FILENAME = "entity_index.csv"
-SLOT_SCHEMA_FILENAME = "schema_manifest.json"
-SLOT_FEATURE_TABLE_FILENAME = "feature_table.csv"
-SLOT_FEATURES_FILENAME = "features.csv"
+CACHE_MANIFEST_FILENAME = runtime_contract.CACHE_MANIFEST_FILENAME
+SCHEMA_MANIFEST_FILENAME = runtime_contract.SCHEMA_MANIFEST_FILENAME
+PROVENANCE_MANIFEST_FILENAME = runtime_contract.PROVENANCE_MANIFEST_FILENAME
+TRAIN_PAIR_TABLE_FILENAME = runtime_contract.TRAIN_PAIR_TABLE_FILENAME
+INNER_VAL_PAIR_TABLE_FILENAME = runtime_contract.INNER_VAL_PAIR_TABLE_FILENAME
+ENTITY_INDEX_FILENAME = runtime_contract.ENTITY_INDEX_FILENAME
+SLOT_SCHEMA_FILENAME = runtime_contract.SLOT_SCHEMA_FILENAME
+SLOT_FEATURE_TABLE_FILENAME = runtime_contract.SLOT_FEATURE_TABLE_FILENAME
+SLOT_FEATURES_FILENAME = runtime_contract.SLOT_FEATURES_FILENAME
 HOST_DEFENSE_BUILD_MANIFEST_FILENAME = "host_defense_build_manifest.json"
 HOST_TYPING_BUILD_MANIFEST_FILENAME = "host_typing_build_manifest.json"
 HOST_STATS_BUILD_MANIFEST_FILENAME = "host_stats_build_manifest.json"
@@ -60,77 +60,22 @@ PHAGE_PROJECTION_BUILD_MANIFEST_FILENAME = "phage_projection_build_manifest.json
 PHAGE_STATS_BUILD_MANIFEST_FILENAME = "phage_stats_build_manifest.json"
 
 TASK_ID = "AR02"
-CACHE_CONTRACT_ID = "autoresearch_search_cache_v1"
-SCHEMA_MANIFEST_ID = "autoresearch_feature_schema_v1"
-SEARCH_PAIR_TABLE_ID = "autoresearch_search_pair_tables_v1"
-HOLDOUT_HANDLING_RULE = "sealed_holdout_outside_workspace"
-SUPPORTED_SEARCH_SPLITS = (build_contract.TRAIN_SPLIT, build_contract.INNER_VAL_SPLIT)
-DISALLOWED_SEARCH_SPLITS = (build_contract.HOLDOUT_SPLIT,)
-PAIR_KEY = ("pair_id", "bacteria", "phage")
+CACHE_CONTRACT_ID = runtime_contract.CACHE_CONTRACT_ID
+SCHEMA_MANIFEST_ID = runtime_contract.SCHEMA_MANIFEST_ID
+SEARCH_PAIR_TABLE_ID = runtime_contract.SEARCH_PAIR_TABLE_ID
+HOLDOUT_HANDLING_RULE = runtime_contract.HOLDOUT_HANDLING_RULE
+SUPPORTED_SEARCH_SPLITS = runtime_contract.SUPPORTED_SEARCH_SPLITS
+DISALLOWED_SEARCH_SPLITS = runtime_contract.DISALLOWED_SEARCH_SPLITS
+PAIR_KEY = runtime_contract.PAIR_KEY
 HOST_SURFACE_BUILD_DIRNAME = "host_surface_cache_build"
 HOST_TYPING_BUILD_DIRNAME = "host_typing_cache_build"
 HOST_STATS_BUILD_DIRNAME = "host_stats_cache_build"
 PHAGE_PROJECTION_BUILD_DIRNAME = "phage_projection_cache_build"
 
 
-@dataclass(frozen=True)
-class SlotSpec:
-    slot_name: str
-    entity_key: str
-    column_prefix: str
-    block_role: str
-    description: str
-
-    @property
-    def join_keys(self) -> list[str]:
-        return [self.entity_key]
-
-
-SLOT_SPECS = (
-    SlotSpec(
-        slot_name="host_defense",
-        entity_key="bacteria",
-        column_prefix="host_defense__",
-        block_role="host",
-        description="Reserved host defense-system features derived from raw host assemblies.",
-    ),
-    SlotSpec(
-        slot_name="host_surface",
-        entity_key="bacteria",
-        column_prefix="host_surface__",
-        block_role="host",
-        description="Reserved host surface and adsorption-related features derived from raw host assemblies.",
-    ),
-    SlotSpec(
-        slot_name="host_typing",
-        entity_key="bacteria",
-        column_prefix="host_typing__",
-        block_role="host",
-        description="Reserved host typing calls derived from raw host assemblies.",
-    ),
-    SlotSpec(
-        slot_name="host_stats",
-        entity_key="bacteria",
-        column_prefix="host_stats__",
-        block_role="host",
-        description="Reserved low-cost host sequence statistics derived from raw host assemblies.",
-    ),
-    SlotSpec(
-        slot_name="phage_projection",
-        entity_key="phage",
-        column_prefix="phage_projection__",
-        block_role="phage",
-        description="Reserved phage projection features derived from raw phage genomes.",
-    ),
-    SlotSpec(
-        slot_name="phage_stats",
-        entity_key="phage",
-        column_prefix="phage_stats__",
-        block_role="phage",
-        description="Reserved low-cost phage sequence statistics derived from raw phage genomes.",
-    ),
-)
-SLOT_SPEC_BY_NAME = {spec.slot_name: spec for spec in SLOT_SPECS}
+SlotSpec = runtime_contract.SlotSpec
+SLOT_SPECS = runtime_contract.SLOT_SPECS
+SLOT_SPEC_BY_NAME = runtime_contract.SLOT_SPEC_BY_NAME
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
