@@ -14,8 +14,8 @@ from sklearn.decomposition import TruncatedSVD
 from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import _parse_binary_flag
 from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import (
     _count_valid_kmer_windows,
-    _gc_content,
     compute_kmer_frequency_vector,
+    gc_content,
     read_fasta_records,
 )
 
@@ -107,8 +107,8 @@ def _compute_phage_kmer_profile(fna_path: Path, *, kmer_size: int) -> Tuple[np.n
         raise ValueError(f"No valid {kmer_size}-mer windows found in {fna_path}")
     combined_vector /= total_windows
     genome_length_nt = sum(len(sequence) for sequence in sequences)
-    gc_content = round(_gc_content(sequences), 6)
-    return combined_vector, genome_length_nt, gc_content
+    gc_fraction = round(gc_content(sequences), 6)
+    return combined_vector, genome_length_nt, gc_fraction
 
 
 def project_novel_phage(fna_path: Path, svd_path: Path) -> Dict[str, object]:

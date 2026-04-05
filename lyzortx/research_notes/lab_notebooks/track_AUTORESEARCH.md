@@ -339,6 +339,60 @@ of being silently coerced.
 AR05 does not claim a new full-panel cold-cache wall-clock number from CI. No dedicated 403-host host-typing/stats
 benchmark was run in this PR; the acceptance path stayed on fixtures and retained-subset tests as intended.
 
+### 2026-04-05 06:52 UTC: AR06 materialized frozen TL17 phage projection plus a small phage-stats baseline
+
+#### Executive summary
+
+`prepare.py` now fills the phage-side `phage_projection` and `phage_stats` slots instead of leaving them as reserved
+placeholders. The projection block reuses the frozen TL17 RBP-family runtime payload and reference bank as a pure
+phage-side featurizer, runs the batched mmseqs path for retained phages, and records reference-bank provenance in the
+cache manifests so the slot remains rebuildable from committed phage FASTAs plus the frozen runtime assets. Alongside
+that, `phage_stats` adds a cheap numeric baseline (`record_count`, `genome_length_nt`, `gc_content`,
+`n50_contig_length_nt`) derived directly from the phage FASTAs.
+
+#### What changed
+
+- **Filled the `phage_projection` slot from frozen TL17 runtime assets.** `prepare_cache.py` now loads the committed
+  TL17 runtime payload, schema, reference-bank FASTA, and reference metadata from the TL17 output directory, projects
+  retained phages into that space, and writes `search_cache_v1/feature_slots/phage_projection/features.csv` with
+  namespaced columns for the retained family scores plus `tl17_rbp_reference_hit_count`.
+- **Used the batched runtime path instead of one-phage-at-a-time projection.** AUTORESEARCH now calls
+  `project_phage_feature_rows_batched()` so pyrodigal gene calling and `mmseqs easy-search` are amortized across the
+  retained phage set rather than rebuilding avoidable query/reference state independently for every phage.
+- **Recorded frozen reference-bank provenance directly in the cache outputs.** The phage-projection slot schema and
+  build manifest now carry checksummed paths for the TL17 runtime payload, reference FASTA, reference metadata, family
+  metadata, and schema manifest. The cache manifest/provenance manifest inherit that slot summary, so later rebuilds
+  can verify exactly which frozen TL17 bank was used.
+- **Made the phage block explicitly independent of checked-in projection CSVs.** The TL17 manifest may still list the
+  original panel projection CSV for provenance, but AUTORESEARCH records that path as "not used" and rebuilds its own
+  phage-side rows from raw FASTAs plus the frozen runtime assets only.
+- **Added a small `phage_stats` baseline family.** A new helper at
+  `lyzortx/pipeline/autoresearch/derive_phage_stats_features.py` writes per-phage stats rows and manifests with four
+  low-cost numeric features: `phage_sequence_record_count`, `phage_genome_length_nt`, `phage_gc_content`, and
+  `phage_n50_contig_length_nt`.
+
+#### Validation
+
+- Added `lyzortx/tests/test_autoresearch_phage_stats_features.py` for phage-stats schema, feature-row, and manifest
+  coverage.
+- Extended `lyzortx/tests/test_autoresearch_prepare_cache.py` to prove:
+  - AUTORESEARCH uses the batched TL17 projection path rather than the per-phage path;
+  - the frozen TL17 reference-bank provenance is written into the phage-projection slot manifests; and
+  - `phage_projection__*` and `phage_stats__*` columns join cleanly onto retained pair rows by `phage`.
+- Focused validation command:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/test_autoresearch_phage_stats_features.py lyzortx/tests/test_track_l_deployable_tl17_runtime.py lyzortx/tests/test_autoresearch_prepare_cache.py`
+  - Result: `17 passed`
+- Full repo validation:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/`
+  - Result: `447 passed`
+
+#### Runtime interpretation
+
+AR06 does not claim a new cold-cache full-panel wall-clock from CI. This PR validates correctness on fixtures and the
+retained-subset cache path, which is the intended acceptance scope. The new implementation shape should be cheaper
+than a naive per-phage TL17 loop because it batches the shared mmseqs search, but any comparison to the dedicated
+DEPLOY/TL17 reference runtime still belongs in a manual benchmark run rather than in CI.
+
 ### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
 
 #### Executive summary

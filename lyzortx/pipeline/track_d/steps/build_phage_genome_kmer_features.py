@@ -163,7 +163,7 @@ def _count_valid_kmer_windows(sequence: str, *, k: int) -> int:
     return valid
 
 
-def _gc_content(sequences: Sequence[str]) -> float:
+def gc_content(sequences: Sequence[str]) -> float:
     gc_count = 0
     valid_count = 0
     for sequence in sequences:
@@ -214,7 +214,7 @@ def build_kmer_matrix(
                 "input_sha256": _sha256(genome.path),
                 "sequence_record_count": len(records),
                 "genome_length_nt": genome_length_nt,
-                "gc_content": round(_gc_content(sequences), 6),
+                "gc_content": round(gc_content(sequences), 6),
                 "valid_kmer_window_count": total_windows,
             }
         )
