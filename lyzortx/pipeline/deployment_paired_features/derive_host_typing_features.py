@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ SCHEMA_MANIFEST_FILENAME = "schema_manifest.json"
 PER_HOST_FEATURES_FILENAME = "host_typing_features.csv"
 VALIDATION_FEATURES_FILENAME = "validation_host_typing_features.csv"
 VALIDATION_REPORT_FILENAME = "validation_report.json"
+MANIFEST_FILENAME = "manifest.json"
 STRING_DTYPE = "string"
 VALIDATION_HOSTS: tuple[str, ...] = ("55989", "EDL933", "LF82")
 
@@ -42,6 +44,14 @@ class HostTypingRuntimeOutputs:
     phylogroup_report_path: Path
     serotype_output_path: Path
     mlst_output_path: Path
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -103,6 +113,116 @@ def build_host_typing_feature_row(
         "host_o_type": o_type,
         "host_h_type": h_type,
         "host_serotype": tl16.derive_serotype(o_type, h_type),
+    }
+
+
+def build_host_typing_runtime_caveats(
+    *,
+    bacteria: str,
+    phylogroup_call: Mapping[str, str],
+    serotype_call: Mapping[str, str],
+    mlst_call: Mapping[str, str],
+) -> list[dict[str, str]]:
+    caveats: list[dict[str, str]] = []
+
+    if not tl16.normalize_text(phylogroup_call.get("phylogroup", "")):
+        caveats.append(
+            {
+                "bacteria": bacteria,
+                "caller": "phylogroup",
+                "field": "host_clermont_phylo",
+                "raw_value": str(phylogroup_call.get("phylogroup", "")),
+                "normalized_value": "",
+                "message": "Clermont typing did not return a resolved phylogroup; the exported feature stays blank.",
+            }
+        )
+
+    raw_st = str(mlst_call.get("st_warwick", ""))
+    if not tl16.normalize_text(raw_st):
+        caveats.append(
+            {
+                "bacteria": bacteria,
+                "caller": "sequence_type",
+                "field": "host_st_warwick",
+                "raw_value": raw_st,
+                "normalized_value": "",
+                "message": "MLST returned an unresolved sequence type; the exported ST remains blank instead of using a placeholder.",
+            }
+        )
+
+    warnings = tl16.normalize_text(serotype_call.get("warnings", ""))
+    if warnings:
+        caveats.append(
+            {
+                "bacteria": bacteria,
+                "caller": "serotype",
+                "field": "host_serotype",
+                "raw_value": warnings,
+                "normalized_value": warnings,
+                "message": "ECTyper emitted caller warnings; review the raw serotype output before treating this call as fully resolved.",
+            }
+        )
+
+    species = tl16.normalize_text(serotype_call.get("species", ""))
+    if species and species.lower() != "escherichia coli":
+        caveats.append(
+            {
+                "bacteria": bacteria,
+                "caller": "serotype",
+                "field": "host_serotype",
+                "raw_value": species,
+                "normalized_value": species,
+                "message": "ECTyper assigned a non-E. coli species label; serotype fields are exported but should be interpreted cautiously.",
+            }
+        )
+
+    return caveats
+
+
+def run_host_typing_callers(
+    *,
+    assembly_path: Path,
+    bacteria_id: str,
+    output_dir: Path,
+    force: bool = False,
+) -> dict[str, Any]:
+    phylogroup_report_path = tl16.run_phylogroup_caller(
+        bacteria=bacteria_id,
+        assembly_path=assembly_path,
+        output_dir=output_dir,
+        force=force,
+    )
+    serotype_output_path, serotype_blast_path = tl16.run_serotype_caller(
+        bacteria=bacteria_id,
+        assembly_path=assembly_path,
+        output_dir=output_dir,
+        force=force,
+    )
+    mlst_output_path = tl16.run_sequence_type_caller(
+        bacteria=bacteria_id,
+        assembly_path=assembly_path,
+        output_dir=output_dir,
+        force=force,
+    )
+    phylogroup_call = tl16.parse_phylogroup_report(phylogroup_report_path)
+    serotype_call = tl16.parse_ectyper_output(serotype_output_path)
+    mlst_call = tl16.parse_mlst_legacy_output(mlst_output_path)
+    return {
+        "runtime_outputs": HostTypingRuntimeOutputs(
+            phylogroup_report_path=phylogroup_report_path,
+            serotype_output_path=serotype_output_path,
+            mlst_output_path=mlst_output_path,
+        ),
+        "phylogroup_call": phylogroup_call,
+        "serotype_call": serotype_call,
+        "mlst_call": mlst_call,
+        "serotype_blast_path": serotype_blast_path,
+        "runtime_caveats": build_host_typing_runtime_caveats(
+            bacteria=bacteria_id,
+            phylogroup_call=phylogroup_call,
+            serotype_call=serotype_call,
+            mlst_call=mlst_call,
+        ),
     }
 
 
@@ -170,60 +290,46 @@ def derive_host_typing_features(
     *,
     bacteria_id: str | None = None,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
-    picard_metadata_path: Path = DEFAULT_PANEL_METADATA_PATH,
+    picard_metadata_path: Path | None = DEFAULT_PANEL_METADATA_PATH,
 ) -> dict[str, Any]:
     if not assembly_path.exists():
         raise FileNotFoundError(f"Assembly FASTA not found: {assembly_path}")
 
     resolved_bacteria_id = bacteria_id or assembly_path.stem
-    panel_metadata = tl16.load_panel_metadata(picard_metadata_path)
     schema = build_host_typing_schema()
     ensure_directory(output_dir)
     write_json(output_dir / SCHEMA_MANIFEST_FILENAME, schema)
 
-    phylogroup_report_path = tl16.run_phylogroup_caller(
-        bacteria=resolved_bacteria_id,
+    runtime_result = run_host_typing_callers(
         assembly_path=assembly_path,
+        bacteria_id=resolved_bacteria_id,
         output_dir=output_dir,
         force=False,
     )
-    serotype_output_path, _ = tl16.run_serotype_caller(
-        bacteria=resolved_bacteria_id,
-        assembly_path=assembly_path,
-        output_dir=output_dir,
-        force=False,
-    )
-    mlst_output_path = tl16.run_sequence_type_caller(
-        bacteria=resolved_bacteria_id,
-        assembly_path=assembly_path,
-        output_dir=output_dir,
-        force=False,
-    )
-
-    outputs = HostTypingRuntimeOutputs(
-        phylogroup_report_path=phylogroup_report_path,
-        serotype_output_path=serotype_output_path,
-        mlst_output_path=mlst_output_path,
-    )
+    outputs = runtime_result["runtime_outputs"]
     feature_row = build_host_typing_feature_row(
         bacteria=resolved_bacteria_id,
-        phylogroup_call=tl16.parse_phylogroup_report(outputs.phylogroup_report_path),
-        serotype_call=tl16.parse_ectyper_output(outputs.serotype_output_path),
-        mlst_call=tl16.parse_mlst_legacy_output(outputs.mlst_output_path),
+        phylogroup_call=runtime_result["phylogroup_call"],
+        serotype_call=runtime_result["serotype_call"],
+        mlst_call=runtime_result["mlst_call"],
     )
 
     feature_csv_path = output_dir / PER_HOST_FEATURES_FILENAME
     _write_single_row_csv(feature_csv_path, feature_row)
 
-    panel_row = _validate_host_metadata_row(panel_metadata, resolved_bacteria_id)
-    comparison = compare_host_typing_to_panel(feature_row, panel_row)
+    comparison = None
+    if picard_metadata_path is not None:
+        panel_metadata = tl16.load_panel_metadata(picard_metadata_path)
+        panel_row = _validate_host_metadata_row(panel_metadata, resolved_bacteria_id)
+        comparison = compare_host_typing_to_panel(feature_row, panel_row)
 
     manifest = {
         "step_name": "derive_host_typing_features",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "inputs": {
             "assembly_path": str(assembly_path),
-            "picard_metadata_path": str(picard_metadata_path),
+            "assembly_sha256": _sha256(assembly_path),
+            "picard_metadata_path": None if picard_metadata_path is None else str(picard_metadata_path),
         },
         "outputs": {
             "phylogroup_report_path": str(outputs.phylogroup_report_path),
@@ -231,9 +337,17 @@ def derive_host_typing_features(
             "mlst_output_path": str(outputs.mlst_output_path),
             "feature_csv_path": str(feature_csv_path),
         },
+        "caller_envs": dict(schema["caller_envs"]),
+        "guardrails": {
+            "panel_metadata_used_for_feature_construction": False,
+            "panel_metadata_used_for_comparison_only": picard_metadata_path is not None,
+            "rebuildable_from_raw_fastas": True,
+            "unresolved_calls_are_left_blank": True,
+        },
+        "runtime_caveats": list(runtime_result["runtime_caveats"]),
         "comparison": comparison,
     }
-    write_json(output_dir / "manifest.json", manifest)
+    write_json(output_dir / MANIFEST_FILENAME, manifest)
     return {
         "schema": schema,
         "feature_row": feature_row,

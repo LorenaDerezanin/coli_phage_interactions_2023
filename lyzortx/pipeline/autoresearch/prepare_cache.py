@@ -17,6 +17,8 @@ from typing import Any, Mapping, Optional, Sequence
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
+from lyzortx.pipeline.deployment_paired_features import derive_host_stats_features
+from lyzortx.pipeline.deployment_paired_features import derive_host_typing_features
 from lyzortx.pipeline.deployment_paired_features import run_all_host_surface
 from lyzortx.pipeline.deployment_paired_features.derive_host_defense_features import (
     DEFAULT_PANEL_DEFENSE_SUBTYPES_PATH,
@@ -47,6 +49,8 @@ SLOT_SCHEMA_FILENAME = "schema_manifest.json"
 SLOT_FEATURE_TABLE_FILENAME = "feature_table.csv"
 SLOT_FEATURES_FILENAME = "features.csv"
 HOST_DEFENSE_BUILD_MANIFEST_FILENAME = "host_defense_build_manifest.json"
+HOST_TYPING_BUILD_MANIFEST_FILENAME = "host_typing_build_manifest.json"
+HOST_STATS_BUILD_MANIFEST_FILENAME = "host_stats_build_manifest.json"
 
 TASK_ID = "AR02"
 CACHE_CONTRACT_ID = "autoresearch_search_cache_v1"
@@ -57,6 +61,8 @@ SUPPORTED_SEARCH_SPLITS = (build_contract.TRAIN_SPLIT, build_contract.INNER_VAL_
 DISALLOWED_SEARCH_SPLITS = (build_contract.HOLDOUT_SPLIT,)
 PAIR_KEY = ("pair_id", "bacteria", "phage")
 HOST_SURFACE_BUILD_DIRNAME = "host_surface_cache_build"
+HOST_TYPING_BUILD_DIRNAME = "host_typing_cache_build"
+HOST_STATS_BUILD_DIRNAME = "host_stats_cache_build"
 
 
 @dataclass(frozen=True)
@@ -806,11 +812,184 @@ def materialize_host_surface_slot(
         "schema_manifest_path": str(schema_path),
         "entity_count": len(namespaced_rows),
         "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
         "feature_csv_path": str(feature_path),
         "feature_csv_sha256": build_contract.sha256_file(feature_path),
         "materialized_feature_columns": feature_columns,
         "materialized_feature_column_count": len(feature_columns),
         "build_runtime": dict(fast_path_result["runtime_metadata"]),
+        "build_dir": str(build_dir),
+    }
+
+
+def materialize_host_typing_slot(
+    *,
+    cache_dir: Path,
+    output_root: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+) -> dict[str, Any]:
+    slot_spec = SLOT_SPEC_BY_NAME["host_typing"]
+    host_fasta_by_bacteria = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="host_fasta_path",
+    )
+    build_dir = output_root / HOST_TYPING_BUILD_DIRNAME
+    rows: list[dict[str, object]] = []
+    runtime_caveats: list[dict[str, str]] = []
+    for bacteria in sorted(host_fasta_by_bacteria):
+        assembly_path = host_fasta_by_bacteria[bacteria]
+        result = derive_host_typing_features.derive_host_typing_features(
+            assembly_path,
+            bacteria_id=bacteria,
+            output_dir=build_dir / bacteria,
+            picard_metadata_path=None,
+        )
+        rows.append(dict(result["feature_row"]))
+        runtime_caveats.extend(result["manifest"]["runtime_caveats"])
+    if len(rows) != len(host_fasta_by_bacteria):
+        raise ValueError(
+            f"Host-typing materialization row count mismatch: expected {len(host_fasta_by_bacteria)}, got {len(rows)}"
+        )
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "per_host_output_dir": str(build_dir),
+        "caller_envs": derive_host_typing_features.build_host_typing_schema()["caller_envs"],
+        "panel_metadata_used_for_feature_construction": False,
+        "rebuildable_from_raw_fastas": True,
+        "runtime_caveat_count": len(runtime_caveats),
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    build_manifest = {
+        "task_id": "AR05",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": slot_spec.slot_name,
+        "per_host_output_dir": str(build_dir),
+        "slot_artifact_path": str(feature_path),
+        "retained_host_count": len(rows),
+        "retained_hosts": sorted(host_fasta_by_bacteria),
+        "caller_envs": derive_host_typing_features.build_host_typing_schema()["caller_envs"],
+        "guardrails": {
+            "source_of_truth": "raw host FASTAs plus pinned phylogroup, serotype, and sequence-type caller envs",
+            "panel_metadata_used_for_feature_construction": False,
+            "comparison_paths_may_use_panel_metadata": True,
+            "unresolved_calls_are_left_blank": True,
+        },
+        "runtime_caveats": runtime_caveats,
+    }
+    build_manifest_path = slot_dir / HOST_TYPING_BUILD_MANIFEST_FILENAME
+    write_json(build_manifest_path, build_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_manifest_path": str(build_manifest_path),
+        "build_dir": str(build_dir),
+        "runtime_caveat_count": len(runtime_caveats),
+    }
+
+
+def materialize_host_stats_slot(
+    *,
+    cache_dir: Path,
+    output_root: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+) -> dict[str, Any]:
+    slot_spec = SLOT_SPEC_BY_NAME["host_stats"]
+    host_fasta_by_bacteria = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="host_fasta_path",
+    )
+    build_dir = output_root / HOST_STATS_BUILD_DIRNAME
+    rows: list[dict[str, object]] = []
+    for bacteria in sorted(host_fasta_by_bacteria):
+        assembly_path = host_fasta_by_bacteria[bacteria]
+        result = derive_host_stats_features.derive_host_stats_features(
+            assembly_path,
+            bacteria_id=bacteria,
+            output_dir=build_dir / bacteria,
+        )
+        rows.append(dict(result["feature_row"]))
+    if len(rows) != len(host_fasta_by_bacteria):
+        raise ValueError(
+            f"Host-stats materialization row count mismatch: expected {len(host_fasta_by_bacteria)}, got {len(rows)}"
+        )
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "per_host_output_dir": str(build_dir),
+        "rebuildable_from_raw_fastas": True,
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    build_manifest = {
+        "task_id": "AR05",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": slot_spec.slot_name,
+        "per_host_output_dir": str(build_dir),
+        "slot_artifact_path": str(feature_path),
+        "retained_host_count": len(rows),
+        "retained_hosts": sorted(host_fasta_by_bacteria),
+        "guardrails": {
+            "source_of_truth": "raw host FASTAs only",
+            "panel_metadata_used": False,
+            "low_cost_baseline_feature_family": True,
+        },
+        "exported_numeric_columns": feature_columns,
+    }
+    build_manifest_path = slot_dir / HOST_STATS_BUILD_MANIFEST_FILENAME
+    write_json(build_manifest_path, build_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_manifest_path": str(build_manifest_path),
         "build_dir": str(build_dir),
     }
 
@@ -941,12 +1120,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     split_pair_tables = write_split_pair_tables(args.cache_dir, split_rows)
     slot_summaries = write_slot_indexes(args.cache_dir, split_rows, args=args)
 
-    schema_manifest = build_top_level_schema_manifest(
-        slot_feature_columns={slot_name: summary["columns"] for slot_name, summary in slot_summaries.items()}
-    )
-    schema_manifest_path = args.cache_dir / SCHEMA_MANIFEST_FILENAME
-    write_json(schema_manifest_path, schema_manifest)
-
     host_surface_build_dir = args.host_surface_build_dir or (args.output_root / HOST_SURFACE_BUILD_DIRNAME)
     slot_summaries["host_surface"] = materialize_host_surface_slot(
         cache_dir=args.cache_dir,
@@ -954,6 +1127,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         max_workers=args.host_surface_max_workers,
         build_dir=host_surface_build_dir,
     )
+    slot_summaries["host_typing"] = materialize_host_typing_slot(
+        cache_dir=args.cache_dir,
+        output_root=args.output_root,
+        split_rows=split_rows,
+    )
+    slot_summaries["host_stats"] = materialize_host_stats_slot(
+        cache_dir=args.cache_dir,
+        output_root=args.output_root,
+        split_rows=split_rows,
+    )
+
+    schema_manifest = build_top_level_schema_manifest(
+        slot_feature_columns={slot_name: summary["columns"] for slot_name, summary in slot_summaries.items()}
+    )
+    schema_manifest_path = args.cache_dir / SCHEMA_MANIFEST_FILENAME
+    write_json(schema_manifest_path, schema_manifest)
 
     warm_cache_validation = None
     if args.warm_cache_manifest_path is not None:

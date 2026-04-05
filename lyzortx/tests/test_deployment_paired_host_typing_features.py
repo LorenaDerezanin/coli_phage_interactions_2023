@@ -136,6 +136,63 @@ def test_derive_host_typing_features_writes_schema_and_feature_outputs(monkeypat
     assert result["comparison"]["field_matches"]["serotype"] is True
 
 
+def test_derive_host_typing_features_can_skip_panel_metadata_and_records_unresolved_mlst(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    assembly_path = tmp_path / "EDL933.fasta"
+    assembly_path.write_text(">contig\nATGC\n", encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    phylogroup_report = tmp_path / "typing_phylogroups.txt"
+    phylogroup_report.write_text("EDL933.fasta\t['arpA']\t['+']\t['arpAgpE']\tE\tE\n", encoding="utf-8")
+    serotype_output = tmp_path / "output.tsv"
+    serotype_output.write_text(
+        "Name\tSpecies\tO-type\tH-type\tSerotype\tQC\tWarnings\nEDL933\tEscherichia coli\tO157\tH7\tO157:H7\t-\t-\n",
+        encoding="utf-8",
+    )
+    mlst_output = tmp_path / "mlst_legacy.tsv"
+    mlst_output.write_text(
+        f"This is mlst 2.32.2 running on linux\nDone.\nFILE\tSCHEME\tST\n{assembly_path}\tecoli_achtman_4\t-\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(derive_host_typing_features.tl16, "run_phylogroup_caller", lambda **_: phylogroup_report)
+    monkeypatch.setattr(
+        derive_host_typing_features.tl16,
+        "run_serotype_caller",
+        lambda **_: (serotype_output, tmp_path / "blastn_output_alleles.txt"),
+    )
+    monkeypatch.setattr(derive_host_typing_features.tl16, "run_sequence_type_caller", lambda **_: mlst_output)
+    monkeypatch.setattr(
+        derive_host_typing_features.tl16,
+        "load_panel_metadata",
+        lambda *_: (_ for _ in ()).throw(AssertionError("panel metadata should not load for runtime-only typing")),
+    )
+
+    result = derive_host_typing_features.derive_host_typing_features(
+        assembly_path,
+        output_dir=output_dir,
+        picard_metadata_path=None,
+    )
+
+    assert result["feature_row"]["host_st_warwick"] == ""
+    assert result["comparison"] is None
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["guardrails"]["panel_metadata_used_for_feature_construction"] is False
+    assert manifest["comparison"] is None
+    assert manifest["runtime_caveats"] == [
+        {
+            "bacteria": "EDL933",
+            "caller": "sequence_type",
+            "field": "host_st_warwick",
+            "raw_value": "-",
+            "normalized_value": "",
+            "message": "MLST returned an unresolved sequence type; the exported ST remains blank instead of using a placeholder.",
+        }
+    ]
+
+
 def test_run_validation_subset_writes_combined_validation_outputs(monkeypatch, tmp_path: Path) -> None:
     validation_dir = tmp_path / "fastas"
     validation_dir.mkdir()

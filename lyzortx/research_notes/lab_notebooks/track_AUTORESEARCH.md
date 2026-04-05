@@ -290,6 +290,55 @@ recorded in `lyzortx/research_notes/lab_notebooks/track_DEPLOY.md`: roughly `6.2
 `10 min` for `403` hosts on a 10-core local benchmark, versus the rejected `~72s/host` `nhmmer` design. That is the
 runtime boundary AUTORESEARCH now enforces.
 
+### 2026-04-05 06:27 UTC: AR05 materialized raw host typing plus a small host-stats baseline block
+
+#### Executive summary
+
+`prepare.py` now materializes both `host_typing` and `host_stats` from retained raw host FASTAs. The typing block
+reuses the pinned Clermont phylogroup, ECTyper serotype, and Achtman-4 MLST callers from the raw-assembly deployment
+path without depending on Picard metadata at runtime, while the stats block adds a cheap numeric baseline
+(`record_count`, `genome_length_nt`, `gc_content`, `n50_contig_length_nt`) that is rebuildable directly from the
+assembly. Unresolved caller behavior, especially blank MLST outputs, is now recorded in a slot build manifest instead
+of being silently coerced.
+
+#### What changed
+
+- **Filled the `host_typing` slot with raw-only categorical calls.** `prepare_cache.py` now runs the reusable
+  deployment host-typing helper on the retained AUTORESEARCH host FASTAs and writes
+  `search_cache_v1/feature_slots/host_typing/features.csv` with namespaced categorical columns:
+  `host_clermont_phylo`, `host_st_warwick`, `host_o_type`, `host_h_type`, and `host_serotype`.
+- **Separated runtime feature construction from panel comparison.** The shared host-typing helper now supports a
+  runtime-only path where Picard metadata is optional and used only for validation/comparison. AUTORESEARCH calls that
+  runtime-only path, so the exported features depend only on raw assemblies plus the pinned caller envs.
+- **Added a small `host_stats` block as the low-cost baseline family.** `prepare_cache.py` now writes
+  `search_cache_v1/feature_slots/host_stats/features.csv` from the raw host assemblies with four numeric fields:
+  `host_sequence_record_count`, `host_genome_length_nt`, `host_gc_content`, and `host_n50_contig_length_nt`.
+- **Recorded caller caveats in manifests instead of inventing placeholders.** The per-host typing helper manifest and
+  the slot-level `host_typing_build_manifest.json` now keep explicit runtime caveat rows when a caller returns an
+  unresolved value. The main concrete case covered here is MLST returning `-`, which stays blank in the exported
+  feature row and is called out in the manifest for auditability.
+- **Updated the frozen cache schema and join tests.** The top-level AUTORESEARCH schema manifest now records the
+  realized `host_typing__*` and `host_stats__*` columns, and the cache tests now prove those categorical and numeric
+  host-side blocks can still be loaded and joined onto retained pair rows by `bacteria`.
+
+#### Validation
+
+- Added runtime-only host-typing coverage in `lyzortx/tests/test_deployment_paired_host_typing_features.py`, including
+  the unresolved-MLST manifest case with panel metadata disabled.
+- Added host-stats coverage in `lyzortx/tests/test_deployment_paired_host_stats_features.py`.
+- Extended `lyzortx/tests/test_autoresearch_prepare_cache.py` to cover:
+  - materialized `host_typing` and `host_stats` slot schemas;
+  - host-side slot manifests carrying runtime caveats; and
+  - successful joins of those slot artifacts onto retained AUTORESEARCH pair rows.
+- Focused validation command:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/test_deployment_paired_host_typing_features.py lyzortx/tests/test_deployment_paired_host_stats_features.py lyzortx/tests/test_autoresearch_prepare_cache.py`
+  - Result: `16 passed`
+
+#### Runtime interpretation
+
+AR05 does not claim a new full-panel cold-cache wall-clock number from CI. No dedicated 403-host host-typing/stats
+benchmark was run in this PR; the acceptance path stayed on fixtures and retained-subset tests as intended.
+
 ### 2026-04-05 11:35 UTC: AUTORESEARCH critical path changed to adsorption-first
 
 #### Executive summary

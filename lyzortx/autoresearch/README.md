@@ -31,6 +31,10 @@ micromamba run -n phage_env python lyzortx/autoresearch/train.py
 - Materialized feature slots write `feature_slots/<slot>/features.csv` plus updated slot schema manifests.
 - `host_surface` is currently built from raw host FASTAs with the pyhmmer fast path and excludes Picard-derived
   `host_lps_core_type`.
+- `host_typing` is currently built from raw host FASTAs via the pinned phylogroup, serotype, and MLST callers, with
+  unresolved caller outputs recorded in a slot build manifest instead of being coerced to placeholders.
+- `host_stats` is currently built from raw host FASTAs as a low-cost numeric baseline block
+  (`record_count`, `genome_length_nt`, `gc_content`, `n50_contig_length_nt`).
 - Sealed holdout labels and holdout-ready evaluation tables stay outside the search workspace entirely.
 
 ## Warm caches

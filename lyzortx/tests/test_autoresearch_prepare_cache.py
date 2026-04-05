@@ -221,6 +221,84 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         fake_build_host_defense_slot_artifact,
     )
 
+    def fake_derive_host_typing_features(
+        assembly_path: Path,
+        *,
+        bacteria_id: str | None = None,
+        output_dir: Path,
+        picard_metadata_path: Path | None,
+    ) -> dict[str, object]:
+        bacteria = bacteria_id or assembly_path.stem
+        output_dir.mkdir(parents=True, exist_ok=True)
+        feature_row = {
+            "bacteria": bacteria,
+            "host_clermont_phylo": f"{bacteria}_phylo",
+            "host_st_warwick": f"{len(bacteria)}",
+            "host_o_type": f"{bacteria}_O",
+            "host_h_type": f"{bacteria}_H",
+            "host_serotype": f"{bacteria}_O:{bacteria}_H",
+        }
+        return {
+            "schema": {"feature_block": "host_typing"},
+            "feature_row": feature_row,
+            "comparison": None,
+            "manifest": {
+                "runtime_caveats": [
+                    {
+                        "bacteria": bacteria,
+                        "caller": "sequence_type",
+                        "field": "host_st_warwick",
+                        "raw_value": "",
+                        "normalized_value": "",
+                        "message": "fixture caveat",
+                    }
+                ]
+            },
+        }
+
+    monkeypatch.setattr(
+        prepare_cache.derive_host_typing_features,
+        "derive_host_typing_features",
+        fake_derive_host_typing_features,
+    )
+    monkeypatch.setattr(
+        prepare_cache.derive_host_typing_features,
+        "build_host_typing_schema",
+        lambda: {
+            "caller_envs": {
+                "phylogroup": "phylogroup_caller",
+                "serotype": "serotype_caller",
+                "sequence_type": "sequence_type_caller",
+            }
+        },
+    )
+
+    def fake_derive_host_stats_features(
+        assembly_path: Path,
+        *,
+        bacteria_id: str | None = None,
+        output_dir: Path,
+    ) -> dict[str, object]:
+        bacteria = bacteria_id or assembly_path.stem
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "schema": {"feature_block": "host_stats"},
+            "feature_row": {
+                "bacteria": bacteria,
+                "host_sequence_record_count": len(bacteria),
+                "host_genome_length_nt": len(bacteria) * 100,
+                "host_gc_content": round(len(bacteria) / 10, 3),
+                "host_n50_contig_length_nt": len(bacteria) * 50,
+            },
+            "manifest": {},
+        }
+
+    monkeypatch.setattr(
+        prepare_cache.derive_host_stats_features,
+        "derive_host_stats_features",
+        fake_derive_host_stats_features,
+    )
+
     exit_code = prepare_cache.main(
         [
             "--raw-interactions-path",
@@ -294,10 +372,45 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
 
     schema = json.loads((cache_dir / prepare_cache.SCHEMA_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert schema["feature_slots"]["host_defense"]["reserved_feature_columns"] == ["host_defense__AbiD"]
+    assert schema["feature_slots"]["host_typing"]["reserved_feature_columns"] == [
+        "host_typing__host_clermont_phylo",
+        "host_typing__host_h_type",
+        "host_typing__host_o_type",
+        "host_typing__host_serotype",
+        "host_typing__host_st_warwick",
+    ]
+    assert schema["feature_slots"]["host_stats"]["reserved_feature_columns"] == [
+        "host_stats__host_gc_content",
+        "host_stats__host_genome_length_nt",
+        "host_stats__host_n50_contig_length_nt",
+        "host_stats__host_sequence_record_count",
+    ]
     host_defense_rows = read_csv_rows(
         cache_dir / "feature_slots" / "host_defense" / prepare_cache.SLOT_FEATURE_TABLE_FILENAME
     )
     assert {row["bacteria"] for row in host_defense_rows} == exported_bacteria
+
+    host_typing_rows = read_csv_rows(cache_dir / "feature_slots" / "host_typing" / prepare_cache.SLOT_FEATURES_FILENAME)
+    host_stats_rows = read_csv_rows(cache_dir / "feature_slots" / "host_stats" / prepare_cache.SLOT_FEATURES_FILENAME)
+    typing_by_bacteria = {row["bacteria"]: row for row in host_typing_rows}
+    stats_by_bacteria = {row["bacteria"]: row for row in host_stats_rows}
+    joined_rows = []
+    for row in train_rows:
+        bacteria = row["bacteria"]
+        if row["retained_for_autoresearch"] != "1":
+            continue
+        joined_rows.append({**row, **typing_by_bacteria[bacteria], **stats_by_bacteria[bacteria]})
+    assert joined_rows
+    assert all("host_typing__host_serotype" in row for row in joined_rows)
+    assert all("host_stats__host_gc_content" in row for row in joined_rows)
+
+    host_typing_manifest = json.loads(
+        (cache_dir / "feature_slots" / "host_typing" / prepare_cache.HOST_TYPING_BUILD_MANIFEST_FILENAME).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert host_typing_manifest["guardrails"]["panel_metadata_used_for_feature_construction"] is False
+    assert {entry["bacteria"] for entry in host_typing_manifest["runtime_caveats"]} == exported_bacteria
 
 
 def test_validate_warm_cache_manifest_rejects_schema_mismatch(tmp_path: Path) -> None:
