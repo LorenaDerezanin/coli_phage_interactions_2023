@@ -215,15 +215,19 @@ def _process_one_host(
         with pyhmmer.easel.SequenceFile(str(proteins_path), digital=True, alphabet=amino) as sf:
             targets = sf.read_block()
 
+        def _name(obj: object) -> str:
+            n = obj.name  # type: ignore[union-attr]
+            return n if isinstance(n, str) else n.decode()
+
         # 1. O-antigen phmmer (protein-translated alleles)
         o_antigen_hits: list[tl15.HmmerHit] = []
         for top_hits in pyhmmer.hmmer.phmmer(cache["o_queries"], targets, cpus=1):
-            query_name = top_hits.query.name.decode()
+            query_name = _name(top_hits.query)
             for hit in top_hits:
                 if hit.evalue < 1e-5:
                     o_antigen_hits.append(
                         tl15.HmmerHit(
-                            target_name=hit.name.decode(),
+                            target_name=_name(hit),
                             query_name=query_name,
                             evalue=hit.evalue,
                             score=hit.score,
@@ -239,11 +243,11 @@ def _process_one_host(
         # 2. Receptor phmmer
         receptor_raw_hits = []
         for top_hits in pyhmmer.hmmer.phmmer(cache["omp_queries"], targets, cpus=1):
-            query_name = top_hits.query.name.decode()
+            query_name = _name(top_hits.query)
             for hit in top_hits:
                 receptor_raw_hits.append(
                     tl15.HmmerHit(
-                        target_name=hit.name.decode(),
+                        target_name=_name(hit),
                         query_name=query_name,
                         evalue=hit.evalue,
                         score=hit.score,
@@ -257,7 +261,7 @@ def _process_one_host(
         for top_hits in pyhmmer.hmmer.hmmscan(targets, cache["hmms"], cpus=1):
             for hit in top_hits:
                 if hit.evalue < tl15.HMMSCAN_EVALUE_THRESHOLD:
-                    name = hit.name.decode()
+                    name = _name(hit)
                     capsule_scores[name] = max(capsule_scores.get(name, 0.0), hit.score)
         return (
             bacteria_id,
