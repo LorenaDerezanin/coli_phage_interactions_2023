@@ -4,6 +4,7 @@ import csv
 import json
 from pathlib import Path
 
+import joblib
 import pytest
 
 from lyzortx.pipeline.autoresearch import build_contract, prepare_cache
@@ -127,12 +128,84 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     output_root = tmp_path / "outputs"
     cache_dir = output_root / "search_cache_v1"
     comparator_root = tmp_path / "comparator"
+    tl17_output_dir = tmp_path / "tl17_runtime"
 
     write_raw_interactions(raw_path, build_fixture_rows())
     for bacteria in ("B1", "B2", "B3", "B4", "B5"):
         write_fasta(host_dir / f"{bacteria}.fna", bacteria)
     for phage in ("P1", "P2"):
         write_fasta(phage_dir / f"{phage}.fna", phage)
+    tl17_output_dir.mkdir(parents=True)
+    (tl17_output_dir / "tl17_rbp_reference_bank.faa").write_text(">ref_11\nMPEPTIDE\n", encoding="utf-8")
+    (tl17_output_dir / "tl17_rbp_reference_metadata.csv").write_text(
+        "reference_id,phage,family_id,gene_name,protein_index,annotation,phrog,protein_length_aa\n"
+        "ref_11,P0,RBP_PHROG_11,P0_CDS_0001,1,tail fiber,11,8\n",
+        encoding="utf-8",
+    )
+    (tl17_output_dir / "tl17_rbp_family_metadata.csv").write_text(
+        "family_id,column_name,supporting_phage_count,supporting_reference_count\n"
+        "RBP_PHROG_11,tl17_phage_rbp_family_11_percent_identity,2,1\n",
+        encoding="utf-8",
+    )
+    write_json_file(
+        tl17_output_dir / "schema_manifest.json",
+        {
+            "feature_block": "tl17_rbp_family_projection",
+            "columns": [
+                {"name": "phage", "dtype": "string"},
+                {"name": "tl17_phage_rbp_family_11_percent_identity", "dtype": "float64"},
+                {"name": "tl17_rbp_reference_hit_count", "dtype": "int64"},
+            ],
+            "family_score_columns": ["tl17_phage_rbp_family_11_percent_identity"],
+            "reference_hit_count_column": "tl17_rbp_reference_hit_count",
+        },
+    )
+    joblib.dump(
+        {
+            "family_rows": [
+                {
+                    "family_id": "RBP_PHROG_11",
+                    "column_name": "tl17_phage_rbp_family_11_percent_identity",
+                    "supporting_phage_count": 2,
+                    "supporting_reference_count": 1,
+                }
+            ],
+            "reference_rows": [
+                {
+                    "reference_id": "ref_11",
+                    "phage": "P0",
+                    "family_id": "RBP_PHROG_11",
+                    "gene_name": "P0_CDS_0001",
+                    "protein_index": 1,
+                    "annotation": "tail fiber",
+                    "phrog": "11",
+                    "protein_sequence": "MPEPTIDE",
+                }
+            ],
+            "matching_policy": {
+                "min_query_coverage": 0.7,
+                "mmseqs_command": ["mmseqs"],
+            },
+        },
+        tl17_output_dir / "tl17_rbp_runtime.joblib",
+    )
+    write_json_file(
+        tl17_output_dir / "tl17_phage_compatibility_manifest.json",
+        {
+            "task_id": "TL17",
+            "matching_policy": {
+                "min_query_coverage": 0.7,
+                "mmseqs_command": ["mmseqs"],
+            },
+            "counts": {
+                "retained_family_count": 1,
+                "retained_reference_protein_count": 1,
+            },
+            "outputs": {
+                "projected_feature_csv": str(tl17_output_dir / "tl17_panel_projected_phage_features.csv"),
+            },
+        },
+    )
 
     monkeypatch.setattr(
         build_contract,
@@ -299,6 +372,70 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         fake_derive_host_stats_features,
     )
 
+    phage_projection_calls: list[dict[str, object]] = []
+
+    def fake_project_phage_feature_rows_batched(
+        phage_paths: list[Path],
+        *,
+        runtime_payload: dict[str, object],
+        reference_fasta_path: Path,
+        scratch_root: Path,
+    ) -> list[dict[str, object]]:
+        phage_projection_calls.append(
+            {
+                "phages": tuple(path.stem for path in phage_paths),
+                "reference_fasta_path": reference_fasta_path,
+                "scratch_root": scratch_root,
+                "runtime_payload": runtime_payload,
+            }
+        )
+        scratch_root.mkdir(parents=True, exist_ok=True)
+        return [
+            {
+                "phage": path.stem,
+                "tl17_phage_rbp_family_11_percent_identity": 70.0 + index,
+                "tl17_rbp_reference_hit_count": index,
+            }
+            for index, path in enumerate(phage_paths, start=1)
+        ]
+
+    monkeypatch.setattr(
+        prepare_cache.tl17_runtime,
+        "project_phage_feature_rows_batched",
+        fake_project_phage_feature_rows_batched,
+    )
+    monkeypatch.setattr(
+        prepare_cache.tl17_runtime,
+        "project_phage_feature_row",
+        lambda *_args, **_kwargs: pytest.fail("Per-phage TL17 projection path should not be used"),
+    )
+
+    def fake_derive_phage_stats_features(
+        phage_fasta_path: Path,
+        *,
+        phage_id: str | None = None,
+        output_dir: Path,
+    ) -> dict[str, object]:
+        phage = phage_id or phage_fasta_path.stem
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "schema": {"feature_block": "phage_stats"},
+            "feature_row": {
+                "phage": phage,
+                "phage_sequence_record_count": len(phage),
+                "phage_genome_length_nt": len(phage) * 100,
+                "phage_gc_content": round(len(phage) / 10, 3),
+                "phage_n50_contig_length_nt": len(phage) * 50,
+            },
+            "manifest": {},
+        }
+
+    monkeypatch.setattr(
+        prepare_cache.derive_phage_stats_features,
+        "derive_phage_stats_features",
+        fake_derive_phage_stats_features,
+    )
+
     exit_code = prepare_cache.main(
         [
             "--raw-interactions-path",
@@ -316,6 +453,8 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
             "0.2",
             "--inner-val-fraction",
             "0.2",
+            "--tl17-output-dir",
+            str(tl17_output_dir),
         ]
     )
     assert exit_code == 0
@@ -330,6 +469,8 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     cache_manifest = json.loads((cache_dir / prepare_cache.CACHE_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert set(cache_manifest["pair_tables"]) == {"train", "inner_val"}
     assert cache_manifest["feature_slots"]["host_defense"]["column_count"] == 1
+    assert cache_manifest["feature_slots"]["phage_projection"]["column_count"] == 2
+    assert cache_manifest["feature_slots"]["phage_stats"]["column_count"] == 4
 
     provenance = json.loads((cache_dir / prepare_cache.PROVENANCE_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert provenance["build_mode"] == "raw_inputs_only"
@@ -342,6 +483,13 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     assert provenance["search_workspace"]["feature_slots"]["host_surface"]["build_runtime"][
         "legacy_nhmmer_path_forbidden"
     ]
+    assert provenance["search_workspace"]["feature_slots"]["phage_projection"]["build_runtime"]["projection_mode"] == (
+        "batched_mmseqs_easy_search"
+    )
+    assert (
+        provenance["search_workspace"]["feature_slots"]["phage_projection"]["reference_bank_provenance"]["task_id"]
+        == "TL17"
+    )
 
     host_index_rows = read_csv_rows(cache_dir / "feature_slots" / "host_surface" / prepare_cache.ENTITY_INDEX_FILENAME)
     exported_bacteria = {row["bacteria"] for row in host_index_rows}
@@ -352,6 +500,13 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     assert len(fast_path_calls) == 1
     assert fast_path_calls[0]["include_lps_core_type"] is False
     assert set(fast_path_calls[0]["assemblies"]) == exported_bacteria
+    exported_phages = {
+        row["phage"]
+        for row in read_csv_rows(cache_dir / "feature_slots" / "phage_projection" / prepare_cache.ENTITY_INDEX_FILENAME)
+    }
+    assert len(phage_projection_calls) == 1
+    assert set(phage_projection_calls[0]["phages"]) == exported_phages
+    assert phage_projection_calls[0]["reference_fasta_path"] == tl17_output_dir / "tl17_rbp_reference_bank.faa"
 
     feature_rows = read_csv_rows(cache_dir / "feature_slots" / "host_surface" / prepare_cache.SLOT_FEATURES_FILENAME)
     assert {key for key in feature_rows[0]} == {
@@ -385,6 +540,16 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         "host_stats__host_n50_contig_length_nt",
         "host_stats__host_sequence_record_count",
     ]
+    assert schema["feature_slots"]["phage_projection"]["reserved_feature_columns"] == [
+        "phage_projection__tl17_phage_rbp_family_11_percent_identity",
+        "phage_projection__tl17_rbp_reference_hit_count",
+    ]
+    assert schema["feature_slots"]["phage_stats"]["reserved_feature_columns"] == [
+        "phage_stats__phage_gc_content",
+        "phage_stats__phage_genome_length_nt",
+        "phage_stats__phage_n50_contig_length_nt",
+        "phage_stats__phage_sequence_record_count",
+    ]
     host_defense_rows = read_csv_rows(
         cache_dir / "feature_slots" / "host_defense" / prepare_cache.SLOT_FEATURE_TABLE_FILENAME
     )
@@ -392,17 +557,34 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
 
     host_typing_rows = read_csv_rows(cache_dir / "feature_slots" / "host_typing" / prepare_cache.SLOT_FEATURES_FILENAME)
     host_stats_rows = read_csv_rows(cache_dir / "feature_slots" / "host_stats" / prepare_cache.SLOT_FEATURES_FILENAME)
+    phage_projection_rows = read_csv_rows(
+        cache_dir / "feature_slots" / "phage_projection" / prepare_cache.SLOT_FEATURES_FILENAME
+    )
+    phage_stats_rows = read_csv_rows(cache_dir / "feature_slots" / "phage_stats" / prepare_cache.SLOT_FEATURES_FILENAME)
     typing_by_bacteria = {row["bacteria"]: row for row in host_typing_rows}
     stats_by_bacteria = {row["bacteria"]: row for row in host_stats_rows}
+    projection_by_phage = {row["phage"]: row for row in phage_projection_rows}
+    stats_by_phage = {row["phage"]: row for row in phage_stats_rows}
     joined_rows = []
     for row in train_rows:
         bacteria = row["bacteria"]
+        phage = row["phage"]
         if row["retained_for_autoresearch"] != "1":
             continue
-        joined_rows.append({**row, **typing_by_bacteria[bacteria], **stats_by_bacteria[bacteria]})
+        joined_rows.append(
+            {
+                **row,
+                **typing_by_bacteria[bacteria],
+                **stats_by_bacteria[bacteria],
+                **projection_by_phage[phage],
+                **stats_by_phage[phage],
+            }
+        )
     assert joined_rows
     assert all("host_typing__host_serotype" in row for row in joined_rows)
     assert all("host_stats__host_gc_content" in row for row in joined_rows)
+    assert all("phage_projection__tl17_rbp_reference_hit_count" in row for row in joined_rows)
+    assert all("phage_stats__phage_gc_content" in row for row in joined_rows)
 
     host_typing_manifest = json.loads(
         (cache_dir / "feature_slots" / "host_typing" / prepare_cache.HOST_TYPING_BUILD_MANIFEST_FILENAME).read_text(
@@ -411,6 +593,17 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     )
     assert host_typing_manifest["guardrails"]["panel_metadata_used_for_feature_construction"] is False
     assert {entry["bacteria"] for entry in host_typing_manifest["runtime_caveats"]} == exported_bacteria
+
+    phage_projection_manifest = json.loads(
+        (
+            cache_dir / "feature_slots" / "phage_projection" / prepare_cache.PHAGE_PROJECTION_BUILD_MANIFEST_FILENAME
+        ).read_text(encoding="utf-8")
+    )
+    assert phage_projection_manifest["guardrails"]["batched_projection_path_used"] is True
+    assert phage_projection_manifest["guardrails"]["checked_in_projection_csv_used"] is False
+    assert phage_projection_manifest["reference_bank_provenance"]["reference_fasta_path"] == str(
+        tl17_output_dir / "tl17_rbp_reference_bank.faa"
+    )
 
 
 def test_validate_warm_cache_manifest_rejects_schema_mismatch(tmp_path: Path) -> None:

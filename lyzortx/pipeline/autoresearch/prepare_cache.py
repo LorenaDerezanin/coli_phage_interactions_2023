@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import joblib
 import logging
 import os
 from collections import Counter
@@ -17,6 +18,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
+from lyzortx.pipeline.autoresearch import derive_phage_stats_features
 from lyzortx.pipeline.deployment_paired_features import derive_host_stats_features
 from lyzortx.pipeline.deployment_paired_features import derive_host_typing_features
 from lyzortx.pipeline.deployment_paired_features import run_all_host_surface
@@ -33,6 +35,8 @@ from lyzortx.pipeline.track_l.steps.run_novel_host_defense_finder import (
     MODEL_INSTALL_MODE_FORBID,
     ensure_defense_finder_models,
 )
+from lyzortx.pipeline.track_l.steps import build_tl17_phage_compatibility_preprocessor as tl17_preprocessor
+from lyzortx.pipeline.track_l.steps import deployable_tl17_runtime as tl17_runtime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +55,8 @@ SLOT_FEATURES_FILENAME = "features.csv"
 HOST_DEFENSE_BUILD_MANIFEST_FILENAME = "host_defense_build_manifest.json"
 HOST_TYPING_BUILD_MANIFEST_FILENAME = "host_typing_build_manifest.json"
 HOST_STATS_BUILD_MANIFEST_FILENAME = "host_stats_build_manifest.json"
+PHAGE_PROJECTION_BUILD_MANIFEST_FILENAME = "phage_projection_build_manifest.json"
+PHAGE_STATS_BUILD_MANIFEST_FILENAME = "phage_stats_build_manifest.json"
 
 TASK_ID = "AR02"
 CACHE_CONTRACT_ID = "autoresearch_search_cache_v1"
@@ -63,6 +69,8 @@ PAIR_KEY = ("pair_id", "bacteria", "phage")
 HOST_SURFACE_BUILD_DIRNAME = "host_surface_cache_build"
 HOST_TYPING_BUILD_DIRNAME = "host_typing_cache_build"
 HOST_STATS_BUILD_DIRNAME = "host_stats_cache_build"
+PHAGE_PROJECTION_BUILD_DIRNAME = "phage_projection_cache_build"
+PHAGE_STATS_BUILD_DIRNAME = "phage_stats_cache_build"
 
 
 @dataclass(frozen=True)
@@ -234,6 +242,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=max(1, os.cpu_count() or 1),
         help="Worker count for the host-surface pyhmmer fast path.",
+    )
+    parser.add_argument(
+        "--tl17-output-dir",
+        type=Path,
+        default=tl17_preprocessor.DEFAULT_OUTPUT_DIR,
+        help="Directory containing the frozen TL17 runtime payload and reference bank.",
     )
     return parser.parse_args(argv)
 
@@ -513,6 +527,65 @@ def build_entity_path_map(
     if not entity_paths:
         raise ValueError(f"No retained entities resolved for {entity_key}/{path_key}.")
     return entity_paths
+
+
+def _load_tl17_frozen_runtime_assets(tl17_output_dir: Path) -> dict[str, Any]:
+    manifest_path = tl17_output_dir / tl17_preprocessor.MANIFEST_FILENAME
+    runtime_payload_path = tl17_output_dir / tl17_preprocessor.RUNTIME_FILENAME
+    reference_fasta_path = tl17_output_dir / tl17_preprocessor.REFERENCE_FASTA_FILENAME
+    reference_metadata_path = tl17_output_dir / tl17_preprocessor.REFERENCE_METADATA_FILENAME
+    family_metadata_path = tl17_output_dir / tl17_preprocessor.FAMILY_METADATA_FILENAME
+    schema_manifest_path = tl17_output_dir / tl17_runtime.SCHEMA_MANIFEST_FILENAME
+    required_paths = (
+        manifest_path,
+        runtime_payload_path,
+        reference_fasta_path,
+        reference_metadata_path,
+        family_metadata_path,
+        schema_manifest_path,
+    )
+    for path in required_paths:
+        if not path.exists():
+            raise FileNotFoundError(f"Missing frozen TL17 runtime asset: {path}")
+
+    manifest = read_json(manifest_path)
+    runtime_payload = joblib.load(runtime_payload_path)
+    if not isinstance(runtime_payload, Mapping):
+        raise TypeError(f"TL17 runtime payload must be a mapping, got {type(runtime_payload)!r}")
+    schema_manifest = read_json(schema_manifest_path)
+    if str(schema_manifest.get("feature_block", "")) != tl17_runtime.TL17_BLOCK_ID:
+        raise ValueError(
+            f"TL17 schema manifest at {schema_manifest_path} declares unexpected feature block "
+            f"{schema_manifest.get('feature_block')!r}"
+        )
+
+    reference_bank_provenance = {
+        "task_id": str(manifest.get("task_id", "")),
+        "tl17_output_dir": str(tl17_output_dir),
+        "manifest_path": str(manifest_path),
+        "manifest_sha256": build_contract.sha256_file(manifest_path),
+        "runtime_payload_path": str(runtime_payload_path),
+        "runtime_payload_sha256": build_contract.sha256_file(runtime_payload_path),
+        "reference_fasta_path": str(reference_fasta_path),
+        "reference_fasta_sha256": build_contract.sha256_file(reference_fasta_path),
+        "reference_metadata_path": str(reference_metadata_path),
+        "reference_metadata_sha256": build_contract.sha256_file(reference_metadata_path),
+        "family_metadata_path": str(family_metadata_path),
+        "family_metadata_sha256": build_contract.sha256_file(family_metadata_path),
+        "schema_manifest_path": str(schema_manifest_path),
+        "schema_manifest_sha256": build_contract.sha256_file(schema_manifest_path),
+        "retained_family_count": int(manifest.get("counts", {}).get("retained_family_count", 0)),
+        "retained_reference_protein_count": int(manifest.get("counts", {}).get("retained_reference_protein_count", 0)),
+        "matching_policy": dict(manifest.get("matching_policy", {})),
+        "projected_feature_csv_path_not_used": str(manifest.get("outputs", {}).get("projected_feature_csv", "")),
+    }
+    return {
+        "manifest": manifest,
+        "runtime_payload": dict(runtime_payload),
+        "schema_manifest": schema_manifest,
+        "reference_fasta_path": reference_fasta_path,
+        "reference_bank_provenance": reference_bank_provenance,
+    }
 
 
 def namespace_slot_feature_rows(
@@ -995,6 +1068,187 @@ def materialize_host_stats_slot(
     }
 
 
+def materialize_phage_projection_slot(
+    *,
+    cache_dir: Path,
+    output_root: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    tl17_output_dir: Path,
+) -> dict[str, Any]:
+    slot_spec = SLOT_SPEC_BY_NAME["phage_projection"]
+    phage_fasta_by_phage = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="phage_fasta_path",
+    )
+    retained_phages = sorted(phage_fasta_by_phage)
+    tl17_assets = _load_tl17_frozen_runtime_assets(tl17_output_dir)
+    build_dir = output_root / PHAGE_PROJECTION_BUILD_DIRNAME
+
+    start = datetime.now(timezone.utc)
+    rows = tl17_runtime.project_phage_feature_rows_batched(
+        [phage_fasta_by_phage[phage] for phage in retained_phages],
+        runtime_payload=tl17_assets["runtime_payload"],
+        reference_fasta_path=tl17_assets["reference_fasta_path"],
+        scratch_root=build_dir,
+    )
+    elapsed_seconds = round((datetime.now(timezone.utc) - start).total_seconds(), 3)
+    if len(rows) != len(retained_phages):
+        raise ValueError(
+            f"Phage-projection materialization row count mismatch: expected {len(retained_phages)}, got {len(rows)}"
+        )
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "build_dir": str(build_dir),
+        "frozen_runtime_task_id": tl17_assets["reference_bank_provenance"]["task_id"],
+        "batched_projection_path_used": True,
+        "rebuildable_from_raw_fastas": True,
+        "checked_in_projection_csv_used": False,
+        "reference_bank_provenance": dict(tl17_assets["reference_bank_provenance"]),
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    build_manifest = {
+        "task_id": "AR06",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": slot_spec.slot_name,
+        "build_dir": str(build_dir),
+        "slot_artifact_path": str(feature_path),
+        "retained_phage_count": len(rows),
+        "retained_phages": retained_phages,
+        "projection_elapsed_seconds": elapsed_seconds,
+        "build_runtime": {
+            "projection_mode": "batched_mmseqs_easy_search",
+            "frozen_runtime_task_id": tl17_assets["reference_bank_provenance"]["task_id"],
+            "accepted_reference_hit_column": tl17_runtime.SUMMARY_HIT_COUNT_COLUMN,
+        },
+        "guardrails": {
+            "source_of_truth": "raw phage FASTAs plus the frozen TL17 runtime payload and reference bank",
+            "checked_in_projection_csv_used": False,
+            "batched_projection_path_used": True,
+            "per_phage_reference_rebuild_forbidden": True,
+            "panel_only_host_metadata_used": False,
+            "label_derived_pair_features_used": False,
+        },
+        "reference_bank_provenance": dict(tl17_assets["reference_bank_provenance"]),
+    }
+    build_manifest_path = slot_dir / PHAGE_PROJECTION_BUILD_MANIFEST_FILENAME
+    write_json(build_manifest_path, build_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_manifest_path": str(build_manifest_path),
+        "build_dir": str(build_dir),
+        "build_runtime": dict(build_manifest["build_runtime"]),
+        "reference_bank_provenance": dict(tl17_assets["reference_bank_provenance"]),
+    }
+
+
+def materialize_phage_stats_slot(
+    *,
+    cache_dir: Path,
+    output_root: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+) -> dict[str, Any]:
+    slot_spec = SLOT_SPEC_BY_NAME["phage_stats"]
+    phage_fasta_by_phage = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="phage_fasta_path",
+    )
+    build_dir = output_root / PHAGE_STATS_BUILD_DIRNAME
+    rows: list[dict[str, object]] = []
+    for phage in sorted(phage_fasta_by_phage):
+        fasta_path = phage_fasta_by_phage[phage]
+        result = derive_phage_stats_features.derive_phage_stats_features(
+            fasta_path,
+            phage_id=phage,
+            output_dir=build_dir / phage,
+        )
+        rows.append(dict(result["feature_row"]))
+    if len(rows) != len(phage_fasta_by_phage):
+        raise ValueError(
+            f"Phage-stats materialization row count mismatch: expected {len(phage_fasta_by_phage)}, got {len(rows)}"
+        )
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "per_phage_output_dir": str(build_dir),
+        "rebuildable_from_raw_fastas": True,
+        "low_cost_baseline_feature_family": True,
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    build_manifest = {
+        "task_id": "AR06",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": slot_spec.slot_name,
+        "per_phage_output_dir": str(build_dir),
+        "slot_artifact_path": str(feature_path),
+        "retained_phage_count": len(rows),
+        "retained_phages": sorted(phage_fasta_by_phage),
+        "guardrails": {
+            "source_of_truth": "raw phage FASTAs only",
+            "panel_metadata_used": False,
+            "low_cost_baseline_feature_family": True,
+        },
+        "exported_numeric_columns": feature_columns,
+    }
+    build_manifest_path = slot_dir / PHAGE_STATS_BUILD_MANIFEST_FILENAME
+    write_json(build_manifest_path, build_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_manifest_path": str(build_manifest_path),
+        "build_dir": str(build_dir),
+    }
+
+
 def write_slot_indexes(
     cache_dir: Path,
     split_rows: Mapping[str, Sequence[Mapping[str, str]]],
@@ -1134,6 +1388,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         split_rows=split_rows,
     )
     slot_summaries["host_stats"] = materialize_host_stats_slot(
+        cache_dir=args.cache_dir,
+        output_root=args.output_root,
+        split_rows=split_rows,
+    )
+    slot_summaries["phage_projection"] = materialize_phage_projection_slot(
+        cache_dir=args.cache_dir,
+        output_root=args.output_root,
+        split_rows=split_rows,
+        tl17_output_dir=args.tl17_output_dir,
+    )
+    slot_summaries["phage_stats"] = materialize_phage_stats_slot(
         cache_dir=args.cache_dir,
         output_root=args.output_root,
         split_rows=split_rows,
