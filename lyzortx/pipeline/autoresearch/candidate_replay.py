@@ -60,6 +60,7 @@ OPTIONAL_CANDIDATE_FILES = (
 DEFAULT_FEATURE_LOCK_PATH = Path(
     "lyzortx/generated_outputs/track_g/tg05_feature_subset_sweep/tg05_locked_v1_feature_config.json"
 )
+DEFAULT_TG01_MODEL_SUMMARY_PATH = Path(build_contract.COMPARATOR_BENCHMARK["model_summary_path"])
 FALLBACK_FEATURE_LOCK_PATH = Path("lyzortx/pipeline/track_g/v1_feature_configuration.json")
 FALLBACK_TG01_BEST_PARAMS = {
     "learning_rate": 0.05,
@@ -432,7 +433,7 @@ def resolve_feature_lock_path(path: Path) -> Path:
 def load_comparator_params(path: Path) -> dict[str, object]:
     if path.exists():
         return load_tg01_lock(path)["best_params"]
-    if path == Path("lyzortx/generated_outputs/track_g/tg01_v1_binary_classifier/tg01_model_summary.json"):
+    if path == DEFAULT_TG01_MODEL_SUMMARY_PATH:
         return dict(FALLBACK_TG01_BEST_PARAMS)
     raise FileNotFoundError(f"Locked comparator model summary not found: {path}")
 

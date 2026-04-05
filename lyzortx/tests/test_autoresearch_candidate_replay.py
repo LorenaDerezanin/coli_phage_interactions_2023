@@ -88,6 +88,16 @@ def test_resolve_feature_lock_path_uses_only_narrow_default_fallback(
         candidate_replay.resolve_feature_lock_path(Path("missing/other.json"))
 
 
+def test_load_comparator_params_uses_only_narrow_default_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(candidate_replay, "DEFAULT_TG01_MODEL_SUMMARY_PATH", Path("missing/default_tg01.json"))
+
+    assert candidate_replay.load_comparator_params(Path("missing/default_tg01.json")) == dict(
+        candidate_replay.FALLBACK_TG01_BEST_PARAMS
+    )
+    with pytest.raises(FileNotFoundError):
+        candidate_replay.load_comparator_params(Path("missing/other_tg01.json"))
+
+
 def build_fake_candidate_module() -> SimpleNamespace:
     class FakeEstimator:
         def fit(self, X: pd.DataFrame, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
