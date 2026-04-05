@@ -52,6 +52,11 @@ column-family prefix.
 - The host-surface build caches `predicted_proteins.faa` under
   `lyzortx/generated_outputs/autoresearch/host_surface_cache_build/` so retries do not rerun the front half of the
   pipeline.
+- `host_typing` is now materialized by `prepare.py` from raw host FASTAs using the pinned Clermont phylogroup caller,
+  ECTyper serotype caller, and Achtman-4 MLST caller. Panel metadata is limited to optional validation paths; runtime
+  feature construction uses only raw assemblies, and unresolved caller outputs are recorded in the slot build manifest.
+- `host_stats` is now materialized by `prepare.py` from raw host FASTAs as a low-cost numeric baseline block containing
+  record count, genome length, GC content, and N50 contig length.
 
 ## Search-space boundary
 
