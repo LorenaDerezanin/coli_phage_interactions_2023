@@ -830,6 +830,7 @@ def materialize_host_typing_slot(
     split_rows: Mapping[str, Sequence[Mapping[str, str]]],
 ) -> dict[str, Any]:
     slot_spec = SLOT_SPEC_BY_NAME["host_typing"]
+    typing_schema = derive_host_typing_features.build_host_typing_schema()
     host_fasta_by_bacteria = build_entity_path_map(
         selected_rows=split_rows,
         entity_key=slot_spec.entity_key,
@@ -866,7 +867,7 @@ def materialize_host_typing_slot(
     schema_manifest["materialization"] = {
         "feature_csv_path": str(feature_path),
         "per_host_output_dir": str(build_dir),
-        "caller_envs": derive_host_typing_features.build_host_typing_schema()["caller_envs"],
+        "caller_envs": typing_schema["caller_envs"],
         "panel_metadata_used_for_feature_construction": False,
         "rebuildable_from_raw_fastas": True,
         "runtime_caveat_count": len(runtime_caveats),
@@ -883,7 +884,7 @@ def materialize_host_typing_slot(
         "slot_artifact_path": str(feature_path),
         "retained_host_count": len(rows),
         "retained_hosts": sorted(host_fasta_by_bacteria),
-        "caller_envs": derive_host_typing_features.build_host_typing_schema()["caller_envs"],
+        "caller_envs": typing_schema["caller_envs"],
         "guardrails": {
             "source_of_truth": "raw host FASTAs plus pinned phylogroup, serotype, and sequence-type caller envs",
             "panel_metadata_used_for_feature_construction": False,

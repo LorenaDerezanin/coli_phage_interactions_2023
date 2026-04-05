@@ -60,7 +60,7 @@ def _compute_n50(lengths: list[int]) -> int:
         running_length += length
         if running_length >= half_length:
             return length
-    return lengths[0]
+    raise AssertionError("N50 computation should always return once lengths are non-empty")
 
 
 def build_host_stats_schema() -> dict[str, Any]:
