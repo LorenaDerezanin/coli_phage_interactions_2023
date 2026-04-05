@@ -24,6 +24,20 @@ Run the first end-to-end adsorption-first baseline on one GPU:
 micromamba run -n phage_env python lyzortx/autoresearch/train.py
 ```
 
+Import one AR08 RunPod candidate bundle back into the local AUTORESEARCH candidate registry:
+
+```bash
+micromamba run -n phage_env python lyzortx/autoresearch/replicate.py import-runpod-candidate \
+  --candidate-bundle .scratch/autoresearch-runpod/collected/candidate_bundle.tgz
+```
+
+Replay one imported candidate and the locked production-intent comparator on the sealed holdout:
+
+```bash
+micromamba run -n phage_env python lyzortx/autoresearch/replicate.py replicate \
+  --candidate-dir lyzortx/generated_outputs/autoresearch/candidates/runpod_run_12345_attempt_2
+```
+
 ## Output contract
 
 `prepare.py` writes under `lyzortx/generated_outputs/autoresearch/`:
@@ -61,3 +75,18 @@ micromamba run -n phage_env python lyzortx/autoresearch/train.py
 Checked-in DEPLOY feature CSVs are optional warm-cache accelerators only. They are never source-of-truth inputs for
 AUTORESEARCH. If a warm cache is provided, `prepare.py` validates that its manifest matches the frozen AR02 schema
 exactly before recording it in provenance.
+
+## Candidate import and sealed-holdout replication
+
+- The AR08 handoff artifact is the exact RunPod candidate bundle: `train.py`, workflow metadata, pod execution metadata,
+  the staged bundle manifest, the remote log, and optional inner-validation outputs.
+- `replicate.py import-runpod-candidate` copies that bundle into
+  `lyzortx/generated_outputs/autoresearch/candidates/<candidate_id>/` and writes an AR09 import manifest with
+  checksums.
+- `replicate.py replicate` rebuilds the raw-input AUTORESEARCH cache on a clean checkout when the default cache is
+  missing, then evaluates the imported candidate against the sealed AR01 holdout.
+- Holdout replication is intentionally stricter than RunPod search: once the candidate is frozen, both the imported
+  candidate arm and the locked production-intent comparator are refit on all retained non-holdout AR01 rows
+  (`train + inner_val`) and scored on the same sealed holdout rows with repeated seeds.
+- Promotion is predeclared: require a positive bootstrap lower bound on ROC-AUC delta and no material bootstrap
+  regression on top-3 hit rate or Brier improvement. Otherwise the decision bundle reports `no_honest_lift`.

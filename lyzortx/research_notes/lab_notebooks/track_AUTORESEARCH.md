@@ -541,3 +541,51 @@ Codex automation path and makes human approval explicit before any external GPU 
 - LightGBM docs: `https://lightgbm.readthedocs.io/en/v4.6.0/Installation-Guide.html`
   - Quote: `The original GPU version of LightGBM (device_type=gpu) is based on OpenCL.`
   - Quote: `The CUDA-based version (device_type=cuda) is a separate implementation.`
+
+### 2026-04-05 22:16 UTC: AR09 added candidate import and sealed-holdout replication with an auditable decision rule
+
+#### Executive summary
+
+AR09 adds one explicit AUTORESEARCH handoff path from AR08 into local replay: `lyzortx/autoresearch/replicate.py`
+now imports a RunPod candidate bundle into `lyzortx/generated_outputs/autoresearch/candidates/` and can replay that
+imported `train.py` on the sealed AR01 holdout. The replay path refits both the imported candidate arm and the locked
+production-intent comparator on all retained non-holdout AR01 rows, evaluates both on the same sealed holdout rows,
+and writes one auditable decision bundle with repeated-seed metrics, paired bootstrap deltas, and a final
+`promote`/`no_honest_lift` outcome.
+
+#### What changed
+
+- **Added one import command for the raw AR08 handoff.** `replicate.py import-runpod-candidate` accepts either the
+  downloaded candidate directory or `candidate_bundle.tgz`, validates that the required AR08 files are present
+  (`train.py`, local workflow metadata, bundle manifest, pod metadata, remote log), copies them under
+  `lyzortx/generated_outputs/autoresearch/candidates/<candidate_id>/`, and records file checksums in
+  `ar09_import_manifest.json`.
+- **Made sealed-holdout replay a separate post-search contract.** `replicate.py replicate` deliberately does not
+  reuse the RunPod inner-validation outputs as promotion evidence. Instead it rebuilds or validates the frozen raw-input
+  AUTORESEARCH cache, reloads the AR01 pair table, and evaluates the frozen imported candidate on the sealed holdout.
+- **Predeclared the replication rule instead of deciding case by case.** Once a candidate is imported, both arms are
+  trained on all retained AR01 non-holdout rows (`train + inner_val`) and scored on the same retained holdout rows
+  with repeated seeds. That is the right simplification because search is over; keeping `inner_val` aside during the
+  final replay would just waste labeled training data.
+- **Used the same decision math for candidate and comparator.** AR09 now computes holdout ROC-AUC, top-3 hit rate, and
+  Brier score for both arms, then runs paired holdout-strain bootstrap deltas with the comparator as baseline. The
+  decision bundle only promotes when the ROC-AUC delta bootstrap lower bound clears zero and the top-3/Brier delta
+  upper bounds show no material regression; otherwise the artifact says `no_honest_lift`.
+
+#### Validation
+
+- Added `lyzortx/tests/test_autoresearch_candidate_replay.py` to cover:
+  - import of a RunPod candidate bundle into the local candidate registry;
+  - the narrow default-path fallback to the committed Track G feature lock;
+  - replay of an imported candidate module on a sealed-holdout fixture; and
+  - writing a final AR09 decision bundle with aggregated predictions and bootstrap-based decision text.
+- Focused validation in the CI shell:
+  - `micromamba run -n phage_env pytest -q lyzortx/tests/test_autoresearch_candidate_replay.py`
+  - Result: `5 passed`
+
+#### Interpretation
+
+AR09 keeps the expensive and fragile parts where they belong. AR08 still owns the cloud search loop; AR09 owns only
+the narrow import boundary and the honest post-search replication rule. During this task there was no completed
+`AUTORESEARCH RunPod` workflow run in GitHub Actions to import as a real winner, so the new code establishes the
+auditable replay path and decision contract without claiming a production promotion result that did not yet exist.
