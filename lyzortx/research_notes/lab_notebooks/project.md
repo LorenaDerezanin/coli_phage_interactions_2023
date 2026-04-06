@@ -1430,3 +1430,29 @@ for the initial baseline, and host defense becomes an additive block rather than
 This is the smallest plan change that actually changes the AUTORESEARCH critical path. It preserves defense as possible
 additive signal while moving the first serious search onto the feature families that are both more adsorption-aligned
 and operationally easier to get running quickly.
+
+### 2026-04-05 22:16 UTC: AUTORESEARCH promotion now requires clean-checkout holdout replay, not RunPod inner-val wins
+
+#### Executive summary
+
+We added the project-level rule for AUTORESEARCH promotion: a RunPod search result is only a candidate, not a winner.
+The winning artifact must be imported back into the repo, replayed from a clean checkout on the sealed AR01 holdout,
+and compared against the current locked production-intent comparator with the same repeated-seed bootstrap decision
+path before any promotion claim is allowed.
+
+#### What changed
+
+- The AR08-to-AR09 handoff is now explicit: the exact `train.py` plus RunPod workflow/pod metadata is the raw input to
+  replication, not a screenshot of inner-validation metrics.
+- Final replay uses all retained AR01 non-holdout rows for fitting and keeps the sealed holdout only for the last
+  comparison. That is the correct thin contract after search because the candidate is frozen and no longer being tuned.
+- Promotion is predeclared and metric-based:
+  - primary metric: holdout ROC-AUC
+  - guardrails: no material regression on holdout top-3 hit rate or Brier score
+  - failure mode: emit `no_honest_lift` instead of stretching the evidence
+
+#### Interpretation
+
+This raises the bar in the right place. The expensive RunPod loop is allowed to optimize on inner validation, but it
+does not get to self-certify promotion. The only evidence that counts for promotion is the clean-checkout,
+sealed-holdout replication bundle produced after the search code is frozen and imported back into the repo.
