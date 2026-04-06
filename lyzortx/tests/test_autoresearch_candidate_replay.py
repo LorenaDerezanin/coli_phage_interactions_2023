@@ -98,6 +98,25 @@ def test_load_comparator_params_uses_only_narrow_default_fallback(monkeypatch: p
         candidate_replay.load_comparator_params(Path("missing/other_tg01.json"))
 
 
+def test_validate_comparator_feature_lock_requires_contract_blocks_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        candidate_replay,
+        "load_v1_lock",
+        lambda path: {"winner_subset_blocks": ["defense", "phage_genomic"]},
+    )
+
+    assert candidate_replay.validate_comparator_feature_lock(
+        Path("fixture.json"),
+        ("defense", "phage_genomic"),
+    ) == {"winner_subset_blocks": ["defense", "phage_genomic"]}
+
+    with pytest.raises(ValueError, match="does not match the AR01 contract"):
+        candidate_replay.validate_comparator_feature_lock(
+            Path("fixture.json"),
+            ("defense",),
+        )
+
+
 def build_fake_candidate_module() -> SimpleNamespace:
     class FakeEstimator:
         def fit(self, X: pd.DataFrame, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:

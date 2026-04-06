@@ -438,6 +438,18 @@ def load_comparator_params(path: Path) -> dict[str, object]:
     raise FileNotFoundError(f"Locked comparator model summary not found: {path}")
 
 
+def validate_comparator_feature_lock(path: Path, expected_locked_blocks: Sequence[object]) -> dict[str, object]:
+    payload = load_v1_lock(path)
+    expected_blocks = [str(block) for block in expected_locked_blocks]
+    actual_blocks = [str(block) for block in payload.get("winner_subset_blocks", [])]
+    if expected_blocks and actual_blocks != expected_blocks:
+        raise ValueError(
+            "Comparator feature lock does not match the AR01 contract: "
+            f"expected {expected_blocks!r}, found {actual_blocks!r} in {path}"
+        )
+    return payload
+
+
 def ensure_track_g_prerequisites(skip_prerequisites: bool) -> argparse.Namespace:
     args = train_v1_binary_classifier.parse_args([])
     required_paths = (
@@ -547,7 +559,10 @@ def build_comparator_holdout_rows(
 ) -> list[dict[str, object]]:
     comparator_manifest = dict(contract_manifest["current_locked_comparator_benchmark"])
     feature_lock_path = resolve_feature_lock_path(Path(str(comparator_manifest["feature_lock_path"])))
-    load_v1_lock(feature_lock_path)
+    # AR09 replays the locked comparator at the block level, not via a hand-maintained per-column allowlist.
+    # The v1 lock records the winning subset blocks ("defense" + "phage_genomic"), so we validate that contract
+    # here and then rebuild the full defense/phage-genomic feature space from the raw Track C/Track D columns.
+    validate_comparator_feature_lock(feature_lock_path, comparator_manifest.get("locked_feature_blocks", ()))
     comparator_params = load_comparator_params(Path(str(comparator_manifest["model_summary_path"])))
     track_g_args = ensure_track_g_prerequisites(skip_prerequisites)
 
