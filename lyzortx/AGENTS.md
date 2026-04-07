@@ -42,7 +42,8 @@ These are validation checkpoints, not dispatchable tasks. All must hold before e
 
 - **Test data quality** — prefer real data (or programmatically generated realistic data) over hand-crafted dummy values.
 - **No magic numbers or inline string literals** — define named constants for repeated or meaningful values.
-- **Progress feedback** — long-running operations must log "starting" and "completed" messages.
+- **Progress feedback** — long-running operations must log "starting" and "completed" messages with elapsed time.
+  Loops over many items should log periodic progress (e.g., every N items) so silence never exceeds ~30 seconds.
 - **Timestamped logging** — use Python's `logging` module with timestamps, not bare `print()`. Use
   `lyzortx.log_config.setup_logging()` in track runners.
 - **Timezone-aware timestamps** — use `datetime.now(timezone.utc)`, never bare `datetime.now()` or `datetime.utcnow()`.

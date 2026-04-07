@@ -335,6 +335,7 @@ def build_host_surface_rows_fast_path(
         for assembly in assemblies
     ]
     protein_cache_hits = 0
+    protein_completed = 0
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(_predict_proteins_one, task): task[0] for task in protein_tasks}
         for future in as_completed(futures):
@@ -343,6 +344,16 @@ def build_host_surface_rows_fast_path(
                 raise RuntimeError(f"Protein prediction failed for {bacteria_id}: {message}")
             if message == "cached":
                 protein_cache_hits += 1
+            protein_completed += 1
+            if protein_completed % 50 == 0 or protein_completed == len(protein_tasks):
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+                LOGGER.info(
+                    "Host-surface protein prediction: %d/%d hosts completed (%.1fs elapsed, %d cached)",
+                    protein_completed,
+                    len(protein_tasks),
+                    elapsed,
+                    protein_cache_hits,
+                )
 
     prodigal_elapsed = (datetime.now(timezone.utc) - start).total_seconds()
     LOGGER.info(
@@ -377,8 +388,15 @@ def build_host_surface_rows_fast_path(
     }
 
     scan_start = datetime.now(timezone.utc)
+    LOGGER.info(
+        "Host-surface HMM scans starting for %d assemblies with %d workers (O-antigen + receptor + capsule)",
+        len(assemblies),
+        max_workers,
+    )
     rows: list[dict[str, Any]] = []
     failures: list[tuple[str, str]] = []
+    n_assemblies = len(assemblies)
+    completed_count = 0
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
         futures = {
             pool.submit(
@@ -391,6 +409,7 @@ def build_host_surface_rows_fast_path(
         }
         for future in as_completed(futures):
             bacteria_id, ok, result = future.result()
+            completed_count += 1
             if not ok:
                 failures.append((bacteria_id, str(result)))
                 continue
@@ -406,6 +425,14 @@ def build_host_surface_rows_fast_path(
                     include_lps_core_type=include_lps_core_type,
                 )
             )
+            if completed_count % 50 == 0 or completed_count == n_assemblies:
+                elapsed = (datetime.now(timezone.utc) - scan_start).total_seconds()
+                LOGGER.info(
+                    "Host-surface HMM scans: %d/%d hosts completed (%.1fs elapsed)",
+                    completed_count,
+                    n_assemblies,
+                    elapsed,
+                )
 
     if failures:
         formatted = "; ".join(f"{bacteria}: {message}" for bacteria, message in sorted(failures))
@@ -413,6 +440,11 @@ def build_host_surface_rows_fast_path(
 
     scan_elapsed = (datetime.now(timezone.utc) - scan_start).total_seconds()
     total_elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+    LOGGER.info(
+        "Host-surface HMM scans finished in %.1fs (%.1fs total including protein prediction)",
+        scan_elapsed,
+        total_elapsed,
+    )
     schema = build_host_surface_schema(
         runtime_inputs.capsule_profile_names,
         include_lps_core_type=include_lps_core_type,
