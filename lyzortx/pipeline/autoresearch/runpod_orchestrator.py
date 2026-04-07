@@ -70,7 +70,7 @@ def build_create_pod_payload(
         "dockerArgs": "",
         "imageName": image_name,
         "name": pod_name,
-        "ports": SSH_PORT_SPEC,
+        "ports": [SSH_PORT_SPEC],  # Must be array per RunPod REST v1 schema validation
         "supportPublicIp": support_public_ip,
         "env": {"SSH_PUBLIC_KEY": ssh_public_key},
     }

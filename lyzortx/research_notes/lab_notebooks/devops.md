@@ -1,3 +1,26 @@
+### 2026-04-07: RunPod REST v1 API field format learnings
+
+#### Executive summary
+
+First live run of the AUTORESEARCH RunPod workflow required several iterations to get the pod creation payload right.
+The RunPod REST v1 `/pods` endpoint is picky about field names and types in ways that contradict their own docs.
+
+#### Findings
+
+- `gpuTypeId` must be a **string**, not `gpuTypeIds` (array). The docs show both; only the singular form works.
+- `ports` must be an **array** (`["22/tcp"]`), not a string. The REST schema validation rejects `"22/tcp"`.
+- `computeType` and `allowedCudaVersions` are not valid REST v1 fields — they cause 500 errors.
+- `dockerArgs` should be present (empty string) for the request to be accepted.
+- The `env` field is a plain object (`{"SSH_PUBLIC_KEY": "..."}`) — not an array of key-value pairs.
+- Using `curl --fail` swallows the response body on HTTP errors, making debugging impossible. Always capture the body
+  separately with `--output` and `--write-out "%{http_code}"`.
+
+#### Resolution
+
+Replaced inline workflow bash with `lyzortx/pipeline/autoresearch/runpod_orchestrator.py` — a testable Python module
+with unit tests covering the payload schema. Future field-format bugs will be caught by
+`lyzortx/tests/test_runpod_orchestrator.py` before reaching CI.
+
 ### 2026-03-31: Codex CI image routing now follows task-level image profiles
 
 #### Executive summary

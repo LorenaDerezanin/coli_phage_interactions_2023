@@ -16,7 +16,7 @@ def test_build_create_pod_payload_field_names() -> None:
     assert payload["volumeMountPath"] == "/workspace"
     assert payload["imageName"] == orch.RUNPOD_LOCKED_IMAGE_NAME
     assert payload["name"] == "test-pod-1"
-    assert payload["ports"] == "22/tcp"
+    assert payload["ports"] == ["22/tcp"]
     assert payload["supportPublicIp"] is True
     assert payload["env"] == {"SSH_PUBLIC_KEY": "ssh-ed25519 AAAA"}
     assert payload["dockerArgs"] == ""
@@ -27,11 +27,11 @@ def test_build_create_pod_payload_field_names() -> None:
     assert "allowedCudaVersions" not in payload
 
 
-def test_build_create_pod_payload_no_array_fields() -> None:
-    """gpuTypeId must be a string, ports must be a string — not arrays."""
+def test_build_create_pod_payload_field_types() -> None:
+    """gpuTypeId must be a string, ports must be an array."""
     payload = orch.build_create_pod_payload(ssh_public_key="key", pod_name="p")
     assert isinstance(payload["gpuTypeId"], str)
-    assert isinstance(payload["ports"], str)
+    assert isinstance(payload["ports"], list)
 
 
 def test_parse_create_pod_response_extracts_id() -> None:
