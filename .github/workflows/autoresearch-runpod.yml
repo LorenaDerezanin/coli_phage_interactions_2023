@@ -145,223 +145,96 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+      RUNTIME_DIR: .scratch/autoresearch-runpod/runtime
+      SSH_KEY: .scratch/autoresearch-runpod/runtime/id_ed25519
+      BUNDLE_DIR: .scratch/autoresearch-runpod/staged-bundle
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            lyzortx
+            pyproject.toml
+          sparse-checkout-cone-mode: false
+
+      - name: Install lyzortx package
+        run: pip install -e . --no-deps
+
       - name: Download staged AUTORESEARCH bundle
         uses: actions/download-artifact@v6
         with:
           name: autoresearch-runpod-bundle
           path: .scratch/autoresearch-runpod/staged-bundle
 
-      - name: Generate ephemeral SSH key
-        run: |
-          mkdir -p .scratch/autoresearch-runpod/runtime
-          ssh-keygen -t ed25519 -N "" -C "github-actions-autoresearch-runpod" \
-            -f .scratch/autoresearch-runpod/runtime/id_ed25519
-
-      - name: Create local RunPod experiment metadata
+      - name: Generate ephemeral SSH key and experiment metadata
         env:
-          BUNDLE_SOURCE: ${{ inputs.bundle_source }}
-          EXISTING_BUNDLE_RUN_ID: ${{ inputs.existing_bundle_run_id }}
-          EXISTING_BUNDLE_ARTIFACT_NAME: ${{ inputs.existing_bundle_artifact_name }}
           EXPERIMENT_COMMAND: ${{ inputs.experiment_command }}
         run: |
-          jq -n \
-            --arg github_repository "${{ github.repository }}" \
-            --arg github_ref_name "${{ github.ref_name }}" \
-            --arg github_sha "${{ github.sha }}" \
-            --arg github_run_id "${{ github.run_id }}" \
-            --arg github_run_attempt "${{ github.run_attempt }}" \
-            --arg bundle_source "$BUNDLE_SOURCE" \
-            --arg existing_bundle_run_id "$EXISTING_BUNDLE_RUN_ID" \
-            --arg existing_bundle_artifact_name "$EXISTING_BUNDLE_ARTIFACT_NAME" \
-            --arg experiment_command "$EXPERIMENT_COMMAND" \
-            '{
-              github_repository: $github_repository,
-              github_ref_name: $github_ref_name,
-              github_sha: $github_sha,
-              github_run_id: $github_run_id,
-              github_run_attempt: $github_run_attempt,
-              bundle_source: $bundle_source,
-              existing_bundle_run_id: $existing_bundle_run_id,
-              existing_bundle_artifact_name: $existing_bundle_artifact_name,
-              experiment_command: $experiment_command
-            }' \
-            > .scratch/autoresearch-runpod/runtime/local_run_metadata.json
+          mkdir -p "$RUNTIME_DIR"
+          ssh-keygen -t ed25519 -N "" -C "github-actions-autoresearch-runpod" -f "${SSH_KEY}"
+          python -c "
+          import json; from pathlib import Path
+          from lyzortx.pipeline.autoresearch.runpod_orchestrator import build_experiment_metadata
+          meta = build_experiment_metadata(
+              github_repository='${{ github.repository }}',
+              github_ref_name='${{ github.ref_name }}',
+              github_sha='${{ github.sha }}',
+              github_run_id='${{ github.run_id }}',
+              github_run_attempt='${{ github.run_attempt }}',
+              bundle_source='${{ inputs.bundle_source }}',
+              experiment_command='${EXPERIMENT_COMMAND}',
+          )
+          Path('${RUNTIME_DIR}/local_run_metadata.json').write_text(json.dumps(meta, indent=2))
+          "
 
       - name: Provision locked RunPod pod
-        id: create_pod
-        env:
-          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
         run: |
-          SSH_PUBLIC_KEY=$(tr -d '\n' < .scratch/autoresearch-runpod/runtime/id_ed25519.pub)
-          cat <<EOF > .scratch/autoresearch-runpod/runtime/create_pod_payload.json
-          {
-            "cloudType": "COMMUNITY",
-            "computeType": "GPU",
-            "gpuCount": 1,
-            "gpuTypeIds": ["NVIDIA A40"],
-            "allowedCudaVersions": ["11.8"],
-            "containerDiskInGb": 50,
-            "volumeInGb": 20,
-            "volumeMountPath": "/workspace",
-            "imageName": "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
-            "name": "autoresearch-${{ github.run_id }}-${{ github.run_attempt }}",
-            "ports": ["22/tcp"],
-            "supportPublicIp": true,
-            "env": {
-              "SSH_PUBLIC_KEY": "${SSH_PUBLIC_KEY}"
-            }
-          }
-          EOF
-          curl --fail --silent --show-error \
-            --request POST \
-            --url "https://rest.runpod.io/v1/pods" \
-            --header "Authorization: Bearer ${RUNPOD_API_KEY}" \
-            --header "Content-Type: application/json" \
-            --data @.scratch/autoresearch-runpod/runtime/create_pod_payload.json \
-            > .scratch/autoresearch-runpod/runtime/create_pod_response.json
-          POD_ID=$(jq -r '.id // empty' .scratch/autoresearch-runpod/runtime/create_pod_response.json)
-          if [ -z "$POD_ID" ]; then
-            echo "::error::RunPod pod creation did not return an id."
-            cat .scratch/autoresearch-runpod/runtime/create_pod_response.json
-            exit 1
-          fi
-          echo "pod_id=${POD_ID}" >> "$GITHUB_OUTPUT"
+          python -m lyzortx.pipeline.autoresearch.runpod_orchestrator \
+            --runtime-dir "$RUNTIME_DIR" \
+            create-pod \
+            --ssh-public-key-path "${SSH_KEY}.pub" \
+            --pod-name "autoresearch-${{ github.run_id }}-${{ github.run_attempt }}"
 
       - name: Wait for RunPod SSH endpoint
-        id: wait_for_pod
-        env:
-          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
         run: |
-          POD_ID="${{ steps.create_pod.outputs.pod_id }}"
-          for attempt in $(seq 1 60); do
-            curl --fail --silent --show-error \
-              --request GET \
-              --url "https://rest.runpod.io/v1/pods/${POD_ID}" \
-              --header "Authorization: Bearer ${RUNPOD_API_KEY}" \
-              > .scratch/autoresearch-runpod/runtime/pod_status.json
-            POD_STATE=$(jq -r '.desiredStatus // empty' .scratch/autoresearch-runpod/runtime/pod_status.json)
-            PUBLIC_IP=$(jq -r '.publicIp // empty' .scratch/autoresearch-runpod/runtime/pod_status.json)
-            SSH_PORT=$(jq -r '.portMappings["22"] // empty' .scratch/autoresearch-runpod/runtime/pod_status.json)
-            if [ -n "$PUBLIC_IP" ] && [ -n "$SSH_PORT" ] && [ "$POD_STATE" = "RUNNING" ]; then
-              echo "public_ip=${PUBLIC_IP}" >> "$GITHUB_OUTPUT"
-              echo "ssh_port=${SSH_PORT}" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::RunPod pod did not expose SSH within the expected startup window."
-          cat .scratch/autoresearch-runpod/runtime/pod_status.json
-          exit 1
+          python -m lyzortx.pipeline.autoresearch.runpod_orchestrator \
+            --runtime-dir "$RUNTIME_DIR" \
+            wait-for-ssh
 
       - name: Sync AUTORESEARCH bundle to RunPod
         run: |
-          POD_IP="${{ steps.wait_for_pod.outputs.public_ip }}"
-          POD_PORT="${{ steps.wait_for_pod.outputs.ssh_port }}"
-          REMOTE_ROOT="/workspace/autoresearch-runpod"
-          ssh -i .scratch/autoresearch-runpod/runtime/id_ed25519 -o StrictHostKeyChecking=no -p "$POD_PORT" "root@${POD_IP}" \
-            "mkdir -p ${REMOTE_ROOT}"
-          scp -i .scratch/autoresearch-runpod/runtime/id_ed25519 -O -o StrictHostKeyChecking=no -P "$POD_PORT" \
-            .scratch/autoresearch-runpod/staged-bundle/autoresearch_runpod_bundle.tgz \
-            .scratch/autoresearch-runpod/staged-bundle/autoresearch_runpod_bundle_manifest.json \
-            .scratch/autoresearch-runpod/runtime/local_run_metadata.json \
-            "root@${POD_IP}:${REMOTE_ROOT}/"
-          ssh -i .scratch/autoresearch-runpod/runtime/id_ed25519 -o StrictHostKeyChecking=no -p "$POD_PORT" "root@${POD_IP}" \
-            "cd ${REMOTE_ROOT} && tar -xzf autoresearch_runpod_bundle.tgz"
+          python -m lyzortx.pipeline.autoresearch.runpod_orchestrator \
+            --runtime-dir "$RUNTIME_DIR" \
+            sync-bundle \
+            --ssh-key-path "$SSH_KEY" \
+            --staged-bundle-dir "$BUNDLE_DIR"
 
       - name: Run bounded AUTORESEARCH experiment
         id: experiment
         env:
           EXPERIMENT_COMMAND: ${{ inputs.experiment_command }}
         run: |
-          POD_IP="${{ steps.wait_for_pod.outputs.public_ip }}"
-          POD_PORT="${{ steps.wait_for_pod.outputs.ssh_port }}"
-          REMOTE_ROOT="/workspace/autoresearch-runpod"
           set +e
-          ssh -i .scratch/autoresearch-runpod/runtime/id_ed25519 -o StrictHostKeyChecking=no -p "$POD_PORT" \
-            "root@${POD_IP}" bash -s -- "$REMOTE_ROOT" "$EXPERIMENT_COMMAND" <<'EOF'
-          set -euo pipefail
-          REMOTE_ROOT="$1"
-          EXPERIMENT_COMMAND="$2"
-          export MAMBA_ROOT_PREFIX=/opt/micromamba
-          export PATH=/opt/micromamba/bin:$PATH
-          if ! command -v micromamba >/dev/null 2>&1; then
-            curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
-              | tar -xvj -C /usr/local/bin --strip-components=1 bin/micromamba
-          fi
-          cd "$REMOTE_ROOT"
-          micromamba create -y -n phage_env -f environment.yml
-          timeout 2100 bash -lc "$EXPERIMENT_COMMAND" 2>&1 | tee runpod_experiment.log
-          exit ${PIPESTATUS[0]}
-          EOF
-          EXPERIMENT_EXIT=$?
-          set -e
-          echo "exit_code=${EXPERIMENT_EXIT}" >> "$GITHUB_OUTPUT"
+          python -m lyzortx.pipeline.autoresearch.runpod_orchestrator \
+            --runtime-dir "$RUNTIME_DIR" \
+            run-experiment \
+            --ssh-key-path "$SSH_KEY" \
+            --experiment-command "$EXPERIMENT_COMMAND"
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Collect RunPod candidate artifacts
-        if: always() && steps.wait_for_pod.conclusion == 'success'
+        if: always()
         env:
-          POD_ID: ${{ steps.create_pod.outputs.pod_id }}
-          POD_PUBLIC_IP: ${{ steps.wait_for_pod.outputs.public_ip }}
-          POD_SSH_PORT: ${{ steps.wait_for_pod.outputs.ssh_port }}
-          EXPERIMENT_EXIT_CODE: ${{ steps.experiment.outputs.exit_code }}
           EXPERIMENT_COMMAND: ${{ inputs.experiment_command }}
         run: |
-          POD_IP="${{ steps.wait_for_pod.outputs.public_ip }}"
-          POD_PORT="${{ steps.wait_for_pod.outputs.ssh_port }}"
-          REMOTE_ROOT="/workspace/autoresearch-runpod"
-          mkdir -p .scratch/autoresearch-runpod/collected
-          ssh -i .scratch/autoresearch-runpod/runtime/id_ed25519 -o StrictHostKeyChecking=no -p "$POD_PORT" \
-            "root@${POD_IP}" bash -s -- \
-            "$REMOTE_ROOT" \
-            "$POD_ID" \
-            "$POD_PUBLIC_IP" \
-            "$POD_SSH_PORT" \
-            "$EXPERIMENT_EXIT_CODE" \
-            "$EXPERIMENT_COMMAND" <<'EOF'
-          set -euo pipefail
-          REMOTE_ROOT="$1"
-          POD_ID="$2"
-          POD_PUBLIC_IP="$3"
-          POD_SSH_PORT="$4"
-          EXPERIMENT_EXIT_CODE="$5"
-          EXPERIMENT_COMMAND="$6"
-          cd "$REMOTE_ROOT"
-          mkdir -p candidate_bundle
-          cp lyzortx/autoresearch/train.py candidate_bundle/train.py
-          cp local_run_metadata.json candidate_bundle/local_run_metadata.json
-          cp autoresearch_runpod_bundle_manifest.json candidate_bundle/autoresearch_runpod_bundle_manifest.json
-          cp runpod_experiment.log candidate_bundle/runpod_experiment.log
-          if [ -f lyzortx/generated_outputs/autoresearch/train_runs/runpod_candidate/ar07_baseline_summary.json ]; then
-            cp lyzortx/generated_outputs/autoresearch/train_runs/runpod_candidate/ar07_baseline_summary.json candidate_bundle/
-          fi
-          if [ -f lyzortx/generated_outputs/autoresearch/train_runs/runpod_candidate/ar07_inner_val_predictions.csv ]; then
-            cp lyzortx/generated_outputs/autoresearch/train_runs/runpod_candidate/ar07_inner_val_predictions.csv candidate_bundle/
-          fi
-          jq -n \
-            --arg pod_id "$POD_ID" \
-            --arg public_ip "$POD_PUBLIC_IP" \
-            --arg ssh_port "$POD_SSH_PORT" \
-            --arg experiment_exit_code "$EXPERIMENT_EXIT_CODE" \
-            --arg experiment_command "$EXPERIMENT_COMMAND" \
-            '{
-              pod_id: $pod_id,
-              public_ip: $public_ip,
-              ssh_port: $ssh_port,
-              experiment_exit_code: $experiment_exit_code,
-              locked_gpu_type_id: "NVIDIA A40",
-              locked_image_name: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
-              container_disk_gb: 50,
-              volume_gb: 20,
-              experiment_command: $experiment_command
-            }' \
-            > candidate_bundle/runpod_execution_metadata.json
-          tar -czf candidate_bundle.tgz -C candidate_bundle .
-          EOF
-          scp -i .scratch/autoresearch-runpod/runtime/id_ed25519 -O -o StrictHostKeyChecking=no -P "$POD_PORT" \
-            "root@${POD_IP}:${REMOTE_ROOT}/candidate_bundle.tgz" \
-            .scratch/autoresearch-runpod/collected/candidate_bundle.tgz
-          tar -xzf .scratch/autoresearch-runpod/collected/candidate_bundle.tgz -C .scratch/autoresearch-runpod/collected
+          python -m lyzortx.pipeline.autoresearch.runpod_orchestrator \
+            --runtime-dir "$RUNTIME_DIR" \
+            collect-candidate \
+            --ssh-key-path "$SSH_KEY" \
+            --experiment-command "$EXPERIMENT_COMMAND" \
+            --output-dir .scratch/autoresearch-runpod/collected
 
       - name: Upload RunPod candidate artifact
         if: always()
@@ -372,15 +245,11 @@ jobs:
           if-no-files-found: warn
 
       - name: Tear down RunPod pod
-        if: always() && steps.create_pod.outputs.pod_id != ''
-        env:
-          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        if: always()
         run: |
-          curl --fail --silent --show-error \
-            --request DELETE \
-            --url "https://rest.runpod.io/v1/pods/${{ steps.create_pod.outputs.pod_id }}" \
-            --header "Authorization: Bearer ${RUNPOD_API_KEY}" \
-            > .scratch/autoresearch-runpod/runtime/delete_pod_response.json
+          python -m lyzortx.pipeline.autoresearch.runpod_orchestrator \
+            --runtime-dir "$RUNTIME_DIR" \
+            delete-pod
 
       - name: Fail workflow if remote experiment failed
         if: always()
