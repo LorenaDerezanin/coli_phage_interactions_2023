@@ -560,6 +560,79 @@ def namespace_slot_feature_rows(
     return feature_columns, namespaced_rows
 
 
+def try_reuse_slot(
+    *,
+    cache_dir: Path,
+    slot_spec: SlotSpec,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    path_key: str,
+) -> Optional[dict[str, Any]]:
+    """Validate an existing slot features.csv and return a summary dict if reusable, else None."""
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    index_path = slot_dir / ENTITY_INDEX_FILENAME
+
+    if not feature_path.is_file():
+        return None
+
+    expected_entities = set(
+        build_entity_path_map(
+            selected_rows=split_rows,
+            entity_key=slot_spec.entity_key,
+            path_key=path_key,
+        )
+    )
+
+    with feature_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        headers = list(reader.fieldnames or [])
+        found_entities: set[str] = set()
+        row_count = 0
+        for row in reader:
+            found_entities.add(str(row[slot_spec.entity_key]))
+            row_count += 1
+
+    if found_entities != expected_entities:
+        LOGGER.info(
+            "Slot %s features.csv entity mismatch: expected %d, found %d — will rebuild",
+            slot_spec.slot_name,
+            len(expected_entities),
+            len(found_entities),
+        )
+        return None
+
+    feature_columns = [c for c in headers if c != slot_spec.entity_key]
+    bad_columns = [c for c in feature_columns if not c.startswith(slot_spec.column_prefix)]
+    if bad_columns:
+        LOGGER.info(
+            "Slot %s features.csv has columns outside prefix %s — will rebuild",
+            slot_spec.slot_name,
+            slot_spec.column_prefix,
+        )
+        return None
+
+    LOGGER.info(
+        "Reusing existing %s slot: %d entities, %d feature columns",
+        slot_spec.slot_name,
+        row_count,
+        len(feature_columns),
+    )
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(index_path),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": row_count,
+        "sha256": build_contract.sha256_file(index_path) if index_path.is_file() else "",
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+    }
+
+
 def write_split_pair_tables(cache_dir: Path, split_rows: Mapping[str, Sequence[Mapping[str, str]]]) -> dict[str, Any]:
     pair_table_dir = cache_dir / "search_pairs"
     ensure_directory(pair_table_dir)
@@ -951,8 +1024,10 @@ def materialize_host_stats_slot(
         path_key="host_fasta_path",
     )
     build_dir = output_root / HOST_STATS_BUILD_DIRNAME
+    n_hosts = len(host_fasta_by_bacteria)
+    LOGGER.info("Host stats: computing sequence statistics for %d hosts", n_hosts)
     rows: list[dict[str, object]] = []
-    for bacteria in sorted(host_fasta_by_bacteria):
+    for i, bacteria in enumerate(sorted(host_fasta_by_bacteria), 1):
         assembly_path = host_fasta_by_bacteria[bacteria]
         result = derive_host_stats_features.derive_host_stats_features(
             assembly_path,
@@ -960,6 +1035,8 @@ def materialize_host_stats_slot(
             output_dir=build_dir / bacteria,
         )
         rows.append(dict(result["feature_row"]))
+        if i % 50 == 0 or i == n_hosts:
+            LOGGER.info("Host stats: %d/%d hosts completed", i, n_hosts)
     if len(rows) != len(host_fasta_by_bacteria):
         raise ValueError(
             f"Host-stats materialization row count mismatch: expected {len(host_fasta_by_bacteria)}, got {len(rows)}"
@@ -1036,6 +1113,10 @@ def materialize_phage_projection_slot(
     tl17_assets = _load_tl17_frozen_runtime_assets(tl17_output_dir)
     build_dir = output_root / PHAGE_PROJECTION_BUILD_DIRNAME
 
+    LOGGER.info(
+        "Phage projection: starting batched mmseqs search for %d phages",
+        len(retained_phages),
+    )
     start = datetime.now(timezone.utc)
     rows = tl17_runtime.project_phage_feature_rows_batched(
         [phage_fasta_by_phage[phage] for phage in retained_phages],
@@ -1044,6 +1125,7 @@ def materialize_phage_projection_slot(
         scratch_root=build_dir,
     )
     elapsed_seconds = round((datetime.now(timezone.utc) - start).total_seconds(), 3)
+    LOGGER.info("Phage projection: batched mmseqs search finished in %.1fs", elapsed_seconds)
     if len(rows) != len(retained_phages):
         raise ValueError(
             f"Phage-projection materialization row count mismatch: expected {len(retained_phages)}, got {len(rows)}"
@@ -1131,13 +1213,16 @@ def materialize_phage_stats_slot(
         path_key="phage_fasta_path",
     )
     rows: list[dict[str, object]] = []
-    for phage in sorted(phage_fasta_by_phage):
+    n_phages = len(phage_fasta_by_phage)
+    LOGGER.info("Phage stats: computing sequence statistics for %d phages", n_phages)
+    for i, phage in enumerate(sorted(phage_fasta_by_phage), 1):
         fasta_path = phage_fasta_by_phage[phage]
         feature_row = derive_phage_stats_features.build_phage_stats_feature_row(
             fasta_path,
             phage_id=phage,
         )
         rows.append(dict(feature_row))
+    LOGGER.info("Phage stats: %d/%d phages completed", n_phages, n_phages)
     if len(rows) != len(phage_fasta_by_phage):
         raise ValueError(
             f"Phage-stats materialization row count mismatch: expected {len(phage_fasta_by_phage)}, got {len(rows)}"
@@ -1325,33 +1410,93 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     slot_summaries = write_slot_indexes(args.cache_dir, split_rows, args=args)
 
     host_surface_build_dir = args.host_surface_build_dir or (args.output_root / HOST_SURFACE_BUILD_DIRNAME)
-    slot_summaries["host_surface"] = materialize_host_surface_slot(
+
+    reused = try_reuse_slot(
         cache_dir=args.cache_dir,
+        slot_spec=SLOT_SPEC_BY_NAME["host_surface"],
         split_rows=split_rows,
-        max_workers=args.host_surface_max_workers,
-        build_dir=host_surface_build_dir,
+        path_key="host_fasta_path",
     )
-    slot_summaries["host_typing"] = materialize_host_typing_slot(
+    if reused:
+        slot_summaries["host_surface"] = reused
+    else:
+        LOGGER.info("Materializing host_surface slot")
+        slot_summaries["host_surface"] = materialize_host_surface_slot(
+            cache_dir=args.cache_dir,
+            split_rows=split_rows,
+            max_workers=args.host_surface_max_workers,
+            build_dir=host_surface_build_dir,
+        )
+        LOGGER.info("Completed host_surface slot")
+
+    reused = try_reuse_slot(
         cache_dir=args.cache_dir,
-        output_root=args.output_root,
+        slot_spec=SLOT_SPEC_BY_NAME["host_typing"],
         split_rows=split_rows,
+        path_key="host_fasta_path",
     )
-    slot_summaries["host_stats"] = materialize_host_stats_slot(
+    if reused:
+        slot_summaries["host_typing"] = reused
+    else:
+        LOGGER.info("Materializing host_typing slot")
+        slot_summaries["host_typing"] = materialize_host_typing_slot(
+            cache_dir=args.cache_dir,
+            output_root=args.output_root,
+            split_rows=split_rows,
+        )
+        LOGGER.info("Completed host_typing slot")
+
+    reused = try_reuse_slot(
         cache_dir=args.cache_dir,
-        output_root=args.output_root,
+        slot_spec=SLOT_SPEC_BY_NAME["host_stats"],
         split_rows=split_rows,
+        path_key="host_fasta_path",
     )
-    slot_summaries["phage_projection"] = materialize_phage_projection_slot(
+    if reused:
+        slot_summaries["host_stats"] = reused
+    else:
+        LOGGER.info("Materializing host_stats slot")
+        slot_summaries["host_stats"] = materialize_host_stats_slot(
+            cache_dir=args.cache_dir,
+            output_root=args.output_root,
+            split_rows=split_rows,
+        )
+        LOGGER.info("Completed host_stats slot")
+
+    reused = try_reuse_slot(
         cache_dir=args.cache_dir,
-        output_root=args.output_root,
+        slot_spec=SLOT_SPEC_BY_NAME["phage_projection"],
         split_rows=split_rows,
-        tl17_output_dir=args.tl17_output_dir,
+        path_key="phage_fasta_path",
     )
-    slot_summaries["phage_stats"] = materialize_phage_stats_slot(
+    if reused:
+        slot_summaries["phage_projection"] = reused
+    else:
+        LOGGER.info("Materializing phage_projection slot")
+        slot_summaries["phage_projection"] = materialize_phage_projection_slot(
+            cache_dir=args.cache_dir,
+            output_root=args.output_root,
+            split_rows=split_rows,
+            tl17_output_dir=args.tl17_output_dir,
+        )
+        LOGGER.info("Completed phage_projection slot")
+
+    reused = try_reuse_slot(
         cache_dir=args.cache_dir,
-        output_root=args.output_root,
+        slot_spec=SLOT_SPEC_BY_NAME["phage_stats"],
         split_rows=split_rows,
+        path_key="phage_fasta_path",
     )
+    if reused:
+        slot_summaries["phage_stats"] = reused
+    else:
+        LOGGER.info("Materializing phage_stats slot")
+        slot_summaries["phage_stats"] = materialize_phage_stats_slot(
+            cache_dir=args.cache_dir,
+            output_root=args.output_root,
+            split_rows=split_rows,
+        )
+        LOGGER.info("Completed phage_stats slot")
 
     schema_manifest = build_top_level_schema_manifest(
         slot_feature_columns={slot_name: summary["columns"] for slot_name, summary in slot_summaries.items()}
