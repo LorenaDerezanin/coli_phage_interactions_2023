@@ -4,13 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       bundle_source:
-        description: "Whether to build a fresh AUTORESEARCH cache bundle or reuse an artifact from a prior run"
+        description: "Where the AUTORESEARCH cache bundle comes from"
         required: true
-        default: build-cache
+        default: release
         type: choice
         options:
+          - release
           - build-cache
           - existing-artifact
+      release_tag:
+        description: "GitHub release tag containing the bundle (when bundle_source=release)"
+        required: false
+        type: string
       existing_bundle_run_id:
         description: "Prior workflow run ID containing the AUTORESEARCH RunPod bundle artifact"
         required: false
@@ -59,6 +64,16 @@ jobs:
       - name: Mark workspace as safe git directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      - name: Validate release inputs
+        if: inputs.bundle_source == 'release'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::release_tag is required when bundle_source=release."
+            exit 1
+          fi
+
       - name: Validate existing-artifact inputs
         if: inputs.bundle_source == 'existing-artifact'
         env:
@@ -89,6 +104,17 @@ jobs:
           micromamba run -n phage_env python -m lyzortx.pipeline.autoresearch.runpod_bundle \
             --cache-dir lyzortx/generated_outputs/autoresearch/search_cache_v1 \
             --output-dir .scratch/autoresearch-runpod/staged-bundle
+
+      - name: Download bundle from GitHub release
+        if: inputs.bundle_source == 'release'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir -p .scratch/autoresearch-runpod/staged-bundle
+          gh release download "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            --dir .scratch/autoresearch-runpod/staged-bundle
 
       - name: Download prior AUTORESEARCH bundle artifact
         if: inputs.bundle_source == 'existing-artifact'
