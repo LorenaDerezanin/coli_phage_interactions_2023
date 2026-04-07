@@ -139,6 +139,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Skip download_picard_assemblies() and trust the provided host assembly directory as-is.",
     )
     parser.add_argument(
+        "--skip-comparator-lock",
+        action="store_true",
+        help="Skip comparator artifact checksum validation (for CI/RunPod where Track G outputs are unavailable).",
+    )
+    parser.add_argument(
         "--host-defense-output-dir",
         type=Path,
         default=None,
@@ -225,6 +230,7 @@ def run_ar01_contract(args: argparse.Namespace) -> tuple[Path, Path, Path]:
             "--split-salt",
             args.split_salt,
             *(["--skip-host-assembly-resolution"] if args.skip_host_assembly_resolution else []),
+            *(["--skip-comparator-lock"] if args.skip_comparator_lock else []),
         ]
     )
     if exit_code != 0:

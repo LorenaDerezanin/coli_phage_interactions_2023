@@ -114,6 +114,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Skip download_picard_assemblies() and trust the provided host assembly directory as-is.",
     )
+    parser.add_argument(
+        "--skip-comparator-lock",
+        action="store_true",
+        help=(
+            "Skip comparator artifact checksum validation.  Use in CI/RunPod where "
+            "Track G generated outputs are not available.  The comparator reference "
+            "(paths + artifact ID) is still recorded; checksums are deferred to AR09 replay."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -475,6 +484,7 @@ def build_contract_manifest(
     split_salt: str,
     holdout_fraction: float,
     inner_val_fraction: float,
+    skip_comparator_lock: bool = False,
 ) -> Dict[str, object]:
     split_summary = build_split_summary(pair_table_rows)
     validate_split_contract(split_summary)
@@ -508,7 +518,11 @@ def build_contract_manifest(
             "train_fraction": 1.0 - holdout_fraction - inner_val_fraction,
             **split_summary,
         },
-        "current_locked_comparator_benchmark": build_locked_comparator_benchmark(COMPARATOR_BENCHMARK),
+        "current_locked_comparator_benchmark": (
+            dict(COMPARATOR_BENCHMARK, artifact_checksums=None, artifact_checksums_deferred=True)
+            if skip_comparator_lock
+            else build_locked_comparator_benchmark(COMPARATOR_BENCHMARK)
+        ),
         "output_dir": str(output_dir),
     }
 
@@ -572,6 +586,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         split_salt=args.split_salt,
         holdout_fraction=args.holdout_fraction,
         inner_val_fraction=args.inner_val_fraction,
+        skip_comparator_lock=args.skip_comparator_lock,
     )
     write_json(args.output_dir / CONTRACT_MANIFEST_FILENAME, contract_manifest)
 

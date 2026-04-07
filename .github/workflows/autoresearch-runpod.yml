@@ -85,7 +85,7 @@ jobs:
         if: inputs.bundle_source == 'build-cache'
         run: |
           mkdir -p .scratch/autoresearch-runpod/staged-bundle
-          micromamba run -n phage_env python lyzortx/autoresearch/prepare.py
+          micromamba run -n phage_env python lyzortx/autoresearch/prepare.py --skip-comparator-lock
           micromamba run -n phage_env python -m lyzortx.pipeline.autoresearch.runpod_bundle \
             --cache-dir lyzortx/generated_outputs/autoresearch/search_cache_v1 \
             --output-dir .scratch/autoresearch-runpod/staged-bundle
