@@ -31,6 +31,7 @@ on:
 permissions:
   contents: read
   actions: read
+  packages: read
 
 concurrency:
   group: autoresearch-runpod-${{ github.ref_name }}
