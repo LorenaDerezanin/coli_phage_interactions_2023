@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     container:
-      image: ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:host-typing-main
+      image: ghcr.io/lyzortx/coli-phage-interactions-2023-codex-ci:full-bio-main
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
