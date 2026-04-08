@@ -1,9 +1,9 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-08 -->
+<!-- Last consolidated: 2026-04-09 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**56 knowledge units** across 8 themes (49 active, 6 dead ends, 1 superseded)
+**60 knowledge units** across 8 themes (51 active, 8 dead ends, 1 superseded)
 
 ## Data & Labels
 
@@ -39,8 +39,9 @@ What works, what doesn't, leakage risks, and encoding decisions.
 - LPS core typing is complete (404/404 hosts); capsule typing is too sparse (5.7%) for standalone feature — missingness
   flag carries as much signal. [validated; source: TC03]
 - Phage tetranucleotide kmer SVD embeddings (24 dimensions, 99.42% variance retained) provide compact composition-based
-  features for all 96 panel phages. [validated; source: TD02]
-  - *Composition-based only; does not capture gene-level or RBP-level signals.*
+  features for all 96 panel phages. [validated; source: TD02; see also: raw-kmer-zero-signal]
+  - *SVD is denoising, not just compressing: raw 256-dim frequencies add zero signal, but SVD concentrates variance into
+    extractable dimensions. Composition-based only; does not capture gene-level or RBP-level signals.*
 - VIRIDIC-tree MDS (8 coordinates from patristic distances) captures phage relatedness beyond identity or family labels.
   [validated; source: TD03]
 - Only 77/96 phages have curated receptor data; 19 are explicitly uncovered rather than guessed, requiring explicit
@@ -56,6 +57,11 @@ What works, what doesn't, leakage risks, and encoding decisions.
 - Defense system gene counts reflect real biological redundancy (e.g., 2 vs 1 MazEF copies); HMM detection scores
   reflect only tool confidence. Integer counts are the correct encoding. [validated; source: DEPLOY06, DEPLOY track
   design]
+- Defense subtypes correlate with phylogroup, causing lineage confounding: defense features rerank borderline phages by
+  host lineage rather than mechanistic evasion signal. [validated; source: 2026-04-08 defense ablation, 2026-04-08
+  defense top-3 deep dive; see also: defense-ablation-autoresearch, adsorption-first-strategy]
+  - *Specific mechanism: lytic phages dropped from top-3 when the host defense profile resembled phylogroups where those
+    phages don't lyse. The top-3 regression only manifests in multi-seed aggregated predictions, not individual seeds.*
 - Protein-level phmmer search for O-antigen features is 12x faster than nhmmer DNA search (4.3s vs 72s per host) with
   identical O-type calls and stronger E-values. [validated; source: DEPLOY04, DEPLOY07]
 
@@ -70,7 +76,8 @@ Architecture choices, calibration, and performance bounds.
   autoresearch-parity]
 - AUTORESEARCH raw-FASTA baseline achieves 0.810 AUC on ST03 holdout vs TL18's 0.823; the difference falls inside the
   95% bootstrap CI and is not statistically significant. [validated; source: 2026-04-08 AUTORESEARCH eval; see also:
-  tl18-improvement, svd-bottleneck]
+  tl18-improvement, svd-bottleneck, defense-ablation-autoresearch]
+  - *Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%.*
 - SVD compression was the AUTORESEARCH bottleneck, not feature count: removing SVD and using 300-tree LightGBM on 159
   raw features improved from 0.765 to 0.810 AUC. [validated; source: 2026-04-08 AUTORESEARCH eval]
 - Isotonic calibration outperforms Platt on ECE (0.021 vs 0.028); Platt outperforms on log-loss (0.333 vs 0.344).
@@ -84,6 +91,11 @@ Architecture choices, calibration, and performance bounds.
 - LogisticRegression with class_weight='balanced' is a strong baseline (AUC 0.827, top-3 0.846) that substantially
   outperforms naive dummy; LightGBM improves materially over it (AUC 0.908, top-3 0.933) on expanded features.
   [validated; source: ST0.4, TG01]
+- Adding 79 DefenseFinder host defense features to AUTORESEARCH improves AUC from 0.810 to 0.817 (+0.7pp) but regresses
+  top-3 hit rate from 90.8% to 86.2% (-4.6pp). [validated; source: 2026-04-08 defense ablation; see also:
+  defense-lineage-confounding, autoresearch-parity, top3-auc-not-redundant]
+  - *Defense features help discrimination (AUC) but hurt ranking (top-3) due to lineage confounding. LightGBM's native
+    feature selection is not aggressive enough to ignore noisy defense subtypes.*
 - Adsorption-first modeling (host surface + typing features) is the correct critical path; defense features contribute
   but are not gate-critical for first baseline. [validated; source: 2026-04-05 replan, antiphage-landscape reading; see
   also: autoresearch-parity]
@@ -164,6 +176,16 @@ Compressed lessons from approaches that didn't work.
 - Family-cap diversity constraint (max_per_family=2) reduced top-3 hit rate by 3.1pp across all score variants;
   diversity constraint does not bind in current holdout. [validated; source: ST0.6b]
   - *Different phage panel or application may reorder priorities.*
+- Raw 256-dim tetranucleotide kmer frequencies add zero extractable signal for LightGBM with 300 trees on 96 phages; the
+  dimensionality/sample-size mismatch makes splits uninformative without SVD denoising. [validated; source: 2026-04-08
+  kmer ablation; see also: kmer-embeddings, svd-bottleneck]
+  - *TL18's SVD (99.4% variance in 24 dims) is necessary for kmer signal — but SVD uses a panel-fitted artifact, which
+    conflicts with the FASTA-only AUTORESEARCH contract.*
+- AR09 comparator arm (panel-derived V0 metadata features on AR01 individual-bacteria split) was fundamentally
+  incomparable to TL18 and was scrapped for ST03 evaluations. [validated; source: 2026-04-08 AUTORESEARCH eval; see
+  also: st03-canonical-benchmark, autoresearch-parity]
+  - *Different holdout split (AR01 vs ST03), different feature source, only 12 bacteria overlap. The 0.865 AUC it
+    produced was meaningless for honest comparison.*
 
 ### Superseded
 

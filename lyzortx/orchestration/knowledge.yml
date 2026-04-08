@@ -1,4 +1,4 @@
-last_consolidated: "2026-04-08"
+last_consolidated: "2026-04-09"
 source_dir: lyzortx/research_notes/lab_notebooks
 
 themes:
@@ -114,7 +114,11 @@ themes:
         sources: [TD02]
         status: active
         confidence: validated
-        context: Composition-based only; does not capture gene-level or RBP-level signals.
+        context: >
+          SVD is denoising, not just compressing: raw 256-dim frequencies add zero signal, but
+          SVD concentrates variance into extractable dimensions. Composition-based only; does not
+          capture gene-level or RBP-level signals.
+        relates_to: [raw-kmer-zero-signal]
 
       - id: viridic-distance
         statement: >
@@ -166,6 +170,19 @@ themes:
         status: active
         confidence: validated
 
+      - id: defense-lineage-confounding
+        statement: >
+          Defense subtypes correlate with phylogroup, causing lineage confounding: defense features
+          rerank borderline phages by host lineage rather than mechanistic evasion signal.
+        sources: [2026-04-08 defense ablation, 2026-04-08 defense top-3 deep dive]
+        status: active
+        confidence: validated
+        context: >
+          Specific mechanism: lytic phages dropped from top-3 when the host defense profile
+          resembled phylogroups where those phages don't lyse. The top-3 regression only manifests
+          in multi-seed aggregated predictions, not individual seeds.
+        relates_to: [defense-ablation-autoresearch, adsorption-first-strategy]
+
       - id: o-antigen-phmmer
         statement: >
           Protein-level phmmer search for O-antigen features is 12x faster than nhmmer DNA search
@@ -205,7 +222,10 @@ themes:
         sources: [2026-04-08 AUTORESEARCH eval]
         status: active
         confidence: validated
-        relates_to: [tl18-improvement, svd-bottleneck]
+        context: >
+          Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses
+          top-3 from 90.8% to 86.2%.
+        relates_to: [tl18-improvement, svd-bottleneck, defense-ablation-autoresearch]
 
       - id: svd-bottleneck
         statement: >
@@ -249,6 +269,19 @@ themes:
         sources: [ST0.4, TG01]
         status: active
         confidence: validated
+
+      - id: defense-ablation-autoresearch
+        statement: >
+          Adding 79 DefenseFinder host defense features to AUTORESEARCH improves AUC from 0.810
+          to 0.817 (+0.7pp) but regresses top-3 hit rate from 90.8% to 86.2% (-4.6pp).
+        sources: [2026-04-08 defense ablation]
+        status: active
+        confidence: validated
+        context: >
+          Defense features help discrimination (AUC) but hurt ranking (top-3) due to lineage
+          confounding. LightGBM's native feature selection is not aggressive enough to ignore
+          noisy defense subtypes.
+        relates_to: [defense-lineage-confounding, autoresearch-parity, top3-auc-not-redundant]
 
       - id: adsorption-first-strategy
         statement: >
@@ -467,6 +500,31 @@ themes:
         status: dead-end
         confidence: validated
         context: Different phage panel or application may reorder priorities.
+
+      - id: raw-kmer-zero-signal
+        statement: >
+          Raw 256-dim tetranucleotide kmer frequencies add zero extractable signal for LightGBM
+          with 300 trees on 96 phages; the dimensionality/sample-size mismatch makes splits
+          uninformative without SVD denoising.
+        sources: [2026-04-08 kmer ablation]
+        status: dead-end
+        confidence: validated
+        context: >
+          TL18's SVD (99.4% variance in 24 dims) is necessary for kmer signal — but SVD uses a
+          panel-fitted artifact, which conflicts with the FASTA-only AUTORESEARCH contract.
+        relates_to: [kmer-embeddings, svd-bottleneck]
+
+      - id: ar09-comparator-scrapped
+        statement: >
+          AR09 comparator arm (panel-derived V0 metadata features on AR01 individual-bacteria split)
+          was fundamentally incomparable to TL18 and was scrapped for ST03 evaluations.
+        sources: [2026-04-08 AUTORESEARCH eval]
+        status: dead-end
+        confidence: validated
+        context: >
+          Different holdout split (AR01 vs ST03), different feature source, only 12 bacteria overlap.
+          The 0.865 AUC it produced was meaningless for honest comparison.
+        relates_to: [st03-canonical-benchmark, autoresearch-parity]
 
       - id: isotonic-ranking-superseded
         statement: >
