@@ -1556,3 +1556,30 @@ statistically significant and is more likely architectural than feature-driven.
 Further feature additions within the current train.py-only surface are unlikely to close the gap. The next
 improvement step would be architectural: pairwise interaction features, post-hoc calibration, or per-phage
 sub-models. These exceed the current AUTORESEARCH search contract and would need a plan update before proceeding.
+
+### 2026-04-09 01:00 UTC: Track APEX launched — targeting 95% AUC via structural RBP features
+
+#### Executive summary
+
+Launched Track APEX (Adsorption-Prediction EXpansion) with 6 tasks targeting 95% AUC and 95% top-3 on ST03
+holdout. This is the first track to incorporate protein structure prediction (via PHIStruct/ESMFold) and per-phage
+sub-models into the pipeline.
+
+#### Strategic decision
+
+The AUTORESEARCH feature search is concluded at 0.810 AUC on the current all-pairs LightGBM architecture. Rather
+than continuing to search for features within the frozen train.py surface, APEX expands the architecture:
+
+1. **Structural RBP embeddings** — the paper identifies RBPs as the #1 phage-side variable, but AUTORESEARCH only
+   has binary family presence. PHIStruct provides structure-aware embeddings that capture binding-interface similarity.
+2. **Per-phage sub-models** — the paper achieves 86% AUROC with per-phage models. APEX adds phage-specific
+   classifiers that break Straboviridae collapse.
+3. **Pairwise compatibility** — label-free RBP-receptor structural matching, replacing the leaky label-derived
+   pairwise features that were removed from TL18.
+
+#### What this means for the project
+
+- AUTORESEARCH remains the frozen FASTA-only baseline. APEX extends it with structural and architectural innovations.
+- The codex-implement.yml CI workflow is disabled for APEX tasks. The orchestrator creates issues; I implement them
+  directly.
+- Realistic ceiling: 0.90-0.92 AUC, 95% top-3. The 0.95 AUC target is aspirational but motivating.

@@ -968,3 +968,39 @@ AUROC without kmer features, and our experiments confirm raw kmers add zero sign
    - Post-hoc calibration (isotonic or Platt scaling)
    - Per-phage sub-models or phage-family stratification
    These are beyond the current AUTORESEARCH "train.py-only" search surface and would require a plan update.
+
+### 2026-04-09 01:00 UTC: Track APEX planned — structural RBP features, per-phage models, pairwise compatibility
+
+#### Executive summary
+
+Planned a new track (APEX: Adsorption-Prediction EXpansion) targeting 95% AUC and 95% top-3 on ST03 holdout. The
+AUTORESEARCH feature search is concluded at 0.810 AUC — further gains require architectural changes and novel signal
+sources. APEX has 6 tasks: PHIStruct structural RBP embeddings (AX01), per-phage sub-models (AX02), pairwise
+RBP-receptor compatibility (AX03), phage functional gene repertoire (AX04), calibration + ensemble (AX05), and final
+integration (AX06).
+
+#### Rationale
+
+The ST09 error analysis shows the root cause of holdout misses is Straboviridae prior collapse: the model's top-3
+stays all-Straboviridae for strains whose true positives are in other families. Binary RBP family presence (33 TL17
+features) cannot distinguish phages within a family or predict cross-family compatibility. The paper confirms
+adsorption factors (30 significant) dominate prediction, with RBPs as the key phage-side variable.
+
+The highest-leverage signal source is structural RBP similarity — phages with similar tail fiber tip domains target
+similar receptors. PHIStruct (PMID 39804673) provides structure-aware RBP embeddings with a pre-computed dataset on
+Zenodo. Combined with per-phage sub-models and pairwise compatibility features, this should break the Straboviridae
+collapse that causes 6-8 of the 10 current holdout misses.
+
+#### Task graph
+
+- **AX01** (critical path): PHIStruct RBP structural embeddings → new `phage_rbp_structure` slot
+- **AX02** (parallel): Per-phage LightGBM sub-models on bacterial features
+- **AX03** (depends on AX01): Pairwise RBP-receptor compatibility features from structural clusters + host OMP data
+- **AX04** (parallel): Phage functional gene repertoire from Pharokka (PHROG counts, anti-defense, depolymerases)
+- **AX05** (depends on AX02+AX03): Isotonic calibration + stacked ensemble
+- **AX06**: Final integration, ablation matrix, and ST03 holdout evaluation with bootstrap CIs
+
+#### Honest ceiling estimate
+
+Realistic: 0.90-0.92 AUC, 95% top-3. Aspirational: 0.95 AUC. Hard constraints: ~7% label noise, 65-strain holdout
+(1 flip = 1.5pp top-3), 2 unrescuable abstention misses (zero labeled positives).
