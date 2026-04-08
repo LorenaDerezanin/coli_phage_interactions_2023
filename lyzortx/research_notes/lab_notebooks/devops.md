@@ -1113,3 +1113,29 @@ Added `.github/workflows/autoresearch-runpod.yml` as a manual-only workflow for 
 stages a frozen bundle, uses the dedicated `runpod-autoresearch` GitHub environment with `RUNPOD_API_KEY`, provisions
 one fixed RunPod pod, uploads a candidate artifact bundle, and tears the pod down. This keeps paid cloud credentials
 and provisioning logic out of the generic Codex issue/PR automation path.
+
+### 2026-04-08 22:00 UTC: Added `/sleeponit` skill and knowledge model infrastructure
+
+#### Executive summary
+
+New skill `/sleeponit` and supporting Python infrastructure for consolidating lab notebook knowledge into a structured
+YAML knowledge model. Follows the `plan.yml` → `PLAN.md` pattern: `knowledge.yml` → `knowledge_parser.py` →
+`render_knowledge.py` → `KNOWLEDGE.md`. The rendered output is wired into Claude's context via `lyzortx/CLAUDE.md`.
+
+#### Components
+
+- `lyzortx/orchestration/knowledge_parser.py` — frozen dataclasses (`KnowledgeUnit`, `KnowledgeTheme`,
+  `KnowledgeModel`, `KnowledgeDiff`), YAML loader, validator, and diff function.
+- `lyzortx/orchestration/render_knowledge.py` — renders knowledge.yml to markdown with pymarkdown lint fixing. CLI:
+  `python -m lyzortx.orchestration.render_knowledge [--knowledge-path PATH] [--output PATH] [--stdout]`.
+- `.agents/skills/sleeponit/SKILL.md` — 3-phase skill: extract (read notebooks), curate (user reviews draft), emit
+  (write YAML + render markdown + wire context).
+- `lyzortx/tests/test_knowledge_parser.py` — 15 unit tests covering parser, all validation rules, diff detection, and
+  render output.
+
+#### Design decisions
+
+- YAML source of truth (not markdown) — enables Python validation, diffing, and programmatic manipulation.
+- Knowledge units carry: `id`, `statement`, `sources`, `status`, `confidence`, `context`, `relates_to`.
+- `relates_to` provides lightweight cross-references between units without requiring a full graph database.
+- Merge-conflict strategy: YAML is append-mostly; after merging, re-run the renderer to regenerate KNOWLEDGE.md.
