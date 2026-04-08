@@ -43,15 +43,9 @@ def _render_unit(unit: KnowledgeUnit) -> str:
 
     parts.append(f"[{'; '.join(annotations)}]")
 
-    status_marker = ""
-    if unit.status == "superseded":
-        status_marker = "~~"
-    elif unit.status == "dead-end":
-        status_marker = ""  # Dead ends are in their own section, no special marker needed
-
     text = " ".join(parts)
-    if status_marker:
-        text = f"{status_marker}{text}{status_marker}"
+    if unit.status == "superseded":
+        text = f"~~{text}~~"
 
     lines = textwrap.fill(
         text,
