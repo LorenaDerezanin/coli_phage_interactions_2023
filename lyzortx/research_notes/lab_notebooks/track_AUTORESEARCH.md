@@ -831,6 +831,26 @@ feature selection may not be aggressive enough to ignore the noisy subtypes.
 The remaining gap to TL18 (0.6pp AUC, 2.6pp Brier) is likely from kmer features, which capture phage genome
 composition directly. Kmer extraction is the next step.
 
+#### Top-3 regression deep dive
+
+The 3 new top-3 misses (ECOR-14, IAI67, NILS76) all show the same pattern: a lytic phage that was ranked 1-3 without
+defense dropped to rank 4 with defense features. In every case, non-lytic DIJ07/LF82 phages were boosted relative to
+lytic LF73/LF82 phages.
+
+Specific example — ECOR-14:
+
+- Without defense: LF73\_P1 at rank 2 (prob 0.895), LF73\_P4 at rank 3 (prob 0.894) — both lytic.
+- With defense: LF73\_P1 dropped to rank 4 (prob 0.676). DIJ07\_P2 and DIJ07\_P1 moved to ranks 2-3.
+
+The defense features are pulling down predictions for specific host-phage pairs where the host defense profile
+resembles hosts that resist these phages. This is consistent with lineage confounding: defense subtype presence
+correlates with phylogroup, so the model may be learning "ECOR-14 looks like phylogroup X hosts where LF73 doesn't
+lyse" rather than a mechanistic defense-evasion signal.
+
+Statistically, the top-3 difference (59/65 → 56/65) is well within the bootstrap CI \[0.769, 0.925\] and not
+significant. The per-seed top-3 values are actually the same or better with defense — the regression only appears in
+the 3-seed aggregated predictions where probability averaging reshuffles borderline rankings.
+
 #### Generated outputs
 
 - Decision bundle: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2_defense/`
