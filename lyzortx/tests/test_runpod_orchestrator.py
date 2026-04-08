@@ -9,7 +9,7 @@ def test_build_create_pod_payload_field_names() -> None:
     payload = orch.build_create_pod_payload(ssh_public_key="ssh-ed25519 AAAA", pod_name="test-pod-1")
 
     assert payload["cloudType"] == "COMMUNITY"
-    assert payload["gpuTypeId"] == "NVIDIA A40"
+    assert payload["gpuTypeIds"] == ["NVIDIA A40"]
     assert payload["gpuCount"] == 1
     assert payload["containerDiskInGb"] == 50
     assert payload["volumeInGb"] == 20
@@ -19,18 +19,18 @@ def test_build_create_pod_payload_field_names() -> None:
     assert payload["ports"] == ["22/tcp"]
     assert payload["supportPublicIp"] is True
     assert payload["env"] == {"SSH_PUBLIC_KEY": "ssh-ed25519 AAAA"}
-    assert payload["dockerArgs"] == ""
 
-    # These fields must NOT be present — they cause 500 errors on the RunPod REST v1 API
-    assert "gpuTypeIds" not in payload
+    # These fields must NOT be present — they cause errors on the RunPod REST v1 API
+    assert "gpuTypeId" not in payload
+    assert "dockerArgs" not in payload
     assert "computeType" not in payload
     assert "allowedCudaVersions" not in payload
 
 
 def test_build_create_pod_payload_field_types() -> None:
-    """gpuTypeId must be a string, ports must be an array."""
+    """gpuTypeIds and ports must be arrays."""
     payload = orch.build_create_pod_payload(ssh_public_key="key", pod_name="p")
-    assert isinstance(payload["gpuTypeId"], str)
+    assert isinstance(payload["gpuTypeIds"], list)
     assert isinstance(payload["ports"], list)
 
 

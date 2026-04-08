@@ -63,11 +63,10 @@ def build_create_pod_payload(
     return {
         "cloudType": "COMMUNITY",
         "gpuCount": gpu_count,
-        "gpuTypeId": gpu_type_id,
+        "gpuTypeIds": [gpu_type_id],  # Must be array of strings per REST v1 schema
         "containerDiskInGb": container_disk_gb,
         "volumeInGb": volume_gb,
         "volumeMountPath": VOLUME_MOUNT_PATH,
-        "dockerArgs": "",
         "imageName": image_name,
         "name": pod_name,
         "ports": [SSH_PORT_SPEC],  # Must be array per RunPod REST v1 schema validation
