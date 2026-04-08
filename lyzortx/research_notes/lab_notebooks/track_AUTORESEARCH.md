@@ -589,3 +589,117 @@ AR09 keeps the expensive and fragile parts where they belong. AR08 still owns th
 the narrow import boundary and the honest post-search replication rule. During this task there was no completed
 `AUTORESEARCH RunPod` workflow run in GitHub Actions to import as a real winner, so the new code establishes the
 auditable replay path and decision contract without claiming a production promotion result that did not yet exist.
+
+### 2026-04-08 21:50 UTC: First end-to-end AUTORESEARCH baseline — local CPU run and sealed holdout replication
+
+#### Executive summary
+
+Ran the complete AR01-AR09 pipeline locally on CPU for the first time. The raw-FASTA AUTORESEARCH candidate achieved
+holdout ROC-AUC 0.787 vs the locked production comparator's 0.865. The AR09 decision bundle correctly reports
+`no_honest_lift` — the candidate's bootstrap AUC delta CI is entirely negative ([-0.097, -0.059]). This is the
+expected first-baseline result: hand-engineered Track C/D/G features still outperform the raw-FASTA-only pipeline.
+
+#### Context
+
+The AUTORESEARCH tooling (AR01-AR09) was all merged but had never been exercised end-to-end against a real experiment.
+The original plan was to run `train.py` on a RunPod GPU, but two factors made local CPU execution the pragmatic first
+step: (1) the RunPod REST v1 API schema kept changing between runs, and (2) the current `train.py` baseline is a
+64-tree LightGBM model that trains in 0.4 seconds on CPU — GPU rental would be pure waste.
+
+#### Bugs discovered and fixed
+
+Five bugs were found and fixed during the first real run:
+
+1. **Slot-level schema manifests left empty on resume (prepare_cache.py).** When `try_reuse_slot()` found existing
+   `features.csv` files from a prior partial run, it returned a summary with the correct column list but did not
+   rewrite the slot-level `schema_manifest.json`. Those manifests had been written empty during the partial run
+   (before features were materialized). `train.py` then failed with "slot bypassed the frozen top-level cache schema"
+   because it compares slot-level vs top-level `reserved_feature_columns`. Fix: `try_reuse_slot()` now rewrites
+   `schema_manifest.json` on every reuse, using `build_slot_schema_manifest()` with the actual columns from the CSV.
+
+2. **Feature slots excluded holdout entities (prepare_cache.py).** `select_search_rows()` only selected train and
+   inner_val splits, and all downstream entity resolution (slot indexes, feature materialization) used this restricted
+   set. This meant the cache contained 295 bacteria but the sealed holdout had 74 additional bacteria whose features
+   were never computed. When `replicate.py` tried to build holdout embeddings, the left join produced NaN embeddings
+   for all 74 holdout-only bacteria, triggering a "could not join all required host/phage embeddings" error.
+
+   Fix: added `select_all_retained_rows()` which includes holdout rows for feature materialization. Pair tables
+   remain restricted to train+inner_val (labels are sealed), but entity-level features derived from raw FASTAs carry
+   no label information and are safe to compute for all splits. The cache now contains 369 bacteria (295 + 74 holdout)
+   and 96 phages (unchanged — all phages were already covered).
+
+3. **Dynamic module loading crashed on dataclass decorator (candidate_replay.py).** `load_module_from_path()` used
+   `importlib.util.module_from_spec()` + `spec.loader.exec_module()` but did not register the module in
+   `sys.modules` before execution. Python's `@dataclass` decorator internally calls `sys.modules.get(cls.__module__)`
+   to resolve the module's `__dict__`, and when the module isn't registered, this returns `None` and raises
+   `AttributeError: 'NoneType' object has no attribute '__dict__'`. Fix: insert
+   `sys.modules[module_name] = module` before `exec_module()`.
+
+4. **Feature lock mismatch between AR01 contract and generated Track G artifact (candidate_replay.py).** The AR01
+   contract specifies `locked_feature_blocks: ["defense", "phage_genomic"]`, but the generated
+   `tg05_locked_v1_feature_config.json` has `winner_subset_blocks: ["omp", "phage_genomic", "pairwise"]` from a
+   different Track G sweep. The hard-coded check in `load_v1_lock()` raised before the AR09-level validation could
+   run. Fix: `resolve_feature_lock_path()` now reads the lock file's blocks and compares them to the expected contract
+   before returning the path. When they diverge, it falls back to the checked-in
+   `lyzortx/pipeline/track_g/v1_feature_configuration.json` which has the correct defense+phage_genomic blocks.
+
+5. **RunPod API schema instability.** The `gpuTypeId` (singular) field that worked on 2026-04-07 was rejected on
+   2026-04-08 in favor of `gpuTypeIds` (array). Similarly, `dockerArgs` went from required to rejected. See the devops
+   notebook for details.
+
+#### Results
+
+**Inner validation (train.py, train split only):**
+
+| Metric | Value |
+|--------|-------|
+| ROC-AUC | 0.765 |
+| Top-3 hit rate | 90.5% |
+| Brier score | 0.166 |
+
+**Sealed holdout replication (replicate.py, 3 seeds with bootstrap):**
+
+| Metric | Candidate (raw-FASTA) | Comparator (Track C/D/G) | Delta CI (95%) |
+|--------|----------------------|-------------------------|----------------|
+| ROC-AUC | 0.787 | 0.865 | [-0.097, -0.059] |
+| Top-3 hit rate | 90.5% | 95.9% | [-0.156, 0.000] |
+| Brier score | 0.173 | 0.137 | [-0.052, -0.022] |
+
+**Decision: `no_honest_lift`** — AUC delta stays within bootstrap noise (entirely negative); Brier score materially
+degrades.
+
+#### Interpretation
+
+The ~8 point AUC gap (0.787 vs 0.865) reflects the expected difference between raw-FASTA-derived features and the
+hand-engineered feature pipeline. The raw-FASTA candidate uses: capsule profile HMM scores (113 columns),
+phylogroup/serotype/MLST typing (5 columns), host sequence statistics (4 columns), TL17 RBP-family presence vectors
+(33 columns), and phage sequence statistics (4 columns) — all compressed through TruncatedSVD into 8-dimensional
+host and phage embeddings. The comparator uses the full Track C defense columns, Track D phage genomic k-mer and
+distance features, and the TG05 feature-subset sweep winner, without the dimensionality bottleneck.
+
+The candidate's 90.5% top-3 hit rate is respectable — for most bacteria, the correct phage is in the top 3
+predictions — but the comparator's 95.9% leaves less room for error.
+
+This result establishes the baseline for AUTORESEARCH iteration. The `no_honest_lift` decision is correct and expected
+for the first honest baseline. The pipeline is now proven end-to-end: `prepare.py` → `train.py` → `replicate.py` all
+work locally. Future iterations should focus on:
+
+- More expressive feature engineering within `train.py` (the only mutable surface).
+- Potentially including `host_defense` features (currently reserved for additive ablation).
+- Hyperparameter search within the 1800-second wall-clock budget.
+- Exploring whether the SVD dimensionality bottleneck (8 dimensions) is too aggressive.
+
+#### Artifacts
+
+- Inner validation summary: `lyzortx/generated_outputs/autoresearch/train_runs/local_cpu_baseline/ar07_baseline_summary.json`
+- AR09 decision bundle: `lyzortx/generated_outputs/autoresearch/decision_bundles/local_cpu_baseline_1/ar09_decision_bundle.json`
+- AR09 seed metrics: `lyzortx/generated_outputs/autoresearch/decision_bundles/local_cpu_baseline_1/ar09_seed_metrics.csv`
+- AR09 aggregated predictions: `lyzortx/generated_outputs/autoresearch/decision_bundles/local_cpu_baseline_1/ar09_aggregated_holdout_predictions.csv`
+
+#### Timing
+
+- Cache rebuild with holdout entities: ~25 minutes (host_defense ~20 min, host_surface ~8 min, host_typing ~8 min,
+  host_stats ~3 min, phage slots reused).
+- Cache resume (all slots exist): ~5 seconds.
+- train.py on CPU: 0.4 seconds.
+- replicate.py (3 seeds + 1000 bootstrap): ~20 seconds.

@@ -1,16 +1,62 @@
-### 2026-04-07: RunPod REST v1 API field format learnings
+### 2026-04-08: RunPod REST v1 API — schema keeps changing, GPU availability is unreliable
+
+#### Executive summary
+
+Continued RunPod API debugging after the initial workflow bash replacement. The REST v1 `/pods` endpoint changed its
+schema validation between our GitHub Actions runs and local testing, requiring a second round of payload fixes. The
+locked GPU type (NVIDIA A40) was unavailable on community cloud, forcing a pivot to local CPU execution.
+
+#### Findings — API schema instability
+
+The 2026-04-07 entry recorded that `gpuTypeId` (singular string) was the correct field and `gpuTypeIds` (array) caused
+errors. When we ran the same payload locally on 2026-04-08, the API reversed its position:
+
+- `gpuTypeId` (singular) now causes HTTP 400: `"key provided in request body which is not in input schema: 'gpuTypeId'
+  (Did you mean 'gpuTypeIds'?)"`.
+- `gpuTypeIds` (array of strings) is now the accepted form: `"gpuTypeIds": ["NVIDIA A40"]`.
+- `dockerArgs` now causes HTTP 400: `"key provided in request body which is not in input schema: 'dockerArgs'"`.
+  Previously it was required as an empty string.
+
+This means the RunPod REST v1 schema is not stable across time. The unit tests in
+`lyzortx/tests/test_runpod_orchestrator.py` now assert the latest known-good schema, but this may break again.
+
+#### Findings — GPU availability
+
+Queried available GPU types via the RunPod GraphQL API (`gpuTypes { id communityCloud secureCloud }`). Key finding:
+NVIDIA A40 has `communityCloud=False` — it is only available on secure cloud, which may have different pricing and
+provisioning. Available community alternatives include RTX 3090 (24GB, ~$0.20/hr), RTX 4090 (24GB, ~$0.35/hr), and
+RTX A6000 (48GB). For our LightGBM workload (64 trees, 15 leaves), even the smallest GPU is massive overkill — the
+entire training runs in 0.4 seconds on CPU.
+
+#### Findings — local execution is viable
+
+Since `train.py` supports `--device-type cpu` and the current LightGBM baseline is lightweight, the entire
+AUTORESEARCH pipeline can run locally without RunPod:
+
+- `prepare.py --skip-comparator-lock`: ~25 min first build (369 hosts), ~5 sec on resume with existing slots.
+- `train.py --device-type cpu`: 0.4 seconds.
+- `replicate.py replicate`: ~20 seconds (3 seeds × candidate + comparator + 1000 bootstrap samples).
+
+The RunPod orchestrator and workflow remain useful for future heavier workloads but are not needed for the current
+baseline.
+
+#### Resolution
+
+Updated `runpod_orchestrator.py` to use `gpuTypeIds` (array) and removed `dockerArgs`. The first honest baseline was
+run entirely locally on CPU. RunPod provisioning is deferred until the workload justifies GPU rental.
+
+### 2026-04-07: RunPod REST v1 API field format learnings (initial round)
 
 #### Executive summary
 
 First live run of the AUTORESEARCH RunPod workflow required several iterations to get the pod creation payload right.
-The RunPod REST v1 `/pods` endpoint is picky about field names and types in ways that contradict their own docs.
+The RunPod REST v1 `/pods` endpoint is picky about field names and types in ways that contradict their own docs. See
+the 2026-04-08 entry above for subsequent corrections — the schema changed between this session and the next.
 
 #### Findings
 
-- `gpuTypeId` must be a **string**, not `gpuTypeIds` (array). The docs show both; only the singular form works.
 - `ports` must be an **array** (`["22/tcp"]`), not a string. The REST schema validation rejects `"22/tcp"`.
 - `computeType` and `allowedCudaVersions` are not valid REST v1 fields — they cause 500 errors.
-- `dockerArgs` should be present (empty string) for the request to be accepted.
 - The `env` field is a plain object (`{"SSH_PUBLIC_KEY": "..."}`) — not an array of key-value pairs.
 - Using `curl --fail` swallows the response body on HTTP errors, making debugging impossible. Always capture the body
   separately with `--output` and `--write-out "%{http_code}"`.
