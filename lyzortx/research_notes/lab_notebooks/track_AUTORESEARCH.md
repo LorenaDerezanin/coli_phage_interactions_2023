@@ -794,3 +794,44 @@ overlap between the two splits.
 - Decision bundle: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2/ar09_decision_bundle.json`
 - Seed metrics: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2/ar09_seed_metrics.csv`
 - Aggregated predictions: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2/ar09_aggregated_holdout_predictions.csv`
+
+### 2026-04-08 21:16 UTC: Defense feature ablation on ST03 holdout
+
+#### Executive summary
+
+Adding 79 DefenseFinder-derived host defense features to the raw-feature baseline improves ST03 holdout ROC-AUC from
+0.810 to 0.817 (+0.7pp), narrowing the gap to TL18's 0.823 by half. However, top-3 hit rate **dropped** from 90.8%
+to 86.2%, suggesting the defense features add noise that hurts ranking quality. Brier score improved marginally
+(0.167 to 0.164). The defense features alone are not sufficient to close the gap to TL18.
+
+#### Method
+
+Ran `train.py --include-host-defense` which adds the `host_defense` slot (79 binary/integer features from
+DefenseFinder subtype annotations, derived from raw host assemblies via pyrodigal + defense-finder). Total feature
+count: 159 (base) + 79 (defense) = 238 features (234 numeric + 4 categorical). Replayed on ST03 holdout with
+3 seeds and 1000-sample bootstrap.
+
+#### Results
+
+| Metric         | No defense              | + Defense               | TL18      |
+|----------------|-------------------------|-------------------------|-----------|
+| ROC-AUC        | 0.810 \[0.765, 0.847\]  | 0.817 \[0.778, 0.851\]  | **0.823** |
+| Top-3 hit rate | 0.908                   | 0.862                   | **0.937** |
+| Brier score    | 0.167                   | 0.164                   | **0.141** |
+
+Per-seed AUC stability: 0.814, 0.818, 0.817 (low variance).
+
+#### Interpretation
+
+The defense features provide a modest AUC lift but hurt ranking. This is consistent with the AGENTS.md warning that
+"anti-defense-defense subtype associations are vulnerable to lineage confounding" — many defense subtypes correlate
+with phylogroup, so they may be proxying for host lineage rather than adding mechanistic signal. LightGBM's native
+feature selection may not be aggressive enough to ignore the noisy subtypes.
+
+The remaining gap to TL18 (0.6pp AUC, 2.6pp Brier) is likely from kmer features, which capture phage genome
+composition directly. Kmer extraction is the next step.
+
+#### Generated outputs
+
+- Decision bundle: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2_defense/`
+- Inner-val summary: `lyzortx/generated_outputs/autoresearch/train_runs/ar07_defense_ablation/`

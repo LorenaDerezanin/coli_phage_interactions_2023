@@ -457,7 +457,7 @@ def validate_split_membership(context: CacheContext) -> None:
         retained = split_frame.loc[split_frame["retained_for_autoresearch"] == "1"]
         expected_hash = split_hashes.get(split_name, {}).get("retained_pair_ids_sha256")
         if expected_hash is not None:
-            actual_hash = sha256_strings(retained["pair_id"].tolist())
+            actual_hash = sha256_strings(sorted(retained["pair_id"].tolist()))
             if actual_hash != expected_hash:
                 raise ValueError(
                     f"AUTORESEARCH split membership drift detected for '{split_name}': "
