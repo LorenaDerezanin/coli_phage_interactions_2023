@@ -9,6 +9,7 @@ as plan.yml / plan_parser.py.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -156,6 +157,18 @@ def validate_knowledge(model: KnowledgeModel) -> list[str]:
         for ref in unit.relates_to:
             if ref not in all_ids:
                 errors.append(f"Unit {unit.id!r} relates_to unknown ID {ref!r}")
+
+    # Validate last_consolidated is a timezone-aware ISO 8601 timestamp
+    if model.last_consolidated:
+        try:
+            dt = datetime.fromisoformat(model.last_consolidated)
+            if dt.tzinfo is None:
+                errors.append(
+                    f"last_consolidated {model.last_consolidated!r} has no timezone — "
+                    "use a full ISO 8601 timestamp like 2026-04-09T01:30:00+02:00"
+                )
+        except ValueError:
+            errors.append(f"last_consolidated {model.last_consolidated!r} is not a valid ISO 8601 timestamp")
 
     return errors
 

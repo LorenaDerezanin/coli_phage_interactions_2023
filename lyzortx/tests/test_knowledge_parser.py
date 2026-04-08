@@ -17,8 +17,11 @@ from lyzortx.orchestration.knowledge_parser import (
 )
 from lyzortx.orchestration.render_knowledge import render_knowledge
 
+TS = "2026-04-08T22:00:00+00:00"
+TS_OLD = "2026-04-01T12:00:00+00:00"
+
 MINIMAL_KNOWLEDGE = textwrap.dedent("""\
-    last_consolidated: "2026-04-08"
+    last_consolidated: "2026-04-08T22:00:00+00:00"
     source_dir: lyzortx/research_notes/lab_notebooks
 
     themes:
@@ -64,7 +67,7 @@ def minimal_knowledge_path(tmp_path: Path) -> Path:
 def test_load_knowledge_roundtrip(minimal_knowledge_path: Path) -> None:
     model = load_knowledge(minimal_knowledge_path)
 
-    assert model.last_consolidated == "2026-04-08"
+    assert model.last_consolidated == "2026-04-08T22:00:00+00:00"
     assert model.source_dir == "lyzortx/research_notes/lab_notebooks"
     assert len(model.themes) == 2
     assert model.themes[0].key == "data-labels"
@@ -111,7 +114,7 @@ def test_validate_valid_model(minimal_knowledge_path: Path) -> None:
 
 def test_validate_catches_duplicate_ids() -> None:
     model = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -130,7 +133,7 @@ def test_validate_catches_duplicate_ids() -> None:
 
 def test_validate_catches_empty_statement() -> None:
     model = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -148,7 +151,7 @@ def test_validate_catches_empty_statement() -> None:
 
 def test_validate_catches_invalid_status() -> None:
     model = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -166,7 +169,7 @@ def test_validate_catches_invalid_status() -> None:
 
 def test_validate_catches_invalid_confidence() -> None:
     model = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -190,7 +193,7 @@ def test_validate_catches_invalid_confidence() -> None:
 
 def test_validate_catches_empty_sources() -> None:
     model = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -208,7 +211,7 @@ def test_validate_catches_empty_sources() -> None:
 
 def test_validate_catches_broken_relates_to() -> None:
     model = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -230,9 +233,27 @@ def test_validate_catches_broken_relates_to() -> None:
     assert any("relates_to unknown ID" in e for e in errors)
 
 
+def test_validate_catches_naive_timestamp() -> None:
+    model = KnowledgeModel(
+        last_consolidated="2026-04-08",
+        source_dir="test",
+        themes=[
+            KnowledgeTheme(
+                key="t1",
+                title="Theme 1",
+                units=[
+                    KnowledgeUnit(id="ok", statement="Something", sources=["X"], status="active"),
+                ],
+            )
+        ],
+    )
+    errors = validate_knowledge(model)
+    assert any("no timezone" in e for e in errors)
+
+
 def test_diff_knowledge_detects_additions() -> None:
     old = KnowledgeModel(
-        last_consolidated="2026-04-01",
+        last_consolidated=TS_OLD,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -243,7 +264,7 @@ def test_diff_knowledge_detects_additions() -> None:
         ],
     )
     new = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -265,7 +286,7 @@ def test_diff_knowledge_detects_additions() -> None:
 
 def test_diff_knowledge_detects_removals() -> None:
     old = KnowledgeModel(
-        last_consolidated="2026-04-01",
+        last_consolidated=TS_OLD,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -279,7 +300,7 @@ def test_diff_knowledge_detects_removals() -> None:
         ],
     )
     new = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -296,7 +317,7 @@ def test_diff_knowledge_detects_removals() -> None:
 
 def test_diff_knowledge_detects_updates() -> None:
     old = KnowledgeModel(
-        last_consolidated="2026-04-01",
+        last_consolidated=TS_OLD,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -307,7 +328,7 @@ def test_diff_knowledge_detects_updates() -> None:
         ],
     )
     new = KnowledgeModel(
-        last_consolidated="2026-04-08",
+        last_consolidated=TS,
         source_dir="test",
         themes=[
             KnowledgeTheme(
@@ -330,7 +351,7 @@ def test_render_produces_valid_markdown(minimal_knowledge_path: Path) -> None:
 
     # Basic structural checks
     assert rendered.startswith("# Project Knowledge Model")
-    assert "Last consolidated: 2026-04-08" in rendered
+    assert "Last consolidated: 2026-04-08T22:00:00+00:00" in rendered
     assert "## Data & Labels" in rendered
     assert "## Dead Ends" in rendered
     assert "3 knowledge units" in rendered

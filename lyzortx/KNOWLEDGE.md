@@ -1,6 +1,6 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-09 -->
+<!-- Last consolidated: 2026-04-08T21:49:25+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
 **60 knowledge units** across 8 themes (51 active, 8 dead ends, 1 superseded)
