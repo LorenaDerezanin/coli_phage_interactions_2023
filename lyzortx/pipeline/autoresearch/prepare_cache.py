@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
 import joblib
+import numpy as np
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract
@@ -58,6 +59,9 @@ HOST_TYPING_BUILD_MANIFEST_FILENAME = "host_typing_build_manifest.json"
 HOST_STATS_BUILD_MANIFEST_FILENAME = "host_stats_build_manifest.json"
 PHAGE_PROJECTION_BUILD_MANIFEST_FILENAME = "phage_projection_build_manifest.json"
 PHAGE_STATS_BUILD_MANIFEST_FILENAME = "phage_stats_build_manifest.json"
+PHAGE_KMER_BUILD_MANIFEST_FILENAME = "phage_kmer_build_manifest.json"
+PHAGE_KMER_K = 4
+PHAGE_KMER_DIM = 4**PHAGE_KMER_K  # 256
 
 TASK_ID = "AR02"
 CACHE_CONTRACT_ID = runtime_contract.CACHE_CONTRACT_ID
@@ -1308,6 +1312,112 @@ def materialize_phage_stats_slot(
     }
 
 
+def materialize_phage_kmer_slot(
+    *,
+    cache_dir: Path,
+    output_root: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+) -> dict[str, Any]:
+    from lyzortx.pipeline.track_d.steps.build_phage_genome_kmer_features import (
+        compute_kmer_frequency_vector,
+        read_fasta_records,
+    )
+
+    slot_spec = SLOT_SPEC_BY_NAME["phage_kmer"]
+    phage_fasta_by_phage = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="phage_fasta_path",
+    )
+    k = PHAGE_KMER_K
+    kmer_dim = PHAGE_KMER_DIM
+    feature_names = [f"tetra_freq_{i:03d}" for i in range(kmer_dim)]
+
+    rows: list[dict[str, object]] = []
+    n_phages = len(phage_fasta_by_phage)
+    LOGGER.info("Phage kmer: computing %d-mer frequency vectors for %d phages", k, n_phages)
+    for i, phage in enumerate(sorted(phage_fasta_by_phage), 1):
+        fasta_path = phage_fasta_by_phage[phage]
+        records = read_fasta_records(fasta_path, protein=False)
+        sequences = [record.sequence for record in records]
+
+        combined_vector = np.zeros(kmer_dim, dtype=np.float64)
+        total_windows = 0
+        for sequence in sequences:
+            vector = compute_kmer_frequency_vector(sequence, k=k)
+            window_count = sum(
+                1 for start in range(len(sequence) - k + 1) if all(c in "ACGT" for c in sequence[start : start + k])
+            )
+            if window_count:
+                combined_vector += vector * window_count
+            total_windows += window_count
+        if total_windows == 0:
+            raise ValueError(f"No valid {k}-mer windows found for phage {phage}")
+        combined_vector /= total_windows
+
+        row: dict[str, object] = {"phage": phage}
+        for j, name in enumerate(feature_names):
+            row[name] = round(float(combined_vector[j]), 6)
+        rows.append(row)
+        if i % 20 == 0 or i == n_phages:
+            LOGGER.info("Phage kmer: %d/%d phages completed", i, n_phages)
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "rebuildable_from_raw_fastas": True,
+        "kmer_k": k,
+        "kmer_dim": kmer_dim,
+        "svd_applied": False,
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    build_manifest = {
+        "task_id": "AR06",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": slot_spec.slot_name,
+        "slot_artifact_path": str(feature_path),
+        "retained_phage_count": len(rows),
+        "retained_phages": sorted(phage_fasta_by_phage),
+        "guardrails": {
+            "source_of_truth": "raw phage FASTAs only",
+            "panel_metadata_used": False,
+            "svd_applied": False,
+            "kmer_k": k,
+            "kmer_dim": kmer_dim,
+        },
+        "exported_numeric_columns": feature_columns,
+    }
+    build_manifest_path = slot_dir / PHAGE_KMER_BUILD_MANIFEST_FILENAME
+    write_json(build_manifest_path, build_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_manifest_path": str(build_manifest_path),
+    }
+
+
 def write_slot_indexes(
     cache_dir: Path,
     split_rows: Mapping[str, Sequence[Mapping[str, str]]],
@@ -1523,6 +1633,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             split_rows=all_retained_rows,
         )
         LOGGER.info("Completed phage_stats slot")
+
+    reused = try_reuse_slot(
+        cache_dir=args.cache_dir,
+        slot_spec=SLOT_SPEC_BY_NAME["phage_kmer"],
+        split_rows=all_retained_rows,
+        path_key="phage_fasta_path",
+    )
+    if reused:
+        slot_summaries["phage_kmer"] = reused
+    else:
+        LOGGER.info("Materializing phage_kmer slot")
+        slot_summaries["phage_kmer"] = materialize_phage_kmer_slot(
+            cache_dir=args.cache_dir,
+            output_root=args.output_root,
+            split_rows=all_retained_rows,
+        )
+        LOGGER.info("Completed phage_kmer slot")
 
     schema_manifest = build_top_level_schema_manifest(
         slot_feature_columns={slot_name: summary["columns"] for slot_name, summary in slot_summaries.items()}

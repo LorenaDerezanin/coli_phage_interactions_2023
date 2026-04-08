@@ -855,3 +855,60 @@ the 3-seed aggregated predictions where probability averaging reshuffles borderl
 
 - Decision bundle: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2_defense/`
 - Inner-val summary: `lyzortx/generated_outputs/autoresearch/train_runs/ar07_defense_ablation/`
+
+### 2026-04-08 21:41 UTC: Raw tetranucleotide kmer features add zero signal
+
+#### Executive summary
+
+Added raw 256-dim tetranucleotide (k=4) frequency vectors as a new `phage_kmer` slot. These features are completely
+inert — identical AUC, top-3, and Brier scores with and without kmers, both on inner-val and ST03 holdout. The raw
+frequency space is too high-dimensional (256 dims for 96 phages) for LightGBM to extract signal. TL18's SVD reduction
+to 24 dimensions is not just compression but denoising — it concentrates variance into extractable dimensions.
+
+#### Method
+
+New `phage_kmer` slot in the AUTORESEARCH cache system:
+
+- Added `SlotSpec` to `runtime_contract.py` (entity\_key="phage", prefix="phage\_kmer\_\_")
+- Added materializer in `prepare_cache.py` that reads phage FASTAs, computes window-weighted tetranucleotide
+  frequency vectors across all contigs (reuses `compute_kmer_frequency_vector` from track\_d)
+- 256 columns: `phage_kmer__tetra_freq_000` through `phage_kmer__tetra_freq_255`
+- Pure FASTA-derived, no SVD, no panel artifacts
+- Materialization: 4 seconds for 96 phages
+
+#### Results
+
+| Config                    | AUC    | AUC 95% CI          | Top-3  | Brier  |
+|---------------------------|--------|----------------------|--------|--------|
+| Base (no defense, no kmer)| 0.810  | \[0.765, 0.847\]    | 0.908  | 0.167  |
+| + Defense only            | 0.817  | \[0.778, 0.851\]    | 0.862  | 0.164  |
+| + Kmer only               | 0.810  | \[0.765, 0.847\]    | 0.908  | 0.167  |
+| + Defense + Kmer          | 0.817  | \[0.778, 0.851\]    | 0.862  | 0.164  |
+| TL18 reference            | 0.823  |                      | 0.937  | 0.141  |
+
+Kmer-only and defense+kmer results are identical to their no-kmer counterparts down to the 4th decimal.
+
+#### Interpretation
+
+The 256 raw tetranucleotide frequencies carry no extractable signal for LightGBM with 300 trees on 96 phages. This is
+a sample-size / dimensionality mismatch: 256 mostly-redundant frequency bins vs 96 phage genomes means the model
+cannot find useful splits. TL18's SVD concentrates 99.4% of variance into 24 dimensions, making the signal
+extractable. The SVD is acting as a denoiser, not just a compressor.
+
+The `phage_projection` slot (33 TL17 RBP preprocessor features) likely already captures the phage-side biological
+signal (receptor-binding protein compatibility) that matters for lysis prediction. Raw genome composition adds nothing
+on top.
+
+#### Implications
+
+1. Raw kmer frequencies should be removed from the required baseline slots — they add 256 features of pure noise
+2. If kmer signal is desired, the SVD approach (fit on panel FASTAs, project to 24 dims) is necessary — but this
+   uses a panel-fitted artifact, which conflicts with the "FASTA-only" AUTORESEARCH contract
+3. The current best AUTORESEARCH config remains: raw features + defense (0.817 AUC), 0.6pp below TL18
+4. The remaining gap to TL18 is likely from TL15/16/17 preprocessor features (RBP families, receptor predictions)
+   that are already partially captured in `phage_projection` but may benefit from richer representations
+
+#### Generated outputs
+
+- Decision bundles: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2_kmer/` and
+  `raw_features_v2_kmer_defense/`

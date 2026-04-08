@@ -90,6 +90,13 @@ SLOT_SPECS = (
         block_role="phage",
         description="Reserved low-cost phage sequence statistics derived from raw phage genomes.",
     ),
+    SlotSpec(
+        slot_name="phage_kmer",
+        entity_key="phage",
+        column_prefix="phage_kmer__",
+        block_role="phage",
+        description="Raw tetranucleotide (k=4) frequency vectors from phage genomes. No SVD reduction.",
+    ),
 )
 SLOT_SPEC_BY_NAME = {spec.slot_name: spec for spec in SLOT_SPECS}
 

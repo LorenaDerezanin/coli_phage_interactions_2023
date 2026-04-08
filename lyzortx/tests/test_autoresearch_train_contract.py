@@ -152,6 +152,12 @@ def slot_fixture_rows() -> dict[str, list[dict[str, object]]]:
             "phage_stats__phage_gc_content": "0.39",
         },
     ]
+    phage_kmer_rows = [
+        {"phage": "P1", "phage_kmer__tetra_freq_000": "0.01", "phage_kmer__tetra_freq_001": "0.02"},
+        {"phage": "P2", "phage_kmer__tetra_freq_000": "0.01", "phage_kmer__tetra_freq_001": "0.03"},
+        {"phage": "P3", "phage_kmer__tetra_freq_000": "0.02", "phage_kmer__tetra_freq_001": "0.01"},
+        {"phage": "P4", "phage_kmer__tetra_freq_000": "0.03", "phage_kmer__tetra_freq_001": "0.01"},
+    ]
     return {
         "host_defense": [],
         "host_surface": host_surface_rows,
@@ -159,6 +165,7 @@ def slot_fixture_rows() -> dict[str, list[dict[str, object]]]:
         "host_stats": host_stats_rows,
         "phage_projection": phage_projection_rows,
         "phage_stats": phage_stats_rows,
+        "phage_kmer": phage_kmer_rows,
     }
 
 
