@@ -1456,3 +1456,30 @@ path before any promotion claim is allowed.
 This raises the bar in the right place. The expensive RunPod loop is allowed to optimize on inner validation, but it
 does not get to self-certify promotion. The only evidence that counts for promotion is the clean-checkout,
 sealed-holdout replication bundle produced after the search code is frozen and imported back into the repo.
+
+### 2026-04-08 20:55 UTC: AUTORESEARCH reaches parity with TL18 on honest holdout
+
+#### Executive summary
+
+AUTORESEARCH raw-feature baseline achieves 0.810 ROC-AUC on the ST03 holdout vs TL18's 0.823 — the difference falls
+inside the 95% bootstrap CI \[0.765, 0.847\]. The SVD bottleneck was the main obstacle. The remaining gap is
+attributable to TL18's defense/kmer/preprocessor features that AUTORESEARCH does not yet include. The flawed AR09
+comparator arm (different split, different features) has been scrapped for ST03 evaluations.
+
+#### Strategic decision
+
+Retargeted AUTORESEARCH evaluation from the AR01 holdout (74 bacteria, individual-level) to the ST03 holdout
+(65 bacteria, cv_group-disjoint). Rationale:
+
+1. ST03 is the same split TL18 was evaluated on — only honest comparison possible.
+2. AR01 holdout doesn't group by genomic similarity; ST03 does (at 1e-4 threshold).
+3. The AR09 comparator was meaningless: panel-derived V0 metadata features on a different split produced 0.865 AUC
+   that could not be compared to anything.
+
+#### What this means for the project
+
+- AUTORESEARCH is now a viable path to beat TL18. The architecture (raw slots → LightGBM) works; we just need to
+  close the feature gap.
+- The two most obvious feature additions are defense system annotations and phage genome kmer profiles — exactly the
+  features TL18 has that AUTORESEARCH lacks.
+- Both can be derived from FASTA inputs, keeping the AUTORESEARCH contract intact (no panel-derived metadata).

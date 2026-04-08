@@ -703,3 +703,94 @@ work locally. Future iterations should focus on:
 - Cache resume (all slots exist): ~5 seconds.
 - train.py on CPU: 0.4 seconds.
 - replicate.py (3 seeds + 1000 bootstrap): ~20 seconds.
+
+### 2026-04-08 20:55 UTC: Drop SVD, match TL18 capacity, evaluate on ST03 holdout
+
+#### Executive summary
+
+Removed SVD compression from train.py and fed all 159 raw slot features directly to a 300-tree/31-leaf LightGBM
+matching TL18's model capacity. Added ST03 holdout evaluation to candidate_replay.py for apples-to-apples comparison
+with TL18. Result: **0.810 ROC-AUC** [0.765, 0.847] on the same 65-bacteria holdout where TL18 scores 0.823. The
+difference is not statistically significant (TL18 falls inside our 95% CI), but TL18 has better calibration
+(Brier 0.141 vs 0.167) and higher top-3 hit rate (93.7% vs 90.8%).
+
+#### Problem statement
+
+The first AUTORESEARCH baseline (AR07 v1) crushed 159 raw features into 32 via 8-dim SVD embeddings and used a weak
+64-tree/15-leaf LightGBM. This produced 0.787 AUC on the AR01 holdout, but that number was not comparable to TL18's
+0.823 because:
+
+1. Different holdout splits: AR01 uses 74 individual-bacteria holdout; ST03 uses 65 cv_group-disjoint bacteria.
+   Only 12 bacteria overlap.
+2. Different model architectures: SVD + small LightGBM vs raw features + large LightGBM.
+3. Different feature sets: AUTORESEARCH uses only FASTA-derived slot features; TL18 adds defense, kmer, and
+   TL15/16/17 preprocessor features.
+
+The AR09 comparator arm was also flawed: it used panel-derived V0 metadata features on the AR01 split, producing a
+suspiciously high 0.865 AUC that was meaningless for honest comparison.
+
+#### Changes made
+
+**train.py** — Complete rewrite of the experiment surface:
+- Removed: `FittedEntityEncoder`, `fit_entity_encoder()`, `transform_entity_frame()`, old
+  `build_pair_design_matrix()` with interaction terms, SVD/StandardScaler/OneHotEncoder imports
+- Added: `type_entity_features()` for native categorical detection, `build_raw_pair_design_matrix()` for direct
+  host/phage feature merges, `SLOT_PREFIXES` for feature column identification
+- Updated: `PAIR_SCORER_PARAMS` to 300 trees, 31 leaves, min_child_samples=10, subsample=0.8, colsample_bytree=0.8;
+  `build_pair_scorer()` with class_weight="balanced" and deterministic CPU mode
+- Restored holdout-leakage and split-membership-drift validation lost during rewrite
+- Feature count unchanged: 159 (155 numeric + 4 categorical), now fed directly without compression
+
+**candidate_replay.py** — ST03 holdout support:
+- Added `load_st03_holdout_frame()` and `build_st03_training_frame()`: join ST02 pair table with ST03 split
+  assignments, filter by split/trainable
+- Added `--use-st03-split` CLI flag: evaluates on ST03 holdout, skips flawed comparator arm
+- Updated `build_candidate_holdout_rows()` for new train.py API: `type_entity_features` +
+  `build_raw_pair_design_matrix` + `categorical_feature` in `.fit()`
+- Candidate-only bootstrap CIs when using ST03 (no comparator arm to compare against)
+
+#### Results
+
+**Inner validation (AR01 split):**
+
+| Metric            | SVD baseline (v1) | Raw features (v2) |
+|-------------------|-------------------|--------------------|
+| ROC-AUC           | 0.765             | **0.817**          |
+| Top-3 hit rate    | 93.8%             | **94.6%**          |
+| Brier score       | 0.166             | **0.158**          |
+
+**ST03 holdout (same split as TL18):**
+
+| Metric         | AUTORESEARCH raw features   | TL18 (defense+kmer+preprocessors) |
+|----------------|-----------------------------|-----------------------------------|
+| ROC-AUC        | 0.810 \[0.765, 0.847\]      | **0.823**                         |
+| Top-3 hit rate | 90.8% (59/65)               | **93.7%** (59/63)                 |
+| Brier score    | 0.167                       | **0.141**                         |
+
+Per-seed stability (ST03 holdout, 3 seeds): AUC 0.808–0.810, confirming low random-state variance.
+
+Bootstrap 95% CI for AUTORESEARCH: [0.765, 0.847]. TL18's 0.823 is inside this interval, so the difference is not
+statistically significant at alpha=0.05.
+
+#### Interpretation
+
+The SVD bottleneck was the primary performance limiter: removing it added +5.2pp inner-val AUC and brought the
+AUTORESEARCH baseline within bootstrap noise of TL18 on the honest ST03 holdout. The remaining gap (1.3pp AUC,
+2.6pp Brier) is likely attributable to TL18's richer feature set: defense system annotations, phage genome kmer
+profiles, and TL15/16/17 preprocessor-derived features — none of which AUTORESEARCH currently uses.
+
+The comparator arm has been scrapped for ST03 evaluations. It was fundamentally flawed: different holdout split
+(AR01 vs ST03), different feature source (panel-derived V0 metadata vs FASTA-derived slots), and only 12 bacteria
+overlap between the two splits.
+
+#### Next steps
+
+1. Add defense features from FASTA-derived annotations to the AUTORESEARCH slot system
+2. Add phage genome kmer features
+3. Both should close the remaining gap to TL18 since those are exactly the features TL18 has that we don't
+
+#### Generated outputs
+
+- Decision bundle: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2/ar09_decision_bundle.json`
+- Seed metrics: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2/ar09_seed_metrics.csv`
+- Aggregated predictions: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2/ar09_aggregated_holdout_predictions.csv`
