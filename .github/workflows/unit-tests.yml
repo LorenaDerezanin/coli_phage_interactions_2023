@@ -43,3 +43,9 @@ jobs:
           python -m lyzortx.orchestration.render_plan --stdout > /tmp/PLAN_generated.md
           diff lyzortx/research_notes/PLAN.md /tmp/PLAN_generated.md || \
             (echo "::error::PLAN.md is out of sync with plan.yml. Run: python -m lyzortx.orchestration.render_plan" && exit 1)
+
+      - name: Verify KNOWLEDGE.md is up to date with knowledge.yml
+        run: |
+          python -m lyzortx.orchestration.render_knowledge --stdout > /tmp/KNOWLEDGE_generated.md
+          diff lyzortx/KNOWLEDGE.md /tmp/KNOWLEDGE_generated.md || \
+            (echo "::error::KNOWLEDGE.md is out of sync with knowledge.yml. Run: python -m lyzortx.orchestration.render_knowledge" && exit 1)

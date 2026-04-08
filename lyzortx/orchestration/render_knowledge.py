@@ -10,11 +10,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tempfile
 import textwrap
 from pathlib import Path
-
-from pymarkdown.api import PyMarkdownApi, PyMarkdownApiException
 
 from lyzortx.orchestration.knowledge_parser import (
     KnowledgeModel,
@@ -23,12 +20,14 @@ from lyzortx.orchestration.knowledge_parser import (
     load_knowledge,
     validate_knowledge,
 )
+from lyzortx.orchestration.render_utils import (
+    MAX_PROSE_WIDTH,
+    REPO_ROOT,
+    write_rendered_markdown,
+)
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_KNOWLEDGE_PATH = REPO_ROOT / "lyzortx/orchestration/knowledge.yml"
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "lyzortx/KNOWLEDGE.md"
-DEFAULT_PYMARKDOWN_CONFIG = REPO_ROOT / ".pymarkdown.yaml"
-MAX_PROSE_WIDTH = 120
 
 
 def _render_unit(unit: KnowledgeUnit) -> str:
@@ -140,29 +139,7 @@ def render_knowledge(model: KnowledgeModel) -> str:
 
 def write_rendered_knowledge(output_path: Path, rendered: str) -> None:
     """Write rendered markdown, applying pymarkdown fixes."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=output_path.parent,
-        prefix=f"{output_path.stem}.",
-        suffix=output_path.suffix,
-        delete=False,
-    ) as temp_file:
-        temp_path = Path(temp_file.name)
-        temp_file.write(rendered)
-
-    try:
-        api = PyMarkdownApi().configuration_file_path(str(DEFAULT_PYMARKDOWN_CONFIG))
-        api.fix_path(str(temp_path))
-        temp_path.replace(output_path)
-    except PyMarkdownApiException as exc:
-        temp_path.unlink(missing_ok=True)
-        raise RuntimeError(f"PyMarkdown fix failed for {output_path}: {exc}") from exc
-    except Exception:
-        temp_path.unlink(missing_ok=True)
-        raise
+    write_rendered_markdown(output_path, rendered)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
