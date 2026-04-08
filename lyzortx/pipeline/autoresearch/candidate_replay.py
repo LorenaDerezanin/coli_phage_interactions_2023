@@ -33,6 +33,10 @@ from lyzortx.pipeline.track_l.steps.retrain_mechanistic_v1_model import (
 
 LOGGER = logging.getLogger(__name__)
 
+DEFAULT_ST02_PAIR_TABLE_PATH = Path("lyzortx/generated_outputs/steel_thread_v0/intermediate/st02_pair_table.csv")
+DEFAULT_ST03_SPLIT_ASSIGNMENTS_PATH = Path(
+    "lyzortx/generated_outputs/steel_thread_v0/intermediate/st03_split_assignments.csv"
+)
 DEFAULT_CANDIDATES_DIR = runtime_contract.DEFAULT_OUTPUT_ROOT / "candidates"
 DEFAULT_DECISION_BUNDLES_DIR = runtime_contract.DEFAULT_OUTPUT_ROOT / "decision_bundles"
 IMPORT_MANIFEST_FILENAME = "ar09_import_manifest.json"
@@ -129,6 +133,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for paired holdout-strain bootstrap confidence intervals.",
+    )
+    replicate_parser.add_argument(
+        "--use-st03-split",
+        action="store_true",
+        help="Evaluate on ST03 holdout (same 65-bacteria split as TL18) instead of AR01 holdout. Skips comparator.",
     )
     replicate_parser.add_argument(
         "--include-host-defense",
@@ -309,6 +318,53 @@ def load_holdout_frame(contract_manifest: Mapping[str, object]) -> pd.DataFrame:
     return holdout_frame
 
 
+def _load_st03_joined_frame(
+    st02_path: Path = DEFAULT_ST02_PAIR_TABLE_PATH,
+    st03_path: Path = DEFAULT_ST03_SPLIT_ASSIGNMENTS_PATH,
+) -> pd.DataFrame:
+    """Join ST02 pair table with ST03 split assignments on pair_id."""
+    if not st02_path.exists():
+        raise FileNotFoundError(f"ST02 pair table not found: {st02_path}")
+    if not st03_path.exists():
+        raise FileNotFoundError(f"ST03 split assignments not found: {st03_path}")
+    st02 = pd.read_csv(st02_path, dtype=str, keep_default_na=False)
+    st03 = pd.read_csv(st03_path, dtype=str, keep_default_na=False)
+    joined = st02.merge(st03[["pair_id", "split_holdout", "is_hard_trainable"]], on="pair_id", validate="one_to_one")
+    if len(joined) != len(st02):
+        raise ValueError(f"ST02/ST03 join lost rows: {len(st02)} → {len(joined)}")
+    return joined
+
+
+def load_st03_holdout_frame(
+    st02_path: Path = DEFAULT_ST02_PAIR_TABLE_PATH,
+    st03_path: Path = DEFAULT_ST03_SPLIT_ASSIGNMENTS_PATH,
+) -> pd.DataFrame:
+    """Load the ST03 holdout test set: 65 bacteria, ~6235 trainable pairs."""
+    joined = _load_st03_joined_frame(st02_path, st03_path)
+    holdout = joined.loc[(joined["split_holdout"] == "holdout_test") & (joined["is_hard_trainable"] == "1")].copy()
+    if holdout.empty:
+        raise ValueError("ST03 holdout retained set is empty.")
+    holdout = holdout.rename(columns={"label_hard_any_lysis": "label_any_lysis"})
+    LOGGER.info("ST03 holdout: %d pairs, %d bacteria", len(holdout), holdout["bacteria"].nunique())
+    return holdout
+
+
+def build_st03_training_frame(
+    st02_path: Path = DEFAULT_ST02_PAIR_TABLE_PATH,
+    st03_path: Path = DEFAULT_ST03_SPLIT_ASSIGNMENTS_PATH,
+) -> pd.DataFrame:
+    """Load the ST03 training set: ~29031 trainable pairs."""
+    joined = _load_st03_joined_frame(st02_path, st03_path)
+    training = joined.loc[
+        (joined["split_holdout"] == "train_non_holdout") & (joined["is_hard_trainable"] == "1")
+    ].copy()
+    if training.empty:
+        raise ValueError("ST03 training retained set is empty.")
+    training = training.rename(columns={"label_hard_any_lysis": "label_any_lysis"})
+    LOGGER.info("ST03 training: %d pairs, %d bacteria", len(training), training["bacteria"].nunique())
+    return training
+
+
 def build_candidate_training_frame(context: Any) -> pd.DataFrame:
     frames = []
     for split_name in (runtime_contract.TRAIN_SPLIT, runtime_contract.INNER_VAL_SPLIT):
@@ -344,6 +400,7 @@ def build_candidate_holdout_rows(
     seed: int,
     device_type: str,
     include_host_defense: bool,
+    training_frame_override: pd.DataFrame | None = None,
 ) -> list[dict[str, object]]:
     host_slots = ["host_surface", "host_typing", "host_stats"]
     if include_host_defense:
@@ -361,49 +418,35 @@ def build_candidate_holdout_rows(
         entity_key="phage",
     )
 
-    training_frame = build_candidate_training_frame(context)
-    train_bacteria = sorted(training_frame["bacteria"].unique().tolist())
-    train_phages = sorted(training_frame["phage"].unique().tolist())
-    host_encoder = candidate_module.fit_entity_encoder(
-        frame=host_table.loc[host_table["bacteria"].isin(train_bacteria)].reset_index(drop=True),
-        entity_key="bacteria",
-        embedding_dimension=int(getattr(candidate_module, "HOST_EMBEDDING_DIMENSION", 8)),
-        random_state=seed,
-        encoder_label="host",
-    )
-    phage_encoder = candidate_module.fit_entity_encoder(
-        frame=phage_table.loc[phage_table["phage"].isin(train_phages)].reset_index(drop=True),
-        entity_key="phage",
-        embedding_dimension=int(getattr(candidate_module, "PHAGE_EMBEDDING_DIMENSION", 8)),
-        random_state=seed,
-        encoder_label="phage",
-    )
-    host_embeddings = candidate_module.transform_entity_frame(host_table, encoder=host_encoder)
-    phage_embeddings = candidate_module.transform_entity_frame(phage_table, encoder=phage_encoder)
+    host_typed, host_numeric, host_categorical = candidate_module.type_entity_features(host_table, "bacteria")
+    phage_typed, phage_numeric, phage_categorical = candidate_module.type_entity_features(phage_table, "phage")
 
-    train_design = candidate_module.build_pair_design_matrix(
-        training_frame,
-        host_embeddings=host_embeddings,
-        phage_embeddings=phage_embeddings,
+    training_frame = (
+        training_frame_override if training_frame_override is not None else build_candidate_training_frame(context)
     )
-    holdout_design = candidate_module.build_pair_design_matrix(
-        holdout_frame,
-        host_embeddings=host_embeddings,
-        phage_embeddings=phage_embeddings,
+    train_design = candidate_module.build_raw_pair_design_matrix(
+        training_frame, host_features=host_typed, phage_features=phage_typed
     )
-    feature_columns = [
-        column
-        for column in train_design.columns
-        if column.startswith(("host_embedding_", "phage_embedding_", "pair_abs_", "pair_prod_"))
-    ]
+    holdout_design = candidate_module.build_raw_pair_design_matrix(
+        holdout_frame, host_features=host_typed, phage_features=phage_typed
+    )
+
+    slot_prefixes = candidate_module.SLOT_PREFIXES
+    feature_columns = [col for col in train_design.columns if col.startswith(slot_prefixes)]
     if not feature_columns:
         raise ValueError("Candidate replay constructed zero pair features for holdout replication.")
 
+    categorical_in_features = [col for col in (host_categorical + phage_categorical) if col in feature_columns]
     y_train = train_design["label_any_lysis"].astype(int).to_numpy(dtype=int)
     sample_weight = train_design["training_weight_v3"].astype(float).to_numpy(dtype=float)
     with temporary_module_attribute(candidate_module, "PAIR_SCORER_RANDOM_STATE", seed):
         estimator = candidate_module.build_pair_scorer(device_type=device_type)
-    estimator.fit(train_design[feature_columns], y_train, sample_weight=sample_weight)
+    estimator.fit(
+        train_design[feature_columns],
+        y_train,
+        sample_weight=sample_weight,
+        categorical_feature=categorical_in_features,
+    )
     predictions = estimator.predict_proba(holdout_design[feature_columns])[:, 1]
 
     rows = []
@@ -767,7 +810,15 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
     context = candidate_module.load_and_validate_cache(
         cache_dir=cache_dir, include_host_defense=args.include_host_defense
     )
-    holdout_frame = load_holdout_frame(context.contract_manifest)
+
+    use_st03 = getattr(args, "use_st03_split", False)
+    if use_st03:
+        holdout_frame = load_st03_holdout_frame()
+        training_frame_override = build_st03_training_frame()
+        LOGGER.info("AR09 using ST03 split (65-bacteria holdout, same as TL18)")
+    else:
+        holdout_frame = load_holdout_frame(context.contract_manifest)
+        training_frame_override = None
 
     all_seed_rows: list[dict[str, object]] = []
     seed_metric_rows: list[dict[str, object]] = []
@@ -780,38 +831,61 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
             seed=seed,
             device_type=args.device_type,
             include_host_defense=args.include_host_defense,
+            training_frame_override=training_frame_override,
         )
         all_seed_rows.extend(candidate_seed_rows)
         candidate_seed_metrics = summarize_seed_metrics(candidate_seed_rows)
         seed_metric_rows.append({"arm_id": CANDIDATE_ARM_ID, "seed": seed, **candidate_seed_metrics})
 
-        LOGGER.info("AR09 replay seed %d: locked comparator", seed)
-        comparator_seed_rows = build_comparator_holdout_rows(
-            contract_manifest=context.contract_manifest,
-            skip_prerequisites=args.skip_track_g_prerequisites,
-            seed=seed,
-        )
-        all_seed_rows.extend(comparator_seed_rows)
-        comparator_seed_metrics = summarize_seed_metrics(comparator_seed_rows)
-        seed_metric_rows.append({"arm_id": BASELINE_ARM_ID, "seed": seed, **comparator_seed_metrics})
+        if not use_st03:
+            LOGGER.info("AR09 replay seed %d: locked comparator", seed)
+            comparator_seed_rows = build_comparator_holdout_rows(
+                contract_manifest=context.contract_manifest,
+                skip_prerequisites=args.skip_track_g_prerequisites,
+                seed=seed,
+            )
+            all_seed_rows.extend(comparator_seed_rows)
+            comparator_seed_metrics = summarize_seed_metrics(comparator_seed_rows)
+            seed_metric_rows.append({"arm_id": BASELINE_ARM_ID, "seed": seed, **comparator_seed_metrics})
 
     aggregated_rows = aggregate_seed_rows(all_seed_rows)
     candidate_rows = [row for row in aggregated_rows if row["arm_id"] == CANDIDATE_ARM_ID]
-    comparator_rows = [row for row in aggregated_rows if row["arm_id"] == BASELINE_ARM_ID]
-    bootstrap_summary = bootstrap_holdout_metric_cis(
-        {
-            BASELINE_ARM_ID: comparator_rows,
-            CANDIDATE_ARM_ID: candidate_rows,
-        },
-        bootstrap_samples=args.bootstrap_samples,
-        bootstrap_random_state=args.bootstrap_random_state,
-        baseline_arm_id=BASELINE_ARM_ID,
-    )
-    decision_summary = build_decision_summary(
-        candidate_rows=candidate_rows,
-        comparator_rows=comparator_rows,
-        bootstrap_summary=bootstrap_summary,
-    )
+
+    if use_st03:
+        # Candidate-only bootstrap CIs (no comparator arm)
+        bootstrap_summary = bootstrap_holdout_metric_cis(
+            {CANDIDATE_ARM_ID: candidate_rows},
+            bootstrap_samples=args.bootstrap_samples,
+            bootstrap_random_state=args.bootstrap_random_state,
+            baseline_arm_id=CANDIDATE_ARM_ID,
+        )
+        candidate_metrics = summarize_arm(candidate_rows)
+        decision_summary = {
+            "evaluation_mode": "st03_candidate_only",
+            "arm_metrics": {CANDIDATE_ARM_ID: candidate_metrics},
+            "bootstrap_summary": {
+                arm_id: {
+                    metric_name: bootstrap_metric_block(metric_ci) for metric_name, metric_ci in metric_map.items()
+                }
+                for arm_id, metric_map in bootstrap_summary.items()
+            },
+        }
+    else:
+        comparator_rows = [row for row in aggregated_rows if row["arm_id"] == BASELINE_ARM_ID]
+        bootstrap_summary = bootstrap_holdout_metric_cis(
+            {
+                BASELINE_ARM_ID: comparator_rows,
+                CANDIDATE_ARM_ID: candidate_rows,
+            },
+            bootstrap_samples=args.bootstrap_samples,
+            bootstrap_random_state=args.bootstrap_random_state,
+            baseline_arm_id=BASELINE_ARM_ID,
+        )
+        decision_summary = build_decision_summary(
+            candidate_rows=candidate_rows,
+            comparator_rows=comparator_rows,
+            bootstrap_summary=bootstrap_summary,
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     write_rows(output_dir / AGGREGATED_PREDICTIONS_FILENAME, aggregated_rows)
@@ -829,6 +903,7 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
             "replication_seeds": list(args.replication_seeds),
             "device_type": args.device_type,
             "include_host_defense": args.include_host_defense,
+            "use_st03_split": use_st03,
         },
         "artifacts": {
             "aggregated_holdout_predictions_path": str(output_dir / AGGREGATED_PREDICTIONS_FILENAME),

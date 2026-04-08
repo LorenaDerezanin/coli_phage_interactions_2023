@@ -118,12 +118,33 @@ def test_validate_comparator_feature_lock_requires_contract_blocks_match(monkeyp
 
 
 def build_fake_candidate_module() -> SimpleNamespace:
+    slot_prefixes = (
+        "host_surface__",
+        "host_typing__",
+        "host_stats__",
+        "phage_projection__",
+        "phage_stats__",
+        "host_defense__",
+    )
+
     class FakeEstimator:
-        def fit(self, X: pd.DataFrame, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
-            self.scale = float(np.average(X["pair_prod_00"], weights=sample_weight))
+        def fit(
+            self,
+            X: pd.DataFrame,
+            y: np.ndarray,
+            sample_weight: np.ndarray | None = None,
+            categorical_feature: list[str] | None = None,
+        ) -> None:
+            host_cols = [c for c in X.columns if c.startswith(("host_surface__", "host_typing__", "host_stats__"))]
+            phage_cols = [c for c in X.columns if c.startswith(("phage_projection__", "phage_stats__"))]
+            self.host_col = host_cols[0]
+            self.phage_col = phage_cols[0]
+            product = X[self.host_col].astype(float) * X[self.phage_col].astype(float)
+            self.scale = float(np.average(product, weights=sample_weight))
 
         def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-            raw = X["pair_prod_00"].to_numpy(dtype=float) - self.scale
+            product = X[self.host_col].astype(float) * X[self.phage_col].astype(float)
+            raw = product.to_numpy() - self.scale
             probs = 1.0 / (1.0 + np.exp(-raw))
             return np.column_stack([1.0 - probs, probs])
 
@@ -134,45 +155,32 @@ def build_fake_candidate_module() -> SimpleNamespace:
             merged = frame if merged is None else merged.merge(frame, on=entity_key, how="inner")
         return merged
 
-    def fit_entity_encoder(*, frame, entity_key, embedding_dimension, random_state, encoder_label):
-        return SimpleNamespace(
-            entity_key=entity_key, feature_columns=tuple(column for column in frame.columns if column != entity_key)
-        )
+    def type_entity_features(entity_table, entity_key):
+        feature_cols = [c for c in entity_table.columns if c != entity_key]
+        typed = entity_table.copy()
+        numeric_cols, categorical_cols = [], []
+        for col in feature_cols:
+            numeric_candidate = pd.to_numeric(typed[col], errors="coerce")
+            non_empty = typed[col].astype(str) != ""
+            if bool(non_empty.any()) and bool(numeric_candidate[non_empty].notna().all()):
+                typed[col] = numeric_candidate.astype(float)
+                numeric_cols.append(col)
+            else:
+                typed[col] = typed[col].astype("category")
+                categorical_cols.append(col)
+        return typed, numeric_cols, categorical_cols
 
-    def transform_entity_frame(frame, *, encoder):
-        numeric_column = encoder.feature_columns[0]
-        output = pd.DataFrame(
-            {
-                encoder.entity_key: frame[encoder.entity_key].tolist(),
-                f"{encoder.entity_key[:-1]}_embedding_00"
-                if encoder.entity_key == "bacteria"
-                else "phage_embedding_00": pd.to_numeric(
-                    frame[numeric_column],
-                    errors="coerce",
-                ).astype(float),
-            }
-        )
-        if encoder.entity_key == "bacteria":
-            output.columns = ["bacteria", "host_embedding_00"]
-        return output
-
-    def build_pair_design_matrix(pair_frame, *, host_embeddings, phage_embeddings):
-        merged = pair_frame.merge(host_embeddings, on="bacteria", how="left").merge(
-            phage_embeddings, on="phage", how="left"
-        )
-        merged["pair_abs_00"] = (
-            merged["host_embedding_00"].astype(float) - merged["phage_embedding_00"].astype(float)
-        ).abs()
-        merged["pair_prod_00"] = merged["host_embedding_00"].astype(float) * merged["phage_embedding_00"].astype(float)
+    def build_raw_pair_design_matrix(pair_frame, *, host_features, phage_features):
+        merged = pair_frame.merge(host_features, on="bacteria", how="left", validate="many_to_one")
+        merged = merged.merge(phage_features, on="phage", how="left", validate="many_to_one")
         return merged
 
     return SimpleNamespace(
-        HOST_EMBEDDING_DIMENSION=1,
-        PHAGE_EMBEDDING_DIMENSION=1,
+        SLOT_PREFIXES=slot_prefixes,
+        PAIR_SCORER_RANDOM_STATE=7,
         build_entity_feature_table=build_entity_feature_table,
-        fit_entity_encoder=fit_entity_encoder,
-        transform_entity_frame=transform_entity_frame,
-        build_pair_design_matrix=build_pair_design_matrix,
+        type_entity_features=type_entity_features,
+        build_raw_pair_design_matrix=build_raw_pair_design_matrix,
         build_pair_scorer=lambda device_type: FakeEstimator(),
     )
 
@@ -461,6 +469,7 @@ def test_replicate_candidate_writes_decision_bundle(tmp_path: Path, monkeypatch:
         bootstrap_random_state=7,
         include_host_defense=False,
         skip_track_g_prerequisites=True,
+        use_st03_split=False,
     )
     output_dir = candidate_replay.replicate_candidate(args)
 
