@@ -10,15 +10,6 @@ def _stub_all_steps(monkeypatch, calls):
     monkeypatch.setattr(run_track_l.parse_annotations, "main", lambda argv: calls.append("parse"))
     monkeypatch.setattr(run_track_l.run_enrichment_analysis, "main", lambda argv: calls.append("enrich"))
     monkeypatch.setattr(
-        run_track_l.build_mechanistic_rbp_receptor_features, "main", lambda argv: calls.append("rbp-features")
-    )
-    monkeypatch.setattr(
-        run_track_l.build_mechanistic_defense_evasion_features, "main", lambda argv: calls.append("defense-features")
-    )
-    monkeypatch.setattr(
-        run_track_l.retrain_mechanistic_v1_model, "main", lambda argv: calls.append("retrain-mechanistic-v1")
-    )
-    monkeypatch.setattr(
         run_track_l.build_tl17_phage_compatibility_preprocessor,
         "main",
         lambda argv: calls.append("tl17-phage-compatibility-preprocessor"),
@@ -38,25 +29,20 @@ def _stub_all_steps(monkeypatch, calls):
         "main",
         lambda argv: calls.append("richer-deployable-generalized-inference-bundle"),
     )
-    monkeypatch.setattr(
-        run_track_l.validate_vhdb_generalized_inference,
-        "main",
-        lambda argv: calls.append("validate-vhdb-generalized-inference"),
-    )
 
 
 def test_single_step_dispatch(monkeypatch) -> None:
     calls: list[str] = []
     _stub_all_steps(monkeypatch, calls)
-    run_track_l.main(["--step", "retrain-mechanistic-v1"])
-    assert calls == ["retrain-mechanistic-v1"]
+    run_track_l.main(["--step", "tl17-phage-compatibility-preprocessor"])
+    assert calls == ["tl17-phage-compatibility-preprocessor"]
 
 
 def test_features_group_dispatch(monkeypatch) -> None:
     calls: list[str] = []
     _stub_all_steps(monkeypatch, calls)
     run_track_l.main(["--step", "features"])
-    assert calls == ["parse", "enrich", "rbp-features", "defense-features"]
+    assert calls == ["parse", "enrich"]
 
 
 def test_inference_group_dispatch(monkeypatch) -> None:
@@ -67,7 +53,6 @@ def test_inference_group_dispatch(monkeypatch) -> None:
         "generalized-inference-bundle",
         "deployable-generalized-inference-bundle",
         "richer-deployable-generalized-inference-bundle",
-        "validate-vhdb-generalized-inference",
     ]
 
 
@@ -81,12 +66,8 @@ def test_all_runs_every_step_in_order(monkeypatch) -> None:
         "cache-key-tsvs",
         "parse",
         "enrich",
-        "rbp-features",
-        "defense-features",
-        "retrain-mechanistic-v1",
         "tl17-phage-compatibility-preprocessor",
         "generalized-inference-bundle",
         "deployable-generalized-inference-bundle",
         "richer-deployable-generalized-inference-bundle",
-        "validate-vhdb-generalized-inference",
     ]

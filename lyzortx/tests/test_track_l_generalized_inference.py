@@ -24,7 +24,7 @@ from lyzortx.pipeline.track_l.steps.novel_organism_feature_projection import pro
 LOCKED_LIGHTGBM_PARAMS = {
     "learning_rate": 0.05,
     "min_child_samples": 25,
-    "n_estimators": 300,
+    "n_estimators": 50,
     "num_leaves": 31,
 }
 

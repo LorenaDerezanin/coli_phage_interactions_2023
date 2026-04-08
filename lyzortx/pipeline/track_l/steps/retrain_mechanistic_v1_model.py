@@ -33,10 +33,6 @@ from lyzortx.pipeline.track_g.steps.compute_shap_explanations import (
     top_feature_contributions,
 )
 from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import partition_track_c_columns
-from lyzortx.pipeline.track_l.steps import (
-    build_mechanistic_defense_evasion_features,
-    build_mechanistic_rbp_receptor_features,
-)
 from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import load_holdout_bacteria_ids, load_json
 
 logger = logging.getLogger(__name__)
@@ -332,26 +328,9 @@ def _ensure_default_tl11_bundle(
 def ensure_prerequisite_outputs(args: argparse.Namespace) -> None:
     if args.skip_prerequisites:
         return
-    ensure_default_tg01_summary(args.tg01_summary_path)
-    _ensure_default_tl11_bundle(
-        feature_path=args.tl03_feature_path,
-        manifest_path=args.tl03_manifest_path,
-        expected_task_id="TL03",
-        expected_split_assignments_path=args.st03_split_assignments_path,
-        default_feature_path=DEFAULT_TL03_OUTPUT_PATH,
-        default_manifest_path=DEFAULT_TL03_MANIFEST_PATH,
-        rebuild_fn=build_mechanistic_rbp_receptor_features.main,
-        bundle_label="TL03",
-    )
-    _ensure_default_tl11_bundle(
-        feature_path=args.tl04_feature_path,
-        manifest_path=args.tl04_manifest_path,
-        expected_task_id="TL04",
-        expected_split_assignments_path=args.st03_split_assignments_path,
-        default_feature_path=DEFAULT_TL04_OUTPUT_PATH,
-        default_manifest_path=DEFAULT_TL04_MANIFEST_PATH,
-        rebuild_fn=build_mechanistic_defense_evasion_features.main,
-        bundle_label="TL04",
+    raise RuntimeError(
+        "Mechanistic feature prerequisites (TL03/TL04 builders) have been removed. "
+        "Use --skip-prerequisites with pre-computed feature CSVs."
     )
 
 

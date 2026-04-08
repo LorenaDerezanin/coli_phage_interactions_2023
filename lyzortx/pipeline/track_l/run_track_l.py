@@ -3,11 +3,10 @@
 
 Individual steps and groups (run individually or with 'all'):
   annotate                — Run pharokka on phage genomes and cache key TSVs.
-  features (group)        — parse → enrich → rbp-features → defense-features.
-  retrain-mechanistic-v1  — Retrain the v1 model with mechanistic features.
+  features (group)        — parse → enrich.
   tl17-phage-compatibility-preprocessor — Build the TL17 deployable phage compatibility block.
   inference (group)       — generalized-inference-bundle → deployable-generalized-inference-bundle →
-                            richer-deployable-generalized-inference-bundle → validate-vhdb.
+                            richer-deployable-generalized-inference-bundle.
 """
 
 from __future__ import annotations
@@ -29,13 +28,9 @@ from lyzortx.pipeline.track_l.steps import (
     build_tl17_phage_compatibility_preprocessor,
     build_tl13_generalized_inference_bundle,
     build_tl18_generalized_inference_bundle,
-    build_mechanistic_defense_evasion_features,
-    build_mechanistic_rbp_receptor_features,
     parse_annotations,
-    retrain_mechanistic_v1_model,
     run_enrichment_analysis,
     run_pharokka,
-    validate_vhdb_generalized_inference,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,8 +89,6 @@ def _run_annotate(args: argparse.Namespace) -> None:
 FEATURE_STEPS: list[tuple[str, StepFn]] = [
     ("parse", lambda _args: parse_annotations.main([])),
     ("enrich", lambda _args: run_enrichment_analysis.main([])),
-    ("rbp-features", lambda _args: build_mechanistic_rbp_receptor_features.main([])),
-    ("defense-features", lambda _args: build_mechanistic_defense_evasion_features.main([])),
 ]
 
 INFERENCE_STEPS: list[tuple[str, StepFn]] = [
@@ -105,7 +98,6 @@ INFERENCE_STEPS: list[tuple[str, StepFn]] = [
         "richer-deployable-generalized-inference-bundle",
         lambda _args: build_tl18_generalized_inference_bundle.main([]),
     ),
-    ("validate-vhdb-generalized-inference", lambda _args: validate_vhdb_generalized_inference.main([])),
 ]
 
 # Groups bundle multiple steps behind a single flag.  Single-step entries
@@ -121,7 +113,6 @@ GROUPS: list[tuple[str, list[tuple[str, StepFn]]]] = [
 ALL_STEPS: list[tuple[str, StepFn]] = [
     ("annotate", _run_annotate),
     *FEATURE_STEPS,
-    ("retrain-mechanistic-v1", lambda _args: retrain_mechanistic_v1_model.main([])),
     (
         "tl17-phage-compatibility-preprocessor",
         lambda _args: build_tl17_phage_compatibility_preprocessor.main([]),
