@@ -1531,3 +1531,28 @@ renderer.
 
 Run `/sleeponit` to produce the initial knowledge model from all existing notebooks. This should happen after the
 current AUTORESEARCH baseline work stabilizes, so the knowledge model captures the full state.
+
+### 2026-04-08 22:15 UTC: AUTORESEARCH feature search concluded — base slots are the ceiling
+
+#### Executive summary
+
+After ablating defense features (+0.7pp AUC but -4.6pp top-3) and raw tetranucleotide kmers (zero signal), and
+cross-referencing the original paper, we conclude that the base AUTORESEARCH configuration (159 raw slot features,
+0.810 AUC on ST03 holdout) is at or near the ceiling for the current architecture. The 1.3pp gap to TL18 is not
+statistically significant and is more likely architectural than feature-driven.
+
+#### Key findings
+
+1. **Defense features are net-negative for deployment.** +0.7pp AUC but -4.6pp top-3 due to lineage confounding.
+   The paper confirms: only 2 defense traits are significant vs 30 adsorption traits.
+2. **Raw kmer features are inert.** 256 dims for 96 phages — dimensionality mismatch. TL18's 24-dim SVD is
+   denoising, but the paper achieves 86% AUROC without kmer features entirely, so even the SVD form adds little.
+3. **The paper's architecture is different from ours.** Per-phage models using bacterial features only, not all-pairs
+   LightGBM. This means TL18's remaining advantages over AUTORESEARCH likely come from its feature engineering
+   pipeline (pairwise features, isotonic calibration) rather than from features we haven't tried.
+
+#### Strategic implication
+
+Further feature additions within the current train.py-only surface are unlikely to close the gap. The next
+improvement step would be architectural: pairwise interaction features, post-hoc calibration, or per-phage
+sub-models. These exceed the current AUTORESEARCH search contract and would need a plan update before proceeding.

@@ -912,3 +912,59 @@ on top.
 
 - Decision bundles: `lyzortx/generated_outputs/autoresearch/decision_bundles/raw_features_v2_kmer/` and
   `raw_features_v2_kmer_defense/`
+
+### 2026-04-08 22:15 UTC: Paper confirms adsorption dominance — kmer SVD is not the likely gap source
+
+#### Executive summary
+
+Cross-referencing the original paper (Nature Microbiology, 2024) against our AUTORESEARCH results corrects a prior
+assumption: the remaining 0.6pp AUC gap to TL18 is **not** primarily from missing kmer SVD features. The paper achieves
+~86% AUROC using per-phage models with bacterial adsorption features only, without tetranucleotide/kmer features at
+all. The paper explicitly finds "adsorption factors drive bacterial susceptibility to phages" (30 significant traits)
+while "antiphage systems play a marginal role" (only 2 significant traits). This is fully consistent with our
+experimental results showing defense adds noise (top-3 regression) and raw kmers add zero signal.
+
+#### What the paper says
+
+1. **Per-phage architecture, not all-pairs.** The paper trains one model per phage using bacterial features only (host
+   adsorption traits). This is architecturally different from both AUTORESEARCH (all-pairs LightGBM) and TL18
+   (all-pairs LightGBM with host+phage features). The paper's 86% AUROC comes from per-phage logistic regressions
+   and random forests on bacterial adsorption features.
+2. **No tetranucleotide features.** The paper does not use phage genome composition (kmer/tetranucleotide) features.
+   Its phage-side signal comes from RBP (receptor-binding protein) identity, used to group phages into families and
+   to drive the cocktail recommender — not as a continuous feature input.
+3. **Adsorption dominates, defense is marginal.** "30 adsorption traits significantly associated" vs "only 2 defense
+   traits." The paper concludes that O-antigen type, outer membrane proteins, and LPS structure drive susceptibility,
+   not intracellular defense systems.
+4. **RBPs are the key phage-side variable.** RBP family determines which host surface receptors a phage can bind. The
+   TL17 RBP-family projection vectors already in AUTORESEARCH's `phage_projection` slot capture this signal.
+
+#### Revised gap analysis
+
+The prior hypothesis ("kmer SVD is the likely source of the remaining 0.6pp gap") was wrong. The paper achieves higher
+AUROC without kmer features, and our experiments confirm raw kmers add zero signal. The gap between AUTORESEARCH
+(0.810 AUC on ST03) and TL18 (0.823 AUC on ST03) more likely comes from:
+
+1. **TL18's richer feature preprocessing.** TL18 uses ~190 features including hand-engineered Track C/D/G outputs
+   (defense counts, phage genomic distances, feature-subset sweep winners). Some of these encode pairwise
+   host-phage relationships (e.g., anti-defense vs defense-subtype co-occurrence) that AUTORESEARCH's entity-level
+   slots cannot represent.
+2. **Isotonic calibration.** TL18 applies isotonic calibration which significantly improves Brier score and may
+   reshuffled rankings enough to affect top-3 hit rate.
+3. **Per-phage vs all-pairs architecture.** The paper's per-phage approach fits each phage's host-range pattern
+   independently. TL18 and AUTORESEARCH both use all-pairs models, but TL18's feature engineering implicitly captures
+   some per-phage specificity through RBP-indexed interaction features.
+
+#### Implications for AUTORESEARCH
+
+1. **Kmer SVD is a dead end for this track.** Even if we could fit the SVD on the panel (violating the FASTA-only
+   contract), the paper suggests kmer features would not contribute meaningfully.
+2. **Defense features should remain optional, not default.** Both the paper and our ablation agree: defense signal is
+   marginal and lineage-confounded.
+3. **The best AUTORESEARCH config is the base slots: 0.810 AUC, 90.8% top-3, 0.167 Brier.** This is within bootstrap
+   noise of TL18 (0.823 inside our 95% CI [0.765, 0.847]). The gap is not statistically significant.
+4. **Closing the remaining gap likely requires architectural changes, not more features.** Possible directions:
+   - Pairwise interaction features (RBP-receptor compatibility scores)
+   - Post-hoc calibration (isotonic or Platt scaling)
+   - Per-phage sub-models or phage-family stratification
+   These are beyond the current AUTORESEARCH "train.py-only" search surface and would require a plan update.

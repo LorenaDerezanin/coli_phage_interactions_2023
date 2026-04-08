@@ -1,4 +1,4 @@
-last_consolidated: "2026-04-08T21:49:25+00:00"
+last_consolidated: "2026-04-09T00:30:00+00:00"
 source_dir: lyzortx/research_notes/lab_notebooks
 
 themes:
@@ -49,17 +49,6 @@ themes:
         status: active
         confidence: validated
 
-      - id: dilution-response-signal
-        statement: >
-          Dilution response is a separable signal from binary lysis: 32.9% of lytic pairs show
-          high-potency lysis, with Myoviridae skewed toward high potency and Siphoviridae toward low.
-        sources: [TB05]
-        status: active
-        confidence: validated
-        context: >
-          Binary any_lysis label discards this structure; future models could treat potency as
-          auxiliary task.
-
   # ── FEATURES ───────────────────────────────────────────────────────────────
   - key: features
     title: Features & Feature Engineering
@@ -91,56 +80,25 @@ themes:
         confidence: validated
         relates_to: [binary-encoding-waste]
 
-      - id: omp-clustering
-        statement: >
-          OMP receptor clustering compressed 291 raw states to 22 indicators to fit feature budget;
-          rare clusters grouped into single buckets.
-        sources: [TC02]
-        status: active
-        confidence: validated
-
-      - id: lps-core-complete
-        statement: >
-          LPS core typing is complete (404/404 hosts); capsule typing is too sparse (5.7%) for
-          standalone feature — missingness flag carries as much signal.
-        sources: [TC03]
-        status: active
-        confidence: validated
-
       - id: kmer-embeddings
         statement: >
           Phage tetranucleotide kmer SVD embeddings (24 dimensions, 99.42% variance retained)
-          provide compact composition-based features for all 96 panel phages.
-        sources: [TD02]
+          provide compact composition-based features, but the original paper achieves 86% AUROC
+          without any kmer features. SVD is panel-fitted denoising incompatible with FASTA-only
+          contracts.
+        sources: [TD02, 2026-04-08 paper analysis]
         status: active
         confidence: validated
         context: >
-          SVD is denoising, not just compressing: raw 256-dim frequencies add zero signal, but
-          SVD concentrates variance into extractable dimensions. Composition-based only; does not
-          capture gene-level or RBP-level signals.
+          Raw 256-dim frequencies add zero signal; SVD denoises but requires panel fitting.
+          The paper's success without kmers suggests they are not critical for prediction.
         relates_to: [raw-kmer-zero-signal]
-
-      - id: viridic-distance
-        statement: >
-          VIRIDIC-tree MDS (8 coordinates from patristic distances) captures phage relatedness
-          beyond identity or family labels.
-        sources: [TD03]
-        status: active
-        confidence: validated
 
       - id: rbp-receptor-unknowns
         statement: >
           Only 77/96 phages have curated receptor data; 19 are explicitly uncovered rather than
           guessed, requiring explicit unknown handling in RBP-receptor compatibility features.
         sources: [TE01]
-        status: active
-        confidence: validated
-
-      - id: isolation-host-distance
-        statement: >
-          Isolation-host distance is genuinely pairwise (same phage gets different values against
-          each target) and not a phage-ID proxy.
-        sources: [TE03]
         status: active
         confidence: validated
 
@@ -152,15 +110,6 @@ themes:
         status: active
         confidence: validated
         relates_to: [receptor-variant-richness, defense-integer-counts]
-
-      - id: feature-redundancy
-        statement: >
-          91+ wasted one-hot columns from exact duplicates: host_o_type (84 cols, duplicate of
-          host_o_antigen_type), host_surface_lps_core_type (6 cols), host_capsule_abc_present (1 col),
-          plus 4 derived summary features computable from their base features.
-        sources: [DEPLOY track rationale, DEPLOY03]
-        status: active
-        confidence: validated
 
       - id: defense-integer-counts
         statement: >
@@ -183,14 +132,15 @@ themes:
           in multi-seed aggregated predictions, not individual seeds.
         relates_to: [defense-ablation-autoresearch, adsorption-first-strategy]
 
-      - id: o-antigen-phmmer
+      - id: adsorption-dominates-paper
         statement: >
-          Protein-level phmmer search for O-antigen features is 12x faster than nhmmer DNA search
-          (4.3s vs 72s per host) with identical O-type calls and stronger E-values.
-        sources: [DEPLOY04, DEPLOY07]
+          The original paper confirms adsorption factors dominate prediction (30 significant traits
+          vs 2 defense traits); per-phage models achieve 86% AUROC using only bacterial adsorption
+          features, without kmer or defense features.
+        sources: [2026-04-08 paper analysis, Nature Microbiology 2024]
         status: active
         confidence: validated
-
+        relates_to: [adsorption-first-strategy, defense-lineage-confounding]
 
   # ── MODEL ──────────────────────────────────────────────────────────────────
   - key: model
@@ -224,8 +174,23 @@ themes:
         confidence: validated
         context: >
           Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses
-          top-3 from 90.8% to 86.2%.
-        relates_to: [tl18-improvement, svd-bottleneck, defense-ablation-autoresearch]
+          top-3 from 90.8% to 86.2%. The remaining gap is architectural (pairwise features,
+          calibration, per-phage modeling), not feature-driven.
+        relates_to: [tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, autoresearch-ceiling]
+
+      - id: autoresearch-ceiling
+        statement: >
+          AUTORESEARCH feature search is concluded: base slots (159 features, 0.810 AUC) are at
+          ceiling for the current all-pairs LightGBM architecture. Defense adds noise, raw kmers
+          add zero signal. Further improvement requires architectural changes.
+        sources: [2026-04-08 paper analysis, 2026-04-08 kmer ablation, 2026-04-08 defense ablation]
+        status: active
+        confidence: validated
+        context: >
+          Candidate architectural changes: pairwise interaction features, post-hoc calibration
+          (isotonic/Platt), per-phage sub-models. All exceed the current train.py-only search
+          surface.
+        relates_to: [autoresearch-parity, adsorption-dominates-paper]
 
       - id: svd-bottleneck
         statement: >
@@ -258,15 +223,6 @@ themes:
           LightGBM requires deterministic=True and force_col_wise=True for reproducibility
           across systems; nondeterminism was observed without these flags.
         sources: [TG08, TG09]
-        status: active
-        confidence: validated
-
-      - id: logreg-strong-baseline
-        statement: >
-          LogisticRegression with class_weight='balanced' is a strong baseline (AUC 0.827,
-          top-3 0.846) that substantially outperforms naive dummy; LightGBM improves materially
-          over it (AUC 0.908, top-3 0.933) on expanded features.
-        sources: [ST0.4, TG01]
         status: active
         confidence: validated
 
@@ -313,24 +269,6 @@ themes:
         sources: [TF01]
         status: active
         confidence: validated
-
-      - id: dual-slice-reporting
-        statement: >
-          Dual-slice reporting (full-label + strict-confidence) ensures recommendation quality
-          and calibration quality are tracked separately; strict slice has narrower positive
-          fraction (0.146 vs 0.274).
-        sources: [ST0.7, ST0.8]
-        status: active
-        confidence: validated
-
-      - id: strict-calibration-gap
-        statement: >
-          Strict-confidence slice is materially harder to calibrate: ECE ~0.095 vs full-label
-          ~0.020; root cause uncertain (feature ablations, class-balance, or group-specific error).
-        sources: [TG02]
-        status: active
-        confidence: preliminary
-        context: Revisit after next round of feature engineering.
 
       - id: error-buckets
         statement: >
@@ -399,48 +337,6 @@ themes:
         status: active
         confidence: validated
 
-  # ── INFRASTRUCTURE ─────────────────────────────────────────────────────────
-  - key: infrastructure
-    title: Infrastructure & Operations
-    description: Environment, CI, and operational knowledge not recoverable from code.
-    units:
-      - id: environment-pinning
-        statement: >
-          V1 benchmark environment pinned to exact versions (python=3.12.12, lightgbm=4.6.0,
-          scikit-learn=1.8.0, etc.); all random seeds centralized at 42 for training/calibration.
-        sources: [TJ02]
-        status: active
-        confidence: validated
-
-      - id: runpod-api-unstable
-        statement: >
-          RunPod REST v1 API schema is unstable (field formats changed between calls); local
-          execution is more reliable and default LightGBM trains in 0.4s on CPU.
-        sources: [devops RunPod entries, AR08]
-        status: active
-        confidence: validated
-        context: >
-          Dedicated RunPod workflow exists for heavier search tasks, but default should remain
-          local until complexity justifies cost.
-
-      - id: ci-image-routing
-        statement: >
-          Different tasks use different CI image profiles (full-bio for bioinformatics, basic for
-          lightweight tests); 1.9GB assembly data cannot be baked into images due to disk limits.
-        sources: [devops CI entries]
-        status: active
-        confidence: validated
-
-      - id: external-api-endpoints
-        statement: >
-          External data endpoints differ from listed URLs: VHRdb at viralhostrangedb.pasteur.cloud
-          (not CityU), BASEL via PLOS supplementary, KlebPhaCol at phage.klebphacol.soton.ac.uk,
-          GPB via Nature source-data workbook.
-        sources: [TI03, TI04]
-        status: active
-        confidence: validated
-        context: Endpoints subject to change; registry must be refreshed periodically.
-
   # ── DEAD ENDS ──────────────────────────────────────────────────────────────
   - key: dead-ends
     title: Dead Ends
@@ -453,7 +349,6 @@ themes:
         sources: [TK01, TK02, TK03, TI09]
         status: dead-end
         confidence: validated
-        context: May be worth revisiting with different integration strategies or richer mapping.
 
       - id: label-derived-features-leaky
         statement: >
@@ -472,7 +367,6 @@ themes:
         sources: [TG08, TG11, TG12]
         status: dead-end
         confidence: validated
-        context: Single-feature tests exhausted; multi-feature combinations not tested.
 
       - id: mechanistic-features-no-lift
         statement: >
@@ -484,23 +378,6 @@ themes:
         confidence: validated
         relates_to: [adsorption-first-strategy]
 
-      - id: more-features-not-better
-        statement: >
-          All-features arm (top-3 0.877) underperformed best single-block arms (defense/phage-genomic
-          top-3 0.908); feature combination does not always help.
-        sources: [TG03]
-        status: dead-end
-        confidence: validated
-
-      - id: family-cap-no-bind
-        statement: >
-          Family-cap diversity constraint (max_per_family=2) reduced top-3 hit rate by 3.1pp across
-          all score variants; diversity constraint does not bind in current holdout.
-        sources: [ST0.6b]
-        status: dead-end
-        confidence: validated
-        context: Different phage panel or application may reorder priorities.
-
       - id: raw-kmer-zero-signal
         statement: >
           Raw 256-dim tetranucleotide kmer frequencies add zero extractable signal for LightGBM
@@ -509,30 +386,7 @@ themes:
         sources: [2026-04-08 kmer ablation]
         status: dead-end
         confidence: validated
-        context: >
-          TL18's SVD (99.4% variance in 24 dims) is necessary for kmer signal — but SVD uses a
-          panel-fitted artifact, which conflicts with the FASTA-only AUTORESEARCH contract.
         relates_to: [kmer-embeddings, svd-bottleneck]
-
-      - id: ar09-comparator-scrapped
-        statement: >
-          AR09 comparator arm (panel-derived V0 metadata features on AR01 individual-bacteria split)
-          was fundamentally incomparable to TL18 and was scrapped for ST03 evaluations.
-        sources: [2026-04-08 AUTORESEARCH eval]
-        status: dead-end
-        confidence: validated
-        context: >
-          Different holdout split (AR01 vs ST03), different feature source, only 12 bacteria overlap.
-          The 0.865 AUC it produced was meaningless for honest comparison.
-        relates_to: [st03-canonical-benchmark, autoresearch-parity]
-
-      - id: isotonic-ranking-superseded
-        statement: >
-          Isotonic-calibration ranking was superseded by raw/Platt ranking; isotonic achieves 0.800
-          top-3 vs raw/Platt tied at 0.846.
-        sources: [ST0.6, ST0.6b]
-        status: superseded
-        confidence: validated
 
   # ── OPEN QUESTIONS ─────────────────────────────────────────────────────────
   - key: open-questions
@@ -557,38 +411,12 @@ themes:
         confidence: preliminary
         relates_to: [error-buckets, family-bias-straboviridae]
 
-      - id: abstention-interface
-        statement: >
-          Should the recommendation interface support explicit abstention when no labeled
-          susceptible phage exists (2/10 miss strains have zero positives)?
-        sources: [ST09]
-        status: active
-        confidence: validated
-        context: Abstention is necessary but introduces false-negative tradeoff requiring user study.
-
-      - id: richer-defense-features
-        statement: >
-          DefenseFinder produces HMM scores, system completeness, and sub-threshold hits not yet
-          mined; these could enable per-subtype detection-confidence features.
-        sources: [Future note in project.md]
-        status: active
-        confidence: preliminary
-        relates_to: [defense-integer-counts]
-
       - id: higher-res-rbp
         statement: >
           Per-RBP-gene-level scores from FASTAs (beyond family presence) could close the remaining
-          gap between AUTORESEARCH and TL18; aligns with adsorption-first strategy.
-        sources: [antiphage-landscape reading in project.md]
+          gap between AUTORESEARCH and TL18; aligns with adsorption-first strategy and paper's
+          emphasis on RBPs as the key phage-side variable.
+        sources: [antiphage-landscape reading in project.md, 2026-04-08 paper analysis]
         status: active
         confidence: preliminary
-        relates_to: [autoresearch-parity, adsorption-first-strategy]
-
-      - id: clean-pairwise-combinations
-        statement: >
-          Non-leaky pairwise candidates (curated receptor lookups + isolation-host distances) were
-          tested individually but multi-feature combinations were not explored.
-        sources: [TG11]
-        status: active
-        confidence: preliminary
-        relates_to: [pairwise-block-leaky]
+        relates_to: [autoresearch-parity, adsorption-first-strategy, adsorption-dominates-paper]
