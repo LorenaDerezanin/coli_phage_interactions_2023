@@ -48,10 +48,24 @@ historical records and must not be modified (see Done Task Immutability in the o
   trigger condition ("revisit when...") so the `/replan` skill can evaluate whether the condition is now met. These notes
   are seeds for future plan tasks — they should be concrete enough to act on, not vague aspirations.
 
+## Relationship to the knowledge model
+
+Lab notebooks are the **episodic** record — specific experiments, dates, metrics, and intermediate findings. The
+knowledge model (`lyzortx/orchestration/knowledge.yml` → `lyzortx/KNOWLEDGE.md`) is the **semantic** distillation —
+validated facts, dead-end lessons, and active assumptions extracted from notebooks via the `/sleeponit` skill.
+
+- Notebooks are the source of truth for *what happened*. The knowledge model is the source of truth for *what we know*.
+- When writing a notebook entry that invalidates existing knowledge (e.g., a feature that was "active" is now proven
+  leaky), note the invalidation explicitly. This helps the next `/sleeponit` run update the knowledge model.
+- Source references in the knowledge model (e.g., `[TG02]`) point back to notebook entries. Keep notebook entry IDs
+  (task codes) stable so these references remain valid.
+
 ## Other contents
 
 - `PLAN.md` is auto-generated from `lyzortx/orchestration/plan.yml` by `lyzortx/orchestration/render_plan.py`. Do not
   edit it by hand.
+- `KNOWLEDGE.md` (at `lyzortx/KNOWLEDGE.md`) is auto-generated from `lyzortx/orchestration/knowledge.yml` by
+  `lyzortx/orchestration/render_knowledge.py`. Do not edit it by hand.
 - `LITERATURE.md` is a curated reading list maintained manually.
 - `external_data/` contains the source registry and external dataset metadata.
 - `ad_hoc_analysis_code/` contains one-off analysis scripts referenced by lab notebook entries.

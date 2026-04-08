@@ -4,6 +4,16 @@
 - The README contains a Mermaid state diagram of the full automation lifecycle and descriptions of all components. Keep
   both in sync with the actual workflow logic.
 
+# Knowledge Model Rendering
+
+- `knowledge.yml` is the source of truth for consolidated project knowledge. `render_knowledge.py` renders it to
+  `lyzortx/KNOWLEDGE.md`.
+- Every field in `knowledge.yml` must appear in the rendered output. If a field exists in the YAML, the renderer must
+  surface it — statement, sources, status, confidence, context, and relates_to.
+- When adding new fields to `knowledge.yml`, update `render_knowledge.py` to render them.
+- Run `python -m lyzortx.orchestration.render_knowledge` after modifying `knowledge.yml` to regenerate `KNOWLEDGE.md`.
+- The validator (`knowledge_parser.validate_knowledge()`) must pass before rendering. Invalid YAML is rejected.
+
 # Plan Rendering Completeness
 
 - Every field in `plan.yml` must appear in the rendered `PLAN.md`. If a field exists in the YAML, the renderer must
