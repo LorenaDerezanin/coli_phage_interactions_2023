@@ -266,6 +266,22 @@ def select_search_rows(pair_rows: Sequence[Mapping[str, str]]) -> dict[str, list
     return selected
 
 
+def select_all_retained_rows(pair_rows: Sequence[Mapping[str, str]]) -> dict[str, list[dict[str, str]]]:
+    """Select rows from all splits (including holdout) for feature materialization.
+
+    Feature slots must cover holdout entities so that AR09 replication can compute
+    holdout embeddings. Only *labels* are sealed — entity-level features derived from
+    raw FASTAs carry no label information.
+    """
+    all_splits = (*SUPPORTED_SEARCH_SPLITS, *DISALLOWED_SEARCH_SPLITS)
+    selected: dict[str, list[dict[str, str]]] = {split: [] for split in all_splits}
+    for row in pair_rows:
+        split_name = str(row["split"])
+        if split_name in all_splits:
+            selected[split_name].append(dict(row))
+    return selected
+
+
 def build_slot_index_rows(
     *,
     slot_spec: SlotSpec,
@@ -611,6 +627,15 @@ def try_reuse_slot(
             slot_spec.column_prefix,
         )
         return None
+
+    # Rewrite the slot-level schema manifest so it reflects the actual columns.
+    # Earlier partial runs may have written an empty manifest before features were materialized.
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=row_count,
+        reserved_feature_columns=feature_columns,
+    )
+    write_json(schema_path, schema_manifest)
 
     LOGGER.info(
         "Reusing existing %s slot: %d entities, %d feature columns",
@@ -1405,16 +1430,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     pair_table_path, contract_manifest_path, input_checksums_path = run_ar01_contract(args)
     pair_rows = load_csv_rows(pair_table_path)
     split_rows = select_search_rows(pair_rows)
+    all_retained_rows = select_all_retained_rows(pair_rows)
 
     split_pair_tables = write_split_pair_tables(args.cache_dir, split_rows)
-    slot_summaries = write_slot_indexes(args.cache_dir, split_rows, args=args)
+    slot_summaries = write_slot_indexes(args.cache_dir, all_retained_rows, args=args)
 
     host_surface_build_dir = args.host_surface_build_dir or (args.output_root / HOST_SURFACE_BUILD_DIRNAME)
 
     reused = try_reuse_slot(
         cache_dir=args.cache_dir,
         slot_spec=SLOT_SPEC_BY_NAME["host_surface"],
-        split_rows=split_rows,
+        split_rows=all_retained_rows,
         path_key="host_fasta_path",
     )
     if reused:
@@ -1423,7 +1449,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         LOGGER.info("Materializing host_surface slot")
         slot_summaries["host_surface"] = materialize_host_surface_slot(
             cache_dir=args.cache_dir,
-            split_rows=split_rows,
+            split_rows=all_retained_rows,
             max_workers=args.host_surface_max_workers,
             build_dir=host_surface_build_dir,
         )
@@ -1432,7 +1458,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     reused = try_reuse_slot(
         cache_dir=args.cache_dir,
         slot_spec=SLOT_SPEC_BY_NAME["host_typing"],
-        split_rows=split_rows,
+        split_rows=all_retained_rows,
         path_key="host_fasta_path",
     )
     if reused:
@@ -1442,14 +1468,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slot_summaries["host_typing"] = materialize_host_typing_slot(
             cache_dir=args.cache_dir,
             output_root=args.output_root,
-            split_rows=split_rows,
+            split_rows=all_retained_rows,
         )
         LOGGER.info("Completed host_typing slot")
 
     reused = try_reuse_slot(
         cache_dir=args.cache_dir,
         slot_spec=SLOT_SPEC_BY_NAME["host_stats"],
-        split_rows=split_rows,
+        split_rows=all_retained_rows,
         path_key="host_fasta_path",
     )
     if reused:
@@ -1459,14 +1485,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slot_summaries["host_stats"] = materialize_host_stats_slot(
             cache_dir=args.cache_dir,
             output_root=args.output_root,
-            split_rows=split_rows,
+            split_rows=all_retained_rows,
         )
         LOGGER.info("Completed host_stats slot")
 
     reused = try_reuse_slot(
         cache_dir=args.cache_dir,
         slot_spec=SLOT_SPEC_BY_NAME["phage_projection"],
-        split_rows=split_rows,
+        split_rows=all_retained_rows,
         path_key="phage_fasta_path",
     )
     if reused:
@@ -1476,7 +1502,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slot_summaries["phage_projection"] = materialize_phage_projection_slot(
             cache_dir=args.cache_dir,
             output_root=args.output_root,
-            split_rows=split_rows,
+            split_rows=all_retained_rows,
             tl17_output_dir=args.tl17_output_dir,
         )
         LOGGER.info("Completed phage_projection slot")
@@ -1484,7 +1510,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     reused = try_reuse_slot(
         cache_dir=args.cache_dir,
         slot_spec=SLOT_SPEC_BY_NAME["phage_stats"],
-        split_rows=split_rows,
+        split_rows=all_retained_rows,
         path_key="phage_fasta_path",
     )
     if reused:
@@ -1494,7 +1520,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slot_summaries["phage_stats"] = materialize_phage_stats_slot(
             cache_dir=args.cache_dir,
             output_root=args.output_root,
-            split_rows=split_rows,
+            split_rows=all_retained_rows,
         )
         LOGGER.info("Completed phage_stats slot")
 
