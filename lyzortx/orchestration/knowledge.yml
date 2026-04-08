@@ -1,0 +1,536 @@
+last_consolidated: "2026-04-08"
+source_dir: lyzortx/research_notes/lab_notebooks
+
+themes:
+  # ── DATA & LABELS ──────────────────────────────────────────────────────────
+  - key: data-labels
+    title: Data & Labels
+    description: Labeling policy, data quality, split contracts, and training corpus.
+    units:
+      - id: label-policy-binary
+        statement: >
+          Binary lysis labels use any_lysis rule (matrix_score > 0); ~7% of positives are
+          single-hit noise with matrix_score=0 despite positive labels.
+        sources: [ST0.1]
+        status: active
+        confidence: validated
+
+      - id: noise-downweighting
+        statement: >
+          Borderline score=0 pairs are downweighted (0.1) rather than excluded or flipped,
+          preserving information while reducing noise impact.
+        sources: [TA11]
+        status: active
+        confidence: validated
+        relates_to: [label-policy-binary]
+
+      - id: confidence-tiers
+        statement: >
+          Three confidence tiers (high/medium/low) from replicate agreement preserve 80% of data
+          while narrowing positive fraction from 27.4% to 14.6%.
+        sources: [ST0.1b]
+        status: active
+        confidence: validated
+
+      - id: split-contract
+        statement: >
+          ST02 defines 294 training bacteria; ST03 reserves 65 cv_group-disjoint bacteria for
+          sealed holdout. Deterministic cv_group hashing with salt ensures reproducibility.
+        sources: [ST0.2, ST0.3, AR01]
+        status: active
+        confidence: validated
+        relates_to: [raw-interactions-authority]
+
+      - id: raw-interactions-authority
+        statement: >
+          raw_interactions.csv is the authoritative training corpus; all derived training cohorts
+          and evaluation splits trace back to this file.
+        sources: [ST0.2, AR01, DEPLOY01]
+        status: active
+        confidence: validated
+
+      - id: dilution-response-signal
+        statement: >
+          Dilution response is a separable signal from binary lysis: 32.9% of lytic pairs show
+          high-potency lysis, with Myoviridae skewed toward high potency and Siphoviridae toward low.
+        sources: [TB05]
+        status: active
+        confidence: validated
+        context: >
+          Binary any_lysis label discards this structure; future models could treat potency as
+          auxiliary task.
+
+  # ── FEATURES ───────────────────────────────────────────────────────────────
+  - key: features
+    title: Features & Feature Engineering
+    description: What works, what doesn't, leakage risks, and encoding decisions.
+    units:
+      - id: host-trait-field-effect
+        statement: >
+          Phylogroup, ST, and serotype structure hard-to-lyse behavior at field level
+          (Kruskal-Wallis p=1.24e-09) but no individual trait values survive FDR correction.
+        sources: [TB03]
+        status: active
+        confidence: preliminary
+
+      - id: narrow-susceptibility-rescue
+        statement: >
+          Narrow-susceptibility rescue is concentrated in 19/96 phages (19.8%); Myoviridae
+          dominate, and no single universal rescuer exists.
+        sources: [TB04]
+        status: active
+        confidence: validated
+        relates_to: [family-bias-straboviridae]
+
+      - id: receptor-variant-richness
+        statement: >
+          Receptors are richer than binary presence: OmpC spans 50 variants, BtuB spans 28;
+          binary encoding discards this structure.
+        sources: [TC01]
+        status: active
+        confidence: validated
+        relates_to: [binary-encoding-waste]
+
+      - id: omp-clustering
+        statement: >
+          OMP receptor clustering compressed 291 raw states to 22 indicators to fit feature budget;
+          rare clusters grouped into single buckets.
+        sources: [TC02]
+        status: active
+        confidence: validated
+
+      - id: lps-core-complete
+        statement: >
+          LPS core typing is complete (404/404 hosts); capsule typing is too sparse (5.7%) for
+          standalone feature — missingness flag carries as much signal.
+        sources: [TC03]
+        status: active
+        confidence: validated
+
+      - id: kmer-embeddings
+        statement: >
+          Phage tetranucleotide kmer SVD embeddings (24 dimensions, 99.42% variance retained)
+          provide compact composition-based features for all 96 panel phages.
+        sources: [TD02]
+        status: active
+        confidence: validated
+        context: Composition-based only; does not capture gene-level or RBP-level signals.
+
+      - id: viridic-distance
+        statement: >
+          VIRIDIC-tree MDS (8 coordinates from patristic distances) captures phage relatedness
+          beyond identity or family labels.
+        sources: [TD03]
+        status: active
+        confidence: validated
+
+      - id: rbp-receptor-unknowns
+        statement: >
+          Only 77/96 phages have curated receptor data; 19 are explicitly uncovered rather than
+          guessed, requiring explicit unknown handling in RBP-receptor compatibility features.
+        sources: [TE01]
+        status: active
+        confidence: validated
+
+      - id: isolation-host-distance
+        statement: >
+          Isolation-host distance is genuinely pairwise (same phage gets different values against
+          each target) and not a phage-ID proxy.
+        sources: [TE03]
+        status: active
+        confidence: validated
+
+      - id: binary-encoding-waste
+        statement: >
+          74% of numeric features are binary thresholds discarding continuous biological gradients
+          in receptor scores, RBP identity, capsule HMM scores, and defense gene counts.
+        sources: [TL18, DEPLOY track rationale]
+        status: active
+        confidence: validated
+        relates_to: [receptor-variant-richness, defense-integer-counts]
+
+      - id: feature-redundancy
+        statement: >
+          91+ wasted one-hot columns from exact duplicates: host_o_type (84 cols, duplicate of
+          host_o_antigen_type), host_surface_lps_core_type (6 cols), host_capsule_abc_present (1 col),
+          plus 4 derived summary features computable from their base features.
+        sources: [DEPLOY track rationale, DEPLOY03]
+        status: active
+        confidence: validated
+
+      - id: defense-integer-counts
+        statement: >
+          Defense system gene counts reflect real biological redundancy (e.g., 2 vs 1 MazEF copies);
+          HMM detection scores reflect only tool confidence. Integer counts are the correct encoding.
+        sources: [DEPLOY06, DEPLOY track design]
+        status: active
+        confidence: validated
+
+      - id: o-antigen-phmmer
+        statement: >
+          Protein-level phmmer search for O-antigen features is 12x faster than nhmmer DNA search
+          (4.3s vs 72s per host) with identical O-type calls and stronger E-values.
+        sources: [DEPLOY04, DEPLOY07]
+        status: active
+        confidence: validated
+
+
+  # ── MODEL ──────────────────────────────────────────────────────────────────
+  - key: model
+    title: Model Architecture & Performance
+    description: Architecture choices, calibration, and performance bounds.
+    units:
+      - id: lightgbm-v1-locked
+        statement: >
+          LightGBM v1 baseline with defense + phage-genomic features (no pairwise) achieves
+          clean AUC 0.837, top-3 hit rate 0.908 on ST03 holdout.
+        sources: [TG06, TG07, TG09]
+        status: active
+        confidence: validated
+        relates_to: [tl18-improvement]
+
+      - id: tl18-improvement
+        statement: >
+          TL18 model achieves +0.036 AUC over baseline (0.823 vs 0.787) with 98.5% probability
+          of improvement; new TL15/16/17 feature blocks account for 38.5% of total importance.
+        sources: [TL18 audit]
+        status: active
+        confidence: validated
+        relates_to: [lightgbm-v1-locked, autoresearch-parity]
+
+      - id: autoresearch-parity
+        statement: >
+          AUTORESEARCH raw-FASTA baseline achieves 0.810 AUC on ST03 holdout vs TL18's 0.823;
+          the difference falls inside the 95% bootstrap CI and is not statistically significant.
+        sources: [2026-04-08 AUTORESEARCH eval]
+        status: active
+        confidence: validated
+        relates_to: [tl18-improvement, svd-bottleneck]
+
+      - id: svd-bottleneck
+        statement: >
+          SVD compression was the AUTORESEARCH bottleneck, not feature count: removing SVD and
+          using 300-tree LightGBM on 159 raw features improved from 0.765 to 0.810 AUC.
+        sources: [2026-04-08 AUTORESEARCH eval]
+        status: active
+        confidence: validated
+
+      - id: calibration-tradeoff
+        statement: >
+          Isotonic calibration outperforms Platt on ECE (0.021 vs 0.028); Platt outperforms on
+          log-loss (0.333 vs 0.344). Neither dominates across all calibration metrics.
+        sources: [TG02, ST0.5]
+        status: active
+        confidence: validated
+        context: Results are split-specific; other splits may rank differently.
+
+      - id: top3-auc-not-redundant
+        statement: >
+          Top-3 hit rate and AUC move in different directions across feature blocks: defense
+          subtypes improved top-3 (+4.6pp) but degraded AUC (-0.001).
+        sources: [TG03]
+        status: active
+        confidence: validated
+        context: On small holdout (65 strains), 1 strain flip = 1.5pp top-3.
+
+      - id: lightgbm-determinism
+        statement: >
+          LightGBM requires deterministic=True and force_col_wise=True for reproducibility
+          across systems; nondeterminism was observed without these flags.
+        sources: [TG08, TG09]
+        status: active
+        confidence: validated
+
+      - id: logreg-strong-baseline
+        statement: >
+          LogisticRegression with class_weight='balanced' is a strong baseline (AUC 0.827,
+          top-3 0.846) that substantially outperforms naive dummy; LightGBM improves materially
+          over it (AUC 0.908, top-3 0.933) on expanded features.
+        sources: [ST0.4, TG01]
+        status: active
+        confidence: validated
+
+      - id: adsorption-first-strategy
+        statement: >
+          Adsorption-first modeling (host surface + typing features) is the correct critical path;
+          defense features contribute but are not gate-critical for first baseline.
+        sources: [2026-04-05 replan, antiphage-landscape reading]
+        status: active
+        confidence: validated
+        relates_to: [autoresearch-parity]
+
+  # ── EVALUATION ─────────────────────────────────────────────────────────────
+  - key: evaluation
+    title: Evaluation & Benchmarking
+    description: Holdout protocol, benchmark methodology, and error analysis.
+    units:
+      - id: st03-canonical-benchmark
+        statement: >
+          ST03 grouped host split (65 cv_group-disjoint bacteria) is the canonical v1 benchmark;
+          both TL18 and AUTORESEARCH are evaluated on it for honest comparison.
+        sources: [TF01, 2026-04-08 AUTORESEARCH eval]
+        status: active
+        confidence: validated
+        relates_to: [split-contract]
+
+      - id: bootstrap-strain-level
+        statement: >
+          Bootstrap CIs must be computed at holdout-strain level (not pair level) to align
+          evaluation denominator with recommendation metric; 1000 resamples on 65 strains.
+        sources: [TF01]
+        status: active
+        confidence: validated
+
+      - id: dual-slice-reporting
+        statement: >
+          Dual-slice reporting (full-label + strict-confidence) ensures recommendation quality
+          and calibration quality are tracked separately; strict slice has narrower positive
+          fraction (0.146 vs 0.274).
+        sources: [ST0.7, ST0.8]
+        status: active
+        confidence: validated
+
+      - id: strict-calibration-gap
+        statement: >
+          Strict-confidence slice is materially harder to calibrate: ECE ~0.095 vs full-label
+          ~0.020; root cause uncertain (feature ablations, class-balance, or group-specific error).
+        sources: [TG02]
+        status: active
+        confidence: preliminary
+        context: Revisit after next round of feature engineering.
+
+      - id: error-buckets
+        statement: >
+          Holdout misses split into four non-overlapping failure modes: abstention (2 strains,
+          zero positives), narrow-recall (2, single positive outside top-3), family-collapse
+          (2, wrong family ranked highest), and within-family ordering (4, right family wrong phage).
+        sources: [ST09, TF02]
+        status: active
+        confidence: validated
+        relates_to: [family-bias-straboviridae]
+
+      - id: family-bias-straboviridae
+        statement: >
+          Straboviridae prior collapse suppresses cross-family true positives: 4/10 holdout misses
+          are cross-family blind spots where model top-3 remains all Straboviridae.
+        sources: [ST09]
+        status: active
+        confidence: validated
+
+  # ── DEPLOYMENT ─────────────────────────────────────────────────────────────
+  - key: deployment
+    title: Deployment & Train/Inference Parity
+    description: Feature derivation parity, raw-input pipeline, and pre-computation.
+    units:
+      - id: train-inference-mismatch
+        statement: >
+          Three systematic training/inference feature mismatches identified: DefenseFinder version
+          drift (17.3% model importance), capsule detection sensitivity mismatch (3-5%), and extra
+          phage in FNA directory (low impact).
+        sources: [TL18 audit]
+        status: active
+        confidence: validated
+        relates_to: [zero-delta-parity]
+
+      - id: zero-delta-parity
+        statement: >
+          Honest model packaging requires zero-delta parity: training and inference must call the
+          exact same feature-derivation functions and produce identical features for any host.
+        sources: [DEPLOY track rationale, DEPLOY09]
+        status: active
+        confidence: validated
+
+      - id: precomputed-artifacts
+        statement: >
+          Feature CSVs (defense gene counts, surface features for all 403 hosts) are versioned
+          pre-computed artifacts that downstream tasks consume directly, decoupling expensive
+          preprocessing from evaluation CI.
+        sources: [DEPLOY06, DEPLOY07]
+        status: active
+        confidence: validated
+        relates_to: [defensefinder-precompute]
+
+      - id: picard-assemblies
+        statement: >
+          Picard Figshare assemblies (403 FASTAs, 1.9GB, CC BY 4.0) are the authoritative source
+          for raw-input feature derivation; not all 403 have interaction labels.
+        sources: [DEPLOY01]
+        status: active
+        confidence: validated
+
+      - id: defensefinder-precompute
+        statement: >
+          DefenseFinder on 403 hosts takes ~35-114 min depending on cores; incompatible with
+          search-loop runtime budgets, requiring pre-computation and caching.
+        sources: [DEPLOY06, 2026-04-05 replan]
+        status: active
+        confidence: validated
+
+  # ── INFRASTRUCTURE ─────────────────────────────────────────────────────────
+  - key: infrastructure
+    title: Infrastructure & Operations
+    description: Environment, CI, and operational knowledge not recoverable from code.
+    units:
+      - id: environment-pinning
+        statement: >
+          V1 benchmark environment pinned to exact versions (python=3.12.12, lightgbm=4.6.0,
+          scikit-learn=1.8.0, etc.); all random seeds centralized at 42 for training/calibration.
+        sources: [TJ02]
+        status: active
+        confidence: validated
+
+      - id: runpod-api-unstable
+        statement: >
+          RunPod REST v1 API schema is unstable (field formats changed between calls); local
+          execution is more reliable and default LightGBM trains in 0.4s on CPU.
+        sources: [devops RunPod entries, AR08]
+        status: active
+        confidence: validated
+        context: >
+          Dedicated RunPod workflow exists for heavier search tasks, but default should remain
+          local until complexity justifies cost.
+
+      - id: ci-image-routing
+        statement: >
+          Different tasks use different CI image profiles (full-bio for bioinformatics, basic for
+          lightweight tests); 1.9GB assembly data cannot be baked into images due to disk limits.
+        sources: [devops CI entries]
+        status: active
+        confidence: validated
+
+      - id: external-api-endpoints
+        statement: >
+          External data endpoints differ from listed URLs: VHRdb at viralhostrangedb.pasteur.cloud
+          (not CityU), BASEL via PLOS supplementary, KlebPhaCol at phage.klebphacol.soton.ac.uk,
+          GPB via Nature source-data workbook.
+        sources: [TI03, TI04]
+        status: active
+        confidence: validated
+        context: Endpoints subject to change; registry must be refreshed periodically.
+
+  # ── DEAD ENDS ──────────────────────────────────────────────────────────────
+  - key: dead-ends
+    title: Dead Ends
+    description: Compressed lessons from approaches that didn't work.
+    units:
+      - id: external-data-neutral
+        statement: >
+          VHRdb, BASEL, KlebPhaCol, and GPB external interaction datasets showed neutral
+          cumulative lift over the internal-only baseline; adding them did not improve predictions.
+        sources: [TK01, TK02, TK03, TI09]
+        status: dead-end
+        confidence: validated
+        context: May be worth revisiting with different integration strategies or richer mapping.
+
+      - id: label-derived-features-leaky
+        statement: >
+          Label-derived features (legacy_label_breadth_count, defense_evasion_*, receptor_variant_
+          seen_in_training_positives) caused severe leakage and were removed entirely from TL18.
+        sources: [TG04, TG05, TG06, TG08, TG12]
+        status: dead-end
+        confidence: validated
+        relates_to: [pairwise-block-leaky]
+
+      - id: pairwise-block-leaky
+        statement: >
+          5/13 pairwise compatibility features were soft-leaky (all 4 defense-evasion features +
+          1 receptor training-positive flag); the 8 clean ones individually cannot recover the
+          AUC gap without degrading top-3.
+        sources: [TG08, TG11, TG12]
+        status: dead-end
+        confidence: validated
+        context: Single-feature tests exhausted; multi-feature combinations not tested.
+
+      - id: mechanistic-features-no-lift
+        statement: >
+          Mechanistic pairwise features (RBP-receptor, anti-defense pairs) showed no statistically
+          significant lift on honest holdout rerun; kept in TL18 bundle but contribute only 3.5%
+          and 2.0% to feature importance.
+        sources: [TL12, TL18 audit]
+        status: dead-end
+        confidence: validated
+        relates_to: [adsorption-first-strategy]
+
+      - id: more-features-not-better
+        statement: >
+          All-features arm (top-3 0.877) underperformed best single-block arms (defense/phage-genomic
+          top-3 0.908); feature combination does not always help.
+        sources: [TG03]
+        status: dead-end
+        confidence: validated
+
+      - id: family-cap-no-bind
+        statement: >
+          Family-cap diversity constraint (max_per_family=2) reduced top-3 hit rate by 3.1pp across
+          all score variants; diversity constraint does not bind in current holdout.
+        sources: [ST0.6b]
+        status: dead-end
+        confidence: validated
+        context: Different phage panel or application may reorder priorities.
+
+      - id: isotonic-ranking-superseded
+        statement: >
+          Isotonic-calibration ranking was superseded by raw/Platt ranking; isotonic achieves 0.800
+          top-3 vs raw/Platt tied at 0.846.
+        sources: [ST0.6, ST0.6b]
+        status: superseded
+        confidence: validated
+
+  # ── OPEN QUESTIONS ─────────────────────────────────────────────────────────
+  - key: open-questions
+    title: Open Questions
+    description: Unresolved items that still matter for the project direction.
+    units:
+      - id: narrow-susceptibility-features
+        statement: >
+          Can host-compatibility features (receptor/defense) lift narrow-susceptibility recovery
+          for the 12/36 resolved narrow strains not rescued by any panel phage?
+        sources: [ST09, TB04]
+        status: active
+        confidence: preliminary
+        relates_to: [narrow-susceptibility-rescue, error-buckets]
+
+      - id: within-family-reranking
+        statement: >
+          Can within-family reranking using host-range evidence improve phage selection inside
+          saturated score bands where the model knows the right family but not the right phage?
+        sources: [ST09]
+        status: active
+        confidence: preliminary
+        relates_to: [error-buckets, family-bias-straboviridae]
+
+      - id: abstention-interface
+        statement: >
+          Should the recommendation interface support explicit abstention when no labeled
+          susceptible phage exists (2/10 miss strains have zero positives)?
+        sources: [ST09]
+        status: active
+        confidence: validated
+        context: Abstention is necessary but introduces false-negative tradeoff requiring user study.
+
+      - id: richer-defense-features
+        statement: >
+          DefenseFinder produces HMM scores, system completeness, and sub-threshold hits not yet
+          mined; these could enable per-subtype detection-confidence features.
+        sources: [Future note in project.md]
+        status: active
+        confidence: preliminary
+        relates_to: [defense-integer-counts]
+
+      - id: higher-res-rbp
+        statement: >
+          Per-RBP-gene-level scores from FASTAs (beyond family presence) could close the remaining
+          gap between AUTORESEARCH and TL18; aligns with adsorption-first strategy.
+        sources: [antiphage-landscape reading in project.md]
+        status: active
+        confidence: preliminary
+        relates_to: [autoresearch-parity, adsorption-first-strategy]
+
+      - id: clean-pairwise-combinations
+        statement: >
+          Non-leaky pairwise candidates (curated receptor lookups + isolation-host distances) were
+          tested individually but multi-feature combinations were not explored.
+        sources: [TG11]
+        status: active
+        confidence: preliminary
+        relates_to: [pairwise-block-leaky]

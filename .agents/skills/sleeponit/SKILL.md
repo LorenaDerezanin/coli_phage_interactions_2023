@@ -1,11 +1,11 @@
 ---
 name: sleeponit
 description: >
-  Consolidate lab notebook knowledge into a unified, thematically organized knowledge model. Inspired by sleep-based
-  memory consolidation — transforms episodic experimental records into semantic project knowledge. Use this skill when
-  the user says "sleep on it", "consolidate knowledge", "compact the notebooks", "update the knowledge model",
-  "what do we know", or wants to distill accumulated findings into a reusable context artifact. Also use when starting
-  a new project phase and wanting to capture what's been learned so far.
+  Consolidates lab notebook knowledge into a unified, thematically organized knowledge model. Transforms episodic
+  experimental records into semantic project knowledge, inspired by sleep-based memory consolidation. Triggers when the
+  user says "sleep on it", "consolidate knowledge", "compact the notebooks", "update the knowledge model", "what do we
+  know", or wants to distill accumulated findings into a reusable context artifact. Also triggers when starting a new
+  project phase and wanting to capture what's been learned so far.
 user-invocable: true
 argument-hint: "[--incremental] — update existing knowledge model instead of rebuilding"
 ---
@@ -17,17 +17,6 @@ which renders to `lyzortx/KNOWLEDGE.md` and is loaded into Claude's context for 
 
 The metaphor is deliberate: like sleep-based memory consolidation, this process transforms episodic records (specific
 experiments, dates, intermediate steps) into semantic knowledge (validated facts, dead ends, active assumptions).
-
-## Architecture
-
-```
-lab notebooks (episodic)  →  /sleeponit (consolidation)  →  knowledge.yml (semantic)  →  KNOWLEDGE.md (context)
-```
-
-- **Source of truth**: `lyzortx/orchestration/knowledge.yml` (YAML, machine-manipulable)
-- **Rendered output**: `lyzortx/KNOWLEDGE.md` (markdown, loaded into Claude context via `lyzortx/CLAUDE.md`)
-- **Parser/validator**: `lyzortx/orchestration/knowledge_parser.py`
-- **Renderer**: `lyzortx/orchestration/render_knowledge.py`
 
 ## Phase 1: Extract & Organize
 
@@ -105,14 +94,6 @@ This is the critical human-in-the-loop step. The user must review and approve th
    - Total knowledge units by status
    - If incremental: the diff summary
    - Remind user to commit both `knowledge.yml` and `KNOWLEDGE.md`
-
-## Merge Conflict Guidance
-
-When merging branches that both modified `knowledge.yml`:
-- Resolve the YAML conflict (usually: keep both sets of additions)
-- Update `last_consolidated` to the later date
-- Re-run `python -m lyzortx.orchestration.render_knowledge` to regenerate `KNOWLEDGE.md`
-- The rendered markdown is always regenerable — never hand-edit it
 
 ## What Makes a Good Knowledge Unit
 
