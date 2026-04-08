@@ -322,8 +322,9 @@ def test_train_runs_adsorption_first_baseline_without_host_defense(tmp_path: Pat
         "phage_stats",
     ]
     assert summary["baseline_contract"]["host_defense_active"] is False
-    assert summary["host_encoder"]["slots"] == ["host_surface", "host_typing", "host_stats"]
-    assert "host_defense" not in summary["host_encoder"]["slots"]
+    assert summary["feature_space"]["host_slots"] == ["host_surface", "host_typing", "host_stats"]
+    assert "host_defense" not in summary["feature_space"]["host_slots"]
+    assert summary["feature_space"]["type"] == "raw_slot_features"
     assert set(summary["inner_val_metrics"]) == {"roc_auc", "top3_hit_rate", "brier_score"}
 
 
@@ -374,7 +375,7 @@ def test_train_rejects_schema_bypass(tmp_path: Path) -> None:
         row["unexpected_column"] = "1"
     write_csv_rows(feature_path, rows)
 
-    with pytest.raises(ValueError, match="frozen cache schema"):
+    with pytest.raises(ValueError, match="header mismatch"):
         autoresearch_train.main(
             ["--cache-dir", str(cache_dir), "--output-dir", str(tmp_path / "out"), "--device-type", "cpu"]
         )

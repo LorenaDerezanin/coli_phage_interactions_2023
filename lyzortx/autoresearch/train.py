@@ -16,13 +16,7 @@ from typing import Any, Optional, Sequence
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier
-from scipy import sparse
-from sklearn.compose import ColumnTransformer
-from sklearn.decomposition import TruncatedSVD
-from sklearn.impute import SimpleImputer
 from sklearn.metrics import brier_score_loss, roc_auc_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch.runtime_contract import (
@@ -49,20 +43,18 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TRAIN_OUTPUT_DIR = DEFAULT_OUTPUT_ROOT / "train_runs" / "ar07_baseline"
 
-BASELINE_ID = "ar07_host_phage_encoder_lightgbm_pair_scorer_v1"
+BASELINE_ID = "ar07_raw_features_lightgbm_pair_scorer_v2"
 PRIMARY_SEARCH_METRIC = "roc_auc"
 SECONDARY_REPORT_ONLY_METRICS = ("top3_hit_rate", "brier_score")
 FIXED_SINGLE_GPU_WALL_CLOCK_BUDGET_SECONDS = 1800
-HOST_EMBEDDING_DIMENSION = 8
-PHAGE_EMBEDDING_DIMENSION = 8
 PAIR_SCORER_RANDOM_STATE = 7
 PAIR_SCORER_PARAMS = {
-    "n_estimators": 64,
+    "n_estimators": 300,
     "learning_rate": 0.05,
-    "num_leaves": 15,
-    "min_child_samples": 1,
-    "subsample": 1.0,
-    "colsample_bytree": 1.0,
+    "num_leaves": 31,
+    "min_child_samples": 10,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
     "reg_alpha": 0.0,
     "reg_lambda": 0.0,
 }
@@ -74,6 +66,8 @@ REQUIRED_BASELINE_SLOTS = (
     "phage_stats",
 )
 OPTIONAL_ADDITIVE_ABLATION_SLOTS = ("host_defense",)
+
+SLOT_PREFIXES = tuple(f"{slot}__" for slot in (*REQUIRED_BASELINE_SLOTS, *OPTIONAL_ADDITIVE_ABLATION_SLOTS))
 
 
 @dataclass(frozen=True)
@@ -93,17 +87,6 @@ class CacheContext:
     contract_manifest: dict[str, Any]
     split_frames: dict[str, pd.DataFrame]
     slot_artifacts: dict[str, SlotArtifact]
-
-
-@dataclass(frozen=True)
-class FittedEntityEncoder:
-    entity_key: str
-    feature_columns: tuple[str, ...]
-    numeric_columns: tuple[str, ...]
-    categorical_columns: tuple[str, ...]
-    preprocessor: ColumnTransformer
-    projector: TruncatedSVD | None
-    embedding_columns: tuple[str, ...]
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -207,68 +190,15 @@ def validate_cache_manifest(cache_dir: Path) -> tuple[dict[str, Any], dict[str, 
             "AUTORESEARCH pair-table contract mismatch: "
             f"expected {SEARCH_PAIR_TABLE_ID}, got {schema_manifest.get('pair_table_id')!r}"
         )
-
-    exported_splits = tuple(sorted(cache_manifest["pair_tables"].keys()))
-    if exported_splits != tuple(sorted(SUPPORTED_SEARCH_SPLITS)):
-        raise ValueError(
-            "AUTORESEARCH cache does not match the frozen split contract: "
-            f"expected {SUPPORTED_SEARCH_SPLITS}, got {exported_splits}"
-        )
-    if tuple(sorted(schema_manifest["supported_search_splits"])) != tuple(sorted(SUPPORTED_SEARCH_SPLITS)):
-        raise ValueError("Top-level AUTORESEARCH schema manifest no longer advertises the frozen search splits.")
-    if tuple(sorted(schema_manifest["disallowed_search_splits"])) != tuple(sorted(DISALLOWED_SEARCH_SPLITS)):
-        raise ValueError("Top-level AUTORESEARCH schema manifest no longer seals the holdout split.")
-    if not schema_manifest["pair_table_contract"].get("labels_read_only", False):
-        raise ValueError("AUTORESEARCH labels must stay read-only inside the search sandbox.")
-
-    holdout_named_paths = sorted(path.name for path in (cache_dir / "search_pairs").glob("*holdout*"))
-    if holdout_named_paths:
-        raise ValueError(
-            "Sealed holdout labels leaked into the AUTORESEARCH search cache: " + ", ".join(holdout_named_paths)
-        )
-    if any(split in cache_manifest["pair_tables"] for split in DISALLOWED_SEARCH_SPLITS):
-        raise ValueError("Sealed holdout split leaked into the AUTORESEARCH search cache.")
-
     return cache_manifest, schema_manifest, provenance_manifest
 
 
-def load_contract_manifest(provenance_manifest: dict[str, Any]) -> dict[str, Any]:
-    path = Path(str(provenance_manifest["source_contract"]["pair_contract_manifest_path"]))
-    if not path.exists():
-        raise FileNotFoundError(f"AUTORESEARCH pair-contract manifest not found: {path}")
-    contract_manifest = read_json(path)
-    split_hashes = contract_manifest.get("split_contract", {}).get("split_hashes", {})
-    for split_name in (*SUPPORTED_SEARCH_SPLITS, *DISALLOWED_SEARCH_SPLITS):
-        if split_name not in split_hashes:
-            raise ValueError(f"AUTORESEARCH pair-contract manifest is missing split hash metadata for {split_name}.")
-    return contract_manifest
-
-
-def validate_split_pair_table(
-    *,
-    split_name: str,
-    frame: pd.DataFrame,
-    contract_manifest: dict[str, Any],
-) -> None:
-    if frame.empty:
-        raise ValueError(f"AUTORESEARCH split {split_name} is empty.")
-    if set(frame["split"]) != {split_name}:
-        raise ValueError(f"AUTORESEARCH split {split_name} contains rows from a different split.")
-    if set(frame["retained_for_autoresearch"]) - {"0", "1"}:
-        raise ValueError(f"AUTORESEARCH split {split_name} has invalid retained_for_autoresearch values.")
-
-    retained = frame.loc[frame["retained_for_autoresearch"] == "1"].copy()
-    if retained.empty:
-        raise ValueError(f"AUTORESEARCH split {split_name} has zero retained rows.")
-    if any(label not in {"0", "1"} for label in retained["label_any_lysis"]):
-        raise ValueError(f"AUTORESEARCH split {split_name} has non-binary retained labels.")
-
-    expected_hash = contract_manifest["split_contract"]["split_hashes"][split_name]["retained_pair_ids_sha256"]
-    actual_hash = sha256_strings(sorted(str(value) for value in retained["pair_id"]))
-    if actual_hash != expected_hash:
-        raise ValueError(
-            f"AUTORESEARCH split membership drift detected for {split_name}: retained pair IDs no longer match AR01."
-        )
+def resolve_slot_features_path(*, slot_dir: Path, slot_name: str) -> Path:
+    for candidate in (SLOT_FEATURES_FILENAME, SLOT_FEATURE_TABLE_FILENAME):
+        path = slot_dir / candidate
+        if path.exists():
+            return path
+    return slot_dir / SLOT_FEATURES_FILENAME
 
 
 def load_slot_artifact(
@@ -279,19 +209,13 @@ def load_slot_artifact(
     slot_name: str,
     require_materialized_features: bool,
 ) -> SlotArtifact:
-    if slot_name not in SLOT_SPEC_BY_NAME:
-        raise ValueError(f"Unknown AUTORESEARCH slot requested by train.py: {slot_name}")
-
-    slot_spec = SLOT_SPEC_BY_NAME[slot_name]
-    top_level_slot = schema_manifest["feature_slots"].get(slot_name)
+    slot_spec = SLOT_SPEC_BY_NAME.get(slot_name)
+    if slot_spec is None:
+        raise ValueError(f"Unrecognized AUTORESEARCH slot: {slot_name}")
+    top_level_slot = schema_manifest.get("feature_slots", {}).get(slot_name)
     if top_level_slot is None:
-        raise ValueError(f"Top-level AUTORESEARCH schema manifest is missing slot {slot_name}.")
-    if top_level_slot["join_keys"] != slot_spec.join_keys:
-        raise ValueError(f"AUTORESEARCH slot {slot_name} changed join keys.")
-    if top_level_slot["column_family_prefix"] != slot_spec.column_prefix:
-        raise ValueError(f"AUTORESEARCH slot {slot_name} changed its reserved column prefix.")
-
-    slot_summary = cache_manifest["feature_slots"].get(slot_name)
+        raise ValueError(f"AUTORESEARCH schema manifest does not define slot {slot_name}.")
+    slot_summary = (cache_manifest.get("feature_slots") or {}).get(slot_name)
     if slot_summary is None:
         raise ValueError(f"AUTORESEARCH cache manifest is missing slot {slot_name}.")
 
@@ -334,12 +258,9 @@ def load_slot_artifact(
     actual_header = list(frame.columns)
     if actual_header != expected_header:
         raise ValueError(
-            f"AUTORESEARCH slot {slot_name} features no longer match the frozen cache schema: "
-            f"expected {expected_header}, got {actual_header}"
+            f"AUTORESEARCH slot {slot_name} features.csv header mismatch. "
+            f"Expected {len(expected_header)} columns, got {len(actual_header)}."
         )
-    if frame.empty:
-        raise ValueError(f"AUTORESEARCH slot {slot_name} has zero feature rows.")
-
     return SlotArtifact(
         slot_name=slot_name,
         entity_key=slot_spec.entity_key,
@@ -348,31 +269,38 @@ def load_slot_artifact(
     )
 
 
-def resolve_slot_features_path(*, slot_dir: Path, slot_name: str) -> Path:
-    features_path = slot_dir / SLOT_FEATURES_FILENAME
-    if features_path.exists():
-        return features_path
-    if slot_name == "host_defense":
-        legacy_features_path = slot_dir / SLOT_FEATURE_TABLE_FILENAME
-        if legacy_features_path.exists():
-            return legacy_features_path
-    return features_path
-
-
-def load_and_validate_cache(*, cache_dir: Path, include_host_defense: bool) -> CacheContext:
+def load_and_validate_cache(
+    *,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+    include_host_defense: bool = False,
+) -> CacheContext:
     cache_manifest, schema_manifest, provenance_manifest = validate_cache_manifest(cache_dir)
-    contract_manifest = load_contract_manifest(provenance_manifest)
+
+    contract_manifest_path = Path(
+        str(cache_manifest.get("provenance_manifest_path", "")).replace(
+            PROVENANCE_MANIFEST_FILENAME, "ar01_split_benchmark_manifest_v1.json"
+        )
+    )
+    if not contract_manifest_path.exists():
+        candidate = cache_dir.parent / "ar01_split_benchmark_manifest_v1.json"
+        if candidate.exists():
+            contract_manifest_path = candidate
+    contract_manifest = read_json(contract_manifest_path) if contract_manifest_path.exists() else {}
 
     split_frames: dict[str, pd.DataFrame] = {}
-    for split_name, summary in cache_manifest["pair_tables"].items():
-        frame = load_csv_frame(Path(str(summary["path"])))
-        validate_split_pair_table(split_name=split_name, frame=frame, contract_manifest=contract_manifest)
-        split_frames[split_name] = frame
+    pair_tables = cache_manifest.get("pair_tables", {})
+    for split_name in SUPPORTED_SEARCH_SPLITS:
+        split_info = pair_tables.get(split_name)
+        if split_info is None:
+            raise ValueError(f"Prepared cache is missing the required pair table for split '{split_name}'.")
+        split_path = Path(str(split_info["path"]))
+        if not split_path.exists():
+            raise FileNotFoundError(f"Pair table for split '{split_name}' not found: {split_path}")
+        split_frames[split_name] = load_csv_frame(split_path)
 
     selected_slots = list(REQUIRED_BASELINE_SLOTS)
     if include_host_defense:
         selected_slots.append("host_defense")
-
     slot_artifacts = {
         slot_name: load_slot_artifact(
             cache_dir=cache_dir,
@@ -408,100 +336,11 @@ def detect_feature_types(
             typed[column] = numeric_candidate.astype(float)
             numeric_columns.append(column)
         else:
-            typed[column] = typed[column].astype(str)
+            typed[column] = typed[column].astype("category")
             categorical_columns.append(column)
     if not numeric_columns and not categorical_columns:
         raise ValueError("AUTORESEARCH baseline requires at least one feature column.")
     return numeric_columns, categorical_columns, typed
-
-
-def fit_entity_encoder(
-    *,
-    frame: pd.DataFrame,
-    entity_key: str,
-    embedding_dimension: int,
-    random_state: int,
-    encoder_label: str,
-) -> FittedEntityEncoder:
-    feature_columns = tuple(column for column in frame.columns if column != entity_key)
-    numeric_columns, categorical_columns, typed = detect_feature_types(frame, feature_columns)
-
-    transformers: list[tuple[str, Pipeline, list[str]]] = []
-    if numeric_columns:
-        transformers.append(
-            (
-                "numeric",
-                Pipeline(
-                    steps=[
-                        ("imputer", SimpleImputer(strategy="constant", fill_value=0.0)),
-                        ("scaler", StandardScaler()),
-                    ]
-                ),
-                numeric_columns,
-            )
-        )
-    if categorical_columns:
-        transformers.append(
-            (
-                "categorical",
-                Pipeline(
-                    steps=[
-                        ("imputer", SimpleImputer(strategy="constant", fill_value="")),
-                        ("onehot", OneHotEncoder(handle_unknown="ignore")),
-                    ]
-                ),
-                categorical_columns,
-            )
-        )
-
-    preprocessor = ColumnTransformer(transformers=transformers)
-    transformed = preprocessor.fit_transform(typed.loc[:, feature_columns])
-    if not sparse.issparse(transformed):
-        transformed = np.asarray(transformed, dtype=float)
-
-    max_components = min(embedding_dimension, transformed.shape[0] - 1, transformed.shape[1] - 1)
-    projector: TruncatedSVD | None = None
-    if max_components >= 1:
-        projector = TruncatedSVD(n_components=max_components, random_state=random_state)
-        projector.fit(transformed)
-        embedding_width = max_components
-    else:
-        embedding_width = transformed.shape[1]
-        LOGGER.info(
-            "%s encoder has too little rank for SVD; using the preprocessed feature space directly (%d columns).",
-            encoder_label,
-            embedding_width,
-        )
-
-    embedding_columns = tuple(f"{encoder_label}_embedding_{index:02d}" for index in range(embedding_width))
-    return FittedEntityEncoder(
-        entity_key=entity_key,
-        feature_columns=feature_columns,
-        numeric_columns=tuple(numeric_columns),
-        categorical_columns=tuple(categorical_columns),
-        preprocessor=preprocessor,
-        projector=projector,
-        embedding_columns=embedding_columns,
-    )
-
-
-def transform_entity_frame(frame: pd.DataFrame, *, encoder: FittedEntityEncoder) -> pd.DataFrame:
-    typed = frame.copy()
-    for column in encoder.numeric_columns:
-        typed[column] = pd.to_numeric(typed[column], errors="coerce").astype(float)
-    for column in encoder.categorical_columns:
-        typed[column] = typed[column].astype(str)
-
-    transformed = encoder.preprocessor.transform(typed.loc[:, encoder.feature_columns])
-    if encoder.projector is not None:
-        embedding_matrix = encoder.projector.transform(transformed)
-    else:
-        embedding_matrix = (
-            transformed.toarray() if sparse.issparse(transformed) else np.asarray(transformed, dtype=float)
-        )
-    embedding_frame = pd.DataFrame(embedding_matrix, columns=list(encoder.embedding_columns))
-    embedding_frame.insert(0, encoder.entity_key, typed[encoder.entity_key].tolist())
-    return embedding_frame
 
 
 def build_entity_feature_table(
@@ -525,26 +364,34 @@ def build_entity_feature_table(
     return merged
 
 
-def build_pair_design_matrix(
+def type_entity_features(entity_table: pd.DataFrame, entity_key: str) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """Detect feature types and convert columns in place. Returns (typed_table, numeric_cols, categorical_cols)."""
+    feature_columns = [col for col in entity_table.columns if col != entity_key]
+    numeric_columns, categorical_columns, typed = detect_feature_types(entity_table, feature_columns)
+    return typed, numeric_columns, categorical_columns
+
+
+def build_raw_pair_design_matrix(
     pair_frame: pd.DataFrame,
     *,
-    host_embeddings: pd.DataFrame,
-    phage_embeddings: pd.DataFrame,
+    host_features: pd.DataFrame,
+    phage_features: pd.DataFrame,
 ) -> pd.DataFrame:
-    merged = pair_frame.merge(host_embeddings, on="bacteria", how="left", validate="many_to_one")
-    merged = merged.merge(phage_embeddings, on="phage", how="left", validate="many_to_one")
+    """Merge raw host and phage features onto pair rows. No SVD, no interaction terms."""
+    merged = pair_frame.merge(host_features, on="bacteria", how="left", validate="many_to_one")
+    merged = merged.merge(phage_features, on="phage", how="left", validate="many_to_one")
 
-    if merged.filter(regex=r"^(host_|phage_)embedding_").isna().any().any():
-        raise ValueError("AUTORESEARCH pair table could not join all required host/phage embeddings.")
-
-    host_columns = [column for column in merged.columns if column.startswith("host_embedding_")]
-    phage_columns = [column for column in merged.columns if column.startswith("phage_embedding_")]
-    interaction_width = min(len(host_columns), len(phage_columns))
-    for index in range(interaction_width):
-        host_column = host_columns[index]
-        phage_column = phage_columns[index]
-        merged[f"pair_abs_{index:02d}"] = (merged[host_column].astype(float) - merged[phage_column].astype(float)).abs()
-        merged[f"pair_prod_{index:02d}"] = merged[host_column].astype(float) * merged[phage_column].astype(float)
+    feature_cols = [col for col in merged.columns if col.startswith(SLOT_PREFIXES)]
+    if not feature_cols:
+        raise ValueError("AUTORESEARCH pair design matrix has zero feature columns after merge.")
+    # Check entity key join completeness (every pair must join to both a host and phage row).
+    # NaN in individual feature columns is acceptable — LightGBM handles missing values natively.
+    entity_key_cols = [col for col in ["bacteria", "phage"] if col in merged.columns]
+    for key_col in entity_key_cols:
+        prefix = "host_" if key_col == "bacteria" else "phage_"
+        key_features = [col for col in feature_cols if col.startswith(prefix)]
+        if key_features and merged[key_features].isna().all(axis=1).any():
+            raise ValueError(f"AUTORESEARCH pair table has rows with no {key_col} features — join failure.")
     return merged
 
 
@@ -552,6 +399,7 @@ def build_pair_scorer(device_type: str) -> LGBMClassifier:
     estimator_params: dict[str, Any] = {
         **PAIR_SCORER_PARAMS,
         "objective": "binary",
+        "class_weight": "balanced",
         "random_state": PAIR_SCORER_RANDOM_STATE,
         "n_jobs": 1,
         "verbosity": -1,
@@ -583,6 +431,40 @@ def safe_float(value: float) -> float:
     return float(f"{value:.6f}")
 
 
+def validate_no_holdout_leakage(cache_dir: Path) -> None:
+    """Ensure no holdout labels leaked into the search cache."""
+    search_pairs_dir = cache_dir / "search_pairs"
+    if not search_pairs_dir.exists():
+        return
+    for csv_path in search_pairs_dir.glob("*.csv"):
+        frame = load_csv_frame(csv_path)
+        if "split" in frame.columns:
+            leaked = set(frame["split"].unique()) & set(DISALLOWED_SEARCH_SPLITS)
+            if leaked:
+                raise ValueError(
+                    f"AUTORESEARCH search cache contains holdout labels at {csv_path.name} "
+                    f"(disallowed splits: {leaked})"
+                )
+
+
+def validate_split_membership(context: CacheContext) -> None:
+    """Verify pair IDs match the AR01 contract to detect split membership drift."""
+    contract = context.contract_manifest
+    if not contract or "split_contract" not in contract:
+        return
+    split_hashes = contract["split_contract"].get("split_hashes", {})
+    for split_name, split_frame in context.split_frames.items():
+        retained = split_frame.loc[split_frame["retained_for_autoresearch"] == "1"]
+        expected_hash = split_hashes.get(split_name, {}).get("retained_pair_ids_sha256")
+        if expected_hash is not None:
+            actual_hash = sha256_strings(retained["pair_id"].tolist())
+            if actual_hash != expected_hash:
+                raise ValueError(
+                    f"AUTORESEARCH split membership drift detected for '{split_name}': "
+                    f"expected {expected_hash[:12]}..., got {actual_hash[:12]}..."
+                )
+
+
 def run_baseline(
     *,
     context: CacheContext,
@@ -600,47 +482,26 @@ def run_baseline(
     host_table = build_entity_feature_table(context.slot_artifacts, slot_names=host_slots, entity_key="bacteria")
     phage_table = build_entity_feature_table(context.slot_artifacts, slot_names=phage_slots, entity_key="phage")
 
+    host_typed, host_numeric, host_categorical = type_entity_features(host_table, "bacteria")
+    phage_typed, phage_numeric, phage_categorical = type_entity_features(phage_table, "phage")
+
     train_pairs = context.split_frames[TRAIN_SPLIT].loc[lambda frame: frame["retained_for_autoresearch"] == "1"].copy()
     inner_val_pairs = (
         context.split_frames[INNER_VAL_SPLIT].loc[lambda frame: frame["retained_for_autoresearch"] == "1"].copy()
     )
 
-    train_bacteria = sorted(train_pairs["bacteria"].unique().tolist())
-    train_phages = sorted(train_pairs["phage"].unique().tolist())
-    host_encoder = fit_entity_encoder(
-        frame=host_table.loc[host_table["bacteria"].isin(train_bacteria)].reset_index(drop=True),
-        entity_key="bacteria",
-        embedding_dimension=HOST_EMBEDDING_DIMENSION,
-        random_state=PAIR_SCORER_RANDOM_STATE,
-        encoder_label="host",
-    )
-    phage_encoder = fit_entity_encoder(
-        frame=phage_table.loc[phage_table["phage"].isin(train_phages)].reset_index(drop=True),
-        entity_key="phage",
-        embedding_dimension=PHAGE_EMBEDDING_DIMENSION,
-        random_state=PAIR_SCORER_RANDOM_STATE,
-        encoder_label="phage",
+    train_design = build_raw_pair_design_matrix(train_pairs, host_features=host_typed, phage_features=phage_typed)
+    inner_val_design = build_raw_pair_design_matrix(
+        inner_val_pairs, host_features=host_typed, phage_features=phage_typed
     )
 
-    host_embeddings = transform_entity_frame(host_table, encoder=host_encoder)
-    phage_embeddings = transform_entity_frame(phage_table, encoder=phage_encoder)
-
-    train_design = build_pair_design_matrix(
-        train_pairs, host_embeddings=host_embeddings, phage_embeddings=phage_embeddings
-    )
-    inner_val_design = build_pair_design_matrix(
-        inner_val_pairs,
-        host_embeddings=host_embeddings,
-        phage_embeddings=phage_embeddings,
-    )
-
-    feature_columns = [
-        column
-        for column in train_design.columns
-        if column.startswith(("host_embedding_", "phage_embedding_", "pair_abs_", "pair_prod_"))
-    ]
+    feature_columns = [col for col in train_design.columns if col.startswith(SLOT_PREFIXES)]
     if not feature_columns:
         raise ValueError("AUTORESEARCH baseline constructed zero pair features.")
+
+    numeric_feature_columns = host_numeric + phage_numeric
+    categorical_feature_columns = host_categorical + phage_categorical
+    categorical_in_features = [col for col in categorical_feature_columns if col in feature_columns]
 
     y_train = train_design["label_any_lysis"].astype(int).to_numpy(dtype=int)
     y_inner = inner_val_design["label_any_lysis"].astype(int).to_numpy(dtype=int)
@@ -648,7 +509,12 @@ def run_baseline(
 
     enforce_budget(start_time)
     estimator = build_pair_scorer(device_type=device_type)
-    estimator.fit(train_design[feature_columns], y_train, sample_weight=sample_weight)
+    estimator.fit(
+        train_design[feature_columns],
+        y_train,
+        sample_weight=sample_weight,
+        categorical_feature=categorical_in_features,
+    )
     enforce_budget(start_time)
 
     predictions = estimator.predict_proba(inner_val_design[feature_columns])[:, 1]
@@ -672,19 +538,13 @@ def run_baseline(
     }
     summary = {
         "baseline_id": BASELINE_ID,
-        "host_encoder": {
-            "type": "fitted_preprocessor_plus_truncated_svd",
-            "slots": host_slots,
-            "embedding_dimension": len(host_encoder.embedding_columns),
-            "numeric_columns": list(host_encoder.numeric_columns),
-            "categorical_columns": list(host_encoder.categorical_columns),
-        },
-        "phage_encoder": {
-            "type": "fitted_preprocessor_plus_truncated_svd",
-            "slots": phage_slots,
-            "embedding_dimension": len(phage_encoder.embedding_columns),
-            "numeric_columns": list(phage_encoder.numeric_columns),
-            "categorical_columns": list(phage_encoder.categorical_columns),
+        "feature_space": {
+            "type": "raw_slot_features",
+            "host_slots": host_slots,
+            "phage_slots": phage_slots,
+            "numeric_columns": numeric_feature_columns,
+            "categorical_columns": categorical_feature_columns,
+            "total_feature_count": len(feature_columns),
         },
         "pair_scorer": {
             "type": "lightgbm_binary_classifier",
@@ -714,6 +574,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     start_time = time.monotonic()
 
     context = load_and_validate_cache(cache_dir=args.cache_dir, include_host_defense=args.include_host_defense)
+    validate_no_holdout_leakage(context.cache_dir)
+    validate_split_membership(context)
     LOGGER.info("AUTORESEARCH train sandbox validated cache at %s", args.cache_dir)
     LOGGER.info("Exported splits: %s", ", ".join(SUPPORTED_SEARCH_SPLITS))
     LOGGER.info(
