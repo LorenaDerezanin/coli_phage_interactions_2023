@@ -12,22 +12,22 @@ import argparse
 import sys
 from collections import defaultdict
 from pathlib import Path
-import tempfile
 import textwrap
 from typing import Any
-
-from pymarkdown.api import PyMarkdownApi, PyMarkdownApiException
 
 try:
     import yaml
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from lyzortx.orchestration.render_utils import (
+    MAX_PROSE_WIDTH,
+    REPO_ROOT,
+    write_rendered_markdown,
+)
+
 DEFAULT_PLAN_PATH = REPO_ROOT / "lyzortx/orchestration/plan.yml"
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "lyzortx/research_notes/PLAN.md"
-DEFAULT_PYMARKDOWN_CONFIG = REPO_ROOT / ".pymarkdown.yaml"
-MAX_PROSE_WIDTH = 120
 
 # Map track keys to Mermaid node IDs (lowercase prefix "t" + lowercase track key).
 TRACK_KEY_TO_MERMAID = {
@@ -187,29 +187,7 @@ def render_plan(plan: dict[str, Any]) -> str:
 
 
 def write_rendered_plan(output_path: Path, rendered: str) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=output_path.parent,
-        prefix=f"{output_path.stem}.",
-        suffix=output_path.suffix,
-        delete=False,
-    ) as temp_file:
-        temp_path = Path(temp_file.name)
-        temp_file.write(rendered)
-
-    try:
-        api = PyMarkdownApi().configuration_file_path(str(DEFAULT_PYMARKDOWN_CONFIG))
-        api.fix_path(str(temp_path))
-        temp_path.replace(output_path)
-    except PyMarkdownApiException as exc:
-        temp_path.unlink(missing_ok=True)
-        raise RuntimeError(f"PyMarkdown fix failed for {output_path}: {exc}") from exc
-    except Exception:
-        temp_path.unlink(missing_ok=True)
-        raise
+    write_rendered_markdown(output_path, rendered)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

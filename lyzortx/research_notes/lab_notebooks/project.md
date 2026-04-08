@@ -1483,3 +1483,51 @@ Retargeted AUTORESEARCH evaluation from the AR01 holdout (74 bacteria, individua
 - The two most obvious feature additions are defense system annotations and phage genome kmer profiles — exactly the
   features TL18 has that AUTORESEARCH lacks.
 - Both can be derived from FASTA inputs, keeping the AUTORESEARCH contract intact (no panel-derived metadata).
+
+### 2026-04-08 22:00 UTC: Knowledge consolidation infrastructure — the `/sleeponit` skill
+
+#### Executive summary
+
+We built a structured knowledge consolidation system inspired by sleep-based memory consolidation from cognitive
+science. Lab notebook entries (episodic records) are distilled into a unified `knowledge.yml` (semantic knowledge) that
+renders to `KNOWLEDGE.md` and loads into Claude's context for all lyzortx work. This addresses the scaling problem:
+~9,500 lines of notebooks are too large to load every session, but the knowledge they contain is essential.
+
+#### Strategic rationale
+
+The 2025-2026 agent memory literature (A-Mem, ICLR 2026 MemAgents workshop, Anthropic's context engineering guide)
+converges on episodic-to-semantic transformation as the critical underserved gap in agent memory. Key principles
+adopted:
+
+1. **Two tiers, not three.** Always-loaded knowledge map + on-demand raw notebooks. No intermediate digest layer needed
+   for file-based context systems.
+2. **Structured knowledge units over prose summaries.** Each unit has: statement, sources, status, confidence, and
+   cross-references. Machine-manipulable YAML source of truth, not markdown prose.
+3. **Unified thematic organization.** Knowledge is grouped by concept (features, model, dead ends), not by source track.
+   A finding from Track L and Track E that both relate to features belong together.
+4. **Forgetting is a feature.** Implementation details recoverable from code, git history, and exact file paths are
+   deliberately excluded.
+5. **Incremental updates over full rebuilds.** The `diff_knowledge()` function compares old and new models. Re-running
+   `/sleeponit` proposes additions/updates/removals rather than regenerating from scratch.
+
+#### Architecture
+
+Follows the established `plan.yml` → `plan_parser.py` → `render_plan.py` → `PLAN.md` pattern:
+
+- `lyzortx/orchestration/knowledge.yml` — YAML source of truth
+- `lyzortx/orchestration/knowledge_parser.py` — frozen dataclasses, loader, validator, diff
+- `lyzortx/orchestration/render_knowledge.py` — markdown renderer
+- `lyzortx/KNOWLEDGE.md` — rendered output, loaded via `@KNOWLEDGE.md` in `lyzortx/CLAUDE.md`
+- `.agents/skills/sleeponit/SKILL.md` — user-invocable skill guiding the 3-phase process
+
+#### Data model
+
+`KnowledgeUnit` fields: `id`, `statement`, `sources`, `status` (active/superseded/dead-end), `confidence`
+(validated/preliminary), `context`, `relates_to` (cross-references to other unit IDs). Validation catches duplicate IDs,
+empty statements, invalid statuses, and broken cross-references. 15 unit tests cover the parser, validator, diff, and
+renderer.
+
+#### Future: First consolidation run
+
+Run `/sleeponit` to produce the initial knowledge model from all existing notebooks. This should happen after the
+current AUTORESEARCH baseline work stabilizes, so the knowledge model captures the full state.

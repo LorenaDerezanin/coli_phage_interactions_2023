@@ -20,6 +20,18 @@ These are validation checkpoints, not dispatchable tasks. All must hold before e
 - No leakage violations detected by the v0 regression checks (ST0.1 through ST0.7).
 - v0 model must materially outperform a naive baseline on the same split.
 
+# Knowledge Model
+
+- `lyzortx/KNOWLEDGE.md` is auto-generated from `lyzortx/orchestration/knowledge.yml` by
+  `lyzortx/orchestration/render_knowledge.py`. Do not edit `KNOWLEDGE.md` by hand.
+- The knowledge model contains consolidated project knowledge distilled from lab notebook entries. It is organized
+  thematically (not per-track) and loaded into context for all lyzortx work.
+- Consult the knowledge model before starting work on a track — it captures validated findings, dead ends, and active
+  assumptions that may not be obvious from the code alone.
+- When your work invalidates or extends existing knowledge (e.g., a finding changes status from "active" to
+  "superseded"), note it in your lab notebook entry so the next `/sleeponit` run can update the model.
+- After merging branches that both modified `knowledge.yml`, re-run `render_knowledge.py` to regenerate `KNOWLEDGE.md`.
+
 # Paper Availability
 
 - The research paper is in the local `paper/` directory (gitignored, paywalled — do not redistribute).
