@@ -196,7 +196,7 @@ def test_write_rendered_plan_uses_pymarkdown_fix(monkeypatch: pytest.MonkeyPatch
             path = Path(file_path)
             path.write_text(path.read_text(encoding="utf-8") + "\n<!-- fixed -->\n", encoding="utf-8")
 
-    monkeypatch.setattr("lyzortx.orchestration.render_plan.PyMarkdownApi", lambda: _FakeApi())
+    monkeypatch.setattr("lyzortx.orchestration.render_utils.PyMarkdownApi", lambda: _FakeApi())
     write_rendered_plan(output_path, "# Title\n")
 
     assert captured["config_path"].endswith(".pymarkdown.yaml")
