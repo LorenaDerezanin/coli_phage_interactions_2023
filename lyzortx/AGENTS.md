@@ -71,6 +71,9 @@ These are validation checkpoints, not dispatchable tasks. All must hold before e
 - First explore APIs manually (e.g., `gh api`, `curl`) to understand real data shapes before writing code.
 - Extract core logic into pure functions under `lyzortx/` and write unit tests.
 - **Never read large API responses into the conversation** — write to file, check size, then inspect selectively.
+- **Prove it works before updating tests.** When fixing an integration bug (e.g., API payload format), run the real
+  call first to confirm the fix. Only update unit tests after the live call succeeds. Updating tests to match an
+  untested hypothesis just moves the bug into the test suite.
 
 # Claims About External Libraries
 

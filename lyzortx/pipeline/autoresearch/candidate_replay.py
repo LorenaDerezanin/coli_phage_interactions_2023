@@ -283,10 +283,13 @@ def ensure_autoresearch_cache(cache_dir: Path) -> Path:
 
 
 def load_module_from_path(module_name: str, path: Path) -> ModuleType:
+    import sys
+
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not import module from {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -422,8 +425,25 @@ def build_candidate_holdout_rows(
     return rows
 
 
-def resolve_feature_lock_path(path: Path) -> Path:
+def resolve_feature_lock_path(path: Path, expected_locked_blocks: Sequence[object] = ()) -> Path:
     if path.exists():
+        # Check whether the generated lock matches the contract before using it.
+        if expected_locked_blocks:
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                actual = [str(b) for b in payload.get("winner_subset_blocks", [])]
+                expected = [str(b) for b in expected_locked_blocks]
+                if actual != expected and FALLBACK_FEATURE_LOCK_PATH.exists():
+                    LOGGER.warning(
+                        "Generated feature lock at %s has blocks %r (expected %r); using fallback %s",
+                        path,
+                        actual,
+                        expected,
+                        FALLBACK_FEATURE_LOCK_PATH,
+                    )
+                    return FALLBACK_FEATURE_LOCK_PATH
+            except (json.JSONDecodeError, KeyError):
+                pass
         return path
     if path == DEFAULT_FEATURE_LOCK_PATH and FALLBACK_FEATURE_LOCK_PATH.exists():
         return FALLBACK_FEATURE_LOCK_PATH
@@ -558,11 +578,14 @@ def build_comparator_holdout_rows(
     seed: int,
 ) -> list[dict[str, object]]:
     comparator_manifest = dict(contract_manifest["current_locked_comparator_benchmark"])
-    feature_lock_path = resolve_feature_lock_path(Path(str(comparator_manifest["feature_lock_path"])))
+    expected_blocks = comparator_manifest.get("locked_feature_blocks", ())
+    feature_lock_path = resolve_feature_lock_path(
+        Path(str(comparator_manifest["feature_lock_path"])), expected_locked_blocks=expected_blocks
+    )
     # AR09 replays the locked comparator at the block level, not via a hand-maintained per-column allowlist.
     # The v1 lock records the winning subset blocks ("defense" + "phage_genomic"), so we validate that contract
     # here and then rebuild the full defense/phage-genomic feature space from the raw Track C/Track D columns.
-    validate_comparator_feature_lock(feature_lock_path, comparator_manifest.get("locked_feature_blocks", ()))
+    validate_comparator_feature_lock(feature_lock_path, expected_blocks)
     comparator_params = load_comparator_params(Path(str(comparator_manifest["model_summary_path"])))
     track_g_args = ensure_track_g_prerequisites(skip_prerequisites)
 
