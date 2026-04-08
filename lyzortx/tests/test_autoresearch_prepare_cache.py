@@ -109,6 +109,7 @@ def test_build_top_level_schema_manifest_freezes_reserved_slots() -> None:
         "host_stats",
         "phage_projection",
         "phage_stats",
+        "phage_kmer",
     ]
     assert schema["feature_slots"]["host_surface"] == {
         "entity_key": "bacteria",
@@ -498,7 +499,9 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
     source_pair_rows = read_csv_rows(output_root / build_contract.PAIR_TABLE_FILENAME)
     holdout_bacteria = {row["bacteria"] for row in source_pair_rows if row["split"] == "holdout"}
     assert exported_bacteria
-    assert exported_bacteria.isdisjoint(holdout_bacteria)
+    # Feature slots include holdout entities (for AR09 replication embeddings);
+    # only pair tables exclude holdout.
+    assert holdout_bacteria.issubset(exported_bacteria)
     assert len(fast_path_calls) == 1
     assert fast_path_calls[0]["include_lps_core_type"] is False
     assert set(fast_path_calls[0]["assemblies"]) == exported_bacteria
