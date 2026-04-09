@@ -27,6 +27,11 @@ from pathlib import Path
 
 import numpy as np
 
+# torch and transformers are imported lazily inside model-loading functions because:
+# (1) torch is ~2 GB and takes several seconds to import — --dry-run and the test suite
+#     should not pay this cost;
+# (2) derive_rbp_protein_features imports this module's extraction utilities and would
+#     transitively pull in torch at top level otherwise.
 from lyzortx.pipeline.autoresearch.derive_rbp_protein_features import (
     extract_rbp_proteins_for_phage,
 )
@@ -211,12 +216,11 @@ def compute_saprot_embeddings(
     phage_emb_lists: dict[str, list[np.ndarray]] = {p: [] for p in phage_proteins}
 
     for i, (phage, aa_seq) in enumerate(all_items, 1):
+        # Step 1: ProstT5 AA→3Di (handles cleaning/truncation internally)
+        threedi = _translate_aa_to_3di(aa_seq, prostt5_model, prostt5_tokenizer, device)
+
+        # Step 2: Interleave (use cleaned sequence matching 3Di length)
         clean = aa_seq.translate(RARE_AA_MAP)[:MAX_PROTEIN_LENGTH]
-
-        # Step 1: ProstT5 AA→3Di
-        threedi = _translate_aa_to_3di(clean, prostt5_model, prostt5_tokenizer, device)
-
-        # Step 2: Interleave
         interleaved = _interleave_aa_3di(clean, threedi)
 
         # Step 3: SaProt embedding

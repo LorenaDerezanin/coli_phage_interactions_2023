@@ -1442,6 +1442,9 @@ def materialize_phage_rbp_struct_slot(
 
     slot_spec = SLOT_SPEC_BY_NAME["phage_rbp_struct"]
 
+    # Determine which phages belong to this split (same contract as the old per-phage path).
+    split_phages = {str(row[slot_spec.entity_key]) for rows_list in split_rows.values() for row in rows_list}
+
     # Resolve PLM embedding cache path (precomputed by precompute_rbp_plm_embeddings.py).
     repo_root = Path(__file__).resolve().parents[3]
     plm_cache_path = repo_root / ".scratch" / "rbp_plm_embeddings.npz"
@@ -1450,7 +1453,16 @@ def materialize_phage_rbp_struct_slot(
     n_components = DEFAULT_N_COMPONENTS
 
     LOGGER.info("Phage RBP struct: loading PLM embeddings from %s", plm_cache_path)
-    rows = build_phage_rbp_plm_rows(plm_cache_path, n_components=n_components)
+    all_rows = build_phage_rbp_plm_rows(plm_cache_path, n_components=n_components)
+
+    # Filter to phages in the split, preserving the previous contract.
+    rows = [row for row in all_rows if row["phage"] in split_phages]
+    LOGGER.info(
+        "Phage RBP struct: %d/%d cached phages matched split (%d total in cache)",
+        len(rows),
+        len(split_phages),
+        len(all_rows),
+    )
 
     rbp_phage_count = sum(1 for row in rows if row["has_annotated_rbp"])
     LOGGER.info(

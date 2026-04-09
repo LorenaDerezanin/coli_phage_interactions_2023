@@ -190,7 +190,13 @@ def fit_pca_on_embeddings(
     Only phages with annotated RBPs (has_rbp=True) are used for fitting.
     """
     non_zero_mask = has_rbp.astype(bool)
-    n_non_zero = non_zero_mask.sum()
+    n_non_zero = int(non_zero_mask.sum())
+
+    if n_non_zero < 2:
+        raise ValueError(
+            f"PCA requires at least 2 phages with RBP embeddings, got {n_non_zero}. "
+            "Check that the embedding cache was generated correctly."
+        )
 
     # Clamp n_components to available samples.
     effective_n = min(n_components, n_non_zero - 1)
