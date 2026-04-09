@@ -65,7 +65,7 @@ REQUIRED_BASELINE_SLOTS = (
     "phage_projection",
     "phage_stats",
 )
-OPTIONAL_ADDITIVE_ABLATION_SLOTS = ("host_defense", "phage_rbp_struct")
+OPTIONAL_ADDITIVE_ABLATION_SLOTS = ("host_defense", "phage_rbp_struct", "phage_functional")
 
 SLOT_PREFIXES = tuple(f"{slot}__" for slot in (*REQUIRED_BASELINE_SLOTS, *OPTIONAL_ADDITIVE_ABLATION_SLOTS))
 
@@ -118,6 +118,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--include-phage-rbp-struct",
         action="store_true",
         help="Add the phage_rbp_struct slot (RBP protein descriptors) as an additive ablation.",
+    )
+    parser.add_argument(
+        "--include-phage-functional",
+        action="store_true",
+        help="Add the phage_functional slot (PHROG categories, anti-defense, depolymerase) as an additive ablation.",
     )
     return parser.parse_args(argv)
 
@@ -279,6 +284,7 @@ def load_and_validate_cache(
     cache_dir: Path = DEFAULT_CACHE_DIR,
     include_host_defense: bool = False,
     include_phage_rbp_struct: bool = False,
+    include_phage_functional: bool = False,
 ) -> CacheContext:
     cache_manifest, schema_manifest, provenance_manifest = validate_cache_manifest(cache_dir)
 
@@ -309,6 +315,8 @@ def load_and_validate_cache(
         selected_slots.append("host_defense")
     if include_phage_rbp_struct:
         selected_slots.append("phage_rbp_struct")
+    if include_phage_functional:
+        selected_slots.append("phage_functional")
     slot_artifacts = {
         slot_name: load_slot_artifact(
             cache_dir=cache_dir,
@@ -479,6 +487,7 @@ def run_baseline(
     device_type: str,
     include_host_defense: bool,
     include_phage_rbp_struct: bool = False,
+    include_phage_functional: bool = False,
     start_time: float,
 ) -> tuple[dict[str, Any], list[dict[str, object]]]:
     enforce_budget(start_time)
@@ -489,6 +498,8 @@ def run_baseline(
     phage_slots = ["phage_projection", "phage_stats"]
     if include_phage_rbp_struct:
         phage_slots.append("phage_rbp_struct")
+    if include_phage_functional:
+        phage_slots.append("phage_functional")
 
     host_table = build_entity_feature_table(context.slot_artifacts, slot_names=host_slots, entity_key="bacteria")
     phage_table = build_entity_feature_table(context.slot_artifacts, slot_names=phage_slots, entity_key="phage")
@@ -588,6 +599,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         cache_dir=args.cache_dir,
         include_host_defense=args.include_host_defense,
         include_phage_rbp_struct=args.include_phage_rbp_struct,
+        include_phage_functional=args.include_phage_functional,
     )
     validate_no_holdout_leakage(context.cache_dir)
     validate_split_membership(context)
@@ -598,6 +610,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         active_optional.append("host_defense")
     if args.include_phage_rbp_struct:
         active_optional.append("phage_rbp_struct")
+    if args.include_phage_functional:
+        active_optional.append("phage_functional")
     LOGGER.info(
         "Baseline feature slots: %s",
         ", ".join(REQUIRED_BASELINE_SLOTS + tuple(active_optional)),
@@ -611,6 +625,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         device_type=args.device_type,
         include_host_defense=args.include_host_defense,
         include_phage_rbp_struct=args.include_phage_rbp_struct,
+        include_phage_functional=args.include_phage_functional,
         start_time=start_time,
     )
     elapsed_seconds = safe_float(time.monotonic() - start_time)
@@ -642,6 +657,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "minimum_slots": list(REQUIRED_BASELINE_SLOTS),
             "host_defense_active": args.include_host_defense,
             "phage_rbp_struct_active": args.include_phage_rbp_struct,
+            "phage_functional_active": args.include_phage_functional,
             "host_defense_role": "reserved_additive_ablation",
             "primary_metric": PRIMARY_SEARCH_METRIC,
             "secondary_report_only_metrics": list(SECONDARY_REPORT_ONLY_METRICS),

@@ -173,6 +173,12 @@ def slot_fixture_rows() -> dict[str, list[dict[str, object]]]:
         "phage_stats": phage_stats_rows,
         "phage_kmer": phage_kmer_rows,
         "phage_rbp_struct": phage_rbp_struct_rows,
+        "phage_functional": [
+            {"phage": "P1", "phage_functional__total_cds": "50", "phage_functional__has_anti_defense": "1"},
+            {"phage": "P2", "phage_functional__total_cds": "45", "phage_functional__has_anti_defense": "0"},
+            {"phage": "P3", "phage_functional__total_cds": "38", "phage_functional__has_anti_defense": "0"},
+            {"phage": "P4", "phage_functional__total_cds": "55", "phage_functional__has_anti_defense": "1"},
+        ],
     }
 
 

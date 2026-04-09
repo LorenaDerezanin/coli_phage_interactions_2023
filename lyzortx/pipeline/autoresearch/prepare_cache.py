@@ -61,6 +61,7 @@ PHAGE_PROJECTION_BUILD_MANIFEST_FILENAME = "phage_projection_build_manifest.json
 PHAGE_STATS_BUILD_MANIFEST_FILENAME = "phage_stats_build_manifest.json"
 PHAGE_KMER_BUILD_MANIFEST_FILENAME = "phage_kmer_build_manifest.json"
 PHAGE_RBP_STRUCT_BUILD_MANIFEST_FILENAME = "phage_rbp_struct_build_manifest.json"
+PHAGE_FUNCTIONAL_BUILD_MANIFEST_FILENAME = "phage_functional_build_manifest.json"
 PHAGE_KMER_K = 4
 PHAGE_KMER_DIM = 4**PHAGE_KMER_K  # 256
 DEFAULT_PHAROKKA_ANNOTATION_DIR = Path("data/annotations/pharokka")
@@ -1520,6 +1521,89 @@ def materialize_phage_rbp_struct_slot(
     }
 
 
+def materialize_phage_functional_slot(
+    *,
+    cache_dir: Path,
+    output_root: Path,
+    split_rows: Mapping[str, Sequence[Mapping[str, str]]],
+    pharokka_annotation_dir: Path,
+) -> dict[str, Any]:
+    from lyzortx.pipeline.autoresearch.derive_phage_functional_features import (
+        build_phage_functional_feature_row,
+        build_phage_functional_schema,
+    )
+
+    slot_spec = SLOT_SPEC_BY_NAME["phage_functional"]
+    phage_fasta_by_phage = build_entity_path_map(
+        selected_rows=split_rows,
+        entity_key=slot_spec.entity_key,
+        path_key="phage_fasta_path",
+    )
+    feature_names = build_phage_functional_schema()
+
+    rows: list[dict[str, object]] = []
+    n_phages = len(phage_fasta_by_phage)
+    LOGGER.info("Phage functional: computing gene repertoire features for %d phages", n_phages)
+    for i, phage in enumerate(sorted(phage_fasta_by_phage), 1):
+        row = build_phage_functional_feature_row(phage, pharokka_annotation_dir)
+        rows.append(row)
+        if i % 20 == 0 or i == n_phages:
+            LOGGER.info("Phage functional: %d/%d phages completed", i, n_phages)
+
+    feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
+    slot_dir = cache_dir / "feature_slots" / slot_spec.slot_name
+    feature_path = slot_dir / SLOT_FEATURES_FILENAME
+    write_csv(feature_path, fieldnames=[slot_spec.entity_key, *feature_columns], rows=namespaced_rows)
+
+    schema_manifest = build_slot_schema_manifest(
+        slot_spec,
+        row_count=len(namespaced_rows),
+        reserved_feature_columns=feature_columns,
+    )
+    schema_manifest["materialization"] = {
+        "feature_csv_path": str(feature_path),
+        "rebuildable_from_raw_fastas": False,
+        "requires_pharokka_annotations": True,
+        "feature_count": len(feature_names),
+    }
+    schema_path = slot_dir / SLOT_SCHEMA_FILENAME
+    write_json(schema_path, schema_manifest)
+
+    build_manifest = {
+        "task_id": "AX04",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_contract_id": CACHE_CONTRACT_ID,
+        "slot_name": slot_spec.slot_name,
+        "slot_artifact_path": str(feature_path),
+        "retained_phage_count": len(rows),
+        "retained_phages": sorted(phage_fasta_by_phage),
+        "guardrails": {
+            "source_of_truth": "Pharokka CDS annotations only",
+            "panel_metadata_used": False,
+            "label_derived_features_used": False,
+            "pharokka_annotation_dir": str(pharokka_annotation_dir),
+        },
+        "exported_numeric_columns": feature_columns,
+    }
+    build_manifest_path = slot_dir / PHAGE_FUNCTIONAL_BUILD_MANIFEST_FILENAME
+    write_json(build_manifest_path, build_manifest)
+
+    return {
+        "entity_key": slot_spec.entity_key,
+        "index_path": str(slot_dir / ENTITY_INDEX_FILENAME),
+        "schema_manifest_path": str(schema_path),
+        "entity_count": len(namespaced_rows),
+        "sha256": build_contract.sha256_file(slot_dir / ENTITY_INDEX_FILENAME),
+        "columns": feature_columns,
+        "column_count": len(feature_columns),
+        "feature_csv_path": str(feature_path),
+        "feature_csv_sha256": build_contract.sha256_file(feature_path),
+        "materialized_feature_columns": feature_columns,
+        "materialized_feature_column_count": len(feature_columns),
+        "build_manifest_path": str(build_manifest_path),
+    }
+
+
 def write_slot_indexes(
     cache_dir: Path,
     split_rows: Mapping[str, Sequence[Mapping[str, str]]],
@@ -1770,6 +1854,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             pharokka_annotation_dir=args.pharokka_annotation_dir,
         )
         LOGGER.info("Completed phage_rbp_struct slot")
+
+    reused = try_reuse_slot(
+        cache_dir=args.cache_dir,
+        slot_spec=SLOT_SPEC_BY_NAME["phage_functional"],
+        split_rows=all_retained_rows,
+        path_key="phage_fasta_path",
+    )
+    if reused:
+        slot_summaries["phage_functional"] = reused
+    else:
+        LOGGER.info("Materializing phage_functional slot")
+        slot_summaries["phage_functional"] = materialize_phage_functional_slot(
+            cache_dir=args.cache_dir,
+            output_root=args.output_root,
+            split_rows=all_retained_rows,
+            pharokka_annotation_dir=args.pharokka_annotation_dir,
+        )
+        LOGGER.info("Completed phage_functional slot")
 
     schema_manifest = build_top_level_schema_manifest(
         slot_feature_columns={slot_name: summary["columns"] for slot_name, summary in slot_summaries.items()}
