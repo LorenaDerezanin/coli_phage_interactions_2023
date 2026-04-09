@@ -87,7 +87,7 @@ def fit_isotonic_calibrator_cv(
         )
 
     calibrator = IsotonicRegression(y_min=0, y_max=1, out_of_bounds="clip")
-    calibrator.fit(oof_predictions, y_train)
+    calibrator.fit(oof_predictions, y_train, sample_weight=sample_weight)
     LOGGER.info("Isotonic calibrator fitted on %d OOF predictions", len(oof_predictions))
     return calibrator
 
