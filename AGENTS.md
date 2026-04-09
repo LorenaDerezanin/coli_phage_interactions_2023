@@ -52,6 +52,9 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 # Git and PR Policies
 
 - Committing directly to main is allowed. Use feature branches for orchestrator tasks or changes needing review.
+- **Commit freely, ask before pushing.** In interactive sessions, commit local changes without asking, but always
+  confirm with the user before `git push`. A premature push can trigger CI, auto-merge, or reviews before the work is
+  ready (as happened with PR #366 merging before review fixes were pushed).
 - Always rebase on main before starting work and before every push:
   `git fetch origin main && git rebase origin/main` (or `gt sync` for Graphite stacks).
 - Never use `git add -f`, `git add .`, or `git add -A`. Stage files by explicit path.
