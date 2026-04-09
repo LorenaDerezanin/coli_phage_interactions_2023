@@ -688,6 +688,9 @@ def run_baseline(
 def main(argv: Optional[Sequence[str]] = None) -> int:
     setup_logging()
     args = parse_args(argv)
+    if args.include_pairwise_rbp_receptor and not args.include_phage_rbp_struct:
+        LOGGER.error("--include-pairwise-rbp-receptor requires --include-phage-rbp-struct")
+        return 1
     start_time = time.monotonic()
 
     context = load_and_validate_cache(
