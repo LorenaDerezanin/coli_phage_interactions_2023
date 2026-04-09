@@ -7,7 +7,7 @@ from pathlib import Path
 import joblib
 import pytest
 
-from lyzortx.pipeline.autoresearch import build_contract, prepare_cache
+from lyzortx.pipeline.autoresearch import build_contract, derive_rbp_protein_features, prepare_cache
 
 
 def write_raw_interactions(path: Path, rows: list[dict[str, str]]) -> None:
@@ -440,6 +440,20 @@ def test_main_writes_search_cache_without_holdout(tmp_path: Path, monkeypatch: p
         "derive_phage_stats_features",
         lambda *_args, **_kwargs: pytest.fail("Per-phage phage-stats artifact writes should not be used"),
     )
+
+    # Mock PLM embedding loading — no .npz cache in CI.
+    def fake_build_phage_rbp_plm_rows(_cache_path, *, n_components=32):
+        return [
+            {
+                "phage": phage,
+                "has_annotated_rbp": 0,
+                "rbp_count": 0,
+                **{f"rbp_plm_pc{i}": 0.0 for i in range(n_components)},
+            }
+            for phage in ("P1", "P2")
+        ]
+
+    monkeypatch.setattr(derive_rbp_protein_features, "build_phage_rbp_plm_rows", fake_build_phage_rbp_plm_rows)
 
     exit_code = prepare_cache.main(
         [
