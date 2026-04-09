@@ -117,8 +117,106 @@ The per-phage variant surpasses TL18 on AUC (+1.7pp) and Brier (-0.2pp) on inner
 
 #### Next steps
 
-1. Run the full APEX ablation on ST03 holdout via `candidate_replay.py` with bootstrap CIs
-2. Re-analyze error buckets: which of the 10 original holdout misses are rescued by per-phage blending?
+1. ~~Run the full APEX ablation on ST03 holdout via `candidate_replay.py` with bootstrap CIs~~ Done — see below.
+2. ~~Re-analyze error buckets: which of the 10 original holdout misses are rescued by per-phage blending?~~ Done — see below.
 3. If structural RBP embeddings become available (ESMFold/PHIStruct), replace AX01 physicochemical descriptors —
    the current features proved insufficient for binding specificity
 4. Consider dropping AX04 functional features entirely (noise, not signal)
+
+### 2026-04-09 19:50 UTC: ST03 holdout evaluation and NILS53 error analysis
+
+#### Executive summary
+
+Ran three APEX configurations on the sealed ST03 holdout (65 bacteria, 3 seeds, 1000 bootstrap resamples). Per-phage
+blend (AX02) improves all three metrics vs base: +2.0pp AUC, +3.1pp top-3, -2.3pp Brier. Full combo adds nothing
+beyond per-phage on AUC/top-3; isotonic calibration contributes -0.6pp Brier only. The inner-val AUC/top-3 trade-off
+does not replicate on holdout — per-phage improves both. Error analysis reveals the remaining 4 holdout misses are
+irreducible (2 abstention, 1 needle-in-haystack, 1 prior collapse on narrow-host phages).
+
+#### ST03 holdout results (65 bacteria, 3 seeds, 1000 bootstrap resamples)
+
+| Configuration | AUC [95% CI] | Top-3 [95% CI] | Brier [95% CI] |
+|---|---|---|---|
+| Base (5 slots, all-pairs) | 0.810 [0.765, 0.847] | 90.8% [81.4, 95.0] | 0.167 [0.148, 0.187] |
+| Per-phage blend (AX02) | **0.830** [0.787, 0.866] | **93.8%** [84.2, 97.6] | 0.144 [0.128, 0.163] |
+| Full combo (all + per-phage + cal) | **0.830** [0.787, 0.866] | **93.8%** [85.4, 97.6] | **0.138** [0.118, 0.161] |
+| TL18 (production) | 0.823 | 93.7% | 0.141 |
+
+Per-phage blend surpasses TL18 on AUC (+0.7pp) and matches top-3 (93.8% vs 93.7%). Brier is comparable (0.144 vs
+0.141). All differences fall inside bootstrap CIs — the holdout is too small (65 bacteria) to establish statistical
+significance.
+
+#### Seed variance audit
+
+Per-phage sub-models originally used a hardcoded `random_state=42`, making the per-phage component identical across
+replication seeds. Fixed by passing the replication seed through to `fit_per_phage_models()`. Before/after comparison:
+point estimates moved by <0.1pp (0.8302 -> 0.8299 AUC), confirming results are robust to this correction. Seed
+variance is now honest: per-seed top-3 ranges 90.8%-93.8% (was 92.3%-95.4% with the artificially fixed seed).
+
+#### Error bucket analysis: 6 misses -> 4 misses
+
+The base model misses 6/65 holdout bacteria in top-3. Per-phage blend rescues 2 and loses 0:
+
+**Rescued (2 bacteria):**
+
+- **ECOR-69** (10/96 positives): Base top-3 was all broad-host Straboviridae (DIJ07_P2, 536_P9, DIJ07_P1; none lyse
+  ECOR-69). Per-phage completely reshuffles ranking — top-5 are all true positives (LF110_P2, LF82_P9, LF110_P1,
+  LF82_P2, LF82_P6). The per-phage sub-models learned ECOR-69's specific surface profile is compatible with these
+  phages.
+- **H1-003-0088-B-J** (12/96 positives): Base top-3 was broad Straboviridae. Per-phage pushes 55989_P2 (true positive)
+  into position 3.
+
+**Remaining misses (4 bacteria):**
+
+- **FN-B4** (0 positives): Abstention — no phage in the panel lyses this strain. Irreducible.
+- **NILS24** (0 positives): Abstention. Irreducible.
+- **ECOR-06** (1 positive): Needle-in-haystack — only 1 of 96 phages lyses this strain. Ranking that single phage into
+  the top-3 requires near-perfect discrimination. Effectively irreducible at this panel size.
+- **NILS53** (14 positives): Residual Straboviridae prior collapse. Analyzed in depth below.
+
+#### NILS53 deep dive: prior collapse on narrow-host phages
+
+NILS53 has 14 true positive phages, but all 14 are **narrow-host** (10-53% lysis rate, mean 22%). The model's top-3
+are all **broad-host** phages (62-71% lysis rate, mean 64%) that happen *not* to lyse NILS53. The model assigns high
+scores to broad phages because their base rate of lysis is high across all bacteria — the prior dominates.
+
+Per-phage blending partially helps: NIC06_P2 (the broadest TP at 52.8% lysis rate) moves from rank 17 to rank 4. But
+the 13 narrower TPs (10-29%) cannot compete with broad phages scoring 0.80-0.94. A per-phage sub-model for LM07_P1
+(10% lysis rate, ~37 training positives) lacks discriminative power to override the broad-phage prior for a specific
+unseen host.
+
+This is a fundamental limitation of the current architecture: **per-phage models help broad-to-moderate phages
+distinguish their specific hosts, but narrow-host phages with few training positives cannot build strong enough
+host-specificity signals.** Structural RBP embeddings (encoding binding geometry, not just presence) are the most
+promising path to resolving this — they would give the model phage-side features that actually predict receptor
+binding specificity, rather than relying solely on host-side features to infer compatibility.
+
+| Phage (TP) | Lysis rate | Rank (base) | Rank (per-phage) |
+|---|---|---|---|
+| NIC06_P2 | 52.8% | 17 | **4** |
+| NIC06_P3 | 29.0% | 33 | 26 |
+| NAN33_P1 | 24.4% | 40 | 27 |
+| LM40_P1 | 21.1% | 48 | 32 |
+| LM07_P1 | 10.0% | 83 | 69 |
+
+| Phage (FP in top-3) | Lysis rate | Rank (base) | Rank (per-phage) |
+|---|---|---|---|
+| LF73_P1 | 62.9% | 1 | 1 |
+| LF73_P4 | 62.9% | 5 | 2 |
+| DIJ07_P2 | 71.0% | 4 | — (dropped from top-10) |
+
+#### Updated comparison to baselines (holdout, not inner-val)
+
+| Model | Holdout AUC | Holdout Top-3 | Holdout Brier | Source |
+|---|---|---|---|---|
+| TL18 (production pipeline) | 0.823 | 93.7% | 0.141 | TL18 audit |
+| AUTORESEARCH base (5 slots) | 0.810 | 90.8% | 0.167 | ST03 holdout |
+| AUTORESEARCH + per-phage (AX02) | **0.830** | **93.8%** | 0.144 | ST03 holdout |
+| AUTORESEARCH full combo | **0.830** | **93.8%** | **0.138** | ST03 holdout |
+
+#### What inner-val got wrong
+
+The inner-val predicted a top-3/AUC trade-off: per-phage improved AUC but regressed top-3 (93.2% vs 94.6%). On
+holdout, per-phage improves both AUC and top-3. The inner-val top-3 regression was a small-sample artifact of the
+74-bacteria inner-val set, where 1 bacteria = 1.4pp. This reinforces the knowledge model finding that holdout is the
+honest test.

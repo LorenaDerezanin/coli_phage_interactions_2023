@@ -58,6 +58,7 @@ def fit_per_phage_models(
     *,
     device_type: str = "cpu",
     min_positives: int = MIN_POSITIVES_FOR_FIT,
+    random_state: int = 42,
 ) -> dict[str, LGBMClassifier]:
     """Fit one LightGBM per phage on host-only features.
 
@@ -86,7 +87,7 @@ def fit_per_phage_models(
             **PER_PHAGE_PARAMS,
             "objective": "binary",
             "class_weight": "balanced",
-            "random_state": 42,
+            "random_state": random_state,
             "n_jobs": 1,
             "verbosity": -1,
             "device_type": device_type,

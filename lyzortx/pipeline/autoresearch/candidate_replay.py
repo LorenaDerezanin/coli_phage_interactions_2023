@@ -510,7 +510,9 @@ def build_candidate_holdout_rows(
             for col in feature_columns
             if col.startswith(("host_surface__", "host_typing__", "host_stats__", "host_defense__"))
         ]
-        per_phage_models = fit_per_phage_models(train_design, host_feature_columns, device_type=device_type)
+        per_phage_models = fit_per_phage_models(
+            train_design, host_feature_columns, device_type=device_type, random_state=seed
+        )
         predictions, _ = predict_per_phage(
             per_phage_models, holdout_design, host_feature_columns, all_pairs_predictions, blend_alpha=blend_alpha
         )
@@ -893,9 +895,21 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
     context = candidate_module.load_and_validate_cache(
         cache_dir=cache_dir,
         include_host_defense=args.include_host_defense,
-        include_phage_rbp_struct=getattr(args, "include_phage_rbp_struct", False),
-        include_phage_functional=getattr(args, "include_phage_functional", False),
     )
+
+    # Load APEX phage slots that the candidate module doesn't know about.
+    for apex_slot, apex_flag in [
+        ("phage_rbp_struct", getattr(args, "include_phage_rbp_struct", False)),
+        ("phage_functional", getattr(args, "include_phage_functional", False)),
+    ]:
+        if apex_flag and apex_slot not in context.slot_artifacts:
+            context.slot_artifacts[apex_slot] = candidate_module.load_slot_artifact(
+                cache_dir=cache_dir,
+                schema_manifest=context.schema_manifest,
+                cache_manifest=context.cache_manifest,
+                slot_name=apex_slot,
+                require_materialized_features=True,
+            )
 
     use_st03 = getattr(args, "use_st03_split", False)
     if use_st03:
