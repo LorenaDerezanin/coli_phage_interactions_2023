@@ -107,6 +107,16 @@ SLOT_SPECS = (
             "Per-RBP amino acid composition and physicochemical properties, mean-pooled per phage."
         ),
     ),
+    SlotSpec(
+        slot_name="phage_functional",
+        entity_key="phage",
+        column_prefix="phage_functional__",
+        block_role="phage",
+        description=(
+            "Phage functional gene repertoire from Pharokka annotations: PHROG category counts/fractions, "
+            "anti-defense gene indicators, and depolymerase presence."
+        ),
+    ),
 )
 SLOT_SPEC_BY_NAME = {spec.slot_name: spec for spec in SLOT_SPECS}
 

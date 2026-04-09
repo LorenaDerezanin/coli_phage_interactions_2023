@@ -111,6 +111,7 @@ def test_build_top_level_schema_manifest_freezes_reserved_slots() -> None:
         "phage_stats",
         "phage_kmer",
         "phage_rbp_struct",
+        "phage_functional",
     ]
     assert schema["feature_slots"]["host_surface"] == {
         "entity_key": "bacteria",
