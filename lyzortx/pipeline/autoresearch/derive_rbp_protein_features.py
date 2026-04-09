@@ -4,8 +4,8 @@ Extracts RBP CDS regions from phage genome FASTAs using Pharokka annotation coor
 translates to protein, and computes physicochemical descriptor vectors per RBP. Per-phage
 features are the mean-pooled descriptor vectors across all annotated RBPs.
 
-For phages without annotated RBPs (19/96), all descriptor features are zero and the
-`has_annotated_rbp` indicator is 0.
+For phages without Pharokka-detected RBPs (16/97 in the current panel), all
+descriptor features are zero and the `has_annotated_rbp` indicator is 0.
 """
 
 from __future__ import annotations
