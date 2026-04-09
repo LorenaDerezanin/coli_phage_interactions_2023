@@ -18,6 +18,10 @@ import pandas as pd
 from lightgbm import LGBMClassifier
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
+from lyzortx.autoresearch.calibration import (
+    calibrate_predictions,
+    fit_isotonic_calibrator_cv,
+)
 from lyzortx.autoresearch.per_phage_model import (
     DEFAULT_BLEND_ALPHA,
     PerPhageResult,
@@ -159,6 +163,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=float,
         default=0.5,
         help="Blending weight for per-phage variant: alpha * per_phage + (1-alpha) * all_pairs. Default 0.5.",
+    )
+    parser.add_argument(
+        "--calibrate",
+        choices=("none", "isotonic"),
+        default="none",
+        help=(
+            "Post-hoc calibration method. 'isotonic' = fit isotonic regression on "
+            "3-fold cross-validated out-of-fold training predictions (AX05)."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -527,6 +540,7 @@ def run_baseline(
     include_pairwise_rbp_receptor: bool = False,
     variant: str = "all-pairs",
     blend_alpha: float = DEFAULT_BLEND_ALPHA,
+    calibrate: str = "none",
     start_time: float,
 ) -> tuple[dict[str, Any], list[dict[str, object]]]:
     enforce_budget(start_time)
@@ -624,6 +638,24 @@ def run_baseline(
     else:
         predictions = all_pairs_predictions
 
+    # Post-hoc calibration (AX05): fit on OOF training predictions, apply to inner_val.
+    calibration_applied = False
+    if calibrate == "isotonic":
+        LOGGER.info("Fitting isotonic calibrator via 3-fold CV on training predictions")
+        calibrator = fit_isotonic_calibrator_cv(
+            train_design,
+            feature_columns,
+            y_train,
+            sample_weight,
+            categorical_features=categorical_in_features,
+            device_type=device_type,
+            model_params=PAIR_SCORER_PARAMS,
+        )
+        predictions = calibrate_predictions(calibrator, predictions)
+        calibration_applied = True
+        LOGGER.info("Applied isotonic calibration to inner_val predictions")
+        enforce_budget(start_time)
+
     scored_inner_val = inner_val_design.loc[:, ["pair_id", "bacteria", "phage", "label_any_lysis"]].copy()
     scored_inner_val["prediction"] = predictions
     scored_inner_val["rank_within_bacteria"] = (
@@ -654,6 +686,10 @@ def run_baseline(
             "numeric_columns": numeric_feature_columns,
             "categorical_columns": categorical_feature_columns,
             "total_feature_count": len(feature_columns),
+        },
+        "calibration": {
+            "method": calibrate,
+            "applied": calibration_applied,
         },
         "pair_scorer": {
             "type": "lightgbm_binary_classifier",
@@ -721,6 +757,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     LOGGER.info("train.py is the short-loop experiment surface; cache rebuilding belongs in prepare.py.")
 
     LOGGER.info("Model variant: %s", args.variant)
+    if args.calibrate != "none":
+        LOGGER.info("Calibration: %s", args.calibrate)
     baseline_summary, prediction_rows = run_baseline(
         context=context,
         device_type=args.device_type,
@@ -730,6 +768,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         include_pairwise_rbp_receptor=args.include_pairwise_rbp_receptor,
         variant=args.variant,
         blend_alpha=args.blend_alpha,
+        calibrate=args.calibrate,
         start_time=start_time,
     )
     elapsed_seconds = safe_float(time.monotonic() - start_time)
@@ -766,6 +805,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "host_defense_role": "reserved_additive_ablation",
             "variant": args.variant,
             "blend_alpha": args.blend_alpha,
+            "calibrate": args.calibrate,
             "primary_metric": PRIMARY_SEARCH_METRIC,
             "secondary_report_only_metrics": list(SECONDARY_REPORT_ONLY_METRICS),
         },

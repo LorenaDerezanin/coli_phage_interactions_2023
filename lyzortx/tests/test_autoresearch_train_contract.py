@@ -622,6 +622,33 @@ def test_train_runs_with_pairwise_rbp_receptor_features(tmp_path: Path) -> None:
     assert summary["feature_space"]["total_feature_count"] > 0
 
 
+def test_train_runs_with_isotonic_calibration(tmp_path: Path) -> None:
+    cache_dir = create_minimal_autoresearch_cache(tmp_path)
+    output_dir = tmp_path / "train_outputs"
+
+    exit_code = autoresearch_train.main(
+        [
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(output_dir),
+            "--device-type",
+            "cpu",
+            "--calibrate",
+            "isotonic",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "ar07_baseline_summary.json").read_text(encoding="utf-8"))
+    assert summary["calibration"]["method"] == "isotonic"
+    assert summary["calibration"]["applied"] is True
+    assert summary["baseline_contract"]["calibrate"] == "isotonic"
+    # Calibrated predictions should still produce valid metrics.
+    assert 0.0 <= summary["inner_val_metrics"]["roc_auc"] <= 1.0
+    assert 0.0 <= summary["inner_val_metrics"]["brier_score"] <= 1.0
+
+
 def test_train_reads_legacy_host_defense_artifact_when_ablation_is_on(tmp_path: Path) -> None:
     cache_dir = create_minimal_autoresearch_cache(tmp_path)
     materialize_legacy_host_defense_slot(cache_dir)
