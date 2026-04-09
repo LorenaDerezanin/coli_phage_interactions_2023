@@ -73,12 +73,13 @@ themes:
 
       - id: receptor-variant-richness
         statement: >
-          Receptors are richer than binary presence: OmpC spans 50 variants, BtuB spans 28;
-          binary encoding discards this structure.
-        sources: [TC01]
+          Receptors are richer than binary presence: OmpC spans 50 variants, BtuB spans 28.
+          The TL18 pipeline discarded this structure via binary thresholds; the AUTORESEARCH
+          pipeline uses continuous HMM scores (e.g., OmpC: 79 unique values in [509, 818]).
+        sources: [TC01, 2026-04-09 AUTORESEARCH host_surface audit]
         status: active
         confidence: validated
-        relates_to: [binary-encoding-waste]
+        relates_to: [defense-integer-counts]
 
       - id: kmer-embeddings
         statement: >
@@ -102,14 +103,6 @@ themes:
         status: active
         confidence: validated
 
-      - id: binary-encoding-waste
-        statement: >
-          74% of numeric features are binary thresholds discarding continuous biological gradients
-          in receptor scores, RBP identity, capsule HMM scores, and defense gene counts.
-        sources: [TL18, DEPLOY track rationale]
-        status: active
-        confidence: validated
-        relates_to: [receptor-variant-richness, defense-integer-counts]
 
       - id: defense-integer-counts
         statement: >
@@ -176,20 +169,8 @@ themes:
           Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses
           top-3 from 90.8% to 86.2%. The remaining gap is architectural (pairwise features,
           calibration, per-phage modeling), not feature-driven.
-        relates_to: [tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, autoresearch-ceiling]
+        relates_to: [tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, per-phage-blending-dominant]
 
-      - id: autoresearch-ceiling
-        statement: >
-          AUTORESEARCH feature search concluded at 0.810 AUC for the all-pairs architecture;
-          per-phage blending (AX02) broke this ceiling to 0.840 AUC on inner-val.
-        sources: [2026-04-08 paper analysis, 2026-04-08 kmer ablation, 2026-04-09 APEX ablation]
-        status: superseded
-        confidence: validated
-        context: >
-          The feature ceiling was real for the all-pairs architecture. Per-phage sub-models are
-          an architectural change, not a feature addition — they learn phage-specific host-range
-          patterns that the all-pairs model cannot capture. Superseded by per-phage-blending-dominant.
-        relates_to: [autoresearch-parity, adsorption-dominates-paper, per-phage-blending-dominant]
 
       - id: svd-bottleneck
         statement: >
@@ -251,7 +232,7 @@ themes:
           blended 50/50 with all-pairs predictions. Phages with <3 positives fall back to all-pairs.
           Confirms the paper's finding that per-phage models on bacterial features achieve 86% AUROC.
           Holdout evaluation pending.
-        relates_to: [autoresearch-ceiling, adsorption-dominates-paper, family-bias-straboviridae]
+        relates_to: [adsorption-dominates-paper, family-bias-straboviridae, autoresearch-parity]
 
       - id: pairwise-cross-terms-top3
         statement: >

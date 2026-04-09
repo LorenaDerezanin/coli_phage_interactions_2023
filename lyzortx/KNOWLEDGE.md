@@ -3,7 +3,7 @@
 <!-- Last consolidated: 2026-04-09T12:00:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**45 knowledge units** across 7 themes (37 active, 7 dead ends, 1 superseded)
+**43 knowledge units** across 7 themes (36 active, 7 dead ends, 0 superseded)
 
 ## Data & Labels
 
@@ -29,8 +29,9 @@ What works, what doesn't, leakage risks, and encoding decisions.
   individual trait values survive FDR correction. [preliminary; source: TB03]
 - Narrow-susceptibility rescue is concentrated in 19/96 phages (19.8%); Myoviridae dominate, and no single universal
   rescuer exists. [validated; source: TB04; see also: family-bias-straboviridae]
-- Receptors are richer than binary presence: OmpC spans 50 variants, BtuB spans 28; binary encoding discards this
-  structure. [validated; source: TC01; see also: binary-encoding-waste]
+- Receptors are richer than binary presence: OmpC spans 50 variants, BtuB spans 28. The TL18 pipeline discarded this
+  structure via binary thresholds; the AUTORESEARCH pipeline uses continuous HMM scores (e.g., OmpC: 79 unique values in
+  [509, 818]). [validated; source: TC01, 2026-04-09 AUTORESEARCH host_surface audit; see also: defense-integer-counts]
 - Phage tetranucleotide kmer SVD embeddings (24 dimensions, 99.42% variance retained) provide compact composition-based
   features, but the original paper achieves 86% AUROC without any kmer features. SVD is panel-fitted denoising
   incompatible with FASTA-only contracts. [validated; source: TD02, 2026-04-08 paper analysis; see also:
@@ -39,9 +40,6 @@ What works, what doesn't, leakage risks, and encoding decisions.
     suggests they are not critical for prediction.*
 - Only 77/96 phages have curated receptor data; 19 are explicitly uncovered rather than guessed, requiring explicit
   unknown handling in RBP-receptor compatibility features. [validated; source: TE01]
-- 74% of numeric features are binary thresholds discarding continuous biological gradients in receptor scores, RBP
-  identity, capsule HMM scores, and defense gene counts. [validated; source: TL18, DEPLOY track rationale; see also:
-  receptor-variant-richness, defense-integer-counts]
 - Defense system gene counts reflect real biological redundancy (e.g., 2 vs 1 MazEF copies); HMM detection scores
   reflect only tool confidence. Integer counts are the correct encoding. [validated; source: DEPLOY06, DEPLOY track
   design]
@@ -66,7 +64,7 @@ Architecture choices, calibration, and performance bounds.
   autoresearch-parity]
 - AUTORESEARCH raw-FASTA baseline achieves 0.810 AUC on ST03 holdout vs TL18's 0.823; the difference falls inside the
   95% bootstrap CI and is not statistically significant. [validated; source: 2026-04-08 AUTORESEARCH eval; see also:
-  tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, autoresearch-ceiling]
+  tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, per-phage-blending-dominant]
   - *Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%. The
     remaining gap is architectural (pairwise features, calibration, per-phage modeling), not feature-driven.*
 - SVD compression was the AUTORESEARCH bottleneck, not feature count: removing SVD and using 300-tree LightGBM on 159
@@ -86,8 +84,8 @@ Architecture choices, calibration, and performance bounds.
     feature selection is not aggressive enough to ignore noisy defense subtypes.*
 - Per-phage LightGBM sub-models blended with all-pairs predictions are the dominant AUTORESEARCH architectural gain:
   +2.3pp AUC (0.817→0.840) and -1.9pp Brier (0.159→0.139) on inner-val, surpassing TL18 on AUC and Brier. [validated;
-  source: 2026-04-09 APEX ablation; see also: autoresearch-ceiling, adsorption-dominates-paper,
-  family-bias-straboviridae]
+  source: 2026-04-09 APEX ablation; see also: adsorption-dominates-paper, family-bias-straboviridae,
+  autoresearch-parity]
   - *Each phage gets its own 32-tree LightGBM on host-only features (surface + typing + stats), blended 50/50 with
     all-pairs predictions. Phages with <3 positives fall back to all-pairs. Confirms the paper's finding that per-phage
     models on bacterial features achieve 86% AUROC. Holdout evaluation pending.*
@@ -99,15 +97,6 @@ Architecture choices, calibration, and performance bounds.
 - Adsorption-first modeling (host surface + typing features) is the correct critical path; defense features contribute
   but are not gate-critical for first baseline. [validated; source: 2026-04-05 replan, antiphage-landscape reading; see
   also: autoresearch-parity]
-
-### Superseded
-
-- ~~AUTORESEARCH feature search concluded at 0.810 AUC for the all-pairs architecture; per-phage blending (AX02) broke
-  this ceiling to 0.840 AUC on inner-val. [validated; source: 2026-04-08 paper analysis, 2026-04-08 kmer ablation,
-  2026-04-09 APEX ablation; see also: autoresearch-parity, adsorption-dominates-paper, per-phage-blending-dominant]~~
-  - *The feature ceiling was real for the all-pairs architecture. Per-phage sub-models are an architectural change, not
-    a feature addition — they learn phage-specific host-range patterns that the all-pairs model cannot capture.
-    Superseded by per-phage-blending-dominant.*
 
 ## Evaluation & Benchmarking
 
