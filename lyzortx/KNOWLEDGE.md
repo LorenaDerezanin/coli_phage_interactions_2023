@@ -1,9 +1,9 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-09T12:00:00+00:00 -->
+<!-- Last consolidated: 2026-04-09T20:30:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**43 knowledge units** across 7 themes (36 active, 7 dead ends)
+**39 knowledge units** across 7 themes (31 active, 8 dead ends)
 
 ## Data & Labels
 
@@ -14,7 +14,9 @@ Labeling policy, data quality, split contracts, and training corpus.
 - Borderline score=0 pairs are downweighted (0.1) rather than excluded or flipped, preserving information while reducing
   noise impact. [validated; source: TA11; see also: label-policy-binary]
 - Three confidence tiers (high/medium/low) from replicate agreement preserve 80% of data while narrowing positive
-  fraction from 27.4% to 14.6%. [validated; source: ST0.1b]
+  fraction from 27.4% to 14.6%. Currently unused — the pipeline uses binary labels with sample weighting — but the tier
+  structure is available in the pair table for future soft-label or curriculum-learning experiments. [validated; source:
+  ST0.1b]
 - ST02 defines 294 training bacteria; ST03 reserves 65 cv_group-disjoint bacteria for sealed holdout. Deterministic
   cv_group hashing with salt ensures reproducibility. [validated; source: ST0.2, ST0.3, AR01; see also:
   raw-interactions-authority]
@@ -32,12 +34,6 @@ What works, what doesn't, leakage risks, and encoding decisions.
 - Receptors are richer than binary presence: OmpC spans 50 variants, BtuB spans 28. The TL18 pipeline discarded this
   structure via binary thresholds; the AUTORESEARCH pipeline uses continuous HMM scores (e.g., OmpC: 79 unique values in
   [509, 818]). [validated; source: TC01, 2026-04-09 AUTORESEARCH host_surface audit; see also: defense-integer-counts]
-- Phage tetranucleotide kmer SVD embeddings (24 dimensions, 99.42% variance retained) provide compact composition-based
-  features, but the original paper achieves 86% AUROC without any kmer features. SVD is panel-fitted denoising
-  incompatible with FASTA-only contracts. [validated; source: TD02, 2026-04-08 paper analysis; see also:
-  raw-kmer-zero-signal]
-  - *Raw 256-dim frequencies add zero signal; SVD denoises but requires panel fitting. The paper's success without kmers
-    suggests they are not critical for prediction.*
 - Only 77/96 phages have curated receptor data; 19 are explicitly uncovered rather than guessed, requiring explicit
   unknown handling in RBP-receptor compatibility features. [validated; source: TE01]
 - Defense system gene counts reflect real biological redundancy (e.g., 2 vs 1 MazEF copies); HMM detection scores
@@ -57,43 +53,30 @@ What works, what doesn't, leakage risks, and encoding decisions.
 
 Architecture choices, calibration, and performance bounds.
 
-- LightGBM v1 baseline with defense + phage-genomic features (no pairwise) achieves clean AUC 0.837, top-3 hit rate
-  0.908 on ST03 holdout. [validated; source: TG06, TG07, TG09; see also: tl18-improvement]
 - TL18 model achieves +0.036 AUC over baseline (0.823 vs 0.787) with 98.5% probability of improvement; new TL15/16/17
-  feature blocks account for 38.5% of total importance. [validated; source: TL18 audit; see also: lightgbm-v1-locked,
-  autoresearch-parity]
+  feature blocks account for 38.5% of total importance. [validated; source: TL18 audit; see also: autoresearch-parity]
 - AUTORESEARCH raw-FASTA baseline achieves 0.810 AUC on ST03 holdout vs TL18's 0.823; the difference falls inside the
   95% bootstrap CI and is not statistically significant. [validated; source: 2026-04-08 AUTORESEARCH eval; see also:
   tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, per-phage-blending-dominant]
   - *Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%. The
-    remaining gap is architectural (pairwise features, calibration, per-phage modeling), not feature-driven.*
+    remaining gap is architectural, not feature-driven.*
 - SVD compression was the AUTORESEARCH bottleneck, not feature count: removing SVD and using 300-tree LightGBM on 159
   raw features improved from 0.765 to 0.810 AUC. [validated; source: 2026-04-08 AUTORESEARCH eval]
-- Isotonic calibration outperforms Platt on ECE (0.021 vs 0.028); Platt outperforms on log-loss (0.333 vs 0.344).
-  Neither dominates across all calibration metrics. [validated; source: TG02, ST0.5]
-  - *Results are split-specific; other splits may rank differently.*
-- Top-3 hit rate and AUC move in different directions across feature blocks: defense subtypes improved top-3 (+4.6pp)
-  but degraded AUC (-0.001). [validated; source: TG03]
-  - *On small holdout (65 strains), 1 strain flip = 1.5pp top-3.*
 - LightGBM requires deterministic=True and force_col_wise=True for reproducibility across systems; nondeterminism was
   observed without these flags. [validated; source: TG08, TG09]
 - Adding 79 DefenseFinder host defense features to AUTORESEARCH improves AUC from 0.810 to 0.817 (+0.7pp) but regresses
   top-3 hit rate from 90.8% to 86.2% (-4.6pp). [validated; source: 2026-04-08 defense ablation; see also:
-  defense-lineage-confounding, autoresearch-parity, top3-auc-not-redundant]
+  defense-lineage-confounding, autoresearch-parity]
   - *Defense features help discrimination (AUC) but hurt ranking (top-3) due to lineage confounding. LightGBM's native
     feature selection is not aggressive enough to ignore noisy defense subtypes.*
 - Per-phage LightGBM sub-models blended with all-pairs predictions are the dominant AUTORESEARCH architectural gain:
-  +2.3pp AUC (0.817→0.840) and -1.9pp Brier (0.159→0.139) on inner-val, surpassing TL18 on AUC and Brier. [validated;
-  source: 2026-04-09 APEX ablation; see also: adsorption-dominates-paper, family-bias-straboviridae,
-  autoresearch-parity]
+  +2.0pp AUC (0.810->0.830) on ST03 holdout, +3.1pp top-3 (90.8%->93.8%), and -2.3pp Brier (0.167->0.144). Surpasses
+  TL18 on AUC (+0.7pp) and matches top-3 (93.8% vs 93.7%). [validated; source: 2026-04-09 APEX ablation, 2026-04-09 APEX
+  holdout; see also: adsorption-dominates-paper, family-bias-straboviridae, autoresearch-parity]
   - *Each phage gets its own 32-tree LightGBM on host-only features (surface + typing + stats), blended 50/50 with
-    all-pairs predictions. Phages with <3 positives fall back to all-pairs. Confirms the paper's finding that per-phage
-    models on bacterial features achieve 86% AUROC. Holdout evaluation pending.*
-- Label-free pairwise RBP×receptor cross-terms (24 features) improve top-3 from 94.6% to 95.9% on inner-val without
-  improving AUC, suggesting they help rerank within competitive score bands. [preliminary; source: 2026-04-09 APEX
-  ablation; see also: top3-auc-not-redundant, receptor-variant-richness]
-  - *Cross-terms are has_annotated_rbp × receptor_score and rbp_count × receptor_score for all 12 OMP receptors. The
-    top-3 effect without AUC improvement replicates the known top-3/AUC divergence pattern.*
+    all-pairs predictions. Phages with <3 positives fall back to all-pairs. All 96/96 phages qualify for per-phage
+    models on the ST03 training set (min 3 positives in 221 bacteria). Bootstrap CIs overlap with TL18 — differences not
+    statistically significant on 65-bacteria holdout.*
 - Adsorption-first modeling (host surface + typing features) is the correct critical path; defense features contribute
   but are not gate-critical for first baseline. [validated; source: 2026-04-05 replan, antiphage-landscape reading; see
   also: autoresearch-parity]
@@ -107,11 +90,25 @@ Holdout protocol, benchmark methodology, and error analysis.
   split-contract]
 - Bootstrap CIs must be computed at holdout-strain level (not pair level) to align evaluation denominator with
   recommendation metric; 1000 resamples on 65 strains. [validated; source: TF01]
-- Holdout misses split into four non-overlapping failure modes: abstention (2 strains, zero positives), narrow-recall
-  (2, single positive outside top-3), family-collapse (2, wrong family ranked highest), and within-family ordering (4,
-  right family wrong phage). [validated; source: ST09, TF02; see also: family-bias-straboviridae]
-- Straboviridae prior collapse suppresses cross-family true positives: 4/10 holdout misses are cross-family blind spots
-  where model top-3 remains all Straboviridae. [validated; source: ST09]
+- Per-phage blend reduces holdout misses from 6/65 to 4/65. Remaining failure modes: abstention (2 strains with zero
+  positives), needle-in-haystack (1 strain with 1/96 positive), and narrow-host prior collapse (1 strain with 14
+  narrow-host positives). [validated; source: ST09, TF02, 2026-04-09 APEX holdout; see also: family-bias-straboviridae,
+  narrow-host-prior-collapse]
+- Straboviridae prior collapse suppresses cross-family true positives: broad-host Straboviridae (62-71% lysis rate)
+  dominate model rankings, pushing narrow-host true positives (10-53% lysis rate) below the top-3 cutoff. [validated;
+  source: ST09, 2026-04-09 APEX holdout NILS53 analysis]
+- Per-phage models help broad-to-moderate phages distinguish their hosts but cannot override the broad-phage prior for
+  narrow-host phages (<30% lysis rate) with few training positives; NILS53 (14 narrow-host TPs) remains a top-3 miss.
+  [validated; source: 2026-04-09 APEX holdout NILS53 analysis; see also: family-bias-straboviridae, higher-res-rbp,
+  per-phage-blending-dominant]
+  - *The per-phage sub-model for a phage with 37 training positives and 10% lysis rate lacks discriminative power
+    against broad phages scoring 0.80-0.94. Structural RBP embeddings are the path to resolving this — phage-side
+    features that predict receptor binding specificity rather than relying solely on host-side features.*
+- Inner-val top-3 predictions do not reliably transfer to holdout: per-phage blend predicted a top-3/AUC trade-off on
+  inner-val (93.2% vs 94.6%) that did not replicate on holdout (93.8% vs 90.8% — both improved). [validated; source:
+  2026-04-09 APEX holdout; see also: st03-canonical-benchmark, bootstrap-strain-level]
+  - *On 65-74 bacteria evaluation sets, 1 strain flip = 1.4-1.5pp top-3. Inner-val bacteria overlap with training
+    distribution; holdout bacteria are cv_group-disjoint. Holdout is the only honest top-3 test.*
 
 ## Deployment & Train/Inference Parity
 
@@ -122,13 +119,8 @@ Feature derivation parity, raw-input pipeline, and pre-computation.
   source: TL18 audit; see also: zero-delta-parity]
 - Honest model packaging requires zero-delta parity: training and inference must call the exact same feature-derivation
   functions and produce identical features for any host. [validated; source: DEPLOY track rationale, DEPLOY09]
-- Feature CSVs (defense gene counts, surface features for all 403 hosts) are versioned pre-computed artifacts that
-  downstream tasks consume directly, decoupling expensive preprocessing from evaluation CI. [validated; source:
-  DEPLOY06, DEPLOY07; see also: defensefinder-precompute]
 - Picard Figshare assemblies (403 FASTAs, 1.9GB, CC BY 4.0) are the authoritative source for raw-input feature
   derivation; not all 403 have interaction labels. [validated; source: DEPLOY01]
-- DefenseFinder on 403 hosts takes ~35-114 min depending on cores; incompatible with search-loop runtime budgets,
-  requiring pre-computation and caching. [validated; source: DEPLOY06, 2026-04-05 replan]
 
 ## Dead Ends
 
@@ -147,10 +139,9 @@ Compressed lessons from approaches that didn't work.
   TL18 audit; see also: adsorption-first-strategy]
 - Physicochemical RBP protein descriptors (AA composition + MW/GRAVY/pI/aromaticity/charge, 28 features from 80/96
   phages) add no predictive signal; bulk protein properties cannot capture binding-interface specificity. [validated;
-  source: 2026-04-09 APEX ablation; see also: higher-res-rbp, adsorption-dominates-paper]
-  - *AX01 implemented mean-pooled physicochemical descriptors as a practical alternative to structural RBP embeddings.
-    Inner-val AUC was flat (0.816 vs 0.817 base) and top-3 regressed. Structural embeddings (ESMFold/PHIStruct) remain
-    the path to meaningful phage-side differentiation.*
+  source: 2026-04-09 APEX ablation, 2026-04-09 APEX holdout; see also: higher-res-rbp, adsorption-dominates-paper]
+  - *Confirmed on both inner-val and holdout: full combo (all features + per-phage) has identical AUC to per-phage-only
+    (0.830). Physicochemical descriptors describe bulk protein properties, not binding geometry.*
 - Phage functional gene repertoire features (PHROG category counts/fractions, anti-defense, depolymerase; 25 features)
   degrade top-3 from 94.6% to 87.8% on inner-val and are effectively noise for this prediction task. [validated; source:
   2026-04-09 APEX ablation; see also: defense-lineage-confounding, defense-ablation-autoresearch]
@@ -158,7 +149,13 @@ Compressed lessons from approaches that didn't work.
     Anti-defense features specifically confirmed as noise, consistent with the defense-lineage-confounding finding.*
 - Raw 256-dim tetranucleotide kmer frequencies add zero extractable signal for LightGBM with 300 trees on 96 phages; the
   dimensionality/sample-size mismatch makes splits uninformative without SVD denoising. [validated; source: 2026-04-08
-  kmer ablation; see also: kmer-embeddings, svd-bottleneck]
+  kmer ablation; see also: svd-bottleneck]
+- Label-free pairwise RBP x receptor cross-terms (24 features: has_rbp x receptor_score, rbp_count x receptor_score for
+  12 OMP receptors) showed no improvement on ST03 holdout; the inner-val top-3 gain (+1.3pp) did not replicate.
+  [validated; source: 2026-04-09 APEX ablation, 2026-04-09 APEX holdout; see also: inner-val-unreliable-top3,
+  physicochemical-rbp-insufficient]
+  - *Full combo AUC/top-3 identical to per-phage-only on holdout. The cross-terms are too coarse — they encode "phage
+    has RBP and host has receptor" but not binding specificity.*
 
 ## Open Questions
 
@@ -170,7 +167,10 @@ Unresolved items that still matter for the project direction.
 - Can within-family reranking using host-range evidence improve phage selection inside saturated score bands where the
   model knows the right family but not the right phage? [preliminary; source: ST09; see also: error-buckets,
   family-bias-straboviridae]
-- Structural RBP embeddings (ESMFold/PHIStruct) remain the most promising untested phage-side feature; physicochemical
-  protein descriptors proved insufficient, confirming that binding specificity requires geometric, not bulk-property,
-  representation. [preliminary; source: antiphage-landscape reading in project.md, 2026-04-08 paper analysis, 2026-04-09
-  APEX ablation; see also: adsorption-first-strategy, adsorption-dominates-paper, physicochemical-rbp-insufficient]
+- Protein language model embeddings (ESM-2 or ProstT5 into SaProt) of RBP sequences are the most promising untested
+  phage-side feature; physicochemical descriptors proved insufficient and PHIStruct's off-the-shelf model only predicts
+  genus (not strain). [preliminary; source: 2026-04-08 paper analysis, 2026-04-09 APEX ablation, 2026-04-09 PHIStruct
+  review; see also: adsorption-first-strategy, adsorption-dominates-paper, physicochemical-rbp-insufficient]
+  - *80/96 phages have RBP sequences from Pharokka. ESM-2 (1280-dim, sequence-only, runs on CPU) is the simplest path.
+    ProstT5 into SaProt adds structure-aware 3Di tokens without needing ColabFold. PHIStruct Zenodo has 19K RBP
+    structures but coverage of our panel is unknown.*
