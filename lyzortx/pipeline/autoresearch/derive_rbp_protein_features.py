@@ -1,11 +1,15 @@
-"""Derive per-phage RBP protein descriptor features from genome FASTA + Pharokka annotations.
+"""Derive per-phage RBP features from precomputed PLM embeddings.
 
-Extracts RBP CDS regions from phage genome FASTAs using Pharokka annotation coordinates,
-translates to protein, and computes physicochemical descriptor vectors per RBP. Per-phage
-features are the mean-pooled descriptor vectors across all annotated RBPs.
+The embedding precomputation step (ProstT5→SaProt or ESM-2) runs separately via
+``precompute_rbp_plm_embeddings.py`` and caches results to ``.scratch/rbp_plm_embeddings.npz``.
+This module loads the cached embeddings, applies PCA dimensionality reduction, and produces
+per-phage feature rows for the ``phage_rbp_struct`` slot.
 
-For phages without Pharokka-detected RBPs (16/97 in the current panel), all
-descriptor features are zero and the `has_annotated_rbp` indicator is 0.
+For phages without Pharokka-detected RBPs (16/97 in the current panel), all embedding
+features are zero and the ``has_annotated_rbp`` indicator is 0.
+
+RBP protein extraction utilities (``extract_rbp_proteins_for_phage``, ``RbpProtein``, etc.)
+are kept here for reuse by the precompute script.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 from Bio.Seq import Seq
-from Bio.SeqUtils.ProtParam import ProteinAnalysis
+from sklearn.decomposition import PCA
 
 from lyzortx.pipeline.track_l.steps.parse_annotations import (
     CdsRecord,
@@ -26,24 +30,26 @@ from lyzortx.pipeline.track_l.steps.parse_annotations import (
 
 LOGGER = logging.getLogger(__name__)
 
-# Standard amino acids for composition vector.
-AMINO_ACIDS = tuple("ACDEFGHIKLMNPQRSTVWY")
-AA_COUNT = len(AMINO_ACIDS)
+# Default PCA dimensionality for PLM embeddings.
+DEFAULT_N_COMPONENTS = 32
 
-# Feature names for per-RBP protein descriptors (26 total).
-AA_COMP_FEATURES = [f"aa_{aa}" for aa in AMINO_ACIDS]
-PHYSICO_FEATURES = [
-    "log_length",
-    "molecular_weight",
-    "gravy",
-    "aromaticity",
-    "isoelectric_point",
-    "charge_ph7",
-]
-PER_RBP_FEATURE_NAMES = AA_COMP_FEATURES + PHYSICO_FEATURES
+# Raw PLM embedding dimension (SaProt and ESM-2 both produce 1280-dim).
+RAW_EMBEDDING_DIM = 1280
 
-# Per-phage aggregated feature names: mean-pooled descriptors + metadata.
-PHAGE_FEATURE_NAMES = ["has_annotated_rbp", "rbp_count"] + [f"rbp_mean_{name}" for name in PER_RBP_FEATURE_NAMES]
+# Per-phage feature names: metadata + PCA components.
+# These are set dynamically based on n_components via build_phage_rbp_schema().
+METADATA_FEATURES = ["has_annotated_rbp", "rbp_count"]
+
+
+def build_phage_rbp_schema(n_components: int = DEFAULT_N_COMPONENTS) -> list[str]:
+    """Return the ordered list of feature column names (without entity key)."""
+    pca_features = [f"rbp_plm_pc{i}" for i in range(n_components)]
+    return METADATA_FEATURES + pca_features
+
+
+# ---------------------------------------------------------------------------
+# RBP protein extraction (reused by precompute_rbp_plm_embeddings.py)
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -111,36 +117,6 @@ def extract_cds_protein(record: CdsRecord, contigs: dict[str, str]) -> str:
     return protein
 
 
-def compute_protein_descriptors(protein_seq: str) -> np.ndarray:
-    """Compute a feature vector for a single protein sequence.
-
-    Returns a 26-element vector: 20 amino acid frequencies + 6 physicochemical
-    properties (log_length, molecular_weight, GRAVY, aromaticity, pI, charge_at_pH7).
-    """
-    # Filter to standard amino acids for ProteinAnalysis.
-    clean_seq = "".join(aa for aa in protein_seq if aa in AMINO_ACIDS)
-    if len(clean_seq) < 10:
-        return np.zeros(len(PER_RBP_FEATURE_NAMES), dtype=np.float64)
-
-    analysis = ProteinAnalysis(clean_seq)
-    aa_percent = analysis.amino_acids_percent
-    composition = np.array([aa_percent.get(aa, 0.0) for aa in AMINO_ACIDS], dtype=np.float64)
-
-    physico = np.array(
-        [
-            np.log1p(len(clean_seq)),
-            analysis.molecular_weight() / 1e5,  # Scale to ~0-1 range for typical RBPs.
-            analysis.gravy(),
-            analysis.aromaticity(),
-            analysis.isoelectric_point(),
-            analysis.charge_at_pH(7.0) / 100.0,  # Scale to ~0-1 range.
-        ],
-        dtype=np.float64,
-    )
-
-    return np.concatenate([composition, physico])
-
-
 def extract_rbp_proteins_for_phage(
     phage_name: str,
     genome_fasta_path: Path,
@@ -179,36 +155,111 @@ def extract_rbp_proteins_for_phage(
     return proteins
 
 
-def build_phage_rbp_feature_row(
-    phage_name: str,
-    genome_fasta_path: Path,
-    annotation_dir: Path,
-) -> dict[str, object]:
-    """Build a single feature row for one phage.
+# ---------------------------------------------------------------------------
+# PLM embedding loading and PCA
+# ---------------------------------------------------------------------------
 
-    Returns a dict with keys: phage, has_annotated_rbp, rbp_count, rbp_mean_aa_A, ..., etc.
+
+def load_cached_embeddings(cache_path: Path) -> dict:
+    """Load precomputed PLM embeddings from .npz cache.
+
+    Returns a dict with keys: phage_names, embeddings, has_rbp, rbp_counts, model_backend.
     """
-    proteins = extract_rbp_proteins_for_phage(phage_name, genome_fasta_path, annotation_dir)
-
-    row: dict[str, object] = {"phage": phage_name}
-    if not proteins:
-        row["has_annotated_rbp"] = 0
-        row["rbp_count"] = 0
-        for name in PER_RBP_FEATURE_NAMES:
-            row[f"rbp_mean_{name}"] = 0.0
-        return row
-
-    # Compute descriptor vectors for each RBP and mean-pool.
-    descriptors = np.array([compute_protein_descriptors(p.protein_seq) for p in proteins], dtype=np.float64)
-    mean_descriptors = descriptors.mean(axis=0)
-
-    row["has_annotated_rbp"] = 1
-    row["rbp_count"] = len(proteins)
-    for i, name in enumerate(PER_RBP_FEATURE_NAMES):
-        row[f"rbp_mean_{name}"] = round(float(mean_descriptors[i]), 6)
-    return row
+    if not cache_path.exists():
+        raise FileNotFoundError(
+            f"PLM embedding cache not found at {cache_path}. "
+            "Run: python -m lyzortx.pipeline.autoresearch.precompute_rbp_plm_embeddings"
+        )
+    data = np.load(cache_path, allow_pickle=True)
+    return {
+        "phage_names": list(data["phage_names"]),
+        "embeddings": data["embeddings"],  # (N, 1280)
+        "has_rbp": data["has_rbp"],
+        "rbp_counts": data["rbp_counts"],
+        "model_backend": str(data["model_backend"]),
+    }
 
 
-def build_phage_rbp_schema() -> list[str]:
-    """Return the ordered list of feature column names (without entity key)."""
-    return list(PHAGE_FEATURE_NAMES)
+def fit_pca_on_embeddings(
+    embeddings: np.ndarray,
+    has_rbp: np.ndarray,
+    n_components: int = DEFAULT_N_COMPONENTS,
+) -> PCA:
+    """Fit PCA on non-zero phage embeddings.
+
+    Only phages with annotated RBPs (has_rbp=True) are used for fitting.
+    """
+    non_zero_mask = has_rbp.astype(bool)
+    n_non_zero = non_zero_mask.sum()
+
+    # Clamp n_components to available samples.
+    effective_n = min(n_components, n_non_zero - 1)
+    if effective_n < n_components:
+        LOGGER.warning(
+            "Only %d non-zero phage embeddings; reducing PCA from %d to %d components",
+            n_non_zero,
+            n_components,
+            effective_n,
+        )
+
+    pca = PCA(n_components=effective_n, random_state=42)
+    pca.fit(embeddings[non_zero_mask])
+    LOGGER.info(
+        "PCA fit: %d components explain %.1f%% of variance (from %d phages × %d dims)",
+        effective_n,
+        pca.explained_variance_ratio_.sum() * 100,
+        n_non_zero,
+        embeddings.shape[1],
+    )
+    return pca
+
+
+def build_phage_rbp_plm_rows(
+    cache_path: Path,
+    n_components: int = DEFAULT_N_COMPONENTS,
+) -> list[dict[str, object]]:
+    """Build feature rows for all phages from cached PLM embeddings.
+
+    Loads cached embeddings, fits PCA, and produces one row per phage with
+    has_annotated_rbp, rbp_count, and PCA component features.
+    """
+    cache = load_cached_embeddings(cache_path)
+    phage_names = cache["phage_names"]
+    embeddings = cache["embeddings"]
+    has_rbp = cache["has_rbp"]
+    rbp_counts = cache["rbp_counts"]
+
+    LOGGER.info(
+        "Loaded %d phage embeddings (model: %s) from %s",
+        len(phage_names),
+        cache["model_backend"],
+        cache_path,
+    )
+
+    pca = fit_pca_on_embeddings(embeddings, has_rbp, n_components)
+    effective_n = pca.n_components_
+
+    # Project all phages (including zero-embedding ones).
+    projected = pca.transform(embeddings)  # (N, effective_n)
+
+    # Zero out PCA features for phages without RBPs (their raw embedding is all-zero,
+    # but PCA centering would give them non-zero projections).
+    for i in range(len(phage_names)):
+        if not has_rbp[i]:
+            projected[i, :] = 0.0
+
+    rows: list[dict[str, object]] = []
+    for i, phage in enumerate(phage_names):
+        row: dict[str, object] = {
+            "phage": phage,
+            "has_annotated_rbp": int(has_rbp[i]),
+            "rbp_count": int(rbp_counts[i]),
+        }
+        for j in range(effective_n):
+            row[f"rbp_plm_pc{j}"] = round(float(projected[i, j]), 6)
+        # Pad remaining components with zero if effective_n < n_components.
+        for j in range(effective_n, n_components):
+            row[f"rbp_plm_pc{j}"] = 0.0
+        rows.append(row)
+
+    return rows
