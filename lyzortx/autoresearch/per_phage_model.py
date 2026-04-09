@@ -126,6 +126,8 @@ def predict_per_phage(
 
     Returns (blended_predictions, result_summary).
     """
+    if not 0.0 <= blend_alpha <= 1.0:
+        raise ValueError(f"blend_alpha must be between 0.0 and 1.0, got {blend_alpha}")
     blended = all_pairs_predictions.copy()
     phages = sorted(eval_design["phage"].unique())
     fitted_phages: list[str] = []

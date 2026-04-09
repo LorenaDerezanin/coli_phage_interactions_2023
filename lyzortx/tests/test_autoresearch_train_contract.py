@@ -419,8 +419,153 @@ def test_train_ignores_legacy_host_defense_artifact_when_ablation_is_off(tmp_pat
     assert exit_code == 0
 
 
+def _build_per_phage_pair_rows(
+    *, bacteria_ids: list[str], phage_ids: list[str], split_name: str
+) -> list[dict[str, object]]:
+    """Extended positive pairs: P1 has 3 positives (B1-B3) and 2 negatives (B6, B7) so it clears MIN_POSITIVES_FOR_FIT=3."""
+    positive_pairs = {
+        ("B1", "P1"),
+        ("B1", "P2"),
+        ("B2", "P1"),
+        ("B2", "P2"),
+        ("B3", "P1"),
+        ("B3", "P3"),
+        ("B4", "P1"),
+        ("B4", "P2"),
+        ("B5", "P3"),
+        # B6 and B7 are negative for P1 — gives P1 3 positives, 2 negatives in training.
+    }
+    rows: list[dict[str, object]] = []
+    for bacteria in bacteria_ids:
+        for phage in phage_ids:
+            rows.append(
+                {
+                    "pair_id": f"{bacteria}__{phage}",
+                    "bacteria": bacteria,
+                    "phage": phage,
+                    "split": split_name,
+                    "label_any_lysis": "1" if (bacteria, phage) in positive_pairs else "0",
+                    "label_reason": "fixture",
+                    "training_weight_v3": "1.0",
+                    "label_read_only": "1",
+                    "retained_for_autoresearch": "1",
+                    "exclusion_reasons": "",
+                    "host_fasta_path": f"hosts/{bacteria}.fna",
+                    "phage_fasta_path": f"phages/{phage}.fna",
+                }
+            )
+    return rows
+
+
+def _per_phage_slot_fixture_rows() -> dict[str, list[dict[str, object]]]:
+    """Extended slot fixtures with B6, B7 for the per-phage blend test."""
+    base = slot_fixture_rows()
+    for slot_name, rows in base.items():
+        if not rows:
+            continue
+        sample = rows[0]
+        entity_key = "bacteria" if "bacteria" in sample else "phage"
+        if entity_key == "bacteria":
+            for bact_id in ("B6", "B7"):
+                new_row = dict(rows[0])
+                new_row[entity_key] = bact_id
+                rows.append(new_row)
+    return base
+
+
+def create_per_phage_autoresearch_cache(tmp_path: Path) -> Path:
+    """Like create_minimal_autoresearch_cache but with enough training bacteria for per-phage fitting."""
+    output_root = tmp_path / "outputs"
+    cache_dir = output_root / "search_cache_v1"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    train_bacteria = ["B1", "B2", "B3", "B6", "B7"]
+    inner_bacteria = ["B4", "B5"]
+    phage_ids = ["P1", "P2", "P3", "P4"]
+
+    train_rows = _build_per_phage_pair_rows(
+        bacteria_ids=train_bacteria,
+        phage_ids=phage_ids,
+        split_name=build_contract.TRAIN_SPLIT,
+    )
+    inner_rows = _build_per_phage_pair_rows(
+        bacteria_ids=inner_bacteria,
+        phage_ids=phage_ids,
+        split_name=build_contract.INNER_VAL_SPLIT,
+    )
+    train_path = cache_dir / "search_pairs" / prepare_cache.TRAIN_PAIR_TABLE_FILENAME
+    inner_path = cache_dir / "search_pairs" / prepare_cache.INNER_VAL_PAIR_TABLE_FILENAME
+    write_csv_rows(train_path, train_rows)
+    write_csv_rows(inner_path, inner_rows)
+
+    fixture_rows = _per_phage_slot_fixture_rows()
+    slot_feature_columns: dict[str, list[str]] = {}
+    slot_schema_paths: dict[str, str] = {}
+    for slot_name in [spec.slot_name for spec in prepare_cache.SLOT_SPECS]:
+        feature_columns, schema_path = write_slot(cache_dir, slot_name, fixture_rows[slot_name])
+        slot_feature_columns[slot_name] = feature_columns
+        slot_schema_paths[slot_name] = schema_path
+
+    schema_manifest = prepare_cache.build_top_level_schema_manifest(slot_feature_columns=slot_feature_columns)
+    schema_manifest_path = cache_dir / prepare_cache.SCHEMA_MANIFEST_FILENAME
+    write_json(schema_manifest_path, schema_manifest)
+
+    contract_manifest = {
+        "task_id": "AR01",
+        "split_contract": {
+            "split_hashes": {
+                build_contract.TRAIN_SPLIT: {
+                    "retained_pair_ids_sha256": build_contract.sha256_strings(
+                        sorted(row["pair_id"] for row in train_rows)
+                    )
+                },
+                build_contract.INNER_VAL_SPLIT: {
+                    "retained_pair_ids_sha256": build_contract.sha256_strings(
+                        sorted(row["pair_id"] for row in inner_rows)
+                    )
+                },
+                build_contract.HOLDOUT_SPLIT: {"retained_pair_ids_sha256": build_contract.sha256_strings(["H0__P0"])},
+            }
+        },
+    }
+    contract_manifest_path = output_root / build_contract.CONTRACT_MANIFEST_FILENAME
+    write_json(contract_manifest_path, contract_manifest)
+
+    input_checksums_path = output_root / build_contract.INPUT_CHECKSUMS_FILENAME
+    write_json(input_checksums_path, {"task_id": "AR01"})
+    provenance_manifest = {
+        "task_id": "AR02",
+        "source_contract": {
+            "pair_contract_manifest_path": str(contract_manifest_path),
+            "input_checksums_manifest_path": str(input_checksums_path),
+            "output_root": str(output_root),
+        },
+    }
+    provenance_manifest_path = cache_dir / prepare_cache.PROVENANCE_MANIFEST_FILENAME
+    write_json(provenance_manifest_path, provenance_manifest)
+
+    cache_manifest = {
+        "task_id": "AR02",
+        "cache_contract_id": prepare_cache.CACHE_CONTRACT_ID,
+        "schema_manifest_path": str(schema_manifest_path),
+        "provenance_manifest_path": str(provenance_manifest_path),
+        "pair_tables": {
+            build_contract.TRAIN_SPLIT: {"path": str(train_path)},
+            build_contract.INNER_VAL_SPLIT: {"path": str(inner_path)},
+        },
+        "feature_slots": {
+            slot_name: {
+                "schema_manifest_path": slot_schema_paths[slot_name],
+            }
+            for slot_name in slot_schema_paths
+        },
+    }
+    write_json(cache_dir / prepare_cache.CACHE_MANIFEST_FILENAME, cache_manifest)
+    return cache_dir
+
+
 def test_train_runs_per_phage_blend_variant(tmp_path: Path) -> None:
-    cache_dir = create_minimal_autoresearch_cache(tmp_path)
+    cache_dir = create_per_phage_autoresearch_cache(tmp_path)
     output_dir = tmp_path / "train_outputs"
 
     exit_code = autoresearch_train.main(
@@ -445,7 +590,9 @@ def test_train_runs_per_phage_blend_variant(tmp_path: Path) -> None:
     assert summary["baseline_contract"]["blend_alpha"] == 0.5
     assert "per_phage" in summary
     assert summary["per_phage"]["blend_alpha"] == 0.5
-    assert summary["per_phage"]["n_phages_fitted"] >= 0
+    # P1 has 5 positives in training (B1-B3, B6, B7) — must be fitted.
+    assert summary["per_phage"]["n_phages_fitted"] > 0
+    assert "P1" in summary["per_phage"]["fitted_phages"]
     assert set(summary["inner_val_metrics"]) == {"roc_auc", "top3_hit_rate", "brier_score"}
 
 
