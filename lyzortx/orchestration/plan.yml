@@ -1395,7 +1395,7 @@ tracks:
         silently change split membership, and cannot bypass the frozen cache schema
     - id: AR08
       title: Add a dedicated RunPod workflow and environment-scoped secret contract
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: base
       depends_on_tasks:

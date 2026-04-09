@@ -877,7 +877,7 @@ graph LR
     commands are documented in `lyzortx/autoresearch/README.md`
   - Add guard tests proving the sandbox cannot read sealed holdout labels, cannot silently change split membership, and
     cannot bypass the frozen cache schema
-- [ ] **AR08** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
+- [x] **AR08** Add a dedicated RunPod workflow and environment-scoped secret contract. Model: `gpt-5.4`. CI image
       profile: `base`. Depends on tasks: `AR07`.
   - Add a separate manual workflow for AUTORESEARCH runs instead of wiring cloud provisioning into
     `.github/workflows/codex-implement.yml`
