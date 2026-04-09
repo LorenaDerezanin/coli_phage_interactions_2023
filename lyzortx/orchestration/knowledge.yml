@@ -192,7 +192,7 @@ themes:
           All 96/96 phages qualify for per-phage models on the ST03 training set (min 3 positives
           in 221 bacteria). Bootstrap CIs overlap with TL18 — differences not statistically
           significant on 65-bacteria holdout.
-        relates_to: [adsorption-dominates-paper, family-bias-straboviridae, autoresearch-parity]
+        relates_to: [adsorption-dominates-paper, family-bias-straboviridae, autoresearch-parity, per-phage-not-deployable, deployment-goal]
 
       - id: adsorption-first-strategy
         statement: >
@@ -227,13 +227,17 @@ themes:
 
       - id: error-buckets
         statement: >
-          Per-phage blend reduces holdout misses from 6/65 to 4/65. Remaining failure modes:
-          abstention (2 strains with zero positives), needle-in-haystack (1 strain with 1/96
-          positive), and narrow-host prior collapse (1 strain with 14 narrow-host positives).
+          The all-pairs model misses 6/65 holdout bacteria in top-3. Failure modes: Straboviridae
+          prior collapse (2 strains rescued by per-phage, not deployable), abstention (2 strains
+          with zero positives), needle-in-haystack (1 strain with 1/96 positive), and narrow-host
+          prior collapse (1 strain with 14 narrow-host positives).
         sources: [ST09, TF02, 2026-04-09 APEX holdout]
         status: active
         confidence: validated
-        relates_to: [family-bias-straboviridae, narrow-host-prior-collapse]
+        context: >
+          Per-phage blend reduced misses to 4/65, but per-phage is not deployable for unseen phages.
+          The 6/65 all-pairs error rate is the operationally relevant baseline for the deployment goal.
+        relates_to: [family-bias-straboviridae, narrow-host-prior-collapse, per-phage-not-deployable]
 
       - id: family-bias-straboviridae
         statement: >
@@ -448,19 +452,18 @@ themes:
 
       - id: defense-under-per-phage
         statement: >
-          Do 79 DefenseFinder host defense features still regress top-3 under per-phage blending?
-          The only defense ablation was on the base all-pairs model (0.810 AUC); per-phage
-          architecture changes how host-side features interact with rankings, so the lineage
-          confounding mechanism may be partially mitigated.
-        sources: [2026-04-08 defense ablation, 2026-04-09 APEX holdout]
+          Can the defense top-3 regression (-4.6pp on all-pairs) be mitigated on the deployable
+          all-pairs architecture — e.g., by feature selection, regularization, or phylogroup-aware
+          encoding — to capture the +0.7pp AUC gain without the ranking penalty?
+        sources: [2026-04-08 defense ablation, 2026-04-09 APEX holdout, 2026-04-09 project direction]
         status: active
         confidence: preliminary
         context: >
-          Defense improved AUC +0.7pp but regressed top-3 -4.6pp on the all-pairs model due to
-          lineage confounding. Per-phage sub-models already learn phage-specific host tropism from
-          host-side features, which may absorb or conflict with the defense signal differently.
-          Untested as of 2026-04-09.
-        relates_to: [defense-ablation-autoresearch, defense-lineage-confounding, per-phage-blending-dominant]
+          Originally framed as "does defense behave differently under per-phage blending" but
+          per-phage is not deployable for unseen phages. The actionable question is whether
+          defense can be made useful on the all-pairs model. LightGBM's native feature selection
+          was not aggressive enough; explicit mitigation of lineage confounding may be needed.
+        relates_to: [defense-ablation-autoresearch, defense-lineage-confounding, deployment-goal]
 
       - id: higher-res-rbp
         statement: >

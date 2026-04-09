@@ -72,7 +72,8 @@ Architecture choices, calibration, and performance bounds.
 - Per-phage LightGBM sub-models blended with all-pairs predictions are the dominant AUTORESEARCH architectural gain:
   +2.0pp AUC (0.810->0.830) on ST03 holdout, +3.1pp top-3 (90.8%->93.8%), and -2.3pp Brier (0.167->0.144). Surpasses
   TL18 on AUC (+0.7pp) and matches top-3 (93.8% vs 93.7%). [validated; source: 2026-04-09 APEX ablation, 2026-04-09 APEX
-  holdout; see also: adsorption-dominates-paper, family-bias-straboviridae, autoresearch-parity]
+  holdout; see also: adsorption-dominates-paper, family-bias-straboviridae, autoresearch-parity,
+  per-phage-not-deployable, deployment-goal]
   - *Each phage gets its own 32-tree LightGBM on host-only features (surface + typing + stats), blended 50/50 with
     all-pairs predictions. Phages with <3 positives fall back to all-pairs. All 96/96 phages qualify for per-phage
     models on the ST03 training set (min 3 positives in 221 bacteria). Bootstrap CIs overlap with TL18 — differences not
@@ -90,10 +91,13 @@ Holdout protocol, benchmark methodology, and error analysis.
   split-contract]
 - Bootstrap CIs must be computed at holdout-strain level (not pair level) to align evaluation denominator with
   recommendation metric; 1000 resamples on 65 strains. [validated; source: TF01]
-- Per-phage blend reduces holdout misses from 6/65 to 4/65. Remaining failure modes: abstention (2 strains with zero
-  positives), needle-in-haystack (1 strain with 1/96 positive), and narrow-host prior collapse (1 strain with 14
-  narrow-host positives). [validated; source: ST09, TF02, 2026-04-09 APEX holdout; see also: family-bias-straboviridae,
-  narrow-host-prior-collapse]
+- The all-pairs model misses 6/65 holdout bacteria in top-3. Failure modes: Straboviridae prior collapse (2 strains
+  rescued by per-phage, not deployable), abstention (2 strains with zero positives), needle-in-haystack (1 strain with
+  1/96 positive), and narrow-host prior collapse (1 strain with 14 narrow-host positives). [validated; source: ST09,
+  TF02, 2026-04-09 APEX holdout; see also: family-bias-straboviridae, narrow-host-prior-collapse,
+  per-phage-not-deployable]
+  - *Per-phage blend reduced misses to 4/65, but per-phage is not deployable for unseen phages. The 6/65 all-pairs error
+    rate is the operationally relevant baseline for the deployment goal.*
 - Straboviridae prior collapse suppresses cross-family true positives: broad-host Straboviridae (62-71% lysis rate)
   dominate model rankings, pushing narrow-host true positives (10-53% lysis rate) below the top-3 cutoff. [validated;
   source: ST09, 2026-04-09 APEX holdout NILS53 analysis]
@@ -178,14 +182,13 @@ Unresolved items that still matter for the project direction.
 - Can within-family reranking using host-range evidence improve phage selection inside saturated score bands where the
   model knows the right family but not the right phage? [preliminary; source: ST09; see also: error-buckets,
   family-bias-straboviridae]
-- Do 79 DefenseFinder host defense features still regress top-3 under per-phage blending? The only defense ablation was
-  on the base all-pairs model (0.810 AUC); per-phage architecture changes how host-side features interact with rankings,
-  so the lineage confounding mechanism may be partially mitigated. [preliminary; source: 2026-04-08 defense ablation,
-  2026-04-09 APEX holdout; see also: defense-ablation-autoresearch, defense-lineage-confounding,
-  per-phage-blending-dominant]
-  - *Defense improved AUC +0.7pp but regressed top-3 -4.6pp on the all-pairs model due to lineage confounding. Per-phage
-    sub-models already learn phage-specific host tropism from host-side features, which may absorb or conflict with the
-    defense signal differently. Untested as of 2026-04-09.*
+- Can the defense top-3 regression (-4.6pp on all-pairs) be mitigated on the deployable all-pairs architecture — e.g.,
+  by feature selection, regularization, or phylogroup-aware encoding — to capture the +0.7pp AUC gain without the
+  ranking penalty? [preliminary; source: 2026-04-08 defense ablation, 2026-04-09 APEX holdout, 2026-04-09 project
+  direction; see also: defense-ablation-autoresearch, defense-lineage-confounding, deployment-goal]
+  - *Originally framed as "does defense behave differently under per-phage blending" but per-phage is not deployable for
+    unseen phages. The actionable question is whether defense can be made useful on the all-pairs model. LightGBM's
+    native feature selection was not aggressive enough; explicit mitigation of lineage confounding may be needed.*
 - Protein language model embeddings (ESM-2 or ProstT5 into SaProt) of RBP sequences are the most promising untested
   phage-side feature; physicochemical descriptors proved insufficient and PHIStruct's off-the-shelf model only predicts
   genus (not strain). [preliminary; source: 2026-04-08 paper analysis, 2026-04-09 APEX ablation, 2026-04-09 PHIStruct
