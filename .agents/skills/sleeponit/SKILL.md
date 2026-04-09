@@ -72,28 +72,26 @@ Each unit in the YAML has:
   relates_to: [prob-distribution]   # cross-refs to other unit IDs (optional)
 ```
 
-## Phase 2: Curate
-
-This is the critical human-in-the-loop step. The user must review and approve the knowledge model.
+## Phase 2: Curate & Approve
 
 1. Write draft YAML to `.scratch/sleeponit_draft.yml`
-2. Run validation: `knowledge_parser.validate_knowledge()` — fix any errors
-3. Present a summary to the user:
-   - Total units by theme and status
-   - If incremental: the diff (what's new, changed, removed)
-   - Any units you're uncertain about — flag them explicitly
-4. Tell the user: "Review and edit `.scratch/sleeponit_draft.yml`, then tell me when ready."
-5. After user confirms, re-validate the edited draft
+2. Run `knowledge_parser.validate_knowledge()` — fix any errors
+3. Compute diff with `knowledge_parser.diff_knowledge()` and present a **concise summary** to the user:
+   - Unit count change (e.g., "43 -> 39 units")
+   - Deleted units: list IDs with one-line reason each
+   - Added units: list IDs with one-line description each
+   - Refined units: list IDs with what changed
+   - Flag any units you're uncertain about
+4. Wait for user approval. If the summary is clear, a simple "y" is enough. Only do a multi-step
+   interactive feedback session if changes are unwieldy for a summary or if important info would be
+   lost in the summary.
+5. On approval, proceed to Phase 3. On feedback, adjust the draft and re-summarize.
 
 ## Phase 3: Emit
 
 1. Copy validated YAML to `lyzortx/orchestration/knowledge.yml`
 2. Run `python -m lyzortx.orchestration.render_knowledge` to produce `lyzortx/KNOWLEDGE.md`
 3. If `lyzortx/CLAUDE.md` does not already contain `@KNOWLEDGE.md`, add it as a second line
-4. Report:
-   - Total knowledge units by status
-   - If incremental: the diff summary
-   - Remind user to commit both `knowledge.yml` and `KNOWLEDGE.md`
 
 ## What Makes a Good Knowledge Unit
 
