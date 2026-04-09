@@ -214,6 +214,43 @@ binding specificity, rather than relying solely on host-side features to infer c
 | AUTORESEARCH + per-phage (AX02) | **0.830** | **93.8%** | 0.144 | ST03 holdout |
 | AUTORESEARCH full combo | **0.830** | **93.8%** | **0.138** | ST03 holdout |
 
+#### Biological interpretation
+
+**Why per-phage blending works.** The all-pairs model learns one global function mapping (host features, phage
+features) to lysis probability. It sees 96 x 304 = ~29K pairs and must use phage features (family, projection, stats)
+to distinguish between phages. The problem: phage-side features are mostly taxonomic. Straboviridae (the largest
+family, ~50-60% of the panel) all look similar to the model. For any host, the model ranks all Straboviridae similarly
+and they dominate the top-3.
+
+The per-phage architecture encodes a biological truth: each phage has its own host-range tropism determined by its
+specific receptor-binding protein, not by its taxonomic family. Two Straboviridae phages can target completely
+different receptors (OmpC vs FhuA vs BtuB). A per-phage model trained on host-only features (surface proteins, typing,
+stats) learns *that phage's* tropism — which host surface configurations lead to lysis for that specific phage. This
+mirrors the paper's finding that per-phage models on bacterial features alone achieve 86% AUROC: the host surface
+profile is sufficient to predict compatibility when conditioned on a single phage.
+
+The two rescued bacteria illustrate the mechanism:
+
+- **ECOR-69** (10/96 positives): The base model's top-3 is all broad-host Straboviridae (DIJ07_P2, 536_P9, DIJ07_P1)
+  — none lyse ECOR-69. Per-phage completely reshuffles the ranking: top-5 are all true positives (LF110_P2, LF82_P9,
+  LF110_P1, LF82_P2, LF82_P6). These phages' per-phage sub-models learned that ECOR-69's specific host surface
+  profile is compatible. The all-pairs model couldn't distinguish them because its phage features are too coarse.
+- **H1-003-0088-B-J** (12/96 positives): Same pattern. Per-phage pushes 55989_P2 (a true positive) into position 3.
+  A partial rescue — the sub-model is starting to discriminate this host's susceptibility pattern.
+
+**Why the extra features (AX01, AX03, AX04) add nothing.** Holdout AUC is identical between per-phage-only (0.830) and
+full combo (0.830). The bottleneck is architectural, not feature-driven. Physicochemical RBP descriptors (molecular
+weight, amino acid composition) describe bulk protein properties — they cannot distinguish two RBPs with similar AA
+compositions that fold into different binding geometries targeting different receptors. The pairwise cross-terms
+(has_RBP x receptor_score) are label-free and too coarse: they encode "this phage has an RBP and this host has OmpC"
+but not "this phage's RBP *binds* OmpC." PHROG functional features are likely redundant with family-level biology
+already captured by phage_projection.
+
+**Why isotonic calibration helps Brier but not AUC/top-3.** Isotonic regression is a monotone transformation — it
+cannot change ranking (AUC) or top-3 ordering, only the calibration curve shape. The -0.6pp Brier improvement (0.144
+to 0.138) means the raw per-phage predictions were slightly overconfident, and isotonic correction brings them closer
+to empirical frequencies. The calibrator was fit on 3-fold CV training predictions and transfers reasonably to holdout.
+
 #### What inner-val got wrong
 
 The inner-val predicted a top-3/AUC trade-off: per-phage improved AUC but regressed top-3 (93.2% vs 94.6%). On
