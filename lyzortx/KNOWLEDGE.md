@@ -3,7 +3,7 @@
 <!-- Last consolidated: 2026-04-09T12:00:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**43 knowledge units** across 7 themes (36 active, 7 dead ends, 0 superseded)
+**43 knowledge units** across 7 themes (36 active, 7 dead ends)
 
 ## Data & Labels
 

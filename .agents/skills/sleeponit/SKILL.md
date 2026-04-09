@@ -38,7 +38,7 @@ If `lyzortx/orchestration/knowledge.yml` already exists:
 
 1. Load it with `knowledge_parser.load_knowledge()`
 2. Read notebooks looking for entries newer than `last_consolidated` date or entries not yet reflected in the model
-3. Propose additions, updates (changed status, refined statements), and removals (superseded findings)
+3. Propose additions, updates (refined statements), and deletions (superseded findings — delete, don't mark)
 4. Use `knowledge_parser.diff_knowledge()` to generate a clear change report
 
 ### Organizing into themes
@@ -65,7 +65,7 @@ Each unit in the YAML has:
     Isotonic calibration outperforms Platt scaling for this dataset's
     non-Gaussian probability distribution.
   sources: [TG02, TG05]            # notebook entry references (enough to grep)
-  status: active                    # active | superseded | dead-end
+  status: active                    # active | dead-end (superseded units are deleted, not marked)
   confidence: validated             # validated | preliminary (optional)
   context: >                        # caveats, conditions (optional)
     Only tested with LightGBM; may not hold for other architectures.

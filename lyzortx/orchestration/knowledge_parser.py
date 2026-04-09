@@ -18,7 +18,7 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-VALID_STATUSES = frozenset({"active", "superseded", "dead-end"})
+VALID_STATUSES = frozenset({"active", "dead-end"})
 VALID_CONFIDENCES = frozenset({"validated", "preliminary"})
 
 
@@ -29,7 +29,7 @@ class KnowledgeUnit:
     id: str
     statement: str
     sources: list[str]
-    status: str  # "active" | "superseded" | "dead-end"
+    status: str  # "active" | "dead-end"
     confidence: str | None = None
     context: str | None = None
     relates_to: list[str] = field(default_factory=list)

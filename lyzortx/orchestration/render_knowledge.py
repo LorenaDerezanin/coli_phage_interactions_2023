@@ -44,9 +44,6 @@ def _render_unit(unit: KnowledgeUnit) -> str:
     parts.append(f"[{'; '.join(annotations)}]")
 
     text = " ".join(parts)
-    if unit.status == "superseded":
-        text = f"~~{text}~~"
-
     lines = textwrap.fill(
         text,
         width=MAX_PROSE_WIDTH,
@@ -87,18 +84,8 @@ def _render_theme(theme: KnowledgeTheme) -> str:
         )
         sections.append("")
 
-    active_units = [u for u in theme.units if u.status in ("active", "dead-end")]
-    superseded_units = [u for u in theme.units if u.status == "superseded"]
-
-    for unit in active_units:
+    for unit in theme.units:
         sections.append(_render_unit(unit))
-
-    if superseded_units:
-        sections.append("")
-        sections.append("### Superseded")
-        sections.append("")
-        for unit in superseded_units:
-            sections.append(_render_unit(unit))
 
     sections.append("")
     return "\n".join(sections)
@@ -118,10 +105,9 @@ def render_knowledge(model: KnowledgeModel) -> str:
     all_units = model.all_units()
     active_count = len(model.units_by_status("active"))
     dead_end_count = len(model.units_by_status("dead-end"))
-    superseded_count = len(model.units_by_status("superseded"))
     sections.append(
         f"**{len(all_units)} knowledge units** across {len(model.themes)} themes"
-        f" ({active_count} active, {dead_end_count} dead ends, {superseded_count} superseded)"
+        f" ({active_count} active, {dead_end_count} dead ends)"
     )
     sections.append("")
 
