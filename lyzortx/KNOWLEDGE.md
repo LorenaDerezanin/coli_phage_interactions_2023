@@ -3,7 +3,7 @@
 <!-- Last consolidated: 2026-04-09T20:30:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**40 knowledge units** across 7 themes (32 active, 8 dead ends)
+**42 knowledge units** across 7 themes (34 active, 8 dead ends)
 
 ## Data & Labels
 
@@ -114,6 +114,17 @@ Holdout protocol, benchmark methodology, and error analysis.
 
 Feature derivation parity, raw-input pipeline, and pre-computation.
 
+- The overarching deployment goal is a model that produces reliable lysis-likelihood inference on unseen E. coli
+  strains, ranks or recommends cocktails from a set of potentially unseen phages, and generalizes along both the host
+  and phage axes simultaneously. [validated; source: 2026-04-09 project direction; see also: per-phage-not-deployable,
+  higher-res-rbp]
+- Per-phage sub-models are architecturally incompatible with the deployment goal: they require training-time interaction
+  data for each phage and cannot produce predictions for unseen phages. The +2.0pp AUC gain is real on the fixed-panel
+  holdout but non-transferable to the target deployment scenario. [validated; source: 2026-04-09 APEX holdout,
+  2026-04-09 project direction; see also: per-phage-blending-dominant, deployment-goal, higher-res-rbp]
+  - *Per-phage models generalize to unseen bacteria (the holdout tests this) but not to unseen phages (no sub-model
+    exists to fall back on). For a system that must rank novel phage candidates, the all-pairs architecture with
+    expressive phage-side features (e.g., PLM embeddings) is the only viable path.*
 - Three systematic training/inference feature mismatches identified: DefenseFinder version drift (17.3% model
   importance), capsule detection sensitivity mismatch (3-5%), and extra phage in FNA directory (low impact). [validated;
   source: TL18 audit; see also: zero-delta-parity]
