@@ -1,4 +1,4 @@
-last_consolidated: "2026-04-09T00:30:00+00:00"
+last_consolidated: "2026-04-09T12:00:00+00:00"
 source_dir: lyzortx/research_notes/lab_notebooks
 
 themes:
@@ -180,17 +180,16 @@ themes:
 
       - id: autoresearch-ceiling
         statement: >
-          AUTORESEARCH feature search is concluded: base slots (159 features, 0.810 AUC) are at
-          ceiling for the current all-pairs LightGBM architecture. Defense adds noise, raw kmers
-          add zero signal. Further improvement requires architectural changes.
-        sources: [2026-04-08 paper analysis, 2026-04-08 kmer ablation, 2026-04-08 defense ablation]
-        status: active
+          AUTORESEARCH feature search concluded at 0.810 AUC for the all-pairs architecture;
+          per-phage blending (AX02) broke this ceiling to 0.840 AUC on inner-val.
+        sources: [2026-04-08 paper analysis, 2026-04-08 kmer ablation, 2026-04-09 APEX ablation]
+        status: superseded
         confidence: validated
         context: >
-          Candidate architectural changes: pairwise interaction features, post-hoc calibration
-          (isotonic/Platt), per-phage sub-models. All exceed the current train.py-only search
-          surface.
-        relates_to: [autoresearch-parity, adsorption-dominates-paper]
+          The feature ceiling was real for the all-pairs architecture. Per-phage sub-models are
+          an architectural change, not a feature addition — they learn phage-specific host-range
+          patterns that the all-pairs model cannot capture. Superseded by per-phage-blending-dominant.
+        relates_to: [autoresearch-parity, adsorption-dominates-paper, per-phage-blending-dominant]
 
       - id: svd-bottleneck
         statement: >
@@ -238,6 +237,35 @@ themes:
           confounding. LightGBM's native feature selection is not aggressive enough to ignore
           noisy defense subtypes.
         relates_to: [defense-lineage-confounding, autoresearch-parity, top3-auc-not-redundant]
+
+      - id: per-phage-blending-dominant
+        statement: >
+          Per-phage LightGBM sub-models blended with all-pairs predictions are the dominant
+          AUTORESEARCH architectural gain: +2.3pp AUC (0.817→0.840) and -1.9pp Brier
+          (0.159→0.139) on inner-val, surpassing TL18 on AUC and Brier.
+        sources: [2026-04-09 APEX ablation]
+        status: active
+        confidence: validated
+        context: >
+          Each phage gets its own 32-tree LightGBM on host-only features (surface + typing + stats),
+          blended 50/50 with all-pairs predictions. Phages with <3 positives fall back to all-pairs.
+          Confirms the paper's finding that per-phage models on bacterial features achieve 86% AUROC.
+          Holdout evaluation pending.
+        relates_to: [autoresearch-ceiling, adsorption-dominates-paper, family-bias-straboviridae]
+
+      - id: pairwise-cross-terms-top3
+        statement: >
+          Label-free pairwise RBP×receptor cross-terms (24 features) improve top-3 from 94.6% to
+          95.9% on inner-val without improving AUC, suggesting they help rerank within competitive
+          score bands.
+        sources: [2026-04-09 APEX ablation]
+        status: active
+        confidence: preliminary
+        context: >
+          Cross-terms are has_annotated_rbp × receptor_score and rbp_count × receptor_score for
+          all 12 OMP receptors. The top-3 effect without AUC improvement replicates the known
+          top-3/AUC divergence pattern.
+        relates_to: [top3-auc-not-redundant, receptor-variant-richness]
 
       - id: adsorption-first-strategy
         statement: >
@@ -378,6 +406,35 @@ themes:
         confidence: validated
         relates_to: [adsorption-first-strategy]
 
+      - id: physicochemical-rbp-insufficient
+        statement: >
+          Physicochemical RBP protein descriptors (AA composition + MW/GRAVY/pI/aromaticity/charge,
+          28 features from 80/96 phages) add no predictive signal; bulk protein properties cannot
+          capture binding-interface specificity.
+        sources: [2026-04-09 APEX ablation]
+        status: dead-end
+        confidence: validated
+        context: >
+          AX01 implemented mean-pooled physicochemical descriptors as a practical alternative to
+          structural RBP embeddings. Inner-val AUC was flat (0.816 vs 0.817 base) and top-3
+          regressed. Structural embeddings (ESMFold/PHIStruct) remain the path to meaningful
+          phage-side differentiation.
+        relates_to: [higher-res-rbp, adsorption-dominates-paper]
+
+      - id: phage-functional-noise
+        statement: >
+          Phage functional gene repertoire features (PHROG category counts/fractions, anti-defense,
+          depolymerase; 25 features) degrade top-3 from 94.6% to 87.8% on inner-val and are
+          effectively noise for this prediction task.
+        sources: [2026-04-09 APEX ablation]
+        status: dead-end
+        confidence: validated
+        context: >
+          PHROG categories may be redundant with existing phage_projection features that already
+          encode family-level biology. Anti-defense features specifically confirmed as noise,
+          consistent with the defense-lineage-confounding finding.
+        relates_to: [defense-lineage-confounding, defense-ablation-autoresearch]
+
       - id: raw-kmer-zero-signal
         statement: >
           Raw 256-dim tetranucleotide kmer frequencies add zero extractable signal for LightGBM
@@ -413,10 +470,10 @@ themes:
 
       - id: higher-res-rbp
         statement: >
-          Per-RBP-gene-level scores from FASTAs (beyond family presence) could close the remaining
-          gap between AUTORESEARCH and TL18; aligns with adsorption-first strategy and paper's
-          emphasis on RBPs as the key phage-side variable.
-        sources: [antiphage-landscape reading in project.md, 2026-04-08 paper analysis]
+          Structural RBP embeddings (ESMFold/PHIStruct) remain the most promising untested phage-side
+          feature; physicochemical protein descriptors proved insufficient, confirming that binding
+          specificity requires geometric, not bulk-property, representation.
+        sources: [antiphage-landscape reading in project.md, 2026-04-08 paper analysis, 2026-04-09 APEX ablation]
         status: active
         confidence: preliminary
-        relates_to: [autoresearch-parity, adsorption-first-strategy, adsorption-dominates-paper]
+        relates_to: [adsorption-first-strategy, adsorption-dominates-paper, physicochemical-rbp-insufficient]

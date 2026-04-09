@@ -1,9 +1,9 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-09T00:30:00+00:00 -->
+<!-- Last consolidated: 2026-04-09T12:00:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**41 knowledge units** across 7 themes (36 active, 5 dead ends, 0 superseded)
+**45 knowledge units** across 7 themes (37 active, 7 dead ends, 1 superseded)
 
 ## Data & Labels
 
@@ -69,12 +69,6 @@ Architecture choices, calibration, and performance bounds.
   tl18-improvement, svd-bottleneck, defense-ablation-autoresearch, autoresearch-ceiling]
   - *Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%. The
     remaining gap is architectural (pairwise features, calibration, per-phage modeling), not feature-driven.*
-- AUTORESEARCH feature search is concluded: base slots (159 features, 0.810 AUC) are at ceiling for the current
-  all-pairs LightGBM architecture. Defense adds noise, raw kmers add zero signal. Further improvement requires
-  architectural changes. [validated; source: 2026-04-08 paper analysis, 2026-04-08 kmer ablation, 2026-04-08 defense
-  ablation; see also: autoresearch-parity, adsorption-dominates-paper]
-  - *Candidate architectural changes: pairwise interaction features, post-hoc calibration (isotonic/Platt), per-phage
-    sub-models. All exceed the current train.py-only search surface.*
 - SVD compression was the AUTORESEARCH bottleneck, not feature count: removing SVD and using 300-tree LightGBM on 159
   raw features improved from 0.765 to 0.810 AUC. [validated; source: 2026-04-08 AUTORESEARCH eval]
 - Isotonic calibration outperforms Platt on ECE (0.021 vs 0.028); Platt outperforms on log-loss (0.333 vs 0.344).
@@ -90,9 +84,30 @@ Architecture choices, calibration, and performance bounds.
   defense-lineage-confounding, autoresearch-parity, top3-auc-not-redundant]
   - *Defense features help discrimination (AUC) but hurt ranking (top-3) due to lineage confounding. LightGBM's native
     feature selection is not aggressive enough to ignore noisy defense subtypes.*
+- Per-phage LightGBM sub-models blended with all-pairs predictions are the dominant AUTORESEARCH architectural gain:
+  +2.3pp AUC (0.817→0.840) and -1.9pp Brier (0.159→0.139) on inner-val, surpassing TL18 on AUC and Brier. [validated;
+  source: 2026-04-09 APEX ablation; see also: autoresearch-ceiling, adsorption-dominates-paper,
+  family-bias-straboviridae]
+  - *Each phage gets its own 32-tree LightGBM on host-only features (surface + typing + stats), blended 50/50 with
+    all-pairs predictions. Phages with <3 positives fall back to all-pairs. Confirms the paper's finding that per-phage
+    models on bacterial features achieve 86% AUROC. Holdout evaluation pending.*
+- Label-free pairwise RBP×receptor cross-terms (24 features) improve top-3 from 94.6% to 95.9% on inner-val without
+  improving AUC, suggesting they help rerank within competitive score bands. [preliminary; source: 2026-04-09 APEX
+  ablation; see also: top3-auc-not-redundant, receptor-variant-richness]
+  - *Cross-terms are has_annotated_rbp × receptor_score and rbp_count × receptor_score for all 12 OMP receptors. The
+    top-3 effect without AUC improvement replicates the known top-3/AUC divergence pattern.*
 - Adsorption-first modeling (host surface + typing features) is the correct critical path; defense features contribute
   but are not gate-critical for first baseline. [validated; source: 2026-04-05 replan, antiphage-landscape reading; see
   also: autoresearch-parity]
+
+### Superseded
+
+- ~~AUTORESEARCH feature search concluded at 0.810 AUC for the all-pairs architecture; per-phage blending (AX02) broke
+  this ceiling to 0.840 AUC on inner-val. [validated; source: 2026-04-08 paper analysis, 2026-04-08 kmer ablation,
+  2026-04-09 APEX ablation; see also: autoresearch-parity, adsorption-dominates-paper, per-phage-blending-dominant]~~
+  - *The feature ceiling was real for the all-pairs architecture. Per-phage sub-models are an architectural change, not
+    a feature addition — they learn phage-specific host-range patterns that the all-pairs model cannot capture.
+    Superseded by per-phage-blending-dominant.*
 
 ## Evaluation & Benchmarking
 
@@ -141,6 +156,17 @@ Compressed lessons from approaches that didn't work.
 - Mechanistic pairwise features (RBP-receptor, anti-defense pairs) showed no statistically significant lift on honest
   holdout rerun; kept in TL18 bundle but contribute only 3.5% and 2.0% to feature importance. [validated; source: TL12,
   TL18 audit; see also: adsorption-first-strategy]
+- Physicochemical RBP protein descriptors (AA composition + MW/GRAVY/pI/aromaticity/charge, 28 features from 80/96
+  phages) add no predictive signal; bulk protein properties cannot capture binding-interface specificity. [validated;
+  source: 2026-04-09 APEX ablation; see also: higher-res-rbp, adsorption-dominates-paper]
+  - *AX01 implemented mean-pooled physicochemical descriptors as a practical alternative to structural RBP embeddings.
+    Inner-val AUC was flat (0.816 vs 0.817 base) and top-3 regressed. Structural embeddings (ESMFold/PHIStruct) remain
+    the path to meaningful phage-side differentiation.*
+- Phage functional gene repertoire features (PHROG category counts/fractions, anti-defense, depolymerase; 25 features)
+  degrade top-3 from 94.6% to 87.8% on inner-val and are effectively noise for this prediction task. [validated; source:
+  2026-04-09 APEX ablation; see also: defense-lineage-confounding, defense-ablation-autoresearch]
+  - *PHROG categories may be redundant with existing phage_projection features that already encode family-level biology.
+    Anti-defense features specifically confirmed as noise, consistent with the defense-lineage-confounding finding.*
 - Raw 256-dim tetranucleotide kmer frequencies add zero extractable signal for LightGBM with 300 trees on 96 phages; the
   dimensionality/sample-size mismatch makes splits uninformative without SVD denoising. [validated; source: 2026-04-08
   kmer ablation; see also: kmer-embeddings, svd-bottleneck]
@@ -155,7 +181,7 @@ Unresolved items that still matter for the project direction.
 - Can within-family reranking using host-range evidence improve phage selection inside saturated score bands where the
   model knows the right family but not the right phage? [preliminary; source: ST09; see also: error-buckets,
   family-bias-straboviridae]
-- Per-RBP-gene-level scores from FASTAs (beyond family presence) could close the remaining gap between AUTORESEARCH and
-  TL18; aligns with adsorption-first strategy and paper's emphasis on RBPs as the key phage-side variable. [preliminary;
-  source: antiphage-landscape reading in project.md, 2026-04-08 paper analysis; see also: autoresearch-parity,
-  adsorption-first-strategy, adsorption-dominates-paper]
+- Structural RBP embeddings (ESMFold/PHIStruct) remain the most promising untested phage-side feature; physicochemical
+  protein descriptors proved insufficient, confirming that binding specificity requires geometric, not bulk-property,
+  representation. [preliminary; source: antiphage-landscape reading in project.md, 2026-04-08 paper analysis, 2026-04-09
+  APEX ablation; see also: adsorption-first-strategy, adsorption-dominates-paper, physicochemical-rbp-insufficient]
