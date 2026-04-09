@@ -145,6 +145,39 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Replay the optional host_defense block on top of the imported train.py baseline.",
     )
     replicate_parser.add_argument(
+        "--include-phage-rbp-struct",
+        action="store_true",
+        help="Add phage_rbp_struct slot (RBP protein descriptors, AX01).",
+    )
+    replicate_parser.add_argument(
+        "--include-phage-functional",
+        action="store_true",
+        help="Add phage_functional slot (PHROG categories, AX04).",
+    )
+    replicate_parser.add_argument(
+        "--include-pairwise-rbp-receptor",
+        action="store_true",
+        help="Add pairwise RBP × receptor cross-terms (AX03). Requires --include-phage-rbp-struct.",
+    )
+    replicate_parser.add_argument(
+        "--variant",
+        choices=("all-pairs", "per-phage-blend"),
+        default="all-pairs",
+        help="Model variant: all-pairs or per-phage-blend (AX02).",
+    )
+    replicate_parser.add_argument(
+        "--blend-alpha",
+        type=float,
+        default=0.5,
+        help="Per-phage blend weight (AX02).",
+    )
+    replicate_parser.add_argument(
+        "--calibrate",
+        choices=("none", "isotonic"),
+        default="none",
+        help="Post-hoc calibration method (AX05).",
+    )
+    replicate_parser.add_argument(
         "--skip-track-g-prerequisites",
         action="store_true",
         help="Require all Track G lock artifacts and prerequisites to exist instead of regenerating them.",
@@ -400,12 +433,22 @@ def build_candidate_holdout_rows(
     seed: int,
     device_type: str,
     include_host_defense: bool,
+    include_phage_rbp_struct: bool = False,
+    include_phage_functional: bool = False,
+    include_pairwise_rbp_receptor: bool = False,
+    variant: str = "all-pairs",
+    blend_alpha: float = 0.5,
+    calibrate: str = "none",
     training_frame_override: pd.DataFrame | None = None,
 ) -> list[dict[str, object]]:
     host_slots = ["host_surface", "host_typing", "host_stats"]
     if include_host_defense:
         host_slots.append("host_defense")
     phage_slots = ["phage_projection", "phage_stats"]
+    if include_phage_rbp_struct:
+        phage_slots.append("phage_rbp_struct")
+    if include_phage_functional:
+        phage_slots.append("phage_functional")
 
     host_table = candidate_module.build_entity_feature_table(
         context.slot_artifacts,
@@ -431,8 +474,17 @@ def build_candidate_holdout_rows(
         holdout_frame, host_features=host_typed, phage_features=phage_typed
     )
 
-    slot_prefixes = candidate_module.SLOT_PREFIXES
-    feature_columns = [col for col in train_design.columns if col.startswith(slot_prefixes)]
+    # Pairwise RBP × receptor cross-terms (AX03).
+    if include_pairwise_rbp_receptor:
+        from lyzortx.pipeline.autoresearch.derive_pairwise_rbp_receptor_features import (
+            compute_pairwise_rbp_receptor_features,
+        )
+
+        compute_pairwise_rbp_receptor_features(train_design)
+        compute_pairwise_rbp_receptor_features(holdout_design)
+
+    feature_prefixes = getattr(candidate_module, "ALL_FEATURE_PREFIXES", candidate_module.SLOT_PREFIXES)
+    feature_columns = [col for col in train_design.columns if col.startswith(feature_prefixes)]
     if not feature_columns:
         raise ValueError("Candidate replay constructed zero pair features for holdout replication.")
 
@@ -447,7 +499,38 @@ def build_candidate_holdout_rows(
         sample_weight=sample_weight,
         categorical_feature=categorical_in_features,
     )
-    predictions = estimator.predict_proba(holdout_design[feature_columns])[:, 1]
+    all_pairs_predictions = estimator.predict_proba(holdout_design[feature_columns])[:, 1]
+
+    # Per-phage blending (AX02).
+    if variant == "per-phage-blend":
+        from lyzortx.autoresearch.per_phage_model import fit_per_phage_models, predict_per_phage
+
+        host_feature_columns = [
+            col
+            for col in feature_columns
+            if col.startswith(("host_surface__", "host_typing__", "host_stats__", "host_defense__"))
+        ]
+        per_phage_models = fit_per_phage_models(train_design, host_feature_columns, device_type=device_type)
+        predictions, _ = predict_per_phage(
+            per_phage_models, holdout_design, host_feature_columns, all_pairs_predictions, blend_alpha=blend_alpha
+        )
+    else:
+        predictions = all_pairs_predictions
+
+    # Isotonic calibration (AX05).
+    if calibrate == "isotonic":
+        from lyzortx.autoresearch.calibration import calibrate_predictions, fit_isotonic_calibrator_cv
+
+        calibrator = fit_isotonic_calibrator_cv(
+            train_design,
+            feature_columns,
+            y_train,
+            sample_weight,
+            categorical_features=categorical_in_features,
+            device_type=device_type,
+            model_params=dict(candidate_module.PAIR_SCORER_PARAMS),
+        )
+        predictions = calibrate_predictions(calibrator, predictions)
 
     rows = []
     for row, probability in zip(
@@ -808,7 +891,10 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
     candidate_train_path = args.candidate_dir / "train.py"
     candidate_module = load_module_from_path(f"ar09_candidate_{candidate_id}", candidate_train_path)
     context = candidate_module.load_and_validate_cache(
-        cache_dir=cache_dir, include_host_defense=args.include_host_defense
+        cache_dir=cache_dir,
+        include_host_defense=args.include_host_defense,
+        include_phage_rbp_struct=getattr(args, "include_phage_rbp_struct", False),
+        include_phage_functional=getattr(args, "include_phage_functional", False),
     )
 
     use_st03 = getattr(args, "use_st03_split", False)
@@ -831,6 +917,12 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
             seed=seed,
             device_type=args.device_type,
             include_host_defense=args.include_host_defense,
+            include_phage_rbp_struct=getattr(args, "include_phage_rbp_struct", False),
+            include_phage_functional=getattr(args, "include_phage_functional", False),
+            include_pairwise_rbp_receptor=getattr(args, "include_pairwise_rbp_receptor", False),
+            variant=getattr(args, "variant", "all-pairs"),
+            blend_alpha=getattr(args, "blend_alpha", 0.5),
+            calibrate=getattr(args, "calibrate", "none"),
             training_frame_override=training_frame_override,
         )
         all_seed_rows.extend(candidate_seed_rows)
@@ -903,6 +995,12 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
             "replication_seeds": list(args.replication_seeds),
             "device_type": args.device_type,
             "include_host_defense": args.include_host_defense,
+            "include_phage_rbp_struct": getattr(args, "include_phage_rbp_struct", False),
+            "include_phage_functional": getattr(args, "include_phage_functional", False),
+            "include_pairwise_rbp_receptor": getattr(args, "include_pairwise_rbp_receptor", False),
+            "variant": getattr(args, "variant", "all-pairs"),
+            "blend_alpha": getattr(args, "blend_alpha", 0.5),
+            "calibrate": getattr(args, "calibrate", "none"),
             "use_st03_split": use_st03,
         },
         "artifacts": {
