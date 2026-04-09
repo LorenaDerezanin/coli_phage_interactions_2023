@@ -419,6 +419,36 @@ def test_train_ignores_legacy_host_defense_artifact_when_ablation_is_off(tmp_pat
     assert exit_code == 0
 
 
+def test_train_runs_per_phage_blend_variant(tmp_path: Path) -> None:
+    cache_dir = create_minimal_autoresearch_cache(tmp_path)
+    output_dir = tmp_path / "train_outputs"
+
+    exit_code = autoresearch_train.main(
+        [
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(output_dir),
+            "--device-type",
+            "cpu",
+            "--variant",
+            "per-phage-blend",
+            "--blend-alpha",
+            "0.5",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "ar07_baseline_summary.json").read_text(encoding="utf-8"))
+    assert summary["variant"] == "per-phage-blend"
+    assert summary["baseline_contract"]["variant"] == "per-phage-blend"
+    assert summary["baseline_contract"]["blend_alpha"] == 0.5
+    assert "per_phage" in summary
+    assert summary["per_phage"]["blend_alpha"] == 0.5
+    assert summary["per_phage"]["n_phages_fitted"] >= 0
+    assert set(summary["inner_val_metrics"]) == {"roc_auc", "top3_hit_rate", "brier_score"}
+
+
 def test_train_reads_legacy_host_defense_artifact_when_ablation_is_on(tmp_path: Path) -> None:
     cache_dir = create_minimal_autoresearch_cache(tmp_path)
     materialize_legacy_host_defense_slot(cache_dir)
