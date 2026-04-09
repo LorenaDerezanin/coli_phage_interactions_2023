@@ -419,6 +419,22 @@ themes:
         confidence: preliminary
         relates_to: [error-buckets, family-bias-straboviridae]
 
+      - id: defense-under-per-phage
+        statement: >
+          Do 79 DefenseFinder host defense features still regress top-3 under per-phage blending?
+          The only defense ablation was on the base all-pairs model (0.810 AUC); per-phage
+          architecture changes how host-side features interact with rankings, so the lineage
+          confounding mechanism may be partially mitigated.
+        sources: [2026-04-08 defense ablation, 2026-04-09 APEX holdout]
+        status: active
+        confidence: preliminary
+        context: >
+          Defense improved AUC +0.7pp but regressed top-3 -4.6pp on the all-pairs model due to
+          lineage confounding. Per-phage sub-models already learn phage-specific host tropism from
+          host-side features, which may absorb or conflict with the defense signal differently.
+          Untested as of 2026-04-09.
+        relates_to: [defense-ablation-autoresearch, defense-lineage-confounding, per-phage-blending-dominant]
+
       - id: higher-res-rbp
         statement: >
           Protein language model embeddings (ESM-2 or ProstT5 into SaProt) of RBP sequences are

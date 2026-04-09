@@ -3,7 +3,7 @@
 <!-- Last consolidated: 2026-04-09T20:30:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**39 knowledge units** across 7 themes (31 active, 8 dead ends)
+**40 knowledge units** across 7 themes (32 active, 8 dead ends)
 
 ## Data & Labels
 
@@ -167,6 +167,14 @@ Unresolved items that still matter for the project direction.
 - Can within-family reranking using host-range evidence improve phage selection inside saturated score bands where the
   model knows the right family but not the right phage? [preliminary; source: ST09; see also: error-buckets,
   family-bias-straboviridae]
+- Do 79 DefenseFinder host defense features still regress top-3 under per-phage blending? The only defense ablation was
+  on the base all-pairs model (0.810 AUC); per-phage architecture changes how host-side features interact with rankings,
+  so the lineage confounding mechanism may be partially mitigated. [preliminary; source: 2026-04-08 defense ablation,
+  2026-04-09 APEX holdout; see also: defense-ablation-autoresearch, defense-lineage-confounding,
+  per-phage-blending-dominant]
+  - *Defense improved AUC +0.7pp but regressed top-3 -4.6pp on the all-pairs model due to lineage confounding. Per-phage
+    sub-models already learn phage-specific host tropism from host-side features, which may absorb or conflict with the
+    defense signal differently. Untested as of 2026-04-09.*
 - Protein language model embeddings (ESM-2 or ProstT5 into SaProt) of RBP sequences are the most promising untested
   phage-side feature; physicochemical descriptors proved insufficient and PHIStruct's off-the-shelf model only predicts
   genus (not strain). [preliminary; source: 2026-04-08 paper analysis, 2026-04-09 APEX ablation, 2026-04-09 PHIStruct
