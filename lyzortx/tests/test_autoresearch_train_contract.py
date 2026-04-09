@@ -596,6 +596,32 @@ def test_train_runs_per_phage_blend_variant(tmp_path: Path) -> None:
     assert set(summary["inner_val_metrics"]) == {"roc_auc", "top3_hit_rate", "brier_score"}
 
 
+def test_train_runs_with_pairwise_rbp_receptor_features(tmp_path: Path) -> None:
+    cache_dir = create_minimal_autoresearch_cache(tmp_path)
+    output_dir = tmp_path / "train_outputs"
+
+    exit_code = autoresearch_train.main(
+        [
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(output_dir),
+            "--device-type",
+            "cpu",
+            "--include-phage-rbp-struct",
+            "--include-pairwise-rbp-receptor",
+        ]
+    )
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "ar07_baseline_summary.json").read_text(encoding="utf-8"))
+    assert summary["feature_space"]["pairwise_rbp_receptor_active"] is True
+    assert summary["feature_space"]["pairwise_feature_count"] > 0
+    assert summary["baseline_contract"]["pairwise_rbp_receptor_active"] is True
+    # Total features should include both slot features and pairwise cross-terms.
+    assert summary["feature_space"]["total_feature_count"] > 0
+
+
 def test_train_reads_legacy_host_defense_artifact_when_ablation_is_on(tmp_path: Path) -> None:
     cache_dir = create_minimal_autoresearch_cache(tmp_path)
     materialize_legacy_host_defense_slot(cache_dir)
