@@ -97,6 +97,16 @@ SLOT_SPECS = (
         block_role="phage",
         description="Raw tetranucleotide (k=4) frequency vectors from phage genomes. No SVD reduction.",
     ),
+    SlotSpec(
+        slot_name="phage_rbp_struct",
+        entity_key="phage",
+        column_prefix="phage_rbp_struct__",
+        block_role="phage",
+        description=(
+            "RBP protein descriptor features derived from Pharokka annotations and genome FASTAs. "
+            "Per-RBP amino acid composition and physicochemical properties, mean-pooled per phage."
+        ),
+    ),
 )
 SLOT_SPEC_BY_NAME = {spec.slot_name: spec for spec in SLOT_SPECS}
 
