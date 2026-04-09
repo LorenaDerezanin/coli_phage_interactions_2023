@@ -18,6 +18,12 @@ import pandas as pd
 from lightgbm import LGBMClassifier
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
+from lyzortx.autoresearch.per_phage_model import (
+    DEFAULT_BLEND_ALPHA,
+    PerPhageResult,
+    fit_per_phage_models,
+    predict_per_phage,
+)
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch.runtime_contract import (
     CACHE_CONTRACT_ID,
@@ -123,6 +129,22 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--include-phage-functional",
         action="store_true",
         help="Add the phage_functional slot (PHROG categories, anti-defense, depolymerase) as an additive ablation.",
+    )
+    parser.add_argument(
+        "--variant",
+        choices=("all-pairs", "per-phage-blend"),
+        default="all-pairs",
+        help=(
+            "Model variant. 'all-pairs' = standard LightGBM on all (phage, host) pairs. "
+            "'per-phage-blend' = fit per-phage sub-models on host-only features and blend "
+            "with all-pairs predictions (AX02)."
+        ),
+    )
+    parser.add_argument(
+        "--blend-alpha",
+        type=float,
+        default=0.5,
+        help="Blending weight for per-phage variant: alpha * per_phage + (1-alpha) * all_pairs. Default 0.5.",
     )
     return parser.parse_args(argv)
 
@@ -488,6 +510,8 @@ def run_baseline(
     include_host_defense: bool,
     include_phage_rbp_struct: bool = False,
     include_phage_functional: bool = False,
+    variant: str = "all-pairs",
+    blend_alpha: float = DEFAULT_BLEND_ALPHA,
     start_time: float,
 ) -> tuple[dict[str, Any], list[dict[str, object]]]:
     enforce_budget(start_time)
@@ -539,7 +563,46 @@ def run_baseline(
     )
     enforce_budget(start_time)
 
-    predictions = estimator.predict_proba(inner_val_design[feature_columns])[:, 1]
+    all_pairs_predictions = estimator.predict_proba(inner_val_design[feature_columns])[:, 1]
+
+    # Per-phage blending (AX02): fit per-phage sub-models on host-only features and blend.
+    per_phage_result: PerPhageResult | None = None
+    if variant == "per-phage-blend":
+        host_feature_columns = [
+            col
+            for col in feature_columns
+            if col.startswith(("host_surface__", "host_typing__", "host_stats__", "host_defense__"))
+        ]
+        if not host_feature_columns:
+            raise ValueError("Per-phage variant requires host feature columns but none found in design matrix.")
+        LOGGER.info(
+            "Fitting per-phage sub-models on %d host features for %d training phages",
+            len(host_feature_columns),
+            train_design["phage"].nunique(),
+        )
+        per_phage_models = fit_per_phage_models(
+            train_design,
+            host_feature_columns,
+            device_type=device_type,
+        )
+        predictions, per_phage_result = predict_per_phage(
+            per_phage_models,
+            inner_val_design,
+            host_feature_columns,
+            all_pairs_predictions,
+            blend_alpha=blend_alpha,
+        )
+        LOGGER.info(
+            "Per-phage blending: %d/%d phages fitted, %d fallback (alpha=%.2f)",
+            per_phage_result.n_phages_fitted,
+            per_phage_result.n_phages_total,
+            per_phage_result.n_phages_fallback,
+            blend_alpha,
+        )
+        enforce_budget(start_time)
+    else:
+        predictions = all_pairs_predictions
+
     scored_inner_val = inner_val_design.loc[:, ["pair_id", "bacteria", "phage", "label_any_lysis"]].copy()
     scored_inner_val["prediction"] = predictions
     scored_inner_val["rank_within_bacteria"] = (
@@ -558,8 +621,9 @@ def run_baseline(
         "top3_hit_rate": safe_float(compute_top3_hit_rate(scored_inner_val)),
         "brier_score": safe_float(float(brier_score_loss(y_inner, predictions))),
     }
-    summary = {
+    summary: dict[str, Any] = {
         "baseline_id": BASELINE_ID,
+        "variant": variant,
         "feature_space": {
             "type": "raw_slot_features",
             "host_slots": host_slots,
@@ -576,6 +640,14 @@ def run_baseline(
         "feature_columns": feature_columns,
         "metrics": metrics,
     }
+    if per_phage_result is not None:
+        summary["per_phage"] = {
+            "blend_alpha": blend_alpha,
+            "n_phages_fitted": per_phage_result.n_phages_fitted,
+            "n_phages_fallback": per_phage_result.n_phages_fallback,
+            "fitted_phages": list(per_phage_result.fitted_phages),
+            "fallback_phages": list(per_phage_result.fallback_phages),
+        }
     prediction_rows = [
         {
             "pair_id": str(row["pair_id"]),
@@ -620,12 +692,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     LOGGER.info("Fixed single-GPU wall-clock budget: %d seconds", FIXED_SINGLE_GPU_WALL_CLOCK_BUDGET_SECONDS)
     LOGGER.info("train.py is the short-loop experiment surface; cache rebuilding belongs in prepare.py.")
 
+    LOGGER.info("Model variant: %s", args.variant)
     baseline_summary, prediction_rows = run_baseline(
         context=context,
         device_type=args.device_type,
         include_host_defense=args.include_host_defense,
         include_phage_rbp_struct=args.include_phage_rbp_struct,
         include_phage_functional=args.include_phage_functional,
+        variant=args.variant,
+        blend_alpha=args.blend_alpha,
         start_time=start_time,
     )
     elapsed_seconds = safe_float(time.monotonic() - start_time)
@@ -659,6 +734,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "phage_rbp_struct_active": args.include_phage_rbp_struct,
             "phage_functional_active": args.include_phage_functional,
             "host_defense_role": "reserved_additive_ablation",
+            "variant": args.variant,
+            "blend_alpha": args.blend_alpha,
             "primary_metric": PRIMARY_SEARCH_METRIC,
             "secondary_report_only_metrics": list(SECONDARY_REPORT_ONLY_METRICS),
         },
