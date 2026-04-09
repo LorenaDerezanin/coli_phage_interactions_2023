@@ -16,6 +16,10 @@ Output: .scratch/rbp_plm_embeddings.npz with keys:
   has_rbp        — (N,) boolean array
   rbp_counts     — (N,) integer array
   model_backend  — string identifying the model used
+
+Note: torch and transformers are imported inside functions (lazy imports) to keep module
+import fast for tests and the slot materializer, which only need the cache-loading path.
+This is a deliberate exemption from the top-level-imports policy in AGENTS.md.
 """
 
 from __future__ import annotations
@@ -126,8 +130,12 @@ def _translate_aa_to_3di(
     prostt5_model,
     prostt5_tokenizer,
     device: str,
-) -> str:
-    """Translate an amino acid sequence to 3Di structural tokens using ProstT5."""
+) -> tuple[str, str]:
+    """Translate an amino acid sequence to 3Di structural tokens using ProstT5.
+
+    Returns (clean_aa, threedi) — the cleaned AA sequence and corresponding 3Di tokens.
+    This function owns sequence cleaning (rare residue replacement, truncation).
+    """
     import torch
 
     # Clean sequence: replace rare residues, truncate.
@@ -154,7 +162,7 @@ def _translate_aa_to_3di(
     elif len(threedi) > len(clean):
         threedi = threedi[: len(clean)]
 
-    return threedi
+    return clean, threedi
 
 
 def _interleave_aa_3di(aa_seq: str, threedi: str) -> str:
@@ -216,11 +224,10 @@ def compute_saprot_embeddings(
     phage_emb_lists: dict[str, list[np.ndarray]] = {p: [] for p in phage_proteins}
 
     for i, (phage, aa_seq) in enumerate(all_items, 1):
-        # Step 1: ProstT5 AA→3Di (handles cleaning/truncation internally)
-        threedi = _translate_aa_to_3di(aa_seq, prostt5_model, prostt5_tokenizer, device)
+        # Step 1: ProstT5 AA→3Di (owns cleaning/truncation, returns clean AA too)
+        clean, threedi = _translate_aa_to_3di(aa_seq, prostt5_model, prostt5_tokenizer, device)
 
-        # Step 2: Interleave (use cleaned sequence matching 3Di length)
-        clean = aa_seq.translate(RARE_AA_MAP)[:MAX_PROTEIN_LENGTH]
+        # Step 2: Interleave cleaned AA + 3Di for SaProt input
         interleaved = _interleave_aa_3di(clean, threedi)
 
         # Step 3: SaProt embedding
