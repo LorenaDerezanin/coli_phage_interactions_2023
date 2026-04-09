@@ -590,7 +590,7 @@ def test_train_runs_per_phage_blend_variant(tmp_path: Path) -> None:
     assert summary["baseline_contract"]["blend_alpha"] == 0.5
     assert "per_phage" in summary
     assert summary["per_phage"]["blend_alpha"] == 0.5
-    # P1 has 5 positives in training (B1-B3, B6, B7) — must be fitted.
+    # P1 has 3 positives (B1-B3) and 2 negatives (B6, B7) in training — must be fitted.
     assert summary["per_phage"]["n_phages_fitted"] > 0
     assert "P1" in summary["per_phage"]["fitted_phages"]
     assert set(summary["inner_val_metrics"]) == {"roc_auc", "top3_hit_rate", "brier_score"}
