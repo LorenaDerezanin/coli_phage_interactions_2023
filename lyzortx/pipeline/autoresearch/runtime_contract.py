@@ -103,8 +103,9 @@ SLOT_SPECS = (
         column_prefix="phage_rbp_struct__",
         block_role="phage",
         description=(
-            "RBP protein descriptor features derived from Pharokka annotations and genome FASTAs. "
-            "Per-RBP amino acid composition and physicochemical properties, mean-pooled per phage."
+            "RBP protein language model embeddings (ProstT5→SaProt or ESM-2, 1280-dim) from "
+            "Pharokka annotations and genome FASTAs. Per-RBP embeddings mean-pooled per phage, "
+            "PCA-reduced to 32 dimensions."
         ),
     ),
     SlotSpec(

@@ -1435,35 +1435,41 @@ def materialize_phage_rbp_struct_slot(
     pharokka_annotation_dir: Path,
 ) -> dict[str, Any]:
     from lyzortx.pipeline.autoresearch.derive_rbp_protein_features import (
-        build_phage_rbp_feature_row,
+        DEFAULT_N_COMPONENTS,
+        build_phage_rbp_plm_rows,
         build_phage_rbp_schema,
     )
 
     slot_spec = SLOT_SPEC_BY_NAME["phage_rbp_struct"]
-    phage_fasta_by_phage = build_entity_path_map(
-        selected_rows=split_rows,
-        entity_key=slot_spec.entity_key,
-        path_key="phage_fasta_path",
-    )
+
+    # Determine which phages belong to this split (same contract as the old per-phage path).
+    split_phages = {str(row[slot_spec.entity_key]) for rows_list in split_rows.values() for row in rows_list}
+
+    # Resolve PLM embedding cache path (precomputed by precompute_rbp_plm_embeddings.py).
+    repo_root = Path(__file__).resolve().parents[3]
+    plm_cache_path = repo_root / ".scratch" / "rbp_plm_embeddings.npz"
+
     feature_names = build_phage_rbp_schema()
+    n_components = DEFAULT_N_COMPONENTS
 
-    rows: list[dict[str, object]] = []
-    n_phages = len(phage_fasta_by_phage)
-    LOGGER.info("Phage RBP struct: computing protein descriptors for %d phages", n_phages)
-    rbp_phage_count = 0
-    for i, phage in enumerate(sorted(phage_fasta_by_phage), 1):
-        fasta_path = phage_fasta_by_phage[phage]
-        row = build_phage_rbp_feature_row(phage, fasta_path, pharokka_annotation_dir)
-        rows.append(row)
-        if row["has_annotated_rbp"]:
-            rbp_phage_count += 1
-        if i % 20 == 0 or i == n_phages:
-            LOGGER.info("Phage RBP struct: %d/%d phages completed", i, n_phages)
+    LOGGER.info("Phage RBP struct: loading PLM embeddings from %s", plm_cache_path)
+    all_rows = build_phage_rbp_plm_rows(plm_cache_path, n_components=n_components)
 
+    # Filter to phages in the split, preserving the previous contract.
+    rows = [row for row in all_rows if row["phage"] in split_phages]
     LOGGER.info(
-        "Phage RBP struct: %d/%d phages have annotated RBPs",
+        "Phage RBP struct: %d/%d cached phages matched split (%d total in cache)",
+        len(rows),
+        len(split_phages),
+        len(all_rows),
+    )
+
+    rbp_phage_count = sum(1 for row in rows if row["has_annotated_rbp"])
+    LOGGER.info(
+        "Phage RBP struct: %d/%d phages have annotated RBPs (%d PCA components)",
         rbp_phage_count,
-        n_phages,
+        len(rows),
+        n_components,
     )
 
     feature_columns, namespaced_rows = namespace_slot_feature_rows(rows=rows, slot_spec=slot_spec)
@@ -1480,25 +1486,29 @@ def materialize_phage_rbp_struct_slot(
         "feature_csv_path": str(feature_path),
         "rebuildable_from_raw_fastas": True,
         "requires_pharokka_annotations": True,
+        "requires_plm_embedding_cache": True,
+        "plm_embedding_cache_path": str(plm_cache_path),
+        "pca_n_components": n_components,
         "per_rbp_descriptor_dim": len(feature_names) - 2,  # Exclude has_annotated_rbp, rbp_count.
     }
     schema_path = slot_dir / SLOT_SCHEMA_FILENAME
     write_json(schema_path, schema_manifest)
 
     build_manifest = {
-        "task_id": "AX01",
+        "task_id": "AX07",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "cache_contract_id": CACHE_CONTRACT_ID,
         "slot_name": slot_spec.slot_name,
         "slot_artifact_path": str(feature_path),
         "retained_phage_count": len(rows),
-        "retained_phages": sorted(phage_fasta_by_phage),
+        "retained_phages": [row["phage"] for row in rows],
         "rbp_annotated_phage_count": rbp_phage_count,
         "guardrails": {
-            "source_of_truth": "raw phage FASTAs plus Pharokka CDS annotations",
+            "source_of_truth": "PLM embeddings from raw phage RBP protein sequences",
             "panel_metadata_used": False,
             "label_derived_features_used": False,
             "pharokka_annotation_dir": str(pharokka_annotation_dir),
+            "plm_embedding_cache": str(plm_cache_path),
         },
         "exported_numeric_columns": feature_columns,
     }

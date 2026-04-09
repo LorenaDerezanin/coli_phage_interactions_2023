@@ -257,3 +257,67 @@ The inner-val predicted a top-3/AUC trade-off: per-phage improved AUC but regres
 holdout, per-phage improves both AUC and top-3. The inner-val top-3 regression was a small-sample artifact of the
 74-bacteria inner-val set, where 1 bacteria = 1.4pp. This reinforces the knowledge model finding that holdout is the
 honest test.
+
+### 2026-04-09 21:30 UTC: AX07 — ProstT5→SaProt RBP PLM embedding pipeline
+
+#### Executive summary
+
+Replaced the dead 28-feature physicochemical RBP descriptors with a structure-aware protein language model embedding
+pipeline. ProstT5 translates amino acid sequences to 3Di structural tokens (Foldseek alphabet) without needing actual
+structure prediction; SaProt generates 1280-dim structure-aware embeddings from interleaved AA+3Di input. Two-phase
+design separates expensive model inference (~1-2h, run once) from fast PCA materialization (<1s, tunable). Dry-run
+confirms 81/97 phages with annotated RBPs, 212 total RBP proteins. PR #366.
+
+#### Rationale
+
+The AX01 physicochemical descriptors (AA composition + MW/GRAVY/pI/aromaticity/charge, 28 features) were confirmed dead
+on both inner-val and holdout — bulk protein properties cannot capture binding-interface specificity. Two Straboviridae
+phages with similar AA compositions can fold into completely different RBP tip structures targeting different receptors.
+
+The research identified three PLM options ranked by structure-awareness:
+1. ESM-2 (sequence-only, 650M params, ~2.6 GB) — simplest, proven in VirHostPRED
+2. ProstT5→SaProt (structure-aware without ColabFold, 3B + 650M params) — the sweet spot
+3. ColabFold/ESMFold → real structures → embeddings — most complex, needs GPU
+
+Option 2 was chosen: ProstT5 predicts 3Di structural tokens from sequence alone, avoiding the ColabFold/ESMFold GPU
+dependency. SaProt (ESM-2 architecture trained on AA+3Di pairs from 40M AlphaFold structures) then generates
+structure-aware embeddings. This is the approach PHIStruct's own authors use.
+
+#### Design decisions
+
+**Two-phase architecture:** Model inference (ProstT5 + SaProt) takes ~1-2 hours and is deterministic. PCA
+dimensionality is a hyperparameter worth tuning. Separating these into precompute (cached .npz) + materialize (fast PCA)
+enables rapid experimentation without re-running models. The precompute script supports `--model esm2` as a simpler
+fallback.
+
+**PCA to 32 dimensions:** 1280-dim embeddings on 80 phages is an extreme dimensionality/sample-size mismatch (same
+problem as 256-dim kmers on 96 phages, which was a confirmed dead end). PCA is unsupervised and safe — the phage panel
+is fixed across all train/holdout splits. Starting with 32 components; can tune to 16 or 64 without re-running models.
+
+**Zero-vector handling:** 16/97 phages lack Pharokka-detected RBPs. These get zero raw embeddings. After PCA, the
+centering would project them to non-zero coordinates, so we explicitly zero out PCA features for these phages to
+maintain the `has_annotated_rbp=0` semantics.
+
+**Sequence length:** SaProt has 1024-token max. RBP proteins up to 1022 residues are processed; longer sequences are
+truncated. Most RBPs are 500-1500 AA, so some truncation is expected for the longest tail fibers.
+
+#### RBP extraction statistics (dry-run)
+
+- 97 phages discovered (FNA directory, slightly more than 96 in pair table)
+- 81/97 phages have Pharokka-detected RBPs (83.5%)
+- 212 total RBP proteins across all phages (mean 2.6 RBPs per phage with RBPs)
+- Mean-pooled per phage before PCA
+
+#### Model details
+
+- ProstT5 (`Rostlab/ProstT5_fp16`): T5-3B encoder-decoder, fp16, ~5.5 GB. Input: `"<AA2fold> M E V L ..."`.
+  Output: 3Di structural tokens (lowercase). Rare residues U/Z/O/B mapped to X.
+- SaProt (`westlake-repl/SaProt_650M_AF2`): ESM-2 architecture, 650M params, ~2.6 GB. Input: interleaved AA+3Di
+  (e.g., "MdEvVr"). Embedding: mean-pool last hidden layer excluding BOS/EOS → 1280-dim.
+- Apple Silicon MPS backend available (torch 2.11.0, MPS detected on this Mac).
+
+#### Next steps
+
+1. Run precompute with `--model saprot` on MPS (expect ~1-2h for 212 proteins)
+2. Materialize updated `phage_rbp_struct` slot (34 features: 32 PCA + 2 metadata)
+3. AX08: Holdout evaluation vs per-phage baseline (0.830 AUC, 93.8% top-3)
