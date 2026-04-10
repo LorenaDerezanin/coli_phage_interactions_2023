@@ -483,10 +483,21 @@ def build_candidate_holdout_rows(
         compute_pairwise_rbp_receptor_features(train_design)
         compute_pairwise_rbp_receptor_features(holdout_design)
 
-    feature_prefixes = getattr(candidate_module, "ALL_FEATURE_PREFIXES", candidate_module.SLOT_PREFIXES)
-    feature_columns = [col for col in train_design.columns if col.startswith(feature_prefixes)]
+    # Build prefix list from the slots we actually assembled, not from the candidate module.
+    # Old candidates may lack prefixes for newer slots (phage_rbp_struct, phage_functional).
+    all_slot_names = host_slots + phage_slots
+    replay_prefixes = tuple(f"{s}__" for s in all_slot_names)
+    if include_pairwise_rbp_receptor:
+        replay_prefixes = (*replay_prefixes, "pair_rbp_receptor__")
+    feature_columns = [col for col in train_design.columns if col.startswith(replay_prefixes)]
     if not feature_columns:
         raise ValueError("Candidate replay constructed zero pair features for holdout replication.")
+    LOGGER.info(
+        "AR09 replay: %d feature columns from %d slots (prefixes: %s)",
+        len(feature_columns),
+        len(all_slot_names),
+        ", ".join(replay_prefixes),
+    )
 
     categorical_in_features = [col for col in (host_categorical + phage_categorical) if col in feature_columns]
     y_train = train_design["label_any_lysis"].astype(int).to_numpy(dtype=int)
@@ -500,6 +511,16 @@ def build_candidate_holdout_rows(
         categorical_feature=categorical_in_features,
     )
     all_pairs_predictions = estimator.predict_proba(holdout_design[feature_columns])[:, 1]
+
+    # Log feature importance by slot.
+    imp = estimator.feature_importances_
+    slot_imp: dict[str, float] = {}
+    for col, val in zip(feature_columns, imp):
+        slot = col.split("__")[0]
+        slot_imp[slot] = slot_imp.get(slot, 0) + val
+    total_imp = sum(slot_imp.values()) or 1
+    parts = [f"{s}={v / total_imp * 100:.1f}%" for s, v in sorted(slot_imp.items(), key=lambda x: -x[1])]
+    LOGGER.info("AR09 feature importance by slot: %s", ", ".join(parts))
 
     # Per-phage blending (AX02).
     if variant == "per-phage-blend":
