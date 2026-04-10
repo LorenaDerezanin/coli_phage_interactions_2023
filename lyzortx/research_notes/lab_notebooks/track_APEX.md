@@ -321,3 +321,103 @@ truncated. Most RBPs are 500-1500 AA, so some truncation is expected for the lon
 1. Run precompute with `--model saprot` on MPS (expect ~1-2h for 212 proteins)
 2. Materialize updated `phage_rbp_struct` slot (34 features: 32 PCA + 2 metadata)
 3. AX08: Holdout evaluation vs per-phage baseline (0.830 AUC, 93.8% top-3)
+
+### 2026-04-10 07:00 UTC: AX08 — PLM embedding holdout evaluation and feature importance analysis
+
+#### Executive summary
+
+ProstT5→SaProt PLM embeddings (32 PCA components from 1280-dim) show zero predictive lift on ST03 holdout despite
+LightGBM assigning them 33.9% of total feature importance. The embeddings encode protein-level similarity that is
+redundant with existing phage_projection features (genome-level similarity). PLM features cannibalize phage_projection
+importance (22.7% → 7.6%) without adding new discriminative signal. A silent feature-filtering bug in candidate_replay.py
+initially prevented PLM features from reaching the model at all.
+
+#### Precompute results
+
+- 212 RBP proteins across 81/97 phages processed via ProstT5 (AA→3Di) → SaProt (AA+3Di→1280-dim) on MPS
+- Total wall time: 2h 38min (~45s/protein average, variable 26-60s depending on sequence length)
+- Cache: `.scratch/rbp_plm_embeddings.npz` (97×1280 matrix)
+- 71/81 unique embeddings — 10 exact duplicates from phages sharing identical RBP sequences (same isolation batch)
+- Embedding quality: cosine distance median 0.14 (range p10=0.04 to p90=0.30), non-degenerate
+- PCA: 32 components explain 99.5% of variance (vs 49.4% for random embeddings — strong structure in real data)
+
+#### Feature-filtering bug (critical)
+
+The initial AX08 evaluation showed zero lift, which was correct but for the wrong reason: PLM features never reached
+the LightGBM model. `candidate_replay.py` filtered features using the old candidate module's `SLOT_PREFIXES` (6 slots)
+which excluded `phage_rbp_struct__`. The `getattr(candidate_module, "ALL_FEATURE_PREFIXES", ...)` fallback silently
+dropped all 34 PLM features.
+
+**Fix:** Build prefix list from the actual slots assembled for the replay, not from the candidate module. Added feature
+count + prefix logging to catch this class of bug in future.
+
+#### Holdout results (with fix applied)
+
+| Config | Features | AUC | Top-3 | Brier | ΔAUC | ΔTop-3 |
+|--------|----------|-----|-------|-------|------|--------|
+| Baseline: all-pairs | 159 | 0.810 | 90.8% | 0.165 | — | — |
+| Baseline: per-phage | 159 | 0.830 | 93.8% | 0.144 | — | — |
+| All-pairs + PLM | 193 | 0.807 | 88.7% | 0.168 | -0.3pp | -3.1pp |
+| Per-phage + PLM | 193 | 0.831 | 93.8% | 0.143 | +0.1pp | 0.0pp |
+| Per-phage + PLM + cross | 217 | 0.831 | 93.8% | 0.143 | +0.1pp | 0.0pp |
+
+Bootstrap CIs (per-phage + PLM): AUC 0.831 [0.785, 0.867], top-3 93.8% [85.3%, 97.5%]. Same 4 misses as baseline
+(FN-B4: 0 pos, IAI67: 16 pos, NILS24: 0 pos, NILS53: 14 pos). NILS53 not rescued.
+
+#### Feature importance analysis — the cannibalization finding
+
+| Slot | Without PLM | With PLM | Change |
+|------|-------------|----------|--------|
+| phage_rbp_struct | — | 33.9% | new |
+| host_surface | 29.8% | 24.0% | -5.8pp |
+| phage_projection | 22.7% | 7.6% | -15.1pp |
+| phage_stats | 20.3% | 7.3% | -13.0pp |
+| host_typing | 17.7% | 19.4% | +1.7pp |
+| host_stats | 9.6% | 7.8% | -1.8pp |
+
+PLM embeddings steal 28pp of importance from existing phage-side features (`phage_projection` + `phage_stats`). LightGBM
+finds PLM features easier to split on (continuous, 32 dims vs discrete/lower-dim phage features), but the information
+content is the same: **which phage family does this phage belong to?**
+
+#### Why PLM embeddings don't help — analysis
+
+1. **Redundancy with phage_projection.** Both PLM embeddings and genome-level phage projections encode phage similarity.
+   PLM captures protein-level similarity of RBPs, which correlates strongly with genome-level family membership. The
+   model substitutes one encoding for another with no net information gain.
+
+2. **Mean-pooling destroys binding specificity.** A phage with 3 RBPs (1 receptor-binding, 2 structural) gets an
+   averaged embedding that dilutes the receptor-binding signal. The discriminative information is in specific RBPs, not
+   the average.
+
+3. **96 phages is too few to learn embedding→binding.** Even with 1280-dim embeddings, LightGBM needs enough phage
+   diversity to learn which embedding patterns predict lysis. With 71 unique embeddings (10 duplicates) and strong
+   family clustering, the effective sample size for learning new phage-side patterns is very small.
+
+4. **The prediction bottleneck is not phage identity.** The model already knows which phage family via phage_projection.
+   Within-family discrimination depends on host receptor variants (host-side features), not phage protein structure.
+   Adding more phage-side features doesn't help because the remaining errors (NILS53, IAI67) are about host-side
+   ranking, not phage-side identification.
+
+#### Would AlphaFold-based structural features help?
+
+Unlikely for the same fundamental reasons:
+
+- AlphaFold gives 3D coordinates but doesn't identify the receptor-binding interface. Without knowing which residues
+  contact the receptor, structural features describe the overall fold — which correlates with family, same as PLM.
+- The mapping from structure→binding requires **docking** or **binding affinity prediction**, not just structure
+  prediction. This is a much harder problem and no off-the-shelf tool exists for phage RBP-bacterial receptor docking.
+- With 96 phages, any structural feature will face the same dimensionality/sample-size mismatch.
+
+What **could** work differently:
+- **Fine-tuned PLM:** Train SaProt on phage-host binding data (not general protein structure) to learn
+  binding-relevant representations. Requires external training data (e.g., PHIStruct's 19K RBP structures).
+- **Receptor-specific attention:** Instead of mean-pooling all RBPs, weight by predicted receptor compatibility.
+  Requires knowing which receptor each RBP targets.
+- **Pairwise structural matching:** Compare RBP structures to known receptor-binding proteins via Foldseek to predict
+  receptor type, then use predicted receptor type as a feature.
+
+#### Knowledge model updates
+
+- `higher-res-rbp` open question: partially answered — PLM embeddings tested, neutral result. The question evolves
+  from "will PLM embeddings help?" to "can binding-specific (not structure-general) phage features break the plateau?"
+- New dead-end: PLM embeddings (ProstT5→SaProt) are redundant with existing phage family features.

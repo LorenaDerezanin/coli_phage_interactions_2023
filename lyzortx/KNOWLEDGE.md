@@ -3,7 +3,7 @@
 <!-- Last consolidated: 2026-04-09T20:30:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**42 knowledge units** across 7 themes (34 active, 8 dead ends)
+**43 knowledge units** across 7 themes (34 active, 9 dead ends)
 
 ## Data & Labels
 
@@ -171,6 +171,15 @@ Compressed lessons from approaches that didn't work.
   physicochemical-rbp-insufficient]
   - *Full combo AUC/top-3 identical to per-phage-only on holdout. The cross-terms are too coarse — they encode "phage
     has RBP and host has receptor" but not binding specificity.*
+- ProstT5→SaProt PLM embeddings of RBP sequences (1280-dim, PCA to 32) achieve 33.9% LightGBM feature importance but
+  zero predictive lift on ST03 holdout; they cannibalize existing phage family features without adding new
+  discriminative signal. [validated; source: 2026-04-10 AX08 holdout; see also: physicochemical-rbp-insufficient,
+  higher-res-rbp]
+  - *PLM embeddings steal 28pp importance from phage_projection (22.7%→7.6%) and phage_stats (20.3%→7.3%). The
+    embeddings encode protein-level similarity that correlates with genome-level family membership. Mean-pooling across
+    RBPs further dilutes binding-specific signal. Same 4/65 holdout misses as baseline, NILS53 not rescued. The initial
+    evaluation appeared to show zero lift due to a feature-filtering bug (PLM features silently dropped by old candidate
+    SLOT_PREFIXES); after fixing, the result is confirmed: genuinely neutral.*
 
 ## Open Questions
 
@@ -189,10 +198,14 @@ Unresolved items that still matter for the project direction.
   - *Originally framed as "does defense behave differently under per-phage blending" but per-phage is not deployable for
     unseen phages. The actionable question is whether defense can be made useful on the all-pairs model. LightGBM's
     native feature selection was not aggressive enough; explicit mitigation of lineage confounding may be needed.*
-- Protein language model embeddings (ESM-2 or ProstT5 into SaProt) of RBP sequences are the most promising untested
-  phage-side feature; physicochemical descriptors proved insufficient and PHIStruct's off-the-shelf model only predicts
-  genus (not strain). [preliminary; source: 2026-04-08 paper analysis, 2026-04-09 APEX ablation, 2026-04-09 PHIStruct
-  review; see also: adsorption-first-strategy, adsorption-dominates-paper, physicochemical-rbp-insufficient]
-  - *80/96 phages have RBP sequences from Pharokka. ESM-2 (1280-dim, sequence-only, runs on CPU) is the simplest path.
-    ProstT5 into SaProt adds structure-aware 3Di tokens without needing ColabFold. PHIStruct Zenodo has 19K RBP
-    structures but coverage of our panel is unknown.*
+- General-purpose protein language model embeddings and structure predictions encode phage family similarity, not
+  receptor binding specificity. Breaking the phage-side feature plateau requires binding-specific representations
+  (fine-tuned PLMs, docking features, or receptor-type prediction from structure), not more expressive general protein
+  features. [validated; source: 2026-04-08 paper analysis, 2026-04-09 APEX ablation, 2026-04-09 PHIStruct review,
+  2026-04-10 AX08 holdout; see also: adsorption-first-strategy, adsorption-dominates-paper,
+  physicochemical-rbp-insufficient, plm-rbp-redundant]
+  - *ProstT5→SaProt PLM embeddings (1280-dim, PCA to 32) achieve 33.9% feature importance but zero holdout lift — they
+    cannibalize phage_projection (22.7%→7.6%) by encoding the same family-level information in a more splittable
+    continuous space. AlphaFold structural features would face the same redundancy unless binding-interface-specific
+    features are extracted. With 96 phages (71 unique embeddings), the sample size is too small to learn
+    embedding→binding mappings from general structural representations.*
