@@ -898,7 +898,7 @@ graph LR
     Codex action environment
   - Document the required GitHub environment, secret names, approval gate, pod-spec contract, and local-versus-RunPod
     handoff in `lyzortx/orchestration/README.md`
-- [ ] **AR09** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
+- [x] **AR09** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
       Depends on tasks: `AR08`.
   - Add one command that imports a candidate `train.py` plus its RunPod experiment metadata back into
     `lyzortx/generated_outputs/autoresearch/candidates/`

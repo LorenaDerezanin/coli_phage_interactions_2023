@@ -1420,7 +1420,7 @@ tracks:
         contract, and local-versus-RunPod handoff in `lyzortx/orchestration/README.md`
     - id: AR09
       title: Import winners and replicate them on the sealed holdout
-      status: pending
+      status: done
       model: gpt-5.4
       ci_image_profile: base
       depends_on_tasks:
