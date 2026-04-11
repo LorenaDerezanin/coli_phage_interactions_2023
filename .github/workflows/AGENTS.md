@@ -6,16 +6,13 @@
   `lyzortx/`. This is informational only (`continue-on-error: true`) and does not block merges.
 - `claude-pr-review.yml` uses `anthropics/claude-code-action@v1` to auto-review `orchestrator-task`-labeled PRs on
   open/push, and supports interactive `@claude` mentions on any PR. Requires the `ANTHROPIC_API_KEY` repository secret.
-  Claude posts reviews as `claude[bot]` (the action's own OIDC app identity). After reviewing, it dispatches downstream
-  actions: auto-merge on approval, or `codex-pr-lifecycle.yml` on commented reviews.
-- `codex-pr-lifecycle.yml` is triggered exclusively via `workflow_dispatch` (from `claude-pr-review.yml` or manually).
-  It runs the Codex fix loop for unresolved review threads. The 3-round cap (`codex-review-round-N` labels) prevents
-  infinite loops. A concurrency group ensures only one lifecycle run per PR at a time. The `workflow_dispatch`-only
-  trigger prevents a self-cancellation loop where Codex thread replies would fire `pull_request_review` events that
-  cancel the in-progress run.
-- `publish-codex-ci-image.yml` builds and publishes the prebaked GitHub Container Registry image used by the Codex
-  workflows. The image is rebuilt from `.github/ci/Dockerfile` whenever its inputs change on `main`, and it can also be
-  triggered manually.
+  Claude posts reviews as `claude[bot]` (the action's own OIDC app identity). After reviewing, it auto-merges on
+  approval or leaves comments for local Claude to address.
+- `codex-implement.yml` and `codex-pr-lifecycle.yml` are disabled. Task implementation and review feedback fixes are
+  handled by local Claude sessions. The workflow files are retained for reference.
+- `publish-codex-ci-image.yml` builds and publishes the prebaked GitHub Container Registry image used by CI workflows.
+  The image is rebuilt from `.github/ci/Dockerfile` whenever its inputs change on `main`, and it can also be triggered
+  manually.
 
 # Concurrency and Thread Safety
 

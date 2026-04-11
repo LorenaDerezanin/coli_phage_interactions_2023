@@ -4,6 +4,22 @@
 - The README contains a Mermaid state diagram of the full automation lifecycle and descriptions of all components. Keep
   both in sync with the actual workflow logic.
 
+# Implementation Workflow
+
+- `codex-implement.yml` and `codex-pr-lifecycle.yml` are disabled in GitHub Actions. Task implementation and review
+  feedback fixes happen locally (laptop-based Claude sessions), not in CI.
+- The orchestrator (`orchestrator.yml`) still runs in CI: it ticks on issue close events and `workflow_dispatch`, marks
+  tasks done, and creates new issues.
+- `claude-pr-review.yml` still runs in CI: it auto-reviews orchestrator-task PRs and either approves+merges or posts
+  review comments.
+- Full lifecycle:
+  1. Orchestrator tick creates a GitHub issue for the next pending task.
+  2. Local Claude implements the task and pushes a PR (`Closes #N`).
+  3. `claude-pr-review.yml` reviews the PR.
+  4. If the review has comments, local Claude reads the feedback, pushes fixes, and requests re-review.
+  5. On approval, `claude-pr-review.yml` enables auto-merge. If auto-merge fails, local Claude merges manually.
+  6. The merged PR closes the linked issue, which triggers an orchestrator tick to dispatch the next task.
+
 # Knowledge Model Rendering
 
 - `knowledge.yml` is the source of truth for consolidated project knowledge. `render_knowledge.py` renders it to
@@ -27,19 +43,6 @@
 - Done tasks may omit either — they are historical records, not dispatchable work.
 - The orchestrator validates both fields at load time and raises `ValueError` if either is missing on a pending task.
 
-# Model Tier Selection for Plan Tasks
-
-- Do not choose `gpt-5.4-mini` by surface appearance alone. Some tasks look mechanical but are actually fragile
-  artifact-boundary work.
-- Escalate to `gpt-5.4` when a task does any of the following:
-  - consumes outputs from an upstream task whose schema, provenance, or exclusion rules recently changed
-  - changes evaluation, locking, sweep-selection, or model-comparison logic
-  - depends on gitignored generated outputs that may exist locally in stale pre-replan form
-  - introduces a permissive fallback such as zero-fill, cache reuse, or auto-regeneration
-  - requires interpreting notebook or PR postmortem findings rather than just applying explicit edits
-- Reserve `gpt-5.4-mini` for truly bounded mechanical work where the main risks are local code edits rather than
-  cross-artifact contract mismatches.
-
 # Acceptance Criteria for Artifact-Boundary Tasks
 
 - If a task touches generated artifacts or evaluation semantics, the acceptance criteria must constrain boundary
@@ -52,14 +55,6 @@
   - one proving strict failure still occurs outside that context
 - Never accept criteria that say only "rerun downstream task on clean outputs" when the upstream change alters what rows
   or files exist. The task text must restate the changed contract.
-
-# Skills and Model Fit
-
-- Treat the `replan` skill as guidance that must work for the weakest model tier named in the resulting tasks.
-- If a task would require extra judgment, tighter sequencing, or more explicit artifact-handling instructions for
-  `gpt-5.4-mini` to succeed, either:
-  - add that low-freedom guidance directly to the acceptance criteria, or
-  - assign the task to `gpt-5.4` instead
 
 # Task Status Management
 
@@ -86,8 +81,9 @@
 
 # PR Lifecycle Feedback Contract
 
-- `codex-pr-lifecycle.yml` is not the merge gate. `claude-pr-review.yml` decides whether to auto-merge or dispatch the
-  lifecycle workflow.
+- `codex-pr-lifecycle.yml` is disabled. Review feedback is addressed by local Claude sessions, not CI.
+- `claude-pr-review.yml` decides whether to auto-merge (on approval with zero unresolved threads) or post review
+  comments for local Claude to address.
 - Keep lifecycle feedback detection simple: read visible PR feedback surfaces (top-level PR comments, inline review
   comments, and non-empty review bodies) and do not reintroduce unresolved-thread counting as the criterion for
   whether there is work to do.

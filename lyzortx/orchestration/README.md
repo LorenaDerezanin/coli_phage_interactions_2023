@@ -5,7 +5,7 @@ sequencing and agent dispatch.
 
 ## Automation Lifecycle
 
-The full issue-to-merge lifecycle is automated across three GitHub Actions workflows and one GitHub App:
+The issue-to-merge lifecycle is automated across two GitHub Actions workflows and local Claude sessions:
 
 ```mermaid
 stateDiagram-v2
@@ -13,45 +13,27 @@ stateDiagram-v2
 
     task_ready --> issue_open : orchestrator creates <br> GitHub issue with <br> orchestrator-task label
 
-    issue_open --> codex_implement : codex-implement.yml <br> triggers on issue opened
+    issue_open --> local_implement : local Claude <br> picks up issue
 
-    codex_implement --> pr_created : Codex (gpt-5.4) implements task, <br> writes findings to lab_notebooks/track_&lt;track&gt;.md, <br> and opens PR with Closes #issue
+    local_implement --> pr_created : local Claude implements task, <br> writes findings to lab_notebooks/track_&lt;track&gt;.md, <br> and opens PR with Closes #issue
 
-    pr_created --> codex_review : codex-connector bot <br> auto-reviews PR <br> (GitHub App hook)
+    pr_created --> claude_review : claude-pr-review.yml <br> auto-reviews PR
 
-    note right of codex_implement : Model from plan.yml <br> via issue body directive
+    claude_review --> has_feedback : review has <br> inline comments
+    claude_review --> no_issues : review approved
 
-    codex_review --> has_feedback : review has <br> inline comments
-    codex_review --> no_issues : review has <br> no feedback
+    has_feedback --> local_fix : local Claude reads <br> feedback and pushes fixes
 
-    has_feedback --> round_check : claude-pr-review.yml <br> dispatches codex-pr-lifecycle.yml <br> which checks review round
+    local_fix --> claude_review : push triggers <br> re-review
 
-    round_check --> codex_fix : round < 3
-    round_check --> needs_human : round >= 3 <br> label needs-human-review
+    no_issues --> auto_merge : auto-merge enabled <br> wait for CI
 
-    codex_fix --> push_fixes : Codex addresses feedback <br> replies to each comment <br> pushes to branch
-
-    push_fixes --> re_review : request re-review <br> via @codex review comment
-
-    re_review --> codex_review : codex-connector bot <br> reviews again
-
-    needs_human --> human_merge : human reviews <br> and merges PR
-
-    no_issues --> ready_for_human : label ready-for-human-review
-
-    ready_for_human --> auto_merge_check : PR has <br> orchestrator-task label?
-
-    auto_merge_check --> wait_ci : yes — wait for <br> CI checks to pass
-    auto_merge_check --> human_merge : no — human approves <br> and merges PR
-
-    wait_ci --> auto_merged : CI passes — <br> squash merge
-    wait_ci --> needs_human : CI fails or <br> times out
-
-    needs_human --> human_merge : human reviews <br> and merges PR
+    auto_merge --> auto_merged : CI passes — <br> squash merge
+    auto_merge --> local_merge : auto-merge fails — <br> local Claude merges
 
     auto_merged --> issue_closed : PR merge <br> auto-closes issue
 
-    human_merge --> issue_closed : PR merge <br> auto-closes issue
+    local_merge --> issue_closed : PR merge <br> auto-closes issue
 
     issue_closed --> orchestrator_tick : orchestrator.yml <br> triggers on issue.closed
 
@@ -65,12 +47,16 @@ stateDiagram-v2
 | Actor | Type | Role |
 |---|---|---|
 | `orchestrator.yml` | GitHub Actions workflow | Selects ready tasks, creates issues, marks tasks done, commits plan updates |
-| `codex-implement.yml` | GitHub Actions workflow | Reacts to new `orchestrator-task` issues; runs Codex to implement and open a PR |
-| `chatgpt-codex-connector[bot]` | GitHub App (external) | Automatically reviews every PR (installed on repo owner's account). Always posts `COMMENTED` reviews, never `APPROVED`. |
-| `claude-pr-review.yml` | GitHub Actions workflow | Auto-reviews every PR on open/push via `claude-code-action`. Claude (Opus 4.6) submits formal `APPROVE`/`COMMENT` reviews and manages thread resolution. Posts as `claude[bot]`. |
-| `codex-pr-lifecycle.yml` | GitHub Actions workflow | Dispatched by `claude-pr-review.yml` after a COMMENTED review; orchestrates Codex fix rounds and labels PRs. Uses concurrency groups to prevent parallel runs per PR. |
+| Local Claude | Laptop-based Claude session | Implements tasks, pushes PRs, reads review feedback, pushes fixes, merges if auto-merge fails |
+| `claude-pr-review.yml` | GitHub Actions workflow | Auto-reviews every PR on open/push via `claude-code-action`. Claude (Opus 4.6) submits formal `APPROVE`/`COMMENT` reviews and manages thread resolution. Posts as `claude[bot]`. On approval, enables auto-merge. |
 | `autoresearch-runpod.yml` | GitHub Actions workflow | Manual AUTORESEARCH search runner: stages a frozen cache bundle, provisions a locked RunPod pod behind an environment approval gate, executes one bounded `train.py` command, uploads candidate artifacts, and tears the pod down |
-| Human reviewer | Person | Final approval and merge for non-Codex PRs or when auto-merge fails |
+
+#### Disabled workflows
+
+| Workflow | Reason |
+|---|---|
+| `codex-implement.yml` | Replaced by local Claude sessions for task implementation |
+| `codex-pr-lifecycle.yml` | Replaced by local Claude sessions for review feedback fixes |
 
 ## Architecture
 
@@ -103,8 +89,8 @@ stateDiagram-v2
 - `verify_review_replies.py` — checks that PR review comments have been addressed with replies.
 - `ci_token_usage.py` — CLI for token/cost analysis across all LLM-invoking workflows (Codex + Claude).
 - `.github/workflows/orchestrator.yml` — CI trigger: task dispatch and plan updates.
-- `.github/workflows/codex-implement.yml` — CI trigger: Codex implements new `orchestrator-task` issues.
-- `.github/workflows/codex-pr-lifecycle.yml` — CI trigger: Codex addresses review feedback on PRs.
+- `.github/workflows/codex-implement.yml` — disabled; retained for reference.
+- `.github/workflows/codex-pr-lifecycle.yml` — disabled; retained for reference.
 - `.github/workflows/autoresearch-runpod.yml` — manual GPU experiment runner for AUTORESEARCH. It either builds a
   fresh host-side cache bundle or reuses one from a prior workflow run, then provisions a fixed RunPod pod, copies only
   the AUTORESEARCH runtime bundle plus frozen cache artifacts, runs one bounded `train.py` command, serializes
@@ -128,9 +114,6 @@ Task IDs are derived from track letter + ordinal (e.g., `TB03`, `TF01`). Gates u
 
 Plan authors should size tasks by boundary risk, not just by how small the diff sounds.
 
-- Use `gpt-5.4-mini` for bounded mechanical edits where the main risk is local code change.
-- Use `gpt-5.4` for artifact-boundary tasks: downstream reruns after upstream schema/provenance changes, lock-rule
-  changes, stale generated-output handling, or any task that adds a permissive fallback such as zero-fill.
 - For fragile tasks, write low-freedom acceptance criteria. State the exact contract that changed and the exact failure
   modes to avoid.
 - When a task introduces a fallback, acceptance criteria should require both:
@@ -138,9 +121,6 @@ Plan authors should size tasks by boundary risk, not just by how small the diff 
   - a negative test proving strict failure still happens outside that use
 - When a task consumes generated artifacts, acceptance criteria should say whether stale default artifacts must be
   regenerated or rejected.
-- Do not route paid cloud GPU experiments through `.github/workflows/codex-implement.yml`. If a track needs
-  cloud-infrastructure provisioning or spend-bearing secrets (for example RunPod), add a separate manual workflow and a
-  dedicated GitHub environment with environment-scoped secrets instead of broadening the default Codex workflow.
 - For AUTORESEARCH-style tasks, treat raw inputs plus frozen featurizer code as the source of truth. Checked-in feature
   CSVs may be optional warm caches only; acceptance criteria should require rebuildability from raw data and should
   exclude panel-only metadata or proxies that cannot run on unseen FASTAs.
@@ -185,15 +165,9 @@ first dispatch. Dispatched issues also receive a `model-{id}` label (e.g., `mode
 visibility plus a mirrored `ci-image:{profile}` label so workflows can route the task to the matching prebaked
 container image. Missing profile labels are treated as configuration errors, not as permission to fall back.
 
-### codex-implement.yml
+### codex-implement.yml (disabled)
 
-- `issues.opened` / `issues.reopened`: triggers when an issue with the `orchestrator-task` label is created.
-- `workflow_dispatch`: manual trigger with an issue number.
-
-Resolves the CI image profile from the issue's `ci-image:*` label, then runs Codex inside the matching prebaked GHCR
-image. Builds a prompt from the issue body and acceptance criteria, extracts the model directive (`<!-- model: ... -->`)
-from the issue body, refreshes only the envs that belong to that image profile, then runs Codex with the specified
-model to implement the task and create a PR. The model directive is required — the workflow fails if it is missing.
+Disabled — task implementation is now handled by local Claude sessions. The workflow file is retained for reference.
 
 ### claude-pr-review.yml
 
@@ -203,38 +177,14 @@ model to implement the task and create a PR. The model directive is required —
 Claude reads `AGENTS.md` review guidelines, submits formal `APPROVE` or `COMMENT` reviews via MCP GitHub tools, and is
 the sole judge of thread resolution (can resolve/unresolve threads via GraphQL mutations). Requires the
 `ANTHROPIC_API_KEY` repository secret. The workflow explicitly allows the repo's `czarphage` GitHub App bot to trigger
-re-reviews after Codex pushes, which would otherwise be blocked by `claude-code-action`'s default "no bots" policy.
-After reviewing, it auto-merges only when Claude's latest review is `APPROVED` and the shared
+re-reviews after local Claude pushes, which would otherwise be blocked by `claude-code-action`'s default "no bots"
+policy. After reviewing, it auto-merges only when Claude's latest review is `APPROVED` and the shared
 `lyzortx.orchestration.review_threads` helper reports zero unresolved review threads. If Claude leaves a `COMMENTED`
-review or any unresolved review threads remain, it dispatches `codex-pr-lifecycle.yml`.
+review or any unresolved review threads remain, local Claude reads the feedback and pushes fixes.
 
-### codex-pr-lifecycle.yml
+### codex-pr-lifecycle.yml (disabled)
 
-- `workflow_dispatch`: triggered by `claude-pr-review.yml` when review feedback remains unresolved, or manually with a
-  PR number.
-
-The `workflow_dispatch`-only trigger prevents a self-cancellation loop: when Codex replies to review threads, GitHub
-emits `pull_request_review` events. Previously these events could re-trigger the lifecycle workflow while another
-lifecycle run was already active for the same PR.
-
-The `address-feedback` job runs the Codex fix loop. A concurrency group ensures only one lifecycle run per PR at a time,
-queueing newer runs behind the active one to prevent race conditions on the review round cap without canceling
-in-flight Codex work.
-If the PR has any top-level PR comments, inline review comments, or non-empty review bodies from non-`czarphage`
-authors, Codex reads them and addresses the feedback (up to 3 rounds). Only PRs with zero visible feedback artifacts
-across those surfaces are labeled `ready-for-human-review`. After 3 feedback rounds the PR is labeled
-`needs-human-review`. The fix loop extracts the model from the linked issue (via the PR body's `Closes #N` reference)
-to use the same model as the original implementation.
-
-Both Codex workflows now resolve their container image from `ci-image:*` labels mirrored from `plan.yml` into issues
-and then onto PRs. The current image profiles are:
-
-- `base` — `phage_env` only
-- `host-typing` — `phage_env` plus `phylogroup_caller`, `serotype_caller`, and `sequence_type_caller`
-- `full-bio` — `host-typing` plus `phage_annotation_tools`
-
-Each job still executes env refreshes on startup, but only for the envs that belong to the selected profile, so repo
-dependency changes can land without waiting for a new image publish.
+Disabled — review feedback is now addressed by local Claude sessions. The workflow file is retained for reference.
 
 ### autoresearch-runpod.yml
 
@@ -268,8 +218,7 @@ This is a human-approved lock, not an auto-selected cloud default.
   GPU. The A40 lock buys more memory headroom than the nearby 24 GB options for essentially the same hourly cost, while
   staying within a single-GPU community-cloud budget.
 - **Secret boundary:** `RUNPOD_API_KEY` is referenced only on the provisioning, status-polling, and teardown steps in
-  `autoresearch-runpod.yml`. It is not injected into `codex-implement.yml`, `codex-pr-lifecycle.yml`, or the generic
-  Codex action environment.
+  `autoresearch-runpod.yml`.
 - **Host-to-RunPod handoff:** the host side packages exactly one bundle artifact containing:
   - `lyzortx/autoresearch/{prepare.py,train.py,README.md,program.md}`
   - minimal runtime support files (`environment.yml`, `requirements.txt`, `pyproject.toml`,
@@ -280,16 +229,14 @@ This is a human-approved lock, not an auto-selected cloud default.
 - **Out of bounds for the pod:** `prepare.py`, Picard assembly download, DefenseFinder execution, host typing calls,
   host-surface derivation, and phage projection rebuilding. Those stay on the host side or in prior staged bundles.
 
-## Cutover Policy
+## CI Image Profiles
 
-This CI-image routing is an intentional cutover, not a backward-compatible migration layer.
+The `ci-image:*` label system is retained for `claude-pr-review.yml` routing and for reference if CI-based
+implementation is re-enabled. Orchestrator issues still carry `ci-image:*` labels.
 
-- Only post-cutover orchestrator issues and PRs are supported. They must carry exactly one `ci-image:*` label and the
-  matching env manifests expected by the selected profile.
-- Pre-cutover issues/PRs created before this contract existed are intentionally unsupported by the new Codex workflows.
-  Re-dispatch or rebase them onto a branch that contains the CI-image manifests instead of expecting fallback behavior.
-- Missing labels or missing env manifests are treated as hard configuration errors. The workflows do not silently fall
-  back to older bootstrap paths or prebaked env contents.
+- `base` — `phage_env` only
+- `host-typing` — `phage_env` plus `phylogroup_caller`, `serotype_caller`, and `sequence_type_caller`
+- `full-bio` — `host-typing` plus `phage_annotation_tools`
 
 ## Agent Instructions in Dispatched Issues
 
@@ -297,9 +244,9 @@ Each dispatched issue includes:
 
 - Task description and acceptance criteria (from `plan.yml`).
 - Model directive as an HTML comment: `<!-- model: gpt-5.4-mini -->`. The model is set per-task in `plan.yml` and
-  emitted by `orchestrator.py` when creating the issue. Both `codex-implement.yml` and `codex-pr-lifecycle.yml` extract
-  this directive and pass it to the Codex action. Both `model` and `acceptance_criteria` are required for all pending
-  tasks — the orchestrator raises `ValueError` if either is missing.
+  emitted by `orchestrator.py` when creating the issue. Both `model` and `acceptance_criteria` are required for all
+  pending tasks — the orchestrator raises `ValueError` if either is missing. (The model directive is a historical
+  artifact from when Codex CI consumed it; it is retained for traceability.)
 - CI image profile directive as an HTML comment and mirrored GitHub label. The profile is set per-task in `plan.yml`
   via `ci_image_profile` and mirrored into `ci-image:{profile}` labels for issue/PR routing. Pending tasks must declare
   this explicitly; missing labels fail the workflow rather than silently falling back.
