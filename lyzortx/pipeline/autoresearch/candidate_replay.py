@@ -346,6 +346,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Add pairwise depolymerase × capsule cross-terms (GT01).",
     )
     replicate_parser.add_argument(
+        "--include-pairwise-receptor-omp",
+        action="store_true",
+        help="Add directed receptor × OMP cross-terms (GT02).",
+    )
+    replicate_parser.add_argument(
         "--variant",
         choices=("all-pairs", "per-phage-blend"),
         default="all-pairs",
@@ -623,6 +628,7 @@ def build_candidate_holdout_rows(
     include_phage_functional: bool = False,
     include_pairwise_rbp_receptor: bool = False,
     include_pairwise_depo_capsule: bool = False,
+    include_pairwise_receptor_omp: bool = False,
     variant: str = "all-pairs",
     blend_alpha: float = 0.5,
     calibrate: str = "none",
@@ -679,6 +685,15 @@ def build_candidate_holdout_rows(
         compute_pairwise_depo_capsule_features(train_design)
         compute_pairwise_depo_capsule_features(holdout_design)
 
+    # Directed receptor × OMP cross-terms (GT02).
+    if include_pairwise_receptor_omp:
+        from lyzortx.pipeline.autoresearch.derive_pairwise_receptor_omp_features import (
+            compute_pairwise_receptor_omp_features,
+        )
+
+        compute_pairwise_receptor_omp_features(train_design)
+        compute_pairwise_receptor_omp_features(holdout_design)
+
     # Build prefix list from the slots we actually assembled, not from the candidate module.
     # Old candidates may lack prefixes for newer slots (phage_rbp_struct, phage_functional).
     all_slot_names = host_slots + phage_slots
@@ -687,6 +702,8 @@ def build_candidate_holdout_rows(
         replay_prefixes = (*replay_prefixes, "pair_rbp_receptor__")
     if include_pairwise_depo_capsule:
         replay_prefixes = (*replay_prefixes, "pair_depo_capsule__")
+    if include_pairwise_receptor_omp:
+        replay_prefixes = (*replay_prefixes, "pair_receptor_omp__")
     feature_columns = [col for col in train_design.columns if col.startswith(replay_prefixes)]
     if not feature_columns:
         raise ValueError("Candidate replay constructed zero pair features for holdout replication.")
@@ -1154,6 +1171,7 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
             include_phage_functional=getattr(args, "include_phage_functional", False),
             include_pairwise_rbp_receptor=getattr(args, "include_pairwise_rbp_receptor", False),
             include_pairwise_depo_capsule=getattr(args, "include_pairwise_depo_capsule", False),
+            include_pairwise_receptor_omp=getattr(args, "include_pairwise_receptor_omp", False),
             variant=getattr(args, "variant", "all-pairs"),
             blend_alpha=getattr(args, "blend_alpha", 0.5),
             calibrate=getattr(args, "calibrate", "none"),
@@ -1233,6 +1251,7 @@ def replicate_candidate(args: argparse.Namespace) -> Path:
             "include_phage_functional": getattr(args, "include_phage_functional", False),
             "include_pairwise_rbp_receptor": getattr(args, "include_pairwise_rbp_receptor", False),
             "include_pairwise_depo_capsule": getattr(args, "include_pairwise_depo_capsule", False),
+            "include_pairwise_receptor_omp": getattr(args, "include_pairwise_receptor_omp", False),
             "variant": getattr(args, "variant", "all-pairs"),
             "blend_alpha": getattr(args, "blend_alpha", 0.5),
             "calibrate": getattr(args, "calibrate", "none"),
