@@ -101,24 +101,34 @@ DepoScope remains state of the art. No citing paper has superseded it:
 ### Direct relevance: low for prediction, moderate for annotation
 
 Our project tested depolymerase-related features as part of phage functional gene repertoire (PHROG category counts
-including depolymerase presence). These features degraded top-3 from 94.6% to 87.8% on inner-val and are classified
-as noise (knowledge unit `phage-functional-noise`). DepoScope would provide better depolymerase annotations than
-PHROG-based counting, but the underlying signal (binary depolymerase presence/absence per phage) is unlikely to
-improve lysis prediction because:
+including depolymerase presence). These features degraded top-3 from 94.6% to 87.8% on inner-val and were classified
+as noise (knowledge unit `phage-functional-noise`). However, the negative result may be attributable to a detection
+bug: the patterns used to identify depolymerases did not match Pharokka's actual "tail spike protein" labels, so the
+feature was likely miscounted rather than truly uninformative.
 
-1. Depolymerase activity is relevant mainly for capsulated hosts, while our panel uses BW25113-derived strains
-   (K-12, no capsule).
-2. Depolymerase presence is a phage-side-only feature that doesn't interact with host surface variation in a way
-   that helps ranking.
+Our host panel (369 diverse clinical E. coli from Gaborieau et al. 2024) has rich capsule variation: 99 capsule
+feature columns, all 369 bacteria with nonzero capsule features, and wide variation in individual capsule profiles.
+This means directed cross-terms (depolymerase domain cluster x host capsule profile) have real host-side signal to
+learn from -- unlike Moriniere's BW25113/BL21 receptor screens which used capsule-negative K-12 strains.
 
-### Potential future relevance
+### Potential near-term relevance
 
-- If the project expands to clinical K-antigen-producing strains, depolymerase features become relevant for
-  predicting capsule degradation as a prerequisite for adsorption.
-- DepoScope's domain delineation could support more nuanced features than binary presence (e.g., fold type, domain
-  length) but this requires capsulated hosts in the training data.
+- With ~34 tail-spike-bearing phages in our panel and 99 host capsule feature columns with real variation,
+  DepoScope domain clusters could serve as the phage-side input for directed cross-terms against host capsule
+  profiles. This implicit learning approach (cluster depolymerase domains, let LightGBM discover substrate-capsule
+  associations) is viable because the host-side capsule signal is rich.
+- DepoScope's domain delineation enables more nuanced features than binary presence: fold type, domain length, and
+  domain-level sequence clustering for grouping phages by likely substrate specificity.
 - The same Ghent group (Boeckaerts/Briers) authored both DepoScope and PhageHostLearn (Klebsiella pairwise
-  prediction), suggesting potential integration paths for capsule-targeting prediction.
+  prediction), suggesting potential integration paths. Pharokka (Bouras, Adelaide) is the independent upstream
+  gene-calling step.
+- **Substrate specificity gap**: DepoScope detects depolymerases and delineates domains but does not predict which
+  capsule type they target. No existing tool predicts E. coli K-antigen specificity from depolymerase sequence.
+  For Klebsiella, Gittrich et al. 2025 (Nature Comms) demonstrated a prophage-mining approach using DAG models and
+  sequence clustering to predict capsular tropism from 8,105 prophages -- this method is transferable to lytic phages
+  and could in principle be adapted for E. coli (~80 K-antigen types), but nobody has done it yet. DepoCatalog
+  (Ghent, Sep 2025 preprint) provides an experimental catalog of 105 Klebsiella depolymerases across 58 KL-types
+  but is not a computational predictor.
 
 ### Tool applicability
 

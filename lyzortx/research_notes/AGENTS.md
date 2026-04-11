@@ -60,6 +60,21 @@ validated facts, dead-end lessons, and active assumptions extracted from noteboo
 - Source references in the knowledge model (e.g., `[TG02]`) point back to notebook entries. Keep notebook entry IDs
   (task codes) stable so these references remain valid.
 
+## LITERATURE.md separation of concerns
+
+`LITERATURE.md` documents **what external papers and resources offer**: findings, methods, data, tools, caveats about
+the source itself. It must not contain:
+
+- References to our internal tracks, experiments, or task codes (TI09, AX03, etc.)
+- Our project's plans for integrating a resource ("directed cross-terms", "recommended role: ...")
+- Our past mistakes or detection bugs
+- Gap-to-solution maps, retired gaps, or other project planning
+- Speculation about how features would work in our pipeline
+
+Those belong in the plan (`plan.yml`), knowledge model (`knowledge.yml`), lab notebooks, or gists. LITERATURE.md is a
+reference library, not a project roadmap. A reader should be able to understand each entry without knowing anything
+about our internal codebase.
+
 ## Other contents
 
 - `PLAN.md` is auto-generated from `lyzortx/orchestration/plan.yml` by `lyzortx/orchestration/render_plan.py`. Do not
