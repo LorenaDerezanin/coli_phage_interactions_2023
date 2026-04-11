@@ -182,7 +182,31 @@ Last updated: 2026-04-11
 - Recommended role:
   - Background methodological reference. Low priority for direct integration given AX07/AX08 findings.
 
-### 11) Antiphage Landscape 2025 (defense-discovery LM resource)
+### 11) DepoScope / Concha-Eloko et al. 2024 (depolymerase annotation)
+
+- Why it matters:
+  - State-of-the-art tool for phage depolymerase detection and amino-acid-level enzymatic domain delineation.
+  - Fine-tuned ESM-2 + CNN; MCC 0.455 on independent benchmark (>2x next best tool).
+  - Unique: classifies fold type (beta-helix, beta-propeller, triple helix) and pinpoints domain boundaries.
+  - Same group as PhageHostLearn (Boeckaerts/Briers, Ghent) -- potential integration for capsule-targeting prediction.
+- Usable assets:
+  - Pre-trained ESM-2 models (6L, 12L, 30L) for depolymerase binary classification and domain delineation.
+  - Curated PD fold database and HMM profiles for polysaccharide-degrading domains.
+  - Training dataset of 1,926 positive + 1,409 negative proteins with domain annotations.
+- Caveats:
+  - Depolymerase features (binary presence) are noise for our lysis prediction task on K-12 strains without capsule
+    (knowledge unit `phage-functional-noise`). Relevance increases if project expands to capsulated clinical strains.
+  - Recall weakness on triple helix folds (18/26 missed). Union with DePP recommended for comprehensive screening.
+- Access:
+  - Paper: `https://doi.org/10.1371/journal.pcbi.1011831`
+  - Code: `https://github.com/dimiboeckaerts/DepoScope`
+  - Data: `https://zenodo.org/records/10957073`
+- Gist: `GIST 2024 Concha-Eloko DepoScope depolymerase annotation.md`
+- Recommended role:
+  - Phage annotation tool reference. Low priority for current prediction pipeline; high priority if capsulated hosts
+    enter scope.
+
+### 12) Antiphage Landscape 2025 (defense-discovery LM resource)
 
 - Access:
   - Published: `https://doi.org/10.1126/science.adv8275` (Science, April 2026)
@@ -193,7 +217,7 @@ Last updated: 2026-04-11
 - Recommended role:
   - Defense-feature discovery reference. Not directly actionable for strain-level prediction.
 
-### 12) Shang et al. 2025 — 27-tool phage-host prediction benchmark
+### 13) Shang et al. 2025 — 27-tool phage-host prediction benchmark
 
 - Why it matters:
   - Most comprehensive benchmark of phage-host prediction tools (27 tools, systematic feature analysis).
@@ -205,7 +229,7 @@ Last updated: 2026-04-11
 - Recommended role:
   - Benchmark design reference. Calibration for where our approach sits in the broader landscape.
 
-### 13) Malajczuk et al. 2026 — Strain-level AI review
+### 14) Malajczuk et al. 2026 — Strain-level AI review
 
 - Why it matters:
   - Focused review concluding "predictive performance is tightly coupled to outcome definition, label resolution, and
@@ -236,6 +260,7 @@ Last updated: 2026-04-11
 
 - ViralHostRangeDB (2021): `https://pubmed.ncbi.nlm.nih.gov/33594411/`
 - INPHARED (2022): `https://pubmed.ncbi.nlm.nih.gov/36159887/`
+- DepoScope / Concha-Eloko et al., PLoS Comp Bio (2024): `https://doi.org/10.1371/journal.pcbi.1011831`
 - PHIStruct (2025): `https://pubmed.ncbi.nlm.nih.gov/39804673/`
 
 ## Gap-to-Solution Map
