@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import shutil
@@ -18,27 +19,26 @@ from lyzortx.pipeline.steel_thread_v0.io.write_outputs import ensure_directory, 
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows
 from lyzortx.pipeline.track_c.steps.build_v1_host_feature_pair_table import build_defense_column_mask
 from lyzortx.pipeline.track_l.steps import build_generalized_inference_bundle
-from lyzortx.pipeline.track_l.steps import build_mechanistic_defense_evasion_features
 from lyzortx.pipeline.track_l.steps import generalized_inference
 from lyzortx.pipeline.track_l.steps import validate_vhdb_generalized_inference as tl09
+from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import (
+    load_holdout_bacteria_ids,
+    load_json,
+    sha256_file,
+)
 from lyzortx.pipeline.track_l.steps.deployable_tl04_runtime import (
     TL04_DIRECT_BLOCK_ID,
     build_tl04_runtime_payload,
 )
-from lyzortx.pipeline.track_l.steps._mechanistic_builder_common import sha256_file
 from lyzortx.pipeline.track_l.steps.run_enrichment_analysis import CACHED_ANNOTATIONS_DIR
-from lyzortx.pipeline.track_l.steps.retrain_mechanistic_v1_model import load_tl11_feature_provenance
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/generalized_inference_bundle_tl13")
 DEFAULT_BASELINE_OUTPUT_DIR = Path(".scratch/tl13_baseline_generalized_inference_bundle")
-DEFAULT_TL04_FEATURE_PATH = build_mechanistic_defense_evasion_features.DEFAULT_OUTPUT_DIR / (
-    "mechanistic_defense_evasion_features_v1.csv"
-)
-DEFAULT_TL04_MANIFEST_PATH = build_mechanistic_defense_evasion_features.DEFAULT_OUTPUT_DIR / (
-    "mechanistic_defense_evasion_manifest_v1.json"
-)
+_TL04_OUTPUT_DIR = Path("lyzortx/generated_outputs/track_l/mechanistic_defense_evasion_features")
+DEFAULT_TL04_FEATURE_PATH = _TL04_OUTPUT_DIR / "mechanistic_defense_evasion_features_v1.csv"
+DEFAULT_TL04_MANIFEST_PATH = _TL04_OUTPUT_DIR / "mechanistic_defense_evasion_manifest_v1.json"
 PARITY_AUDIT_FILENAME = "tl13_feature_parity_audit.csv"
 ROUNDTRIP_REFERENCE_FILENAME = "tl13_roundtrip_panel_reference_predictions.csv"
 ROUNDTRIP_HOST_COHORT_FILENAME = "tl13_roundtrip_panel_host_cohort.csv"
@@ -55,6 +55,87 @@ PREDECLARED_ROUNDTRIP_METRICS = {
     "max_abs_probability_delta_max": "lower",
     "identical_rank_count_total": "higher",
 }
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_tl11_manifest(
+    *,
+    feature_path: Path,
+    manifest_path: Path,
+    expected_task_id: str,
+    expected_split_assignments_path: Path,
+) -> dict[str, object]:
+    if not feature_path.exists():
+        raise FileNotFoundError(f"Missing TL11 feature file: {feature_path}")
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing TL11 manifest: {manifest_path}")
+
+    manifest = load_json(manifest_path)
+    if manifest.get("task_id") != expected_task_id:
+        raise ValueError(f"Unexpected TL11 task_id in {manifest_path}: {manifest.get('task_id')!r}")
+
+    provenance = manifest.get("provenance")
+    if not isinstance(provenance, dict):
+        raise ValueError(f"TL11 manifest missing provenance section: {manifest_path}")
+
+    split_section = provenance.get("split_assignments")
+    if not isinstance(split_section, dict):
+        raise ValueError(f"TL11 manifest missing split_assignments section: {manifest_path}")
+    if split_section.get("path") != str(expected_split_assignments_path):
+        raise ValueError(f"TL11 manifest split assignments path mismatch: {manifest_path}")
+
+    expected_holdout_ids = load_holdout_bacteria_ids(expected_split_assignments_path)
+    manifest_holdout_ids = provenance.get("excluded_holdout_bacteria_ids")
+    if sorted(str(value) for value in manifest_holdout_ids or []) != expected_holdout_ids:
+        raise ValueError(f"TL11 manifest holdout IDs do not match ST03 split assignments: {manifest_path}")
+
+    holdout_section = manifest.get("holdout_exclusion")
+    if not isinstance(holdout_section, dict):
+        raise ValueError(f"TL11 manifest missing holdout_exclusion section: {manifest_path}")
+    if int(holdout_section.get("excluded_pair_rows", 0) or 0) <= 0:
+        raise ValueError(f"TL11 manifest reports no excluded holdout pair rows: {manifest_path}")
+
+    outputs = manifest.get("outputs")
+    if not isinstance(outputs, dict):
+        raise ValueError(f"TL11 manifest missing outputs section: {manifest_path}")
+    output_entry = outputs.get("feature_csv")
+    if not isinstance(output_entry, str):
+        raise ValueError(f"TL11 manifest missing feature_csv output entry: {manifest_path}")
+    if output_entry != str(feature_path):
+        raise ValueError(f"TL11 manifest feature_csv path mismatch: {manifest_path}")
+    expected_hash_key = "feature_csv_sha256"
+    if outputs.get(expected_hash_key) != _sha256(feature_path):
+        raise ValueError(f"TL11 manifest feature_csv hash mismatch: {manifest_path}")
+
+    return {
+        "manifest_path": str(manifest_path),
+        "manifest_sha256": _sha256(manifest_path),
+        "feature_path": str(feature_path),
+        "feature_sha256": _sha256(feature_path),
+        "holdout_bacteria_ids": expected_holdout_ids,
+        "excluded_pair_rows": int(holdout_section["excluded_pair_rows"]),
+    }
+
+
+def load_tl11_feature_provenance(
+    feature_path: Path,
+    manifest_path: Path,
+    expected_task_id: str,
+    expected_split_assignments_path: Path,
+) -> dict[str, object]:
+    return _validate_tl11_manifest(
+        feature_path=feature_path,
+        manifest_path=manifest_path,
+        expected_task_id=expected_task_id,
+        expected_split_assignments_path=expected_split_assignments_path,
+    )
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -113,27 +194,15 @@ def ensure_tl04_artifacts(
     tl04_manifest_path: Path,
     st03_split_assignments_path: Path,
 ) -> None:
-    should_rebuild = False
-    if tl04_feature_path.exists() and tl04_manifest_path.exists():
-        try:
-            load_tl11_feature_provenance(
-                tl04_feature_path,
-                tl04_manifest_path,
-                "TL04",
-                st03_split_assignments_path,
-            )
-            return
-        except (FileNotFoundError, ValueError):
-            should_rebuild = True
-    else:
-        should_rebuild = True
-    if tl04_feature_path != DEFAULT_TL04_FEATURE_PATH or tl04_manifest_path != DEFAULT_TL04_MANIFEST_PATH:
-        missing = tl04_feature_path if not tl04_feature_path.exists() else tl04_manifest_path
-        raise FileNotFoundError(f"Missing TL04 deployable artifact: {missing}")
-    if should_rebuild:
-        LOGGER.info("TL04 deployable artifacts missing or stale; rebuilding TL04")
-        build_mechanistic_defense_evasion_features.main(
-            ["--st03-split-assignments-path", str(st03_split_assignments_path)]
+    if not tl04_feature_path.exists():
+        raise FileNotFoundError(
+            f"Missing TL04 feature artifact: {tl04_feature_path}. "
+            "TL04 (mechanistic defense-evasion features) is a dead-ended track and cannot be rebuilt automatically."
+        )
+    if not tl04_manifest_path.exists():
+        raise FileNotFoundError(
+            f"Missing TL04 manifest artifact: {tl04_manifest_path}. "
+            "TL04 (mechanistic defense-evasion features) is a dead-ended track and cannot be rebuilt automatically."
         )
     load_tl11_feature_provenance(
         tl04_feature_path,

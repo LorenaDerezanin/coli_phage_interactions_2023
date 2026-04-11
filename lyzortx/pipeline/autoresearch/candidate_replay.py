@@ -12,24 +12,22 @@ import logging
 import shutil
 import tarfile
 import tempfile
+from collections import defaultdict
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterator, Mapping, Optional, Sequence
 
+import numpy as np
 import pandas as pd
 
 from lyzortx.log_config import setup_logging
 from lyzortx.pipeline.autoresearch import build_contract, prepare_cache, runtime_contract
 from lyzortx.pipeline.steel_thread_v0.steps._io_helpers import read_csv_rows, safe_round
 from lyzortx.pipeline.track_g.steps import train_v1_binary_classifier
-from lyzortx.pipeline.track_l.steps.retrain_mechanistic_v1_model import (
-    bootstrap_holdout_metric_cis,
-    load_tg01_lock,
-    load_v1_lock,
-    partition_track_c_defense_columns,
-)
+from lyzortx.pipeline.track_g.steps.run_feature_block_ablation_suite import partition_track_c_columns
 
 LOGGER = logging.getLogger(__name__)
 
@@ -72,6 +70,189 @@ FALLBACK_TG01_BEST_PARAMS = {
     "n_estimators": 300,
     "num_leaves": 31,
 }
+
+
+BOOTSTRAP_METRIC_NAMES = ("holdout_roc_auc", "holdout_top3_hit_rate_all_strains", "holdout_brier_score")
+
+
+@dataclass(frozen=True)
+class BootstrapMetricCI:
+    point_estimate: Optional[float]
+    ci_low: Optional[float]
+    ci_high: Optional[float]
+    bootstrap_samples_requested: int
+    bootstrap_samples_used: int
+
+
+def load_v1_lock(path: Path) -> dict[str, object]:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    locked_blocks = list(payload.get("winner_subset_blocks", []))
+    if locked_blocks != ["defense", "phage_genomic"]:
+        raise ValueError(
+            "TL05 expects the current locked v1 baseline to be defense + phage_genomic; "
+            f"found {locked_blocks!r} in {path}"
+        )
+    return dict(payload)
+
+
+def load_tg01_lock(path: Path) -> dict[str, object]:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return {
+        "best_params": dict(payload["lightgbm"]["best_params"]),
+        "holdout_binary_metrics": dict(payload["lightgbm"]["holdout_binary_metrics"]),
+        "holdout_top3_metrics": dict(payload["lightgbm"]["holdout_top3_metrics"]),
+    }
+
+
+def partition_track_c_defense_columns(track_c_columns: Sequence[str]) -> tuple[str, ...]:
+    partitioned = train_v1_binary_classifier.deduplicate_preserving_order(track_c_columns)
+    if not partitioned:
+        raise ValueError("Track C feature table has no columns.")
+    defense_columns = partition_track_c_columns(partitioned)["defense_subtypes"]
+    if not defense_columns:
+        raise ValueError("No defense subtype columns were found in Track C features.")
+    return tuple(defense_columns)
+
+
+def _evaluate_holdout_rows(rows: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    y_true = [int(str(row["label_hard_any_lysis"])) for row in rows]
+    y_prob = [float(row["predicted_probability"]) for row in rows]
+    return {
+        "binary": train_v1_binary_classifier.compute_binary_metrics(y_true, y_prob),
+        "top3": train_v1_binary_classifier.compute_top3_hit_rate(rows, probability_key="predicted_probability"),
+    }
+
+
+def bootstrap_holdout_metric_cis(
+    holdout_rows_by_arm: Mapping[str, Sequence[Mapping[str, object]]],
+    *,
+    bootstrap_samples: int,
+    bootstrap_random_state: int,
+    baseline_arm_id: str,
+) -> dict[str, dict[str, BootstrapMetricCI]]:
+    if bootstrap_samples < 1:
+        raise ValueError("bootstrap_samples must be >= 1")
+
+    if baseline_arm_id not in holdout_rows_by_arm:
+        raise ValueError("Missing baseline arm for bootstrap evaluation.")
+
+    holdout_by_bacteria: dict[str, list[Mapping[str, object]]] = defaultdict(list)
+    for row in holdout_rows_by_arm[baseline_arm_id]:
+        holdout_by_bacteria[str(row["bacteria"])].append(row)
+
+    bacteria_ids = tuple(sorted(holdout_by_bacteria.keys()))
+    if not bacteria_ids:
+        raise ValueError("No holdout bacteria available for bootstrap evaluation.")
+
+    arm_bacteria_sets: dict[str, dict[str, list[Mapping[str, object]]]] = {
+        arm_id: {bacteria: [] for bacteria in bacteria_ids} for arm_id in holdout_rows_by_arm
+    }
+    for arm_id, rows in holdout_rows_by_arm.items():
+        for row in rows:
+            bacteria = str(row["bacteria"])
+            if bacteria in arm_bacteria_sets[arm_id]:
+                arm_bacteria_sets[arm_id][bacteria].append(row)
+    for arm_id, bacteria_map in arm_bacteria_sets.items():
+        missing = [bacteria for bacteria in bacteria_ids if not bacteria_map.get(bacteria)]
+        if missing:
+            raise ValueError(f"Missing holdout rows for arm {arm_id}: {', '.join(missing)}")
+
+    rng = np.random.default_rng(bootstrap_random_state)
+    metric_samples: dict[str, dict[str, list[float]]] = {
+        arm_id: {metric_name: [] for metric_name in BOOTSTRAP_METRIC_NAMES} for arm_id in holdout_rows_by_arm
+    }
+    delta_samples: dict[str, dict[str, list[float]]] = {
+        f"{arm_id}__delta_vs_{baseline_arm_id}": {metric_name: [] for metric_name in BOOTSTRAP_METRIC_NAMES}
+        for arm_id in holdout_rows_by_arm
+        if arm_id != baseline_arm_id
+    }
+
+    bacteria_count = len(bacteria_ids)
+    progress_interval = max(1, bootstrap_samples // 5)
+    for sample_index in range(bootstrap_samples):
+        if sample_index == 0 or (sample_index + 1) % progress_interval == 0 or sample_index + 1 == bootstrap_samples:
+            LOGGER.info(
+                "Bootstrap progress: %d/%d paired holdout-strain resamples",
+                sample_index + 1,
+                bootstrap_samples,
+            )
+        sampled_bacteria_indices = rng.integers(0, bacteria_count, size=bacteria_count)
+        sampled_rows_by_arm: dict[str, list[Mapping[str, object]]] = {}
+        for arm_id, bacteria_map in arm_bacteria_sets.items():
+            sampled_rows: list[Mapping[str, object]] = []
+            for bacteria_index in sampled_bacteria_indices.tolist():
+                sampled_rows.extend(bacteria_map[bacteria_ids[bacteria_index]])
+            sampled_rows_by_arm[arm_id] = sampled_rows
+
+        metrics_by_arm = {arm_id: _evaluate_holdout_rows(rows) for arm_id, rows in sampled_rows_by_arm.items()}
+        baseline_metrics = metrics_by_arm[baseline_arm_id]
+        for arm_id, metrics in metrics_by_arm.items():
+            metric_samples[arm_id]["holdout_top3_hit_rate_all_strains"].append(
+                float(metrics["top3"]["top3_hit_rate_all_strains"])
+            )
+            metric_samples[arm_id]["holdout_brier_score"].append(float(metrics["binary"]["brier_score"]))
+            if metrics["binary"]["roc_auc"] is not None:
+                metric_samples[arm_id]["holdout_roc_auc"].append(float(metrics["binary"]["roc_auc"]))
+
+        for arm_id, metrics in metrics_by_arm.items():
+            if arm_id == baseline_arm_id:
+                continue
+            delta_key = f"{arm_id}__delta_vs_{baseline_arm_id}"
+            if baseline_metrics["binary"]["roc_auc"] is not None and metrics["binary"]["roc_auc"] is not None:
+                delta_samples[delta_key]["holdout_roc_auc"].append(
+                    float(metrics["binary"]["roc_auc"]) - float(baseline_metrics["binary"]["roc_auc"])
+                )
+            delta_samples[delta_key]["holdout_top3_hit_rate_all_strains"].append(
+                float(metrics["top3"]["top3_hit_rate_all_strains"])
+                - float(baseline_metrics["top3"]["top3_hit_rate_all_strains"])
+            )
+            delta_samples[delta_key]["holdout_brier_score"].append(
+                float(baseline_metrics["binary"]["brier_score"]) - float(metrics["binary"]["brier_score"])
+            )
+
+    def _ci(values: Sequence[float]) -> tuple[Optional[float], Optional[float], int]:
+        if not values:
+            return None, None, 0
+        low, high = np.quantile(np.asarray(values, dtype=float), [0.025, 0.975])
+        return safe_round(float(low)), safe_round(float(high)), len(values)
+
+    actual_metrics_by_arm = {arm_id: _evaluate_holdout_rows(rows) for arm_id, rows in holdout_rows_by_arm.items()}
+
+    ci_summary: dict[str, dict[str, BootstrapMetricCI]] = {}
+    for arm_id, samples in metric_samples.items():
+        actual_metrics = actual_metrics_by_arm[arm_id]
+        ci_summary[arm_id] = {}
+        for metric_name, sample_values in samples.items():
+            ci_low, ci_high, used = _ci(sample_values)
+            ci_summary[arm_id][metric_name] = BootstrapMetricCI(
+                point_estimate=(
+                    float(actual_metrics["binary"]["roc_auc"])
+                    if metric_name == "holdout_roc_auc"
+                    else float(actual_metrics["top3"]["top3_hit_rate_all_strains"])
+                    if metric_name == "holdout_top3_hit_rate_all_strains"
+                    else float(actual_metrics["binary"]["brier_score"])
+                ),
+                ci_low=ci_low,
+                ci_high=ci_high,
+                bootstrap_samples_requested=bootstrap_samples,
+                bootstrap_samples_used=used,
+            )
+
+    for delta_key, samples in delta_samples.items():
+        ci_summary[delta_key] = {}
+        for metric_name, sample_values in samples.items():
+            ci_low, ci_high, used = _ci(sample_values)
+            ci_summary[delta_key][metric_name] = BootstrapMetricCI(
+                point_estimate=None,
+                ci_low=ci_low,
+                ci_high=ci_high,
+                bootstrap_samples_requested=bootstrap_samples,
+                bootstrap_samples_used=used,
+            )
+
+    return ci_summary
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
