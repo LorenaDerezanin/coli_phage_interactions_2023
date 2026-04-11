@@ -38,6 +38,10 @@ graph LR
     tautoresearch["Track AUTORESEARCH: Raw-FASTA Autoresearch"]
   end
 
+  subgraph s6["Stage 6"]
+    tgiants["Track GIANTS: Three-Layer Biological Prediction"]
+  end
+
   ta --> tb
   ta --> tc
   ta --> td
@@ -55,6 +59,7 @@ graph LR
   tl --> tdeploy
   tg --> tdeploy
   ta --> tautoresearch
+  tautoresearch --> tgiants
 ```
 
 ## Track ST: Steel Thread v0
@@ -905,3 +910,46 @@ graph LR
   - Output a single auditable decision bundle containing candidate provenance, replication metrics, bootstrap summary,
     and final promote/reject decision
   - Document the raw-input AUTORESEARCH handoff and replication rule in the Track AUTORESEARCH and project lab notebooks
+
+## Track GIANTS: Three-Layer Biological Prediction
+
+- **Guiding Principle:** Build features for each biological layer of phage infection — capsule penetration
+  (depolymerase), receptor binding (RBP-OMP), and defense survival — then integrate with RFE-based feature selection.
+  The hypothesis: lysis requires passing adsorption gates (Gate 1 OR Gate 2) then surviving host defenses (Gate 3).
+  Baseline: AUTORESEARCH all-pairs 0.810 AUC on ST03 holdout.
+- [ ] **GT01** Depolymerase-capsule compatibility layer. Model: `claude-opus-4-6`.
+  - Run DepoScope on phage protein sets (from Pharokka CDS or pyrodigal) to identify depolymerases with domain
+    boundaries and fold classification
+  - Union DepoScope hits with Pharokka tail spike annotations (fix DEPOLYMERASE_PATTERNS to match "tail spike protein")
+    for maximum recall
+  - Cluster enzymatic domains by fold type and sequence similarity; report cluster count and phage distribution
+  - Create directed cross-term features (depolymerase_cluster x host_capsule_profile_score) materialized as a new
+    feature slot
+  - Verify host-side capsule variation exists in the training set (99 capsule features, 369 hosts with nonzero profiles)
+  - Record results in track_GIANTS.md
+- [ ] **GT02** RBP-OMP receptor compatibility layer. Model: `claude-opus-4-6`.
+  - Map our 96 phages to OMP receptor classes using genus-level lookup from Moriniere 2026 Table S1 (downloaded to
+    .scratch/genophi/Table_S1_Phages.tsv)
+  - Assign high-confidence genera a receptor class; mark "Resistant" genera as unknown (not "no OMP receptor"); log
+    coverage statistics
+  - Create directed cross-term features (predicted_receptor x host_OMP_HMM_score) materialized as a new feature slot
+  - Document which genera have clean vs ambiguous vs unknown receptor assignments
+  - If cross-terms show lift on clean-assignment genera but not noisy ones, flag GenoPHI per-phage prediction as a
+    follow-up
+  - Record results in track_GIANTS.md
+- [ ] **GT03** Three-layer integration with RFE and class weighting. Model: `claude-opus-4-6`. Depends on tasks: `GT01`,
+      `GT02`.
+  - Combine Gate 1 features (depolymerase x capsule) + Gate 2 features (receptor x OMP) + Gate 3 features (all 79+
+    DefenseFinder defense system counts) with existing 5-slot AUTORESEARCH features
+  - Apply RFE feature selection to prune confounded or uninformative features
+  - Apply inverse-frequency class weighting for narrow-host phages
+  - All-pairs architecture only (no per-phage blending)
+  - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+  - Record full ablation (per-gate contribution) in track_GIANTS.md
+- [ ] **GT04** Holdout evaluation and error analysis. Model: `claude-opus-4-6`. Depends on tasks: `GT03`.
+  - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167 Brier) with bootstrap CIs
+  - Per-gate ablation table showing contribution of each layer
+  - Error bucket re-analysis comparing to the 6/65 all-pairs misses
+  - If S1 genus mapping showed signal in clean-assignment genera, recommend GenoPHI per-phage prediction as a follow-up
+    task
+  - Record in track_GIANTS.md and update knowledge model via /sleeponit

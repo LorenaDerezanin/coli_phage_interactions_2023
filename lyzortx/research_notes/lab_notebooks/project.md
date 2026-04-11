@@ -1583,3 +1583,33 @@ than continuing to search for features within the frozen train.py surface, APEX 
 - The codex-implement.yml CI workflow is disabled for APEX tasks. The orchestrator creates issues; I implement them
   directly.
 - Realistic ceiling: 0.90-0.92 AUC, 95% top-3. The 0.95 AUC target is aspirational but motivating.
+
+### 2026-04-12 00:30 UTC: Track GIANTS launched — three-layer biological model informed by Moriniere and GenoPHI
+
+#### Executive summary
+
+Launched Track GIANTS after literature review of Moriniere 2026 (receptor specificity from genomes) and Noonan 2025
+(GenoPHI strain-level prediction). Rather than benchmarking against these papers, we integrate their key findings into a
+three-layer biological prediction model: depolymerase→capsule compatibility (Gate 1), RBP→OMP receptor compatibility
+(Gate 2), and host defense survival (Gate 3). Baseline: AUTORESEARCH all-pairs 0.810 AUC.
+
+#### Strategic decision
+
+APEX Phase 1-2 exhausted the feature-engineering approach: PLM embeddings, physicochemical descriptors, and undirected
+cross-terms all proved neutral or harmful on the all-pairs architecture. The literature reveals why:
+
+1. **Receptor specificity is discrete and localized** — short motifs at specific genomic loci, not global protein
+   properties. k=5 amino acid k-mers predict receptor class at AUROC 0.99 (Moriniere 2026).
+2. **ML pipeline matters more than features** — algorithm + training strategy explains 5-18x more variance than genomic
+   representation (Noonan 2025, 13.2M training runs).
+3. **Our hosts are diverse clinical isolates** with 99 capsule features and 12 OMP receptor variants — the signal is
+   available if features are directed correctly.
+
+The three-layer architecture matches the actual infection mechanism instead of treating all features as flat inputs.
+Defense features (Gate 3) are unrestricted (all known systems, not just CRISPR/RM/Abi) and gated on adsorption success.
+
+#### Baseline policy
+
+AUTORESEARCH all-pairs (0.810 AUC, 90.8% top-3, 0.167 Brier) is the single canonical baseline. TL18 (0.823) has
+feature integrity issues (DefenseFinder version drift, soft-leaky pairwise features). Per-phage blend (0.830) is not
+deployable and not a valid comparison target.
