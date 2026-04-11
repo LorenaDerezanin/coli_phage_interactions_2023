@@ -62,17 +62,18 @@ What works, what doesn't, leakage risks, and encoding decisions.
 
 Architecture choices, calibration, and performance bounds.
 
-- **`tl18-improvement`**: TL18 model achieves +0.036 AUC over baseline (0.823 vs 0.787) with 98.5% probability of
-  improvement; new TL15/16/17 feature blocks account for 38.5% of total importance. [validated; source: TL18 audit; see
-  also: autoresearch-parity]
-- **`autoresearch-parity`**: AUTORESEARCH raw-FASTA baseline achieves 0.810 AUC on ST03 holdout vs TL18's 0.823; the
-  difference falls inside the 95% bootstrap CI and is not statistically significant. [validated; source: 2026-04-08
-  AUTORESEARCH eval; see also: tl18-improvement, defense-ablation-autoresearch, per-phage-blending-dominant]
-  - *Adding defense features narrows the gap further to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%. The
-    remaining gap is architectural, not feature-driven.*
+- **`tl18-flawed-baseline`**: TL18 model (0.823 AUC) is not a valid baseline: DefenseFinder version drift inflated 17.3%
+  of feature importance, and 5 soft-leaky pairwise features contributed ~5.5%. [validated; source: TL18 audit; see also:
+  autoresearch-baseline]
+- **`autoresearch-baseline`**: AUTORESEARCH all-pairs model (0.810 AUC, 90.8% top-3 on ST03 holdout) is the canonical
+  clean baseline: derived from raw FASTA, no leakage, no feature mismatch, no per-phage blending. [validated; source:
+  2026-04-08 AUTORESEARCH eval; see also: tl18-flawed-baseline, defense-ablation-autoresearch,
+  per-phage-blending-dominant]
+  - *Adding defense features narrows the TL18 gap to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%. All
+    future track comparisons should use 0.810 as the single baseline, not TL18 (flawed) or per-phage (not deployable).*
 - **`defense-ablation-autoresearch`**: Adding 79 DefenseFinder host defense features to AUTORESEARCH improves AUC from
   0.810 to 0.817 (+0.7pp) but regresses top-3 hit rate from 90.8% to 86.2% (-4.6pp). [validated; source: 2026-04-08
-  defense ablation; see also: defense-lineage-confounding, autoresearch-parity, ml-pipeline-over-features]
+  defense ablation; see also: defense-lineage-confounding, autoresearch-baseline, ml-pipeline-over-features]
   - *Defense features help discrimination (AUC) but hurt ranking (top-3) due to lineage confounding. LightGBM's native
     feature selection is not aggressive enough to ignore noisy defense subtypes. GenoPHI found RFE is the optimal
     feature selection method.*
@@ -80,13 +81,13 @@ Architecture choices, calibration, and performance bounds.
   AUTORESEARCH architectural gain: +2.0pp AUC (0.810->0.830) on ST03 holdout, +3.1pp top-3 (90.8%->93.8%), and -2.3pp
   Brier (0.167->0.144). Surpasses TL18 on AUC (+0.7pp) and matches top-3 (93.8% vs 93.7%). [validated; source:
   2026-04-09 APEX ablation, 2026-04-09 APEX holdout; see also: adsorption-dominates-paper, family-bias-straboviridae,
-  autoresearch-parity, per-phage-not-deployable, deployment-goal]
+  autoresearch-baseline, per-phage-not-deployable, deployment-goal]
   - *Each phage gets its own 32-tree LightGBM on host-only features (surface + typing + stats), blended 50/50 with
     all-pairs predictions. Bootstrap CIs overlap with TL18 — differences not statistically significant on 65-bacteria
     holdout.*
 - **`adsorption-first-strategy`**: Adsorption-first modeling (host surface + typing features) is the correct critical
   path; defense features contribute but are not gate-critical for first baseline. [validated; source: 2026-04-05 replan,
-  antiphage-landscape reading; see also: autoresearch-parity]
+  antiphage-landscape reading; see also: autoresearch-baseline]
 - **`ml-pipeline-over-features`**: ML pipeline configuration (algorithm, training strategy, feature selection) matters
   5-18x more than genomic feature representation for strain-level phage-host prediction quality. [validated; source:
   Noonan 2025 GenoPHI, 2026-04-11 literature review; see also: defense-ablation-autoresearch,
@@ -97,8 +98,8 @@ Architecture choices, calibration, and performance bounds.
     weighting.*
 - **`genophi-benchmark`**: GenoPHI achieves AUROC 0.869 on E. coli using 94/96 of our Guelin phages with binary
   protein-family and k-mer features, directionally outperforming our 0.830 with richer engineered features. [validated;
-  source: Noonan 2025 GenoPHI, 2026-04-11 literature review; see also: ml-pipeline-over-features, autoresearch-parity,
-  tl18-improvement]
+  source: Noonan 2025 GenoPHI, 2026-04-11 literature review; see also: ml-pipeline-over-features, autoresearch-baseline,
+  tl18-flawed-baseline]
   - *Not directly comparable (different holdout strategies and bacteria counts). GenoPHI uses 402 strains; we use 369.
     Their features are annotation-free binary presence-absence from both phage and host proteomes. Our features are
     mechanistically grounded continuous scores. The approaches are complementary — combining ML pipeline optimizations
@@ -144,14 +145,12 @@ Feature derivation parity, raw-input pipeline, and pre-computation.
   unseen E. coli strains, ranks or recommends cocktails from a set of potentially unseen phages, and generalizes along
   both the host and phage axes simultaneously. [validated; source: 2026-04-09 project direction; see also:
   per-phage-not-deployable, receptor-specificity-solved]
-- **`per-phage-not-deployable`**: Per-phage sub-models are architecturally incompatible with the deployment goal: they
-  require training-time interaction data for each phage and cannot produce predictions for unseen phages. The +2.0pp AUC
-  gain is real on the fixed-panel holdout but non-transferable to the target deployment scenario. [validated; source:
-  2026-04-09 APEX holdout, 2026-04-09 project direction; see also: per-phage-blending-dominant, deployment-goal,
-  receptor-specificity-solved]
-  - *Per-phage models generalize to unseen bacteria (the holdout tests this) but not to unseen phages (no sub-model
-    exists to fall back on). For unseen phages, the all-pairs architecture with receptor-class-directed features is the
-    viable path.*
+- **`per-phage-not-deployable`**: Per-phage sub-models (0.830 AUC) are not deployable and not a valid comparison
+  baseline: they require training-time interaction data for each phage and cannot produce predictions for unseen phages.
+  [validated; source: 2026-04-09 APEX holdout, 2026-04-09 project direction; see also: per-phage-blending-dominant,
+  deployment-goal, autoresearch-baseline]
+  - *The +2.0pp AUC gain over all-pairs is real on the fixed-panel holdout but non-transferable. All future track
+    comparisons should use the all-pairs 0.810 baseline, not per-phage 0.830.*
 - **`picard-assemblies`**: Picard Figshare assemblies (403 FASTAs, 1.9GB, CC BY 4.0) are the authoritative source for
   raw-input feature derivation; not all 403 have interaction labels. [validated; source: DEPLOY01]
 
