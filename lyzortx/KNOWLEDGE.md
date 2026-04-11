@@ -1,9 +1,9 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-11T12:00:00+00:00 -->
+<!-- Last consolidated: 2026-04-12T00:30:00+00:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**39 knowledge units** across 7 themes (31 active, 8 dead ends)
+**41 knowledge units** across 7 themes (33 active, 8 dead ends)
 
 ## Data & Labels
 
@@ -57,6 +57,17 @@ What works, what doesn't, leakage risks, and encoding decisions.
     general protein embeddings (PLM, mean-pooled) the wrong tool — the signal is in short motifs at specific loci, not
     global protein similarity. Limitation: training on BW25113/BL21 which lack O-antigen/capsule, so
     polysaccharide-mediated specificity is not covered.*
+- **`three-layer-hypothesis`**: Lysis requires passing adsorption gates (capsule penetration OR receptor binding) then
+  surviving host defenses; features should be directed per-layer, not flat. [preliminary; source: Moriniere 2026, Noonan
+  2025 GenoPHI, 2026-04-11 literature review; see also: receptor-specificity-solved, defense-lineage-confounding,
+  adsorption-dominates-paper]
+  - *Gate 1: depolymerase substrate specificity x host capsule/O-antigen profile. Gate 2: RBP receptor class x host OMP
+    variant score. Gate 3: all host defense systems (unrestricted). Adsorption = Gate 1 OR Gate 2; Lysis = Adsorption
+    AND survives Gate 3. Previous flat approaches (AX03 undirected cross-terms, AX07/AX08 PLM embeddings, defense
+    without adsorption gating) all failed because they ignored this layered structure.*
+- **`host-capsule-variation`**: Our 369 clinical E. coli hosts have rich capsule variation (99 capsule feature columns,
+  all nonzero) — they are NOT K-12 lab strains and can support depolymerase-capsule learning. [validated; source:
+  2026-04-11 host_surface audit; see also: three-layer-hypothesis, receptor-variant-richness]
 
 ## Model Architecture & Performance
 

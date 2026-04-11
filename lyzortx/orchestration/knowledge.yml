@@ -1,4 +1,4 @@
-last_consolidated: "2026-04-11T12:00:00+00:00"
+last_consolidated: "2026-04-12T00:30:00+00:00"
 source_dir: lyzortx/research_notes/lab_notebooks
 
 themes:
@@ -124,6 +124,30 @@ themes:
           Limitation: training on BW25113/BL21 which lack O-antigen/capsule, so polysaccharide-mediated
           specificity is not covered.
         relates_to: [receptor-variant-richness, pairwise-cross-terms-dead-end, plm-rbp-redundant, rbp-receptor-unknowns]
+
+      - id: three-layer-hypothesis
+        statement: >
+          Lysis requires passing adsorption gates (capsule penetration OR receptor binding) then
+          surviving host defenses; features should be directed per-layer, not flat.
+        sources: [Moriniere 2026, Noonan 2025 GenoPHI, 2026-04-11 literature review]
+        status: active
+        confidence: preliminary
+        context: >
+          Gate 1: depolymerase substrate specificity x host capsule/O-antigen profile. Gate 2: RBP
+          receptor class x host OMP variant score. Gate 3: all host defense systems (unrestricted).
+          Adsorption = Gate 1 OR Gate 2; Lysis = Adsorption AND survives Gate 3. Previous flat
+          approaches (AX03 undirected cross-terms, AX07/AX08 PLM embeddings, defense without
+          adsorption gating) all failed because they ignored this layered structure.
+        relates_to: [receptor-specificity-solved, defense-lineage-confounding, adsorption-dominates-paper]
+
+      - id: host-capsule-variation
+        statement: >
+          Our 369 clinical E. coli hosts have rich capsule variation (99 capsule feature columns,
+          all nonzero) — they are NOT K-12 lab strains and can support depolymerase-capsule learning.
+        sources: [2026-04-11 host_surface audit]
+        status: active
+        confidence: validated
+        relates_to: [three-layer-hypothesis, receptor-variant-richness]
 
   # ── MODEL ──────────────────────────────────────────────────────────────────
   - key: model
