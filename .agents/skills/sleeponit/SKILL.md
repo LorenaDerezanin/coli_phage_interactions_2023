@@ -36,7 +36,7 @@ Discard:
 
 If `lyzortx/orchestration/knowledge.yml` already exists:
 
-1. Load it with `knowledge_parser.load_knowledge()`
+1. Load it — see API reference below for correct calling convention
 2. Read notebooks looking for entries newer than `last_consolidated` date or entries not yet reflected in the model
 3. Propose additions, updates (refined statements), and deletions (superseded findings — delete, don't mark)
 4. Use `knowledge_parser.diff_knowledge()` to generate a clear change report
@@ -74,18 +74,20 @@ Each unit in the YAML has:
 
 ## Phase 2: Curate & Approve
 
-1. Write draft YAML to `.scratch/sleeponit_draft.yml`
-2. Run `knowledge_parser.validate_knowledge()` — fix any errors
-3. Compute diff with `knowledge_parser.diff_knowledge()` and present a **concise summary** to the user:
+1. Delete any existing `.scratch/sleeponit_draft.yml` first (avoids Write-tool Read-before-write errors on stale
+   drafts): `rm -f .scratch/sleeponit_draft.yml`
+2. Write draft YAML to `.scratch/sleeponit_draft.yml`
+3. Validate and diff — see API reference below for correct calling convention
+4. Present a **concise summary** to the user:
    - Unit count change (e.g., "43 -> 39 units")
    - Deleted units: list IDs with one-line reason each
    - Added units: list IDs with one-line description each
    - Refined units: list IDs with what changed
    - Flag any units you're uncertain about
-4. Wait for user approval. If the summary is clear, a simple "y" is enough. Only do a multi-step
+5. Wait for user approval. If the summary is clear, a simple "y" is enough. Only do a multi-step
    interactive feedback session if changes are unwieldy for a summary or if important info would be
    lost in the summary.
-5. On approval, proceed to Phase 3. On feedback, adjust the draft and re-summarize.
+6. On approval, proceed to Phase 3. On feedback, adjust the draft and re-summarize.
 
 ## Phase 3: Emit
 
@@ -115,3 +117,41 @@ Before finalizing, verify:
 - [ ] Dead ends include the *lesson*, not just "it didn't work"
 - [ ] No implementation details that belong in code comments
 - [ ] `validate_knowledge()` returns no errors
+
+## knowledge_parser API reference
+
+The parser uses frozen dataclasses, not dicts. Do not call `.get()` or use `['key']` on model objects.
+
+```python
+from pathlib import Path
+from lyzortx.orchestration.knowledge_parser import load_knowledge, validate_knowledge, diff_knowledge
+
+# load_knowledge takes a Path, not a string
+km = load_knowledge(Path("lyzortx/orchestration/knowledge.yml"))
+
+# KnowledgeModel attributes (NOT dict-style access):
+km.last_consolidated   # str
+km.themes              # list[KnowledgeTheme]
+km.all_units()         # list[KnowledgeUnit]
+km.all_unit_ids()      # set[str]
+
+# KnowledgeTheme attributes:
+theme.key              # str (e.g., "data-labels")
+theme.title            # str (e.g., "Data & Labels")
+theme.units            # list[KnowledgeUnit]
+
+# KnowledgeUnit attributes:
+unit.id                # str
+unit.statement         # str
+unit.sources           # list[str]
+unit.status            # str ("active" or "dead-end")
+unit.confidence        # str | None
+unit.context           # str | None
+unit.relates_to        # list[str]
+
+# Validate returns a list of error strings (empty = valid)
+errors = validate_knowledge(km)
+
+# Diff compares two KnowledgeModel objects, returns a formatted string report
+report = diff_knowledge(old_km, new_km)
+```
