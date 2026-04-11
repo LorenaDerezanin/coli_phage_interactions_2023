@@ -1584,7 +1584,7 @@ than continuing to search for features within the frozen train.py surface, APEX 
   directly.
 - Realistic ceiling: 0.90-0.92 AUC, 95% top-3. The 0.95 AUC target is aspirational but motivating.
 
-### 2026-04-12 00:30 UTC: Track GIANTS launched — three-layer biological model informed by Moriniere and GenoPHI
+### 2026-04-12 00:15 CEST: Track GIANTS launched — three-layer biological model informed by Moriniere and GenoPHI
 
 #### Executive summary
 

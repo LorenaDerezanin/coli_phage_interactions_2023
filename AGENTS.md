@@ -135,6 +135,12 @@ Do NOT nitpick style — ruff handles formatting. Focus on substantive issues on
 
 - Every `AGENTS.md` must have an accompanying `CLAUDE.md` that imports it with `@AGENTS.md`.
 
+# Timestamps
+
+- Use the computer's local timezone for all timestamps, including lab notebook entries.
+- Get the time from `date '+%Y-%m-%d %H:%M %Z'` (local timezone with zone label).
+- Lab notebook entry format: `### YYYY-MM-DD HH:MM TZ: Title` (e.g., `### 2026-04-12 00:30 CEST: Title`).
+
 # Documentation Style Rules
 
 - Line-length: 120 characters for prose. See `.pre-commit-config.yaml` and `.pymarkdown.yaml` for tool settings.

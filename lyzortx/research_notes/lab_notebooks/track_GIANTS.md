@@ -1,4 +1,4 @@
-### 2026-04-12 00:30 UTC: Track GIANTS launched — three-layer biological prediction model
+### 2026-04-12 00:15 CEST: Track GIANTS launched — three-layer biological prediction model
 
 #### Executive summary
 

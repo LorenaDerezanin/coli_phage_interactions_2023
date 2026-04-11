@@ -35,8 +35,8 @@ historical records and must not be modified (see Done Task Immutability in the o
 
 ## Entry format
 
-- Each entry starts with `### YYYY-MM-DD HH:MM UTC: Title` (date heading level 3; timestamp helps resolve merge
-  conflicts when two entries are added on the same day).
+- Each entry starts with `### YYYY-MM-DD HH:MM TZ: Title` (date heading level 3, local timezone with zone label e.g.
+  CEST; timestamp helps resolve merge conflicts when two entries are added on the same day).
 - Entries within a track file are ordered by task code, earliest first.
 - Every entry must begin with an `#### Executive summary` section: 2-4 sentences covering what changed, why, and the
   key outcome or metric. A reader should be able to skip the rest of the entry and still understand the decision.
