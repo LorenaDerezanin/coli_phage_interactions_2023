@@ -89,7 +89,8 @@ def _render_mermaid(tracks: dict[str, Any]) -> str:
 
 
 def _render_task_line(task: dict[str, Any]) -> str:
-    check = "x" if task.get("status") == "done" else " "
+    status = task.get("status", "pending")
+    check = "x" if status == "done" else ("~" if status == "cancelled" else " ")
     task_id = task.get("id", "")
     title = task["title"]
     prefix = f"**{task_id}** " if task_id else ""

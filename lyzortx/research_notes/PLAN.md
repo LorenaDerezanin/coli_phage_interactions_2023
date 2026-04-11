@@ -716,7 +716,7 @@ graph LR
   - Commit the aggregated CSV so downstream tasks (DEPLOY08) can load it without re-running HMMER scans in CI
   - The per-host intermediate outputs (predicted proteins, tblout files) remain in gitignored generated_outputs and are
     NOT checked in
-- [ ] **DEPLOY08** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
+- [~] **DEPLOY08** Run full feature derivation on 403 hosts, retrain, and evaluate. Model: `gpt-5.4`. CI image profile:
       `full-bio`. Depends on tasks: `DEPLOY01`, `DEPLOY06`, `DEPLOY07`, `DEPLOY04`, `DEPLOY05`.
   - Download the 403 assemblies using the DEPLOY01 function if not already present
   - Load the pre-computed 403-host defense gene counts from the checked-in CSV at
@@ -749,8 +749,8 @@ graph LR
   - Lock decision — if the deployment-paired model improves over the TL18 baseline on AUC (bootstrap 95% CI for the
     delta excludes zero), lock on the deployment-paired model; otherwise keep TL18 baseline
   - Write the comparison table and lock decision to the track lab notebook
-- [ ] **DEPLOY09** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
-      `full-bio`. Depends on tasks: `DEPLOY08`.
+- [~] **DEPLOY09** Wire deployment-paired features into the inference runtime. Model: `gpt-5.4`. CI image profile:
+      `full-bio`.
   - Update generalized_inference.py so that training and inference call the exact same feature derivation functions —
     not analogous functions that produce columns with the same names; import from
     lyzortx/pipeline/deployment_paired_features/ for all feature blocks
@@ -898,7 +898,7 @@ graph LR
     Codex action environment
   - Document the required GitHub environment, secret names, approval gate, pod-spec contract, and local-versus-RunPod
     handoff in `lyzortx/orchestration/README.md`
-- [x] **AR09** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
+- [~] **AR09** Import winners and replicate them on the sealed holdout. Model: `gpt-5.4`. CI image profile: `base`.
       Depends on tasks: `AR08`.
   - Add one command that imports a candidate `train.py` plus its RunPod experiment metadata back into
     `lyzortx/generated_outputs/autoresearch/candidates/`

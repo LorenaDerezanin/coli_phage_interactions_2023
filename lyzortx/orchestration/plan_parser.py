@@ -20,7 +20,7 @@ class PlanTask:
     task_id: str
     track: str
     title: str
-    status: str  # "done" | "pending"
+    status: str  # "pending" | "done" | "cancelled"
     ordinal: int  # 1-based position within track
     task_dependencies: list[str] | None = None
     implemented_in: str | None = None
@@ -83,8 +83,11 @@ def load_plan(plan_path: Path) -> PlanGraph:
     return graph
 
 
+TERMINAL_STATUSES = frozenset({"done", "cancelled"})
+
+
 def is_track_complete(graph: PlanGraph, track: str) -> bool:
-    return all(t.status == "done" for t in graph.tasks_for_track(track))
+    return all(t.status in TERMINAL_STATUSES for t in graph.tasks_for_track(track))
 
 
 def resolve_task_dependencies(task: PlanTask, graph: PlanGraph) -> list[str]:
@@ -104,11 +107,11 @@ def resolve_task_dependencies(task: PlanTask, graph: PlanGraph) -> list[str]:
 
 
 def is_task_ready(task: PlanTask, graph: PlanGraph) -> bool:
-    if task.status == "done":
+    if task.status in TERMINAL_STATUSES:
         return False
 
     for dependency_id in resolve_task_dependencies(task, graph):
-        if graph.task_by_id(dependency_id).status != "done":
+        if graph.task_by_id(dependency_id).status not in TERMINAL_STATUSES:
             return False
 
     return True

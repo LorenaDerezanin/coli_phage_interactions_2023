@@ -1124,7 +1124,7 @@ tracks:
         in gitignored generated_outputs and are NOT checked in
     - id: DEPLOY08
       title: Run full feature derivation on 403 hosts, retrain, and evaluate
-      status: pending
+      status: cancelled
       ci_image_profile: full-bio
       depends_on_tasks:
       - DEPLOY01
@@ -1174,10 +1174,9 @@ tracks:
       - Write the comparison table and lock decision to the track lab notebook
     - id: DEPLOY09
       title: Wire deployment-paired features into the inference runtime
-      status: pending
+      status: cancelled
       ci_image_profile: full-bio
-      depends_on_tasks:
-      - DEPLOY08
+      depends_on_tasks: []
       model: gpt-5.4
       acceptance_criteria:
       - Update generalized_inference.py so that training and inference call the exact
@@ -1420,7 +1419,7 @@ tracks:
         contract, and local-versus-RunPod handoff in `lyzortx/orchestration/README.md`
     - id: AR09
       title: Import winners and replicate them on the sealed holdout
-      status: done
+      status: cancelled
       model: gpt-5.4
       ci_image_profile: base
       depends_on_tasks:

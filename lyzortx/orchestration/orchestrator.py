@@ -100,7 +100,11 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
     from lyzortx.orchestration.plan_parser import load_plan, resolve_task_dependencies
 
     graph = load_plan(plan_path)
-    missing_ci_image_profile = [pt.task_id for pt in graph.tasks if pt.status != "done" and not pt.ci_image_profile]
+    from lyzortx.orchestration.plan_parser import TERMINAL_STATUSES
+
+    missing_ci_image_profile = [
+        pt.task_id for pt in graph.tasks if pt.status not in TERMINAL_STATUSES and not pt.ci_image_profile
+    ]
     if missing_ci_image_profile:
         raise ValueError(
             f"Pending tasks missing required 'ci_image_profile' field in plan.yml: {missing_ci_image_profile}"
@@ -121,7 +125,7 @@ def load_pending_tasks(plan_path: Path) -> list[Task]:
             ci_image_profile=normalize_ci_image_profile(pt.ci_image_profile),
         )
         for pt in graph.tasks
-        if pt.status != "done"
+        if pt.status not in TERMINAL_STATUSES
     ]
     missing_model = [t.task_id for t in tasks if not t.model]
     if missing_model:
