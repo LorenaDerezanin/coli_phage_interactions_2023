@@ -141,6 +141,7 @@ def build_fake_candidate_module() -> SimpleNamespace:
             self.phage_col = phage_cols[0]
             product = X[self.host_col].astype(float) * X[self.phage_col].astype(float)
             self.scale = float(np.average(product, weights=sample_weight))
+            self.feature_importances_ = np.ones(X.shape[1]) / X.shape[1]
 
         def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
             product = X[self.host_col].astype(float) * X[self.phage_col].astype(float)
