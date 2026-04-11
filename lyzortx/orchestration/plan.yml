@@ -1455,6 +1455,7 @@ tracks:
       title: Depolymerase-capsule compatibility layer
       status: pending
       model: claude-opus-4-6
+      ci_image_profile: base
       depends_on_tasks: []
       acceptance_criteria:
       - Run DepoScope on phage protein sets (from Pharokka CDS or pyrodigal) to identify
@@ -1473,6 +1474,7 @@ tracks:
       title: RBP-OMP receptor compatibility layer
       status: pending
       model: claude-opus-4-6
+      ci_image_profile: base
       depends_on_tasks: []
       acceptance_criteria:
       - Map our 96 phages to OMP receptor classes using genus-level lookup from Moriniere
@@ -1490,6 +1492,7 @@ tracks:
       title: Three-layer integration with RFE and class weighting
       status: pending
       model: claude-opus-4-6
+      ci_image_profile: base
       depends_on_tasks:
       - GT01
       - GT02
@@ -1507,6 +1510,7 @@ tracks:
       title: Holdout evaluation and error analysis
       status: pending
       model: claude-opus-4-6
+      ci_image_profile: base
       depends_on_tasks:
       - GT03
       acceptance_criteria:

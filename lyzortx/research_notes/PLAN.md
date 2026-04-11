@@ -917,7 +917,7 @@ graph LR
   (depolymerase), receptor binding (RBP-OMP), and defense survival — then integrate with RFE-based feature selection.
   The hypothesis: lysis requires passing adsorption gates (Gate 1 OR Gate 2) then surviving host defenses (Gate 3).
   Baseline: AUTORESEARCH all-pairs 0.810 AUC on ST03 holdout.
-- [ ] **GT01** Depolymerase-capsule compatibility layer. Model: `claude-opus-4-6`.
+- [ ] **GT01** Depolymerase-capsule compatibility layer. Model: `claude-opus-4-6`. CI image profile: `base`.
   - Run DepoScope on phage protein sets (from Pharokka CDS or pyrodigal) to identify depolymerases with domain
     boundaries and fold classification
   - Union DepoScope hits with Pharokka tail spike annotations (fix DEPOLYMERASE_PATTERNS to match "tail spike protein")
@@ -927,7 +927,7 @@ graph LR
     feature slot
   - Verify host-side capsule variation exists in the training set (99 capsule features, 369 hosts with nonzero profiles)
   - Record results in track_GIANTS.md
-- [ ] **GT02** RBP-OMP receptor compatibility layer. Model: `claude-opus-4-6`.
+- [ ] **GT02** RBP-OMP receptor compatibility layer. Model: `claude-opus-4-6`. CI image profile: `base`.
   - Map our 96 phages to OMP receptor classes using genus-level lookup from Moriniere 2026 Table S1 (downloaded to
     .scratch/genophi/Table_S1_Phages.tsv)
   - Assign high-confidence genera a receptor class; mark "Resistant" genera as unknown (not "no OMP receptor"); log
@@ -937,8 +937,8 @@ graph LR
   - If cross-terms show lift on clean-assignment genera but not noisy ones, flag GenoPHI per-phage prediction as a
     follow-up
   - Record results in track_GIANTS.md
-- [ ] **GT03** Three-layer integration with RFE and class weighting. Model: `claude-opus-4-6`. Depends on tasks: `GT01`,
-      `GT02`.
+- [ ] **GT03** Three-layer integration with RFE and class weighting. Model: `claude-opus-4-6`. CI image profile: `base`.
+      Depends on tasks: `GT01`, `GT02`.
   - Combine Gate 1 features (depolymerase x capsule) + Gate 2 features (receptor x OMP) + Gate 3 features (all 79+
     DefenseFinder defense system counts) with existing 5-slot AUTORESEARCH features
   - Apply RFE feature selection to prune confounded or uninformative features
@@ -946,7 +946,8 @@ graph LR
   - All-pairs architecture only (no per-phage blending)
   - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
   - Record full ablation (per-gate contribution) in track_GIANTS.md
-- [ ] **GT04** Holdout evaluation and error analysis. Model: `claude-opus-4-6`. Depends on tasks: `GT03`.
+- [ ] **GT04** Holdout evaluation and error analysis. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
+      tasks: `GT03`.
   - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167 Brier) with bootstrap CIs
   - Per-gate ablation table showing contribution of each layer
   - Error bucket re-analysis comparing to the 6/65 all-pairs misses
