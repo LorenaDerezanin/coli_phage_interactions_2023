@@ -917,7 +917,7 @@ graph LR
   (depolymerase), receptor binding (RBP-OMP), and defense survival — then integrate with RFE-based feature selection.
   The hypothesis: lysis requires passing adsorption gates (Gate 1 OR Gate 2) then surviving host defenses (Gate 3).
   Baseline: AUTORESEARCH all-pairs 0.810 AUC on ST03 holdout.
-- [ ] **GT01** Depolymerase-capsule compatibility layer. Model: `claude-opus-4-6`. CI image profile: `base`.
+- [x] **GT01** Depolymerase-capsule compatibility layer. Model: `claude-opus-4-6`. CI image profile: `base`.
   - Run DepoScope on phage protein sets (from Pharokka CDS or pyrodigal) to identify depolymerases with domain
     boundaries and fold classification
   - Union DepoScope hits with Pharokka tail spike annotations (fix DEPOLYMERASE_PATTERNS to match "tail spike protein")

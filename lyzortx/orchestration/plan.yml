@@ -1438,21 +1438,22 @@ tracks:
         replication metrics, bootstrap summary, and final promote/reject decision
       - Document the raw-input AUTORESEARCH handoff and replication rule in the Track
         AUTORESEARCH and project lab notebooks
-
   GIANTS:
     name: Three-Layer Biological Prediction
-    description: >
-      Build features for each biological layer of phage infection — capsule penetration (depolymerase),
-      receptor binding (RBP-OMP), and defense survival — then integrate with RFE-based feature selection.
-      The hypothesis: lysis requires passing adsorption gates (Gate 1 OR Gate 2) then surviving host
-      defenses (Gate 3). Baseline: AUTORESEARCH all-pairs 0.810 AUC on ST03 holdout.
+    description: 'Build features for each biological layer of phage infection — capsule
+      penetration (depolymerase), receptor binding (RBP-OMP), and defense survival
+      — then integrate with RFE-based feature selection. The hypothesis: lysis requires
+      passing adsorption gates (Gate 1 OR Gate 2) then surviving host defenses (Gate
+      3). Baseline: AUTORESEARCH all-pairs 0.810 AUC on ST03 holdout.
+
+      '
     stage: 6
     depends_on:
     - AUTORESEARCH
     tasks:
     - id: GT01
       title: Depolymerase-capsule compatibility layer
-      status: pending
+      status: done
       model: claude-opus-4-6
       ci_image_profile: base
       depends_on_tasks: []
@@ -1461,14 +1462,13 @@ tracks:
         depolymerases with domain boundaries and fold classification
       - Union DepoScope hits with Pharokka tail spike annotations (fix DEPOLYMERASE_PATTERNS
         to match "tail spike protein") for maximum recall
-      - Cluster enzymatic domains by fold type and sequence similarity; report cluster count
-        and phage distribution
+      - Cluster enzymatic domains by fold type and sequence similarity; report cluster
+        count and phage distribution
       - Create directed cross-term features (depolymerase_cluster x host_capsule_profile_score)
         materialized as a new feature slot
-      - Verify host-side capsule variation exists in the training set (99 capsule features,
-        369 hosts with nonzero profiles)
+      - Verify host-side capsule variation exists in the training set (99 capsule
+        features, 369 hosts with nonzero profiles)
       - Record results in track_GIANTS.md
-
     - id: GT02
       title: RBP-OMP receptor compatibility layer
       status: pending
@@ -1478,15 +1478,14 @@ tracks:
       acceptance_criteria:
       - Map our 96 phages to OMP receptor classes using genus-level lookup from Moriniere
         2026 Table S1 (downloaded to .scratch/genophi/Table_S1_Phages.tsv)
-      - Assign high-confidence genera a receptor class; mark "Resistant" genera as unknown
-        (not "no OMP receptor"); log coverage statistics
+      - Assign high-confidence genera a receptor class; mark "Resistant" genera as
+        unknown (not "no OMP receptor"); log coverage statistics
       - Create directed cross-term features (predicted_receptor x host_OMP_HMM_score)
         materialized as a new feature slot
       - Document which genera have clean vs ambiguous vs unknown receptor assignments
-      - If cross-terms show lift on clean-assignment genera but not noisy ones, flag GenoPHI
-        per-phage prediction as a follow-up
+      - If cross-terms show lift on clean-assignment genera but not noisy ones, flag
+        GenoPHI per-phage prediction as a follow-up
       - Record results in track_GIANTS.md
-
     - id: GT03
       title: Three-layer integration with RFE and class weighting
       status: pending
@@ -1496,15 +1495,14 @@ tracks:
       - GT01
       - GT02
       acceptance_criteria:
-      - Combine Gate 1 features (depolymerase x capsule) + Gate 2 features (receptor x OMP)
-        + Gate 3 features (all 79+ DefenseFinder defense system counts) with existing 5-slot
-        AUTORESEARCH features
+      - Combine Gate 1 features (depolymerase x capsule) + Gate 2 features (receptor
+        x OMP) + Gate 3 features (all 79+ DefenseFinder defense system counts) with
+        existing 5-slot AUTORESEARCH features
       - Apply RFE feature selection to prune confounded or uninformative features
       - Apply inverse-frequency class weighting for narrow-host phages
       - All-pairs architecture only (no per-phage blending)
       - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
       - Record full ablation (per-gate contribution) in track_GIANTS.md
-
     - id: GT04
       title: Holdout evaluation and error analysis
       status: pending
@@ -1513,8 +1511,8 @@ tracks:
       depends_on_tasks:
       - GT03
       acceptance_criteria:
-      - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167 Brier)
-        with bootstrap CIs
+      - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167
+        Brier) with bootstrap CIs
       - Per-gate ablation table showing contribution of each layer
       - Error bucket re-analysis comparing to the 6/65 all-pairs misses
       - If S1 genus mapping showed signal in clean-assignment genera, recommend GenoPHI
