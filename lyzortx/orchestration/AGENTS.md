@@ -71,6 +71,12 @@
   a done task created), that is expected. The done task records what was true when it was completed; the later task
   records what changed. Git history tells the full story.
 
+# Push Before Closing Issues
+
+- Always push code changes to main before closing GitHub issues. Issue close events trigger orchestrator runs
+  immediately. If the new code hasn't been pushed yet, the old code runs and can recreate the issue you just closed.
+- This applies to both "completed" and "not planned" closures — any close event triggers a tick.
+
 # Orchestration Robustness vs Fail-Fast
 
 - The root AGENTS.md fail-fast rule applies to pipeline code. Orchestration code is different: the orchestrator should
