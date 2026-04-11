@@ -185,10 +185,11 @@ Last updated: 2026-04-11
 ### 11) Antiphage Landscape 2025 (defense-discovery LM resource)
 
 - Access:
+  - Published: `https://doi.org/10.1126/science.adv8275` (Science, April 2026)
   - Preprint: `https://www.biorxiv.org/content/10.1101/2025.01.08.631966v1`
   - Repo: `https://github.com/mdmparis/antiphage_landscape_2025`
   - Interactive map: `https://mdmparis.github.io/antiphage-landscape/`
-- Gist: `GIST 2025 antiphage defense landscape preprint.md`
+- Gist: `GIST 2025 antiphage defense landscape.md`
 - Recommended role:
   - Defense-feature discovery reference. Not directly actionable for strain-level prediction.
 

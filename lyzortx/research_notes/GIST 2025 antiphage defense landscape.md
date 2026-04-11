@@ -1,22 +1,25 @@
-# Gist: 2025 Antiphage Defense Landscape Preprint
+# Gist: 2025 Antiphage Defense Landscape
 
-Last updated: 2026-04-04
+Last updated: 2026-04-11
 
 ## Citation
 
-- Title: _Protein and genomic language models chart a vast landscape of antiphage defenses_
-- Status checked: 2026-04-04
+- Published title: _Protein and genomic language models uncover the unexplored diversity of bacterial immunity_
+- Preprint title: _Protein and genomic language models chart a vast landscape of antiphage defenses_
+- Journal: Science, Vol. 392, Issue 6793, eadv8275 (2 April 2026)
+- DOI: https://doi.org/10.1126/science.adv8275
 - Preprint: https://www.biorxiv.org/content/10.1101/2025.01.08.631966v1
 - Paper repo: https://github.com/mdmparis/antiphage_landscape_2025
 - Interactive map: https://mdmparis.github.io/antiphage-landscape/
+- Full text: not available on Sci-Hub as of 2026-04-11; bioRxiv preprint is the best freely available version
 
 ## Executive summary
 
 This is a relevant paper for the repo, but it is not a new strain-level host-range study. It is a defense-discovery
-paper that uses a protein language model plus a genomic-context transformer to find novel antiphage systems, then
-validates six new systems experimentally in Actinomycetota. The paper also has a public code repository and an
-interactive map of predicted defense-related protein space, but as of 2026-04-04 I did not find a journal or PubMed
-version of this specific work, so it still appears to be a preprint rather than a peer-reviewed publication.
+paper that uses protein and genomic language models to find novel antiphage systems. The published Science version is
+substantially expanded from the preprint: it adds a third model (GeneCLR-DefenseFinder, combining sequence and context),
+validates twelve systems (up from six in the preprint), and applies the models to 120M+ proteins across 30,000+ genomes.
+The paper has a public code repository and an interactive map of predicted defense-related protein space.
 
 ## What the paper actually does
 
@@ -24,47 +27,38 @@ The paper targets a different question from the 2024 Nature _Escherichia_ study 
 predicting whether phage P lyses host H, it asks how much antiphage defense biology is still undiscovered in bacterial
 genomes and whether language models can accelerate that discovery.
 
-The authors build two complementary systems:
+The authors build three complementary systems (the published version adds a third not in the preprint):
 
-1. `ESM-DefenseFinder`
+1. `ESM-DefenseFinder` (ESM_DF)
    - Fine-tunes the ESM2 protein language model to classify proteins as defense-related.
    - Main strength: picks up distant homology to known defense proteins.
    - Main weakness: still leans heavily on homology and has low precision.
 
-2. `ALBERT-DefenseFinder`
+2. `ALBERT-DefenseFinder` (ALBERT_DF)
    - Trains a genomic language model on stretches of neighboring genes in Actinomycetota.
    - Main strength: finds defense candidates from genomic context even when sequence homology is weak or absent.
    - Main weakness: computationally heavier and still low precision, so manual curation remains necessary.
 
-They then manually curate candidates from the context model, synthesize ten systems, and test them in
-_Streptomyces albus_. Two were toxic under the expression setup. Six showed antiphage activity with at least
-100-fold plaque reduction against at least one phage. They named the validated systems Ceres, Geb, Veles, Prithvi,
-Ukko, and Oshun.
+3. `GeneCLR-DefenseFinder` (GeneCLR_DF) — **new in the published version**
+   - Combines sequence and genomic context via contrastive learning.
+   - Bridges the two single-modality models.
 
-## Current status: repo, code, and publication
+The published version validates twelve systems experimentally (in _E. coli_ and _S. albus_), up from six in the
+preprint. The preprint named six: Ceres, Geb, Veles, Prithvi, Ukko, and Oshun. The Science version adds further
+validated systems. Applied to 120M+ proteins from 30,000+ genomes, the models predict ~2.39M antiphage proteins
+(~23,000 operon families), 85% with no previously known link to immunity.
 
-### Do they have a GitHub repo?
+## Publication status
 
-Yes. The preprint's data-availability section points to:
+Published in Science on 2 April 2026 as "Protein and genomic language models uncover the unexplored diversity of
+bacterial immunity" (DOI: 10.1126/science.adv8275). The title changed from the preprint. The published version is
+substantially expanded (third model, more validations, larger genomic sweep).
 
-- https://github.com/mdmparis/antiphage_landscape_2025
+### Code and data
 
-The repo exists publicly and, at minimum, exposes README plus supplementary tables. The preprint also exposes an
-interactive projection:
-
-- https://mdmparis.github.io/antiphage-landscape/
-
-### Why is it still a preprint? Was it published?
-
-As of 2026-04-04, I did not find a journal landing page, PubMed entry, or replacement DOI for this exact title. The
-safest statement is:
-
-- it has public code/resources;
-- it is still indexed as a bioRxiv preprint;
-- I cannot verify a later peer-reviewed version.
-
-I would not infer anything stronger than "likely still under review, unpublished, or not yet indexed." The GitHub
-README saying "publication" is not evidence of journal publication.
+- GitHub repo: https://github.com/mdmparis/antiphage_landscape_2025
+- Interactive UMAP: https://mdmparis.github.io/antiphage-landscape/
+- Supplementary data reportedly on Zenodo (linked from the Science paper).
 
 ## Scientific gist
 
@@ -87,9 +81,11 @@ It is weaker as direct evidence for:
 
 ## Sources
 
+- Published paper (Science): https://doi.org/10.1126/science.adv8275
 - bioRxiv preprint: https://www.biorxiv.org/content/10.1101/2025.01.08.631966v1
 - Paper repo: https://github.com/mdmparis/antiphage_landscape_2025
 - Interactive UMAP: https://mdmparis.github.io/antiphage-landscape/
+- Nature News coverage: https://www.nature.com/articles/d41586-026-01011-y
 - 2024 Nature _Escherichia_ paper: https://doi.org/10.1038/s41564-024-01832-5
 - VHRdb docs: https://hub.pages.pasteur.fr/viralhostrangedb/api.html
 - BASEL completion: https://pubmed.ncbi.nlm.nih.gov/40193529/
