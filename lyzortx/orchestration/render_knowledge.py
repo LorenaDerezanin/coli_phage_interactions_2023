@@ -32,7 +32,7 @@ DEFAULT_OUTPUT_PATH = REPO_ROOT / "lyzortx/KNOWLEDGE.md"
 
 def _render_unit(unit: KnowledgeUnit) -> str:
     """Render a single knowledge unit as a markdown list item."""
-    parts = [unit.statement]
+    parts = [f"**`{unit.id}`**:", unit.statement]
 
     annotations: list[str] = []
     if unit.confidence:
