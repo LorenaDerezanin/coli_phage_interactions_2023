@@ -141,3 +141,52 @@ after the bootstrap summary.
 + Flag for future: GenoPHI per-phage receptor prediction to strengthen Gate 2 beyond the 8-phage genus-level mapping.
 + Knowledge model update: Gate 1 depolymerase × capsule is a validated signal; IFW calibration tradeoff is a new
   finding.
+
+### 2026-04-12 10:01 CEST: GT04 — HPO with Optuna on three-layer feature set
+
+#### Executive summary
+
+Ran 50-trial Optuna HPO over key LightGBM hyperparameters using 5-fold stratified CV on the GT03 RFE-selected feature
+set (257 features). The tuned params achieve 0.828 AUC vs 0.823 default — a marginal +0.4pp that is not statistically
+significant (delta CI [-0.010, +0.015]). The GT03 default LightGBM configuration is near-optimal for this feature set.
+
+#### Optuna best params vs GT03 defaults
+
+| Parameter | GT03 Default | Optuna Best |
+|-----------|-------------|-------------|
+| n_estimators | 300 | 450 |
+| learning_rate | 0.05 | 0.077 |
+| num_leaves | 31 | 108 |
+| min_child_samples | 10 | 9 |
+| subsample | 0.8 | 0.75 |
+| colsample_bytree | 0.8 | 0.83 |
+| reg_lambda | (default) | 0.003 |
+| reg_alpha | (default) | 0.19 |
+
+#### Holdout results
+
+| Arm | AUC | 95% CI | Top-3 | Brier |
+|-----|-----|--------|-------|-------|
+| gt03_default | 0.823 | [0.782, 0.859] | 89.2% | 0.161 |
+| optuna_tuned | 0.828 | [0.775, 0.867] | 90.8% | 0.161 |
+
+Delta (tuned vs default): [-0.010, +0.015] — not significant.
+
+#### Interpretation
+
+The HPO found a more complex model (108 leaves, 450 trees) that marginally improves CV AUC but doesn't translate to a
+significant holdout gain. This is consistent with GenoPHI's finding that algorithm choice matters more than
+hyperparameter tuning once the algorithm family is fixed. The default params (31 leaves, 300 trees) are a better
+tradeoff: simpler, faster, and within noise of the tuned config.
+
+The feature importance shift is minor: depo×capsule increases from 21.5% to 24.1% with tuned params (deeper trees
+capture more of the cross-term signal), while host_typing drops from 12.8% to 5.5%.
+
+**Caveat:** RFE was applied once on the full training set before Optuna CV, so the inner CV scores are mildly
+optimistic (folds see features selected using their own labels). This doesn't affect the holdout comparison — both
+arms use the same RFE-selected features — but the Optuna best CV score overstates the true generalization.
+
+#### Next steps
+
++ GT05: CatBoost comparison — the GenoPHI-optimal algorithm, not just tuned LightGBM.
++ GT06: GenoPHI per-phage receptor prediction to strengthen Gate 2.
