@@ -959,7 +959,7 @@ graph LR
   - Run best params on ST03 holdout with 3 seeds and 1000 bootstrap resamples
   - Compare to GT03 baseline with bootstrap CIs and error bucket re-analysis
   - Record results in track_GIANTS.md
-- [ ] **GT05** CatBoost comparison on three-layer feature set. Model: `claude-opus-4-6`. CI image profile: `base`.
+- [x] **GT05** CatBoost comparison on three-layer feature set. Model: `claude-opus-4-6`. CI image profile: `base`.
       Depends on tasks: `GT03`.
   - Replace LightGBM with CatBoost using the GT03 feature set (GenoPHI found CatBoost + RFE optimal on this dataset)
   - CatBoost handles categoricals (phylogroup, serotype, ST) natively — use cat_features instead of one-hot encoding

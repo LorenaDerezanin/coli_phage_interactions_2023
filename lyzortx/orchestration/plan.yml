@@ -1527,7 +1527,7 @@ tracks:
       - Record results in track_GIANTS.md
     - id: GT05
       title: CatBoost comparison on three-layer feature set
-      status: pending
+      status: done
       model: claude-opus-4-6
       ci_image_profile: base
       depends_on_tasks:
