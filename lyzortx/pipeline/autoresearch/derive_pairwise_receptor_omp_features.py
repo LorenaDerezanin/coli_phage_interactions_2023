@@ -263,12 +263,13 @@ def compute_pairwise_receptor_omp_features(
         design[cross_lps_col] = design[predicted_lps_col] * o_antigen_score
         added_columns.append(cross_lps_col)
 
+    # Count unique phages per receptor type for logging.
+    omp_phage_count = design.loc[design[has_assignment_col] == 1.0, "phage"].nunique()
+    lps_phage_count = design.loc[design[predicted_lps_col] == 1.0, "phage"].nunique()
     LOGGER.info(
         "Added %d directed receptor × OMP features (%d phages with OMP assignment, %d with LPS)",
         len(added_columns),
-        int(design[has_assignment_col].sum() / max(1, design["phage"].nunique()) * design["phage"].nunique())
-        if has_assignment_col in design.columns
-        else 0,
-        int(design[predicted_lps_col].sum() / max(1, len(design)) * design["phage"].nunique()),
+        omp_phage_count,
+        lps_phage_count,
     )
     return added_columns
