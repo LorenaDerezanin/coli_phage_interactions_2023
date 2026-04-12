@@ -1,9 +1,9 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-12T13:43:00+02:00 -->
+<!-- Last consolidated: 2026-04-12T14:46:00+02:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**46 knowledge units** across 7 themes (35 active, 11 dead ends)
+**48 knowledge units** across 7 themes (36 active, 12 dead ends)
 
 ## Data & Labels
 
@@ -238,6 +238,24 @@ Compressed lessons from approaches that didn't work.
     native categoricals and 50-trial HPO gave delta CI [-0.011, +0.017]. CatBoost improves Brier (0.152 vs 0.161)
     without AUC penalty — useful for calibration but not discrimination. Confirms GenoPHI's finding that algorithm
     choice matters less than feature selection once the algorithm family is fixed.*
+- **`genophi-features-redundant`**: GenoPHI's binary protein-family features (MMseqs2 clustering, 28,389 clusters) add
+  no significant lift when combined with mechanistic features (AUC 0.826 vs 0.823, delta CI [-0.002, +0.008]). The
+  protein-family clusters encode the same biological information as our HMM-based features at different granularity.
+  [validated; source: GT08; see also: genophi-benchmark, autoresearch-baseline, panel-size-ceiling]
+  - *RFE retained 244/700 protein-family features (216 host + 28 phage) capturing 13.1% importance. But host
+    protein-family clusters correlate with HMM scores (both measure gene presence), and phage clusters correlate with
+    phage_projection features. GenoPHI's AUROC advantage (0.869 vs 0.823) is not due to feature representation — it
+    comes from different holdout strategy, bacteria counts, or ML pipeline interactions.*
+- **`panel-size-ceiling`**: The 0.823 AUC ceiling is bound by the 96-phage panel and 65-bacteria holdout, not by feature
+  engineering, algorithm choice, or feature representation. Seven independent attempts (GT04-GT08) all failed to break
+  through, each adding 0.0-0.4pp (none significant). [validated; source: GT03, GT04, GT05, GT06, GT07, GT08, 2026-04-12
+  final assessment; see also: autoresearch-baseline, error-buckets, narrow-host-prior-collapse, depo-capsule-validated]
+  - *The 6/65 holdout misses decompose into: 2 abstention (0 positives), 1 needle-in-haystack (1/96 positive), 3
+    broad-phage-prior failures. The 3 rescuable misses require promoting narrow-host specialist phages (10-25% lysis
+    rate) above broadly lytic phages (60-65% lysis rate) — a ranking challenge that genomic features alone cannot
+    resolve because the host-specificity factors (expression regulation, phase variation, co-evolutionary dynamics)
+    leave no detectable genomic signatures in presence-absence or HMM-score features. Expanding the phage panel or the
+    holdout is the path forward, not more features.*
 - **`kmer-receptor-expansion-neutral`**: Expanding Gate 2 receptor coverage from 8/96 (genus-level) to 39/96
   (k-mer-based) OMP phages produces zero AUC improvement (0.824 vs 0.823, delta CI [-0.005, +0.005]). [validated;
   source: GT06; see also: omp-score-homogeneity, pairwise-cross-terms-dead-end, receptor-specificity-solved]

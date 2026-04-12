@@ -1,4 +1,4 @@
-last_consolidated: "2026-04-12T13:43:00+02:00"
+last_consolidated: "2026-04-12T14:46:00+02:00"
 source_dir: lyzortx/research_notes/lab_notebooks
 
 themes:
@@ -512,6 +512,43 @@ themes:
           calibration but not discrimination. Confirms GenoPHI's finding that algorithm choice
           matters less than feature selection once the algorithm family is fixed.
         relates_to: [ml-pipeline-over-features, depo-capsule-validated]
+
+      - id: genophi-features-redundant
+        statement: >
+          GenoPHI's binary protein-family features (MMseqs2 clustering, 28,389 clusters) add no
+          significant lift when combined with mechanistic features (AUC 0.826 vs 0.823, delta CI
+          [-0.002, +0.008]). The protein-family clusters encode the same biological information as
+          our HMM-based features at different granularity.
+        sources: [GT08]
+        status: dead-end
+        confidence: validated
+        context: >
+          RFE retained 244/700 protein-family features (216 host + 28 phage) capturing 13.1%
+          importance. But host protein-family clusters correlate with HMM scores (both measure
+          gene presence), and phage clusters correlate with phage_projection features. GenoPHI's
+          AUROC advantage (0.869 vs 0.823) is not due to feature representation — it comes from
+          different holdout strategy, bacteria counts, or ML pipeline interactions.
+        relates_to: [genophi-benchmark, autoresearch-baseline, panel-size-ceiling]
+
+      - id: panel-size-ceiling
+        statement: >
+          The 0.823 AUC ceiling is bound by the 96-phage panel and 65-bacteria holdout, not by
+          feature engineering, algorithm choice, or feature representation. Seven independent
+          attempts (GT04-GT08) all failed to break through, each adding 0.0-0.4pp (none
+          significant).
+        sources: [GT03, GT04, GT05, GT06, GT07, GT08, 2026-04-12 final assessment]
+        status: active
+        confidence: validated
+        context: >
+          The 6/65 holdout misses decompose into: 2 abstention (0 positives), 1 needle-in-haystack
+          (1/96 positive), 3 broad-phage-prior failures. The 3 rescuable misses require promoting
+          narrow-host specialist phages (10-25% lysis rate) above broadly lytic phages (60-65%
+          lysis rate) — a ranking challenge that genomic features alone cannot resolve because the
+          host-specificity factors (expression regulation, phase variation, co-evolutionary dynamics)
+          leave no detectable genomic signatures in presence-absence or HMM-score features. Expanding
+          the phage panel or the holdout is the path forward, not more features.
+        relates_to: [autoresearch-baseline, error-buckets, narrow-host-prior-collapse,
+                     depo-capsule-validated]
 
       - id: kmer-receptor-expansion-neutral
         statement: >

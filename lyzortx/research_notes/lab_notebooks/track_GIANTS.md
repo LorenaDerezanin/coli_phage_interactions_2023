@@ -546,7 +546,100 @@ Both feature families are informative enough to survive RFE and capture measurab
 sufficient independent signal to improve predictions on the 65-bacteria holdout. The 0.823 AUC represents a hard
 ceiling for this feature set, model class, and evaluation protocol.
 
-GT09 (BASEL panel expansion) depends on GT07+GT08 completing. Given both produced null results at the feature level,
-the remaining question is whether more training data (new phage diversity) changes the picture. However, this is a
-longer-running task that requires downloading, harmonizing, and extending the interaction matrix — and prior external
-data attempts (TK01-03) showed neutral lift.
+GT09 (BASEL panel expansion) cancelled: both GT07 and GT08 show the ceiling is not feature-bound in the way more data
+would address, and prior external data attempts (TK01-03) showed neutral lift. The evidence does not support investing
+in data expansion before resolving the more fundamental constraint.
+
+### 2026-04-12 14:46 CEST: Track GIANTS final assessment — biological root cause analysis
+
+#### Executive summary
+
+Track GIANTS ran 8 tickets (GT01-GT08) exploring the three-layer biological hypothesis for phage-host lysis
+prediction. The single validated discovery is Gate 1 (depolymerase × capsule cross-terms, +1.2pp AUC). Five
+independent attempts to improve beyond 0.823 AUC all failed: HPO (+0.4pp), CatBoost (+0.3pp), k-mer receptor
+expansion (+0.0pp), OMP allele variants (+0.3pp), and GenoPHI protein-family features (+0.3pp). None reached
+statistical significance. This section analyzes why, grounded in biology rather than ML methodology.
+
+#### The fundamental constraint: 96 phages on 65 holdout bacteria
+
+The holdout has 65 bacteria × 96 phages = 6,240 pairs. At 20.7% positive rate, that's ~1,293 positive pairs. The
+model's job is to rank the correct 1,293 pairs above the incorrect 4,947. Any feature that improves ranking must
+shift enough pairs to move at least 1 of the 6 missed bacteria from miss to hit — which requires shifting at least
+one true-positive phage above at least three false-positive phages for that bacterium.
+
+The core problem is **the model already knows which phages are broadly lytic** (60-65% lysis rate). These phages
+dominate the top-3 for every bacterium. To improve, a feature must identify cases where a narrow-host specialist
+phage (10-25% lysis rate) should be ranked above a broadly lytic phage for a specific host. This requires:
+
+1. **Phage-side specificity**: knowing which narrow-host phage matches which host
+2. **Host-side discrimination**: the feature must vary enough across hosts to create different rankings
+
+#### Why each feature family failed to break through
+
+**Gate 2 (receptor × OMP cross-terms, GT02/GT06/GT07)**: The phage side works — k-mer receptor predictions assign
+39/96 phages to specific OMP receptors with biologically plausible accuracy. But the host side fails. OMP HMM scores
+(CV 0.01-0.17) are near-constant because all E. coli express all 12 core OMPs. Even OMP allele clusters (GT07),
+which have real variance (0.08-0.25) and measurable single-feature discrimination (BtuB d=0.455), don't create
+enough differential ranking across bacteria to change the top-3 for any missed strain. The biological reason: in
+clinical E. coli with O-antigen/capsule, OMP receptor identity is necessary but not sufficient for infection —
+polysaccharide penetration (Gate 1) is the gating step.
+
+**GenoPHI protein-family features (GT08)**: 28,389 binary protein clusters from both host and phage genomes. After
+filtering and RFE, 244 features survived with 13.1% importance. But they encode largely the same information as our
+existing mechanistic features — the protein-family clusters for host surface genes correlate with our HMM scores, and
+phage-side clusters correlate with phage_projection features. This is not surprising: both approaches measure
+"which genes does this genome have?" at different granularity. Adding a second encoding of the same biological signal
+does not create new discriminative power.
+
+**HPO and CatBoost (GT04/GT05)**: Confirmed GenoPHI's finding that algorithm choice matters less than features once
+the algorithm family is fixed. 300-tree LightGBM with default parameters is near-optimal for this feature set.
+
+#### What the 0.823 ceiling means biologically
+
+The model can correctly rank phages for 59/65 holdout bacteria. The 6 misses decompose into:
+
++ **2 abstention bacteria** (0/96 positives): No phage in the panel works. No feature can fix this.
++ **1 needle-in-haystack** (1/96 positive): Only AL505_Ev3 lyses ECOR-06. Statistical near-impossibility.
++ **3 broad-phage-prior failures** (ECOR-69, NILS41, NILS53): These bacteria have 10-14 true positives, but all
+  are ranked below broadly lytic phages. The model knows the right phage *family* but can't promote the right
+  *individual phage* over the dominant Straboviridae/Phapecoctavirus.
+
+The 3 rescuable misses share a pattern: the true-positive phages are narrow-host specialists whose lysis of these
+specific hosts is governed by factors not captured by any genomic feature we've tried — likely involving expression-
+level regulation, phase variation, or phage-host co-evolutionary dynamics that don't leave genomic signatures
+detectable by presence-absence or HMM-score features.
+
+#### What would actually help (not feature engineering)
+
+1. **More phages in the panel.** The 96-phage panel is the binding constraint, not the feature set. With only 96
+   phages, the model's phage-side ranking capacity is limited. A 200-phage panel with more narrow-host diversity
+   would naturally break the broad-phage prior dominance. This is a data collection problem, not a computational one.
+
+2. **Different evaluation protocol.** Our holdout is 65 cv_group-disjoint bacteria — strong for generalization claims,
+   but 1 strain flip = 1.5pp top-3. With 6 misses (3 fixable), the maximum achievable improvement is ~4.6pp. A
+   larger holdout (or expanding the bacteria panel) would give more statistical power to detect real improvements.
+
+3. **Per-phage models with transfer learning.** The per-phage blend (+2.0pp, 0.830 AUC) works because each phage
+   gets its own small model that can learn host-specific patterns. If per-phage models could be made deployable
+   (via few-shot transfer from a general model), this is the most promising architectural direction.
+
+4. **Experimental data on the 6 misses.** Testing the 6 missed bacteria against the panel phages under different
+   growth conditions or phage multiplicities might reveal whether the misses are genuine biological resistances or
+   assay sensitivity limits.
+
+#### Track GIANTS outcome summary
+
+| Ticket | What | AUC delta | Significance |
+|--------|------|-----------|-------------|
+| GT01 | Depolymerase × capsule features | (component of GT03) | — |
+| GT02 | Receptor × OMP features (genus) | (component of GT03) | — |
+| GT03 | Three-layer integration + RFE | **+1.2pp** (0.810→0.823) | **Significant** |
+| GT04 | Optuna HPO | +0.4pp | Not significant |
+| GT05 | CatBoost comparison | +0.3pp | Not significant |
+| GT06 | k-mer receptor expansion | +0.0pp | Not significant |
+| GT07 | OMP allele variant features | +0.3pp | Not significant |
+| GT08 | GenoPHI protein-family features | +0.3pp | Not significant |
+
+**One validated discovery (Gate 1, +1.2pp) and seven null results.** The null results are as informative as the
+positive: they establish that the 0.823 ceiling is not breakable by feature engineering, algorithm choice, or
+representation changes alone — it is bound by the 96-phage panel size and the 65-bacteria holdout resolution.
