@@ -1487,7 +1487,7 @@ tracks:
         GenoPHI per-phage prediction as a follow-up
       - Record results in track_GIANTS.md
     - id: GT03
-      title: Three-layer integration with RFE, class weighting, and algorithm comparison
+      title: Three-layer integration with RFE and class weighting
       status: pending
       model: claude-opus-4-6
       ci_image_profile: base
@@ -1500,26 +1500,52 @@ tracks:
         existing 5-slot AUTORESEARCH features
       - Apply RFE feature selection to prune confounded or uninformative features
       - Apply inverse-frequency class weighting for narrow-host phages
-      - Lightweight HPO via Optuna (~50 trials) over key params (num_leaves,
-        min_child_samples, learning_rate, feature_fraction, reg_lambda) — new feature
-        families have different scales and sparsity than the original config
-      - Compare LightGBM vs CatBoost (GenoPHI found CatBoost + RFE optimal on this
-        dataset; CatBoost also handles categoricals natively)
-      - All-pairs architecture only (no per-phage blending)
+      - All-pairs architecture only (no per-phage blending), LightGBM
       - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
-      - Record full ablation (per-gate contribution, per-algorithm) in track_GIANTS.md
+      - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167
+        Brier) with bootstrap CIs
+      - Per-gate ablation table showing contribution of each layer
+      - Error bucket re-analysis comparing to the 6/65 all-pairs misses
+      - If S1 genus mapping showed signal in clean-assignment genera, flag GenoPHI
+        per-phage prediction as a follow-up
+      - Record full results and interpretation in track_GIANTS.md
     - id: GT04
-      title: Holdout evaluation and error analysis
+      title: Cancelled — eval folded into GT03
+      status: cancelled
+      model: claude-opus-4-6
+      ci_image_profile: base
+      depends_on_tasks: []
+      acceptance_criteria: []
+    - id: GT05
+      title: HPO with Optuna on three-layer feature set
       status: pending
       model: claude-opus-4-6
       ci_image_profile: base
       depends_on_tasks:
       - GT03
       acceptance_criteria:
-      - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167
-        Brier) with bootstrap CIs
-      - Per-gate ablation table showing contribution of each layer
-      - Error bucket re-analysis comparing to the 6/65 all-pairs misses
-      - If S1 genus mapping showed signal in clean-assignment genera, recommend GenoPHI
-        per-phage prediction as a follow-up task
-      - Record in track_GIANTS.md and update knowledge model via /sleeponit
+      - Lightweight HPO via Optuna (~50 trials) over key LightGBM params (num_leaves,
+        min_child_samples, learning_rate, feature_fraction, reg_lambda) using the GT03
+        feature set and RFE-selected features
+      - New feature families have different scales and sparsity than the original config,
+        so old hyperparams may be suboptimal
+      - Run best params on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+      - Compare to GT03 baseline with bootstrap CIs and error bucket re-analysis
+      - Record results in track_GIANTS.md
+    - id: GT06
+      title: CatBoost comparison on three-layer feature set
+      status: pending
+      model: claude-opus-4-6
+      ci_image_profile: base
+      depends_on_tasks:
+      - GT03
+      acceptance_criteria:
+      - Replace LightGBM with CatBoost using the GT03 feature set (GenoPHI found
+        CatBoost + RFE optimal on this dataset)
+      - CatBoost handles categoricals (phylogroup, serotype, ST) natively — use
+        cat_features instead of one-hot encoding
+      - Lightweight HPO via Optuna (~50 trials) over CatBoost-specific params
+        (depth, learning_rate, l2_leaf_reg, random_strength)
+      - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+      - Compare to GT03 (LightGBM) and GT05 (tuned LightGBM) with bootstrap CIs
+      - Record results in track_GIANTS.md

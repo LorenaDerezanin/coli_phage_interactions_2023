@@ -937,24 +937,35 @@ graph LR
   - If cross-terms show lift on clean-assignment genera but not noisy ones, flag GenoPHI per-phage prediction as a
     follow-up
   - Record results in track_GIANTS.md
-- [ ] **GT03** Three-layer integration with RFE, class weighting, and algorithm comparison. Model: `claude-opus-4-6`. CI
-      image profile: `base`. Depends on tasks: `GT01`, `GT02`.
+- [ ] **GT03** Three-layer integration with RFE and class weighting. Model: `claude-opus-4-6`. CI image profile: `base`.
+      Depends on tasks: `GT01`, `GT02`.
   - Combine Gate 1 features (depolymerase x capsule) + Gate 2 features (receptor x OMP) + Gate 3 features (all 79+
     DefenseFinder defense system counts) with existing 5-slot AUTORESEARCH features
   - Apply RFE feature selection to prune confounded or uninformative features
   - Apply inverse-frequency class weighting for narrow-host phages
-  - Lightweight HPO via Optuna (~50 trials) over key params (num_leaves, min_child_samples, learning_rate,
-    feature_fraction, reg_lambda) — new feature families have different scales and sparsity than the original config
-  - Compare LightGBM vs CatBoost (GenoPHI found CatBoost + RFE optimal on this dataset; CatBoost also handles
-    categoricals natively)
-  - All-pairs architecture only (no per-phage blending)
+  - All-pairs architecture only (no per-phage blending), LightGBM
   - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
-  - Record full ablation (per-gate contribution, per-algorithm) in track_GIANTS.md
-- [ ] **GT04** Holdout evaluation and error analysis. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
-      tasks: `GT03`.
   - Compare to AUTORESEARCH all-pairs baseline (0.810 AUC, 90.8% top-3, 0.167 Brier) with bootstrap CIs
   - Per-gate ablation table showing contribution of each layer
   - Error bucket re-analysis comparing to the 6/65 all-pairs misses
-  - If S1 genus mapping showed signal in clean-assignment genera, recommend GenoPHI per-phage prediction as a follow-up
-    task
-  - Record in track_GIANTS.md and update knowledge model via /sleeponit
+  - If S1 genus mapping showed signal in clean-assignment genera, flag GenoPHI per-phage prediction as a follow-up
+  - Record full results and interpretation in track_GIANTS.md
+- [~] **GT04** Cancelled — eval folded into GT03. Model: `claude-opus-4-6`. CI image profile: `base`.
+- [ ] **GT05** HPO with Optuna on three-layer feature set. Model: `claude-opus-4-6`. CI image profile: `base`. Depends
+      on tasks: `GT03`.
+  - Lightweight HPO via Optuna (~50 trials) over key LightGBM params (num_leaves, min_child_samples, learning_rate,
+    feature_fraction, reg_lambda) using the GT03 feature set and RFE-selected features
+  - New feature families have different scales and sparsity than the original config, so old hyperparams may be
+    suboptimal
+  - Run best params on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+  - Compare to GT03 baseline with bootstrap CIs and error bucket re-analysis
+  - Record results in track_GIANTS.md
+- [ ] **GT06** CatBoost comparison on three-layer feature set. Model: `claude-opus-4-6`. CI image profile: `base`.
+      Depends on tasks: `GT03`.
+  - Replace LightGBM with CatBoost using the GT03 feature set (GenoPHI found CatBoost + RFE optimal on this dataset)
+  - CatBoost handles categoricals (phylogroup, serotype, ST) natively — use cat_features instead of one-hot encoding
+  - Lightweight HPO via Optuna (~50 trials) over CatBoost-specific params (depth, learning_rate, l2_leaf_reg,
+    random_strength)
+  - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+  - Compare to GT03 (LightGBM) and GT05 (tuned LightGBM) with bootstrap CIs
+  - Record results in track_GIANTS.md
