@@ -995,7 +995,7 @@ graph LR
   - Combine with GT03 feature set and evaluate on ST03 holdout with 3 seeds and 1000 bootstrap resamples
   - Compare to GT03 all_gates_rfe baseline (0.823 AUC) with bootstrap CIs
   - Record results and biological interpretation in track_GIANTS.md
-- [ ] **GT08** GenoPHI binary protein-family features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
+- [x] **GT08** GenoPHI binary protein-family features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
       tasks: `GT06`.
   - VARIANCE PRE-FLIGHT: After clustering, check that the binary feature matrix has meaningful variance — report number
     of clusters, fraction of non-singleton clusters, and whether cluster presence/absence discriminates lysed vs

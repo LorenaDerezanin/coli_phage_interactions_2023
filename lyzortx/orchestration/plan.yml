@@ -1590,7 +1590,7 @@ tracks:
       - Record results and biological interpretation in track_GIANTS.md
     - id: GT08
       title: GenoPHI binary protein-family features
-      status: pending
+      status: done
       model: claude-opus-4-6
       ci_image_profile: base
       depends_on_tasks:
