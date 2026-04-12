@@ -1510,13 +1510,6 @@ tracks:
         per-phage prediction as a follow-up
       - Record full results and interpretation in track_GIANTS.md
     - id: GT04
-      title: Cancelled — eval folded into GT03
-      status: cancelled
-      model: claude-opus-4-6
-      ci_image_profile: base
-      depends_on_tasks: []
-      acceptance_criteria: []
-    - id: GT05
       title: HPO with Optuna on three-layer feature set
       status: pending
       model: claude-opus-4-6
@@ -1532,7 +1525,7 @@ tracks:
       - Run best params on ST03 holdout with 3 seeds and 1000 bootstrap resamples
       - Compare to GT03 baseline with bootstrap CIs and error bucket re-analysis
       - Record results in track_GIANTS.md
-    - id: GT06
+    - id: GT05
       title: CatBoost comparison on three-layer feature set
       status: pending
       model: claude-opus-4-6
@@ -1547,5 +1540,5 @@ tracks:
       - Lightweight HPO via Optuna (~50 trials) over CatBoost-specific params
         (depth, learning_rate, l2_leaf_reg, random_strength)
       - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
-      - Compare to GT03 (LightGBM) and GT05 (tuned LightGBM) with bootstrap CIs
+      - Compare to GT03 (LightGBM) and GT04 (tuned LightGBM) with bootstrap CIs
       - Record results in track_GIANTS.md
