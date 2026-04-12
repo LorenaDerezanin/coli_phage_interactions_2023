@@ -426,25 +426,24 @@ def run_ablation(
         auc_ci = ci_dict.get("holdout_roc_auc")
         top3_ci = ci_dict.get("holdout_top3_hit_rate_all_strains")
         brier_ci = ci_dict.get("holdout_brier_score")
-        if auc_ci and top3_ci and brier_ci:
-            summary_lines.append(
-                f"{arm_id:30s} "
-                f"{auc_ci.point_estimate:.3f}  "
-                f"{top3_ci.point_estimate * 100:.1f}%  "
-                f"{brier_ci.point_estimate:.3f}"
+        if auc_ci and auc_ci.point_estimate is not None:
+            auc_str = f"{auc_ci.point_estimate:.3f}"
+            top3_str = (
+                f"{top3_ci.point_estimate * 100:.1f}%" if top3_ci and top3_ci.point_estimate is not None else "N/A"
             )
+            brier_str = f"{brier_ci.point_estimate:.3f}" if brier_ci and brier_ci.point_estimate is not None else "N/A"
+            summary_lines.append(f"{arm_id:30s} {auc_str:>8s} {top3_str:>8s} {brier_str:>8s}")
     summary_lines.append("")
     summary_lines.append("Delta vs baseline (AUC):")
     for arm_id, ci_dict in bootstrap_results.items():
         if "__delta_vs_baseline" not in arm_id:
             continue
         auc_delta = ci_dict.get("holdout_roc_auc")
-        if auc_delta:
+        if auc_delta and auc_delta.point_estimate is not None:
             clean_id = arm_id.replace("__delta_vs_baseline", "")
-            summary_lines.append(
-                f"  {clean_id:28s} {auc_delta.point_estimate:+.4f} "
-                f"[{auc_delta.ci_lower:+.4f}, {auc_delta.ci_upper:+.4f}]"
-            )
+            ci_lo = f"{auc_delta.ci_low:+.4f}" if auc_delta.ci_low is not None else "N/A"
+            ci_hi = f"{auc_delta.ci_high:+.4f}" if auc_delta.ci_high is not None else "N/A"
+            summary_lines.append(f"  {clean_id:28s} {auc_delta.point_estimate:+.4f} [{ci_lo}, {ci_hi}]")
 
     summary_text = "\n".join(summary_lines)
     (output_dir / "summary.txt").write_text(summary_text + "\n", encoding="utf-8")
@@ -456,8 +455,8 @@ def run_ablation(
         bootstrap_json[arm_id] = {
             metric: {
                 "point_estimate": ci.point_estimate,
-                "ci_lower": ci.ci_lower,
-                "ci_upper": ci.ci_upper,
+                "ci_low": ci.ci_low,
+                "ci_high": ci.ci_high,
             }
             for metric, ci in ci_dict.items()
         }
