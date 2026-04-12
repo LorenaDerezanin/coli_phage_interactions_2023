@@ -979,7 +979,7 @@ graph LR
     GT04/GT05
   - Compare to GT03 all_gates_rfe baseline (0.823 AUC) with bootstrap CIs
   - Record results in track_GIANTS.md
-- [ ] **GT07** OMP extracellular loop variant features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
+- [x] **GT07** OMP extracellular loop variant features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
       tasks: `GT06`.
   - VARIANCE PRE-FLIGHT: Before building the full pipeline, extract OMP sequences for a sample of hosts, compute
     loop-region features, and report CV and unique value counts. If loop features have CV < 0.1 or Cohen d < 0.1 for

@@ -1564,7 +1564,7 @@ tracks:
       - Record results in track_GIANTS.md
     - id: GT07
       title: OMP extracellular loop variant features
-      status: pending
+      status: done
       model: claude-opus-4-6
       ci_image_profile: base
       depends_on_tasks:
@@ -1582,8 +1582,8 @@ tracks:
       - Compute allele-level or k-mer features from loop regions that capture the
         binding-interface variation compressed away by whole-gene HMM scores (current
         CV 0.01-0.17)
-      - Build directed cross-terms with GT06 k-mer receptor predictions
-        (predicted_receptor_is_OmpC x host_OmpC_loop_variant)
+      - Build directed cross-terms with GT06 k-mer receptor predictions (predicted_receptor_is_OmpC
+        x host_OmpC_loop_variant)
       - Combine with GT03 feature set and evaluate on ST03 holdout with 3 seeds and
         1000 bootstrap resamples
       - Compare to GT03 all_gates_rfe baseline (0.823 AUC) with bootstrap CIs
@@ -1599,15 +1599,15 @@ tracks:
       - 'VARIANCE PRE-FLIGHT: After clustering, check that the binary feature matrix
         has meaningful variance — report number of clusters, fraction of non-singleton
         clusters, and whether cluster presence/absence discriminates lysed vs non-lysed
-        pairs (median-split effect size). If features are degenerate (>90% zero or >90%
-        one), stop and report.'
+        pairs (median-split effect size). If features are degenerate (>90% zero or
+        >90% one), stop and report.'
       - Run MMseqs2 clustering (identity 0.4, coverage 0.8) on all proteins from both
         host and phage genomes to create protein family clusters
-      - Build binary presence-absence feature matrix (does genome X contain a member of
-        cluster Y?) for both host and phage sides — this is GenoPHI's core feature
+      - Build binary presence-absence feature matrix (does genome X contain a member
+        of cluster Y?) for both host and phage sides — this is GenoPHI's core feature
         representation (AUROC 0.869)
-      - Filter to remove single-genome clusters; apply frequency-based filtering
-        (present in >=2 strain clusters)
+      - Filter to remove single-genome clusters; apply frequency-based filtering (present
+        in >=2 strain clusters)
       - Combine binary protein-family features with GT03 mechanistic feature set
       - Evaluate combined feature set on ST03 holdout with 3 seeds and 1000 bootstrap
         resamples
@@ -1630,6 +1630,6 @@ tracks:
       - Re-evaluate best feature set from GT07/GT08 on expanded panel with ST03 holdout
         protocol (3 seeds, 1000 bootstrap resamples)
       - Compare to GT03 baseline and best GT07/GT08 result with bootstrap CIs
-      - Analyze whether additional narrow-host phage diversity helps break the
-        broad-phage prior dominance identified in the pair-level analysis
+      - Analyze whether additional narrow-host phage diversity helps break the broad-phage
+        prior dominance identified in the pair-level analysis
       - Record results in track_GIANTS.md
