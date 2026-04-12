@@ -190,3 +190,62 @@ arms use the same RFE-selected features — but the Optuna best CV score oversta
 
 + GT05: CatBoost comparison — the GenoPHI-optimal algorithm, not just tuned LightGBM.
 + GT06: GenoPHI per-phage receptor prediction to strengthen Gate 2.
+
+### 2026-04-12 11:56 CEST: GT05 — CatBoost comparison on three-layer feature set
+
+#### Executive summary
+
+Replaced LightGBM with CatBoost (GenoPHI-optimal algorithm) using 50-trial Optuna HPO with native categorical handling.
+CatBoost achieves 0.826 AUC vs LightGBM's 0.823 — a +0.3pp difference that is not statistically significant (delta CI
+[-0.011, +0.017]). CatBoost does improve calibration (Brier 0.152 vs 0.161). The algorithm choice is not the bottleneck;
+feature quality (particularly Gate 2's limited 8/96 phage coverage) is the binding constraint.
+
+#### Best CatBoost params
+
+| Parameter | Value |
+|-----------|-------|
+| iterations | 400 |
+| learning_rate | 0.091 |
+| depth | 8 |
+| l2_leaf_reg | 0.79 |
+| random_strength | 2.38 |
+| bagging_temperature | 2.02 |
+| border_count | 89 |
+
+#### Holdout results
+
+| Arm | AUC | 95% CI | Top-3 | Brier |
+|-----|-----|--------|-------|-------|
+| lgbm_gt03_default | 0.823 | [0.782, 0.859] | 89.2% | 0.161 |
+| catboost_tuned | 0.826 | [0.781, 0.864] | 90.8% | 0.152 |
+
+Delta (CatBoost vs LightGBM): [-0.011, +0.017] — not significant.
+
+#### Interpretation
+
+**CatBoost's native categorical handling does not unlock a significant AUC gain.** The phylogroup/serotype/ST
+categoricals are already well-captured by LightGBM's one-hot encoding at this tree depth. CatBoost's ordered target
+encoding is theoretically superior for high-cardinality categoricals, but our categoricals are low-cardinality
+(phylogroup: 7 levels, serotype: ~40, ST: ~80) and already saturated by LightGBM's 31-leaf trees.
+
+**CatBoost does improve calibration.** Brier drops from 0.161 to 0.152 — similar to the IFW effect in GT03 but without
+the AUC penalty. CatBoost's ordered boosting reduces overfitting, which improves probability calibration even when
+discrimination (AUC) stays flat.
+
+**Feature importance is consistent across algorithms.** depo×capsule is the top slot at 24% (CatBoost) vs 21.5%
+(LightGBM). host_defense is slightly higher in CatBoost (5.6-6.8% vs 4.6%), suggesting CatBoost extracts marginally
+more signal from defense features — possibly because ordered boosting is less susceptible to the lineage confounding
+that degrades LightGBM's defense-feature usage.
+
+**Same RFE-before-CV caveat as GT04 applies.** Inner CV scores are mildly optimistic but holdout comparison is clean.
+
+#### Conclusion
+
+Neither HPO (GT04: +0.4pp) nor algorithm change (GT05: +0.3pp) produces a statistically significant gain over the GT03
+LightGBM baseline. The 0.823 AUC ceiling is feature-bound, not model-bound. GT06 (GenoPHI per-phage receptor
+prediction) is the most promising path forward — expanding Gate 2 from 8/96 to 96/96 phages addresses the actual
+bottleneck.
+
+#### Next steps
+
++ GT06: GenoPHI per-phage receptor prediction to strengthen Gate 2 from 8/96 to 96/96 phage coverage.
