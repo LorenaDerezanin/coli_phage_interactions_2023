@@ -117,13 +117,18 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 
 # Review Focus Areas
 
-1. **Correctness** — bugs, logic errors, off-by-one, wrong variable usage.
-2. **Test coverage** — are new/changed functions tested? Critical edge cases covered?
-3. **Security** — no secrets committed, no injection risks.
-4. **AGENTS.md compliance** — verify PR follows policies (code placement, dependency pinning, git staging, etc.).
-5. **Clarity** — naming, structure, readability.
-6. **Coding principles** — no magic numbers, constants defined and reused, progress logging with timestamps.
-7. **Scientific substance** — biological plausibility, statistical rigor, honest interpretation.
+Reviews must prioritize in this order — reject on higher-priority issues before even looking at lower ones:
+
+1. **Does the ticket actually work?** — Does the PR implement what the ticket asks for? Are acceptance criteria met?
+   Does it produce real results (not scaffolding, not zero-row outputs)?
+2. **Scientific/biological/logical correctness** — biological plausibility, statistical rigor, honest interpretation.
+   Wrong biology or flawed statistics are worse than ugly code.
+3. **Correctness** — bugs, logic errors, off-by-one, wrong variable usage.
+4. **Test coverage** — are new/changed functions tested? Critical edge cases covered?
+5. **Security** — no secrets committed, no injection risks.
+6. **AGENTS.md compliance** — verify PR follows policies (code placement, dependency pinning, git staging, etc.).
+7. **Clarity** — naming, structure, readability.
+8. **Coding principles** — no magic numbers, constants defined and reused, progress logging with timestamps.
 
 Do NOT nitpick style — ruff handles formatting. Focus on substantive issues only. Do not invent problems.
 

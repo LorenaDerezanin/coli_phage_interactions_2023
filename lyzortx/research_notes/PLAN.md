@@ -979,3 +979,39 @@ graph LR
     GT04/GT05
   - Compare to GT03 all_gates_rfe baseline (0.823 AUC) with bootstrap CIs
   - Record results in track_GIANTS.md
+- [ ] **GT07** OMP extracellular loop variant features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
+      tasks: `GT06`.
+  - Extract OMP protein sequences (OmpC, BtuB, Tsx, FhuA, LptD, OmpF) from all 369 host assemblies using the existing
+    Picard FASTA files
+  - Identify extracellular loop regions using known E. coli OMP topology (UniProt annotations for K-12 reference
+    strains)
+  - Compute allele-level or k-mer features from loop regions that capture the binding-interface variation compressed
+    away by whole-gene HMM scores (current CV 0.01-0.17)
+  - Build directed cross-terms with GT06 k-mer receptor predictions (predicted_receptor_is_OmpC x
+    host_OmpC_loop_variant)
+  - Combine with GT03 feature set and evaluate on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+  - Compare to GT03 all_gates_rfe baseline (0.823 AUC) with bootstrap CIs
+  - Record results and biological interpretation in track_GIANTS.md
+- [ ] **GT08** GenoPHI binary protein-family features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
+      tasks: `GT06`.
+  - Run MMseqs2 clustering (identity 0.4, coverage 0.8) on all proteins from both host and phage genomes to create
+    protein family clusters
+  - Build binary presence-absence feature matrix (does genome X contain a member of cluster Y?) for both host and phage
+    sides — this is GenoPHI's core feature representation (AUROC 0.869)
+  - Filter to remove single-genome clusters; apply frequency-based filtering (present in >=2 strain clusters)
+  - Combine binary protein-family features with GT03 mechanistic feature set
+  - Evaluate combined feature set on ST03 holdout with 3 seeds and 1000 bootstrap resamples
+  - Compare to GT03 all_gates_rfe baseline (0.823 AUC) with bootstrap CIs
+  - Record results and biological interpretation in track_GIANTS.md
+- [ ] **GT09** BASEL phage panel expansion. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on tasks:
+      `GT07`, `GT08`.
+  - Download 56 BASEL phages from Zenodo record 15736582 with their 25 ECOR strain interaction matrix (Gaborieau 2024,
+    BASEL completion 2025)
+  - Harmonize phage and host naming with our existing interaction matrix
+  - Extend interaction matrix from 96 to ~152 phages; compute features for new phages using existing pipeline
+  - Re-evaluate best feature set from GT07/GT08 on expanded panel with ST03 holdout protocol (3 seeds, 1000 bootstrap
+    resamples)
+  - Compare to GT03 baseline and best GT07/GT08 result with bootstrap CIs
+  - Analyze whether additional narrow-host phage diversity helps break the broad-phage prior dominance identified in the
+    pair-level analysis
+  - Record results in track_GIANTS.md
