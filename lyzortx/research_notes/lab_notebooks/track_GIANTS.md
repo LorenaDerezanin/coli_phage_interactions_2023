@@ -411,3 +411,62 @@ host_OmpC_loop3_variant` rather than `predicted_receptor_is_OmpC × host_OmpC_HM
 The BASEL collection's 56 new phages tested against 25 ECOR strains would help break the lysis-breadth prior by adding
 more narrow-host phages with diverse receptor specificities. However, earlier external data expansion attempts (TK01-03)
 showed neutral lift, suggesting the bottleneck is feature quality, not training volume.
+
+### 2026-04-12 14:17 CEST: GT07 — OMP extracellular loop variant features
+
+#### Executive summary
+
+Replaced near-constant whole-gene OMP HMM scores (CV 0.01-0.17) with binary OMP allele-variant features from Track C
+(99% identity BLAST clustering, 22 features with variance 0.08-0.25). Variance pre-flight passed: BtuB cluster 99_15
+showed Cohen's d=0.455, Tsx cluster 99_11 d=0.264. However, the directed cross-terms (predicted_receptor_is_X ×
+host_X_variant_cluster_Y) produce no significant holdout improvement: AUC 0.826 vs 0.823, delta CI [-0.001, +0.006].
+The OMP variant features capture 5.1% feature importance (vs 2.0% for HMM-based) but this does not translate to better
+discrimination on 65 holdout bacteria.
+
+#### Variance pre-flight results
+
+| Feature | Variance | Cohen's d (lysed vs non-lysed) | Status |
+|---------|----------|-------------------------------|--------|
+| BtuB cluster 99_15 | 0.168 | +0.455 | Pass |
+| Tsx cluster 99_11 | 0.212 | +0.264 | Pass |
+| BtuB cluster 99_6 | 0.250 | -0.176 | Pass (anti-correlated) |
+| Tsx cluster 99_2 | 0.225 | -0.218 | Pass (anti-correlated) |
+| OmpC cluster 99_24 | 0.111 | (not tested, only 13 OmpC phages) | Marginal |
+
+Pre-flight conclusion: features have real variance and measurable discrimination. Proceeded with full evaluation.
+
+#### Holdout results
+
+| Arm | AUC | 95% CI | Top-3 | Brier |
+|-----|-----|--------|-------|-------|
+| gt03_baseline (all_gates_rfe) | 0.823 | [0.782, 0.859] | 89.2% | 0.161 |
+| +omp_variants | 0.826 | [0.784, 0.861] | 87.7% | 0.159 |
+
+Delta (+omp_variants vs baseline): [-0.001, +0.006] — not significant.
+
+#### Feature importance
+
+The OMP variant cross-terms capture 5.1% feature importance (seed-averaged), vs 2.0% for the HMM-based receptor
+features. This confirms the variant features are more informative than the near-constant HMM scores, but the
+improvement is absorbed by the existing host_surface slot (20.2%) which already captures OMP information at the
+whole-gene level.
+
+#### Interpretation
+
+The variance pre-flight correctly identified that OMP variant features have real discriminative power at the
+single-feature level (BtuB d=0.455). But this per-feature discrimination doesn't compound into a holdout AUC
+improvement because:
+
+1. **The variant features are still binary (present/absent) for each allele cluster.** A host either has BtuB allele
+   99_15 or it doesn't — there's no continuous interaction strength. The cross-term is still 0 or 1.
+2. **RFE selects 278/543 features.** The OMP variant cross-terms survive RFE (they have real information), but they
+   compete with 270+ other features that already capture host-surface variation.
+3. **The 0.823 ceiling persists.** Neither more accurate receptor predictions (GT06), nor better host-side features
+   (GT07) breaks through — the constraint may be in the interaction matrix itself (96 phages, 65 holdout bacteria).
+
+#### Conclusion
+
+OMP allele-variant features are a genuine improvement over HMM scores (5.1% vs 2.0% importance, real variance, real
+per-feature discrimination), but they do not break the 0.823 AUC ceiling on ST03 holdout. The remaining Gate 2 path
+is exhausted at the feature level — receptor × OMP cross-terms cannot significantly improve all-pairs predictions
+regardless of how the host side is encoded.
