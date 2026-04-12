@@ -264,7 +264,8 @@ def compute_pairwise_receptor_omp_features(
         added_columns.append(cross_lps_col)
 
     # Count unique phages per receptor type for logging.
-    omp_phage_count = design.loc[design[has_assignment_col] == 1.0, "phage"].nunique()
+    omp_cols = [f"{PAIRWISE_PREFIX}predicted_is_{r}" for r in OMP_RECEPTOR_COLUMNS]
+    omp_phage_count = design.loc[design[omp_cols].max(axis=1) == 1.0, "phage"].nunique()
     lps_phage_count = design.loc[design[predicted_lps_col] == 1.0, "phage"].nunique()
     LOGGER.info(
         "Added %d directed receptor × OMP features (%d phages with OMP assignment, %d with LPS)",
