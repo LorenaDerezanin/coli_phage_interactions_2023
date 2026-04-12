@@ -40,7 +40,12 @@ from lyzortx.pipeline.autoresearch.candidate_replay import (
     load_module_from_path,
     load_st03_holdout_frame,
     summarize_seed_metrics,
-    temporary_module_attribute,
+)
+from lyzortx.pipeline.autoresearch.derive_pairwise_depo_capsule_features import (
+    compute_pairwise_depo_capsule_features,
+)
+from lyzortx.pipeline.autoresearch.derive_pairwise_receptor_omp_features import (
+    compute_pairwise_receptor_omp_features,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -138,18 +143,10 @@ def build_design_matrices(
 
     # Add pairwise cross-terms.
     if arm.include_pairwise_depo_capsule:
-        from lyzortx.pipeline.autoresearch.derive_pairwise_depo_capsule_features import (
-            compute_pairwise_depo_capsule_features,
-        )
-
         compute_pairwise_depo_capsule_features(train_design)
         compute_pairwise_depo_capsule_features(holdout_design)
 
     if arm.include_pairwise_receptor_omp:
-        from lyzortx.pipeline.autoresearch.derive_pairwise_receptor_omp_features import (
-            compute_pairwise_receptor_omp_features,
-        )
-
         compute_pairwise_receptor_omp_features(train_design)
         compute_pairwise_receptor_omp_features(holdout_design)
 
@@ -189,11 +186,11 @@ def compute_inverse_freq_weights(train_design: pd.DataFrame) -> np.ndarray:
     mean_inv = np.mean(list(inv_freq.values()))
     inv_freq = {p: v / mean_inv for p, v in inv_freq.items()}  # normalize to mean=1
 
-    # Apply to positive samples only.
+    # Apply to positive samples only (vectorized).
     ifw = np.ones(len(base_weight))
-    for i in range(len(base_weight)):
-        if labels[i] == 1:
-            ifw[i] = inv_freq[phages[i]]
+    pos_mask = labels == 1
+    phage_ifw = np.array([inv_freq[p] for p in phages])
+    ifw[pos_mask] = phage_ifw[pos_mask]
 
     LOGGER.info(
         "Inverse-frequency weighting: min=%.2f, max=%.2f, mean=%.2f (positive samples only)",
@@ -257,7 +254,6 @@ def apply_rfe(
 
 def run_arm_seed(
     *,
-    candidate_module: ModuleType,
     train_design: pd.DataFrame,
     holdout_design: pd.DataFrame,
     feature_columns: list[str],
@@ -283,17 +279,16 @@ def run_arm_seed(
     active_categorical = [c for c in categorical_columns if c in active_features]
 
     # Build and train estimator.
-    with temporary_module_attribute(candidate_module, "PAIR_SCORER_RANDOM_STATE", seed):
-        estimator = LGBMClassifier(
-            **LGBM_PARAMS,
-            objective="binary",
-            class_weight="balanced",
-            random_state=seed,
-            n_jobs=1,
-            verbosity=-1,
-            device_type=device_type,
-            **({"deterministic": True, "force_col_wise": True} if device_type == "cpu" else {}),
-        )
+    estimator = LGBMClassifier(
+        **LGBM_PARAMS,
+        objective="binary",
+        class_weight="balanced",
+        random_state=seed,
+        n_jobs=1,
+        verbosity=-1,
+        device_type=device_type,
+        **({"deterministic": True, "force_col_wise": True} if device_type == "cpu" else {}),
+    )
     estimator.fit(
         train_design[active_features],
         y_train,
@@ -365,7 +360,6 @@ def run_ablation(
         for seed in SEEDS:
             LOGGER.info("Arm %s seed %d", arm.arm_id, seed)
             arm_seed_rows = run_arm_seed(
-                candidate_module=candidate_module,
                 train_design=train_design,
                 holdout_design=holdout_design,
                 feature_columns=feature_columns,
