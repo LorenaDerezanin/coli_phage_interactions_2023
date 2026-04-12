@@ -64,4 +64,80 @@ GT01 (depolymerase x capsule) ──┐
 GT02 (receptor x OMP)     ──────┘
 ```
 
-GT01 and GT02 are parallel. GT03 combines all layers. GT04 evaluates.
+GT01 and GT02 are parallel. GT03 combines all layers with RFE and class weighting. GT04 (HPO) and GT05 (CatBoost)
+are incremental follow-ups.
+
+### 2026-04-12 08:41 CEST: GT03 — Three-layer integration with RFE and inverse-frequency weighting
+
+#### Executive summary
+
+Combined all three gate feature sets (depolymerase × capsule, receptor × OMP, defense) with the 5-slot AUTORESEARCH
+baseline and evaluated on ST03 holdout. The all_gates_rfe arm achieves 0.823 AUC [0.781, 0.858], a statistically
+significant +1.2pp over the 0.810 baseline. Gate 1 (depolymerase × capsule) is the primary driver, contributing +0.7pp
+alone with 22% feature importance. RFE selects 252/502 numeric features. Inverse-frequency weighting hurts AUC but
+improves Brier from 0.165 to 0.145.
+
+#### Ablation results
+
+| Arm | AUC | AUC 95% CI | Top-3 | Brier | AUC delta CI vs baseline |
+|-----|-----|-----------|-------|-------|--------------------------|
+| baseline | 0.810 | [0.767, 0.848] | 92.3% | 0.165 | — |
+| +gate1 (depo×capsule) | 0.818 | [0.772, 0.856] | 93.8% | 0.162 | [+0.003, +0.012] *|
+| +gate2 (receptor×OMP) | 0.814 | [0.769, 0.851] | 89.2% | 0.165 | [-0.001, +0.007] |
+| +gate3 (defense) | 0.816 | [0.777, 0.850] | 89.2% | 0.165 | [-0.003, +0.016] |
+| all_gates | 0.822 | [0.781, 0.857] | 92.3% | 0.161 | [+0.002, +0.022]* |
+| all_gates_rfe | 0.823 | [0.781, 0.858] | 90.8% | 0.162 | [+0.003, +0.024] * |
+| all_gates_rfe_ifw | 0.809 | [0.758, 0.849] | 89.2% | 0.145 | [-0.014, +0.015] |
+
+`*` = 95% CI excludes zero. 3 seeds, 1000 bootstrap resamples on 65 holdout bacteria.
+
+#### Feature importance (all_gates_rfe arm, seed-averaged)
+
++ pair_depo_capsule: 21.5% — the dominant new signal
++ host_surface: 21.2% — OMP/capsule HMM scores
++ phage_projection: 15.6% — TL17-frozen phage features
++ phage_stats: 13.9% — genome statistics
++ host_typing: 12.8% — phylogroup/serotype/ST
++ host_stats: 8.4% — genome statistics
++ host_defense: 4.6% — defense system counts
++ pair_receptor_omp: 2.0% — directed receptor cross-terms
+
+#### Interpretation
+
+**Gate 1 (depolymerase × capsule) is the primary discovery.** The 242 features (41 cluster memberships + has_depo/count
+× 99 capsule scores) capture 22% of total feature importance and produce a statistically significant +0.7pp AUC lift
+alone. This validates the three-layer hypothesis at the capsule penetration layer: DepoScope-predicted depolymerase
+presence interacted with host capsule HMM profiles provides discriminative signal that LightGBM can exploit.
+
+**Gate 2 (receptor × OMP) is marginal.** Only 8/96 phages have clean OMP receptor assignments from the genus-level
+Table S1 lookup (Tequatrovirus→Tsx, Lambdavirus→LamB, Dhillonvirus→FhuA). The +0.3pp AUC is not statistically
+significant. GenoPHI per-phage receptor prediction (AUROC 0.99) would assign receptors to all 96 phages and likely
+strengthen this gate.
+
+**Gate 3 (defense) replicates prior findings.** The +0.6pp AUC is consistent with the previously observed +0.7pp
+(defense-ablation-autoresearch). The CI is wide [-0.003, +0.016], confirming it's not a reliable contributor at this
+sample size.
+
+**RFE helps marginally.** Pruning from 507 to ~257 features adds +0.1pp over all_gates (0.823 vs 0.822). The pruning
+primarily removes redundant capsule cross-terms and low-importance defense subtypes.
+
+**Inverse-frequency weighting hurts AUC, helps calibration.** The IFW arm drops AUC by 1.4pp but improves Brier from
+0.162 to 0.145 — the model becomes better calibrated by upweighting narrow-host phage positives, but at the cost of
+discrimination. This suggests IFW might be better applied as a post-hoc calibration adjustment rather than a training
+weight.
+
+#### Error bucket analysis
+
+The baseline has 6/65 holdout misses (90.3% top-3 after seed averaging). The all_gates_rfe arm has comparable top-3
+(90.8%). Individual seeds show high variance: top-3 ranges from 87.7% to 95.4% across seeds, reflecting the small
+holdout (1 strain = 1.5pp). A proper error bucket analysis requires comparing per-strain predictions, deferred to
+after the bootstrap summary.
+
+#### Next steps
+
++ GT04: HPO with Optuna over LightGBM params — the new feature families may benefit from different tree depth and
+  regularization than the default config.
++ GT05: CatBoost comparison — handles categoricals natively, found optimal by GenoPHI.
++ Flag for future: GenoPHI per-phage receptor prediction to strengthen Gate 2 beyond the 8-phage genus-level mapping.
++ Knowledge model update: Gate 1 depolymerase × capsule is a validated signal; IFW calibration tradeoff is a new
+  finding.
