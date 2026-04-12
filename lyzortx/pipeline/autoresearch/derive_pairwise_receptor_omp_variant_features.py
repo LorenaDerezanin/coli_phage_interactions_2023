@@ -91,14 +91,15 @@ def compute_pairwise_receptor_omp_variant_features(
     phage_pred: dict[str, ReceptorPrediction] = {p.phage: p for p in predictions}
 
     phage_series = design["phage"].astype(str)
-    bacteria_series = design["bacteria"].astype(str)
     added_columns: list[str] = []
 
-    # Merge variant features into design by bacteria.
-    bacteria_in_variants = set(variant_df.index)
+    # Merge variant features into design by bacteria (vectorized join).
+    variant_lookup = variant_df[variant_cols]
+    design_idx = design.index
+    merged = design[["bacteria"]].merge(variant_lookup, left_on="bacteria", right_index=True, how="left")
+    merged.index = design_idx
     for vcol in variant_cols:
-        mapped = bacteria_series.map(lambda b, col=vcol: variant_df.loc[b, col] if b in bacteria_in_variants else 0.0)
-        design[vcol] = mapped.astype(float)
+        design[vcol] = merged[vcol].fillna(0.0).astype(float)
 
     # For each OMP receptor, create directed cross-terms.
     for receptor_short, variant_prefix in RECEPTOR_TO_VARIANT_PREFIX.items():
