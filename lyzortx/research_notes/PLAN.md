@@ -968,7 +968,7 @@ graph LR
   - Run on ST03 holdout with 3 seeds and 1000 bootstrap resamples
   - Compare to GT03 (LightGBM) and GT04 (tuned LightGBM) with bootstrap CIs
   - Record results in track_GIANTS.md
-- [ ] **GT06** GenoPHI per-phage receptor prediction to strengthen Gate 2. Model: `claude-opus-4-6`. CI image profile:
+- [x] **GT06** GenoPHI per-phage receptor prediction to strengthen Gate 2. Model: `claude-opus-4-6`. CI image profile:
       `base`. Depends on tasks: `GT04`, `GT05`.
   - Run GenoPHI v0.1 (or reproduce its receptor classification approach) on our 96-phage panel to predict per-phage OMP
     receptor class (replacing the genus-level Table S1 lookup that only covers 8/96 phages)
