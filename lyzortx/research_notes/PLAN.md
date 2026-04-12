@@ -927,7 +927,7 @@ graph LR
     feature slot
   - Verify host-side capsule variation exists in the training set (99 capsule features, 369 hosts with nonzero profiles)
   - Record results in track_GIANTS.md
-- [ ] **GT02** RBP-OMP receptor compatibility layer. Model: `claude-opus-4-6`. CI image profile: `base`.
+- [x] **GT02** RBP-OMP receptor compatibility layer. Model: `claude-opus-4-6`. CI image profile: `base`.
   - Map our 96 phages to OMP receptor classes using genus-level lookup from Moriniere 2026 Table S1 (downloaded to
     .scratch/genophi/Table_S1_Phages.tsv)
   - Assign high-confidence genera a receptor class; mark "Resistant" genera as unknown (not "no OMP receptor"); log
