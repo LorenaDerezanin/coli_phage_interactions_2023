@@ -950,7 +950,7 @@ graph LR
   - Error bucket re-analysis comparing to the 6/65 all-pairs misses
   - If S1 genus mapping showed signal in clean-assignment genera, flag GenoPHI per-phage prediction as a follow-up
   - Record full results and interpretation in track_GIANTS.md
-- [ ] **GT04** HPO with Optuna on three-layer feature set. Model: `claude-opus-4-6`. CI image profile: `base`. Depends
+- [x] **GT04** HPO with Optuna on three-layer feature set. Model: `claude-opus-4-6`. CI image profile: `base`. Depends
       on tasks: `GT03`.
   - Lightweight HPO via Optuna (~50 trials) over key LightGBM params (num_leaves, min_child_samples, learning_rate,
     feature_fraction, reg_lambda) using the GT03 feature set and RFE-selected features

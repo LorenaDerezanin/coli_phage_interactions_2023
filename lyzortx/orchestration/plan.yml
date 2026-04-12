@@ -1511,7 +1511,7 @@ tracks:
       - Record full results and interpretation in track_GIANTS.md
     - id: GT04
       title: HPO with Optuna on three-layer feature set
-      status: pending
+      status: done
       model: claude-opus-4-6
       ci_image_profile: base
       depends_on_tasks:
