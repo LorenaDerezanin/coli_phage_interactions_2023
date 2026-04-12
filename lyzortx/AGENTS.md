@@ -139,3 +139,8 @@ Before approving or marking done: did this task produce real results, or just sc
 - **Deployability means "derivable from inputs."** Separate architectural limitations from implementation gaps.
 - **Small holdouts (<~100 units) require bootstrap confidence intervals.** Unquantified point estimates are noise.
 - **Acceptance criteria define goals, not solutions.** Treat named tools as suggestions, not allowlists.
+- **Variance pre-flight before building feature pipelines.** Before implementing a feature family, compute basic
+  statistics (CV, unique value count, median-split effect size) on the raw host-side and phage-side inputs. If the
+  cross-term host side has CV < 0.1 or the feature cannot discriminate lysed from non-lysed pairs (Cohen's d < 0.1),
+  stop and report — do not build the full pipeline. This check takes minutes; rebuilding after the fact takes hours.
+  Example: OMP HMM scores (CV 0.01-0.17) would have been caught before GT02/GT06 if this check had been applied.

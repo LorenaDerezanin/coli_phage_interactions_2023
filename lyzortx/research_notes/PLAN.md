@@ -981,6 +981,9 @@ graph LR
   - Record results in track_GIANTS.md
 - [ ] **GT07** OMP extracellular loop variant features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
       tasks: `GT06`.
+  - VARIANCE PRE-FLIGHT: Before building the full pipeline, extract OMP sequences for a sample of hosts, compute
+    loop-region features, and report CV and unique value counts. If loop features have CV < 0.1 or Cohen d < 0.1 for
+    lysed vs non-lysed discrimination, stop and report the dead end — do not build the full evaluation pipeline.
   - Extract OMP protein sequences (OmpC, BtuB, Tsx, FhuA, LptD, OmpF) from all 369 host assemblies using the existing
     Picard FASTA files
   - Identify extracellular loop regions using known E. coli OMP topology (UniProt annotations for K-12 reference
@@ -994,6 +997,9 @@ graph LR
   - Record results and biological interpretation in track_GIANTS.md
 - [ ] **GT08** GenoPHI binary protein-family features. Model: `claude-opus-4-6`. CI image profile: `base`. Depends on
       tasks: `GT06`.
+  - VARIANCE PRE-FLIGHT: After clustering, check that the binary feature matrix has meaningful variance — report number
+    of clusters, fraction of non-singleton clusters, and whether cluster presence/absence discriminates lysed vs
+    non-lysed pairs (median-split effect size). If features are degenerate (>90% zero or >90% one), stop and report.
   - Run MMseqs2 clustering (identity 0.4, coverage 0.8) on all proteins from both host and phage genomes to create
     protein family clusters
   - Build binary presence-absence feature matrix (does genome X contain a member of cluster Y?) for both host and phage
