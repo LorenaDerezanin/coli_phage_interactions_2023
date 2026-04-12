@@ -311,3 +311,103 @@ The remaining improvement paths are:
 + Full GenoPHI pipeline (trained classifier, not just k-mer scanning) for more accurate receptor predictions
 + Panel expansion beyond 96 phages to increase statistical power
 + Per-phage inverse-frequency weighting combined with CatBoost (GT05 showed Brier improvement)
+
+### 2026-04-12 13:43 CEST: Pair-level biological analysis of Track GIANTS results
+
+#### Executive summary
+
+Deep pair-level analysis of GT03-GT06 holdout predictions reveals why receptor × OMP cross-terms produced zero lift
+despite Moriniere 2026's AUROC 0.99 receptor classifiers. The root cause is threefold: (1) all 369 clinical E. coli
+hosts express all 12 core OMPs at nearly identical levels (CV 0.01-0.17), collapsing host-side cross-terms to constants;
+(2) phages sharing the same predicted receptor have wildly different host ranges (Tsx phages: mean pairwise Jaccard
+0.091, below the random-pair baseline of 0.17); (3) Moriniere's models were trained on K-12 lab strains lacking
+O-antigen/capsule, but 100% of our clinical strains have O-antigen, making polysaccharide barriers — not OMP receptor
+presence — the dominant host-side adsorption determinant. This explains why Gate 1 (depolymerase × capsule) works
+(+1.2pp) but Gate 2 (receptor × OMP) doesn't: capsule/O-antigen is the outer physical barrier.
+
+#### The 6 holdout misses
+
+The all_gates_rfe arm misses 6/65 holdout bacteria in top-3. Each miss has a distinct biological signature:
+
+| Bacterium | Positives | Failure mode | Top-3 FP families | Best TP rank |
+|-----------|-----------|-------------|-------------------|-------------|
+| ECOR-06 | 1/96 (1.0%) | Needle-in-haystack | Straboviridae, Felixounavirus | AL505_Ev3 rank 25 |
+| ECOR-69 | 10/96 (10.4%) | Broad-phage prior | Phapecoctavirus, Justusliebigvirus | LF82_P2 rank 7 |
+| FN-B4 | 0/96 (0.0%) | Abstention | — | No TPs exist |
+| NILS24 | 0/96 (0.0%) | Abstention | — | No TPs exist |
+| NILS41 | 14/96 (14.6%) | Broad-phage prior | Phapecoctavirus, Straboviridae | LF73_P4 rank 6 |
+| NILS53 | 14/96 (14.6%) | Narrow-host collapse | Straboviridae, Phapecoctavirus | NIC06_P2 rank 5 |
+
+**Common pattern:** The model's top-3 is always dominated by broad-host phages (DIJ07_P1/P2, LF82_P8, 536_P7/P9,
+LF73_P1) with 47-65% panel lysis rates. These phages are predicted high for every bacterium because the model has
+learned their base rate. The true positives for missed bacteria are moderate-to-narrow host range phages ranked 5-48.
+
+**NILS53 is the critical case.** It has 14 true positives, but 13 of them are narrow-host specialists (10-26% lysis
+rate) from Autographiviridae, Dhillonvirus, and Kagunavirus. Only NIC06_P2 (Tequatrovirus, 42% lysis rate) ranks in
+the top 5. The remaining 13 TPs are ranked 33-48 — completely buried under broad-host phages. These narrow-host
+specialists target different receptors (lptD, lps) than the dominant broad-host phages (ngr, ompC), but the model
+can't exploit this because the host-side receptor scores are near-identical across bacteria.
+
+#### Why receptor × OMP cross-terms fail: three compounding problems
+
+**1. Host OMP scores are near-constant across clinical E. coli.**
+
+| Receptor | Mean | Std | CV | Unique values |
+|----------|------|-----|-----|---------------|
+| LptD | 1821.8 | 22.8 | **0.01** | 65 |
+| OmpA | 772.1 | 14.5 | **0.02** | 43 |
+| Tsx | 685.7 | 19.2 | **0.03** | 24 |
+| OmpC | 756.7 | 31.2 | **0.04** | 79 |
+
+All 369 hosts have all 12 OMPs at >99% presence. The HMM similarity scores measure gene presence/conservation, not
+functional variation at the binding interface. The cross-term `predicted_is_OmpC × host_OmpC_score ≈
+predicted_is_OmpC × 757 ± 31` — the host side contributes no discrimination.
+
+Direct test: OmpC-targeting phages lyse high-OmpC hosts at 37.0% vs low-OmpC hosts at 33.4% (Cohen's d=0.086). For
+Tsx: d=0.055. For BtuB: d=0.033. These effect sizes are negligible — OMP HMM scores do not predict within-receptor
+lysis.
+
+**2. Same-receptor phages have uncorrelated host ranges.**
+
+Tsx-targeting phages (8 phages) span 3-204 lysed hosts out of 402. Their mean pairwise Jaccard similarity is 0.091 —
+*below* the random-pair baseline of 0.17. A Lambdavirus targeting Tsx (411_P1, 3/402) and a Krischvirus targeting Tsx
+(LF73_P4, 204/402) share almost zero hosts. Receptor class tells you which door the phage knocks on, but not whether
+it gets through — that depends on O-antigen/capsule barriers, intracellular defenses, and other post-adsorption
+factors.
+
+OmpC phages (13 phages) are more cohesive (mean Jaccard 0.422, 2.5x enrichment over random) because they're dominated
+by closely related Felixounavirus, but this family similarity is already captured by phage_projection features.
+
+**3. Moriniere's models were trained on K-12 (no O-antigen/capsule).**
+
+The k-mer receptor classifiers achieve AUROC 0.99 because they were trained on BW25113/BL21 — lab strains where OMP
+receptors are the *only* surface barrier. Our 369 clinical strains all have O-antigen (100% non-zero O-antigen scores,
+mean 813, std 693). In clinical isolates, the polysaccharide layer gates physical access to OMP receptors. A phage that
+targets OmpC must first penetrate the O-antigen/capsule — and that penetration depends on depolymerase specificity
+(Gate 1), not receptor binding affinity (Gate 2).
+
+This is why Gate 1 (depolymerase × capsule) produces the only validated lift: it encodes the *outer* barrier. Gate 2
+encodes a barrier that is masked by polysaccharides in clinical isolates.
+
+#### What would help: OMP variant-level features
+
+The HMM scores measure gene presence/conservation at the whole-gene level. But Moriniere showed that receptor
+specificity is encoded in short hypervariable sequence motifs at RBP tip domains — and the equivalent host-side signal
+would be in the extracellular loop regions of OMP proteins. OmpC has 50 allelic variants across our panel; BtuB has 28.
+The current HMM score (CV 0.04 for OmpC) compresses this allelic diversity into a near-constant.
+
+Extracting OMP extracellular loop sequences and computing allele-level or k-mer features would give the cross-term
+actual host-side variation to exploit. The cross-term would become `predicted_receptor_is_OmpC ×
+host_OmpC_loop3_variant` rather than `predicted_receptor_is_OmpC × host_OmpC_HMM_score`.
+
+#### Training data expansion assessment
+
+| Source | New phages | New bacteria | Overlap | Value |
+|--------|-----------|-------------|---------|-------|
+| GenoPHI (Noonan 2025) | 0 (94/96 ours) | ~33 (402 vs 369) | Contains our data | Modest |
+| BASEL collection (Zenodo 15736582) | 56 | 0 (25 ECOR) | 25 bacteria overlap | New phage diversity |
+| VHRdb | Varies | Varies | Contains our dataset | Aggregation resource |
+
+The BASEL collection's 56 new phages tested against 25 ECOR strains would help break the lysis-breadth prior by adding
+more narrow-host phages with diverse receptor specificities. However, earlier external data expansion attempts (TK01-03)
+showed neutral lift, suggesting the bottleneck is feature quality, not training volume.

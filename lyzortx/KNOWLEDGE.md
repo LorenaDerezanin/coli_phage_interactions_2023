@@ -1,9 +1,9 @@
 # Project Knowledge Model
 
-<!-- Last consolidated: 2026-04-12T00:30:00+00:00 -->
+<!-- Last consolidated: 2026-04-12T13:43:00+02:00 -->
 <!-- Source: lyzortx/research_notes/lab_notebooks -->
 
-**41 knowledge units** across 7 themes (33 active, 8 dead ends)
+**46 knowledge units** across 7 themes (35 active, 11 dead ends)
 
 ## Data & Labels
 
@@ -58,16 +58,44 @@ What works, what doesn't, leakage risks, and encoding decisions.
     global protein similarity. Limitation: training on BW25113/BL21 which lack O-antigen/capsule, so
     polysaccharide-mediated specificity is not covered.*
 - **`three-layer-hypothesis`**: Lysis requires passing adsorption gates (capsule penetration OR receptor binding) then
-  surviving host defenses; features should be directed per-layer, not flat. [preliminary; source: Moriniere 2026, Noonan
-  2025 GenoPHI, 2026-04-11 literature review; see also: receptor-specificity-solved, defense-lineage-confounding,
-  adsorption-dominates-paper]
-  - *Gate 1: depolymerase substrate specificity x host capsule/O-antigen profile. Gate 2: RBP receptor class x host OMP
-    variant score. Gate 3: all host defense systems (unrestricted). Adsorption = Gate 1 OR Gate 2; Lysis = Adsorption
-    AND survives Gate 3. Previous flat approaches (AX03 undirected cross-terms, AX07/AX08 PLM embeddings, defense
-    without adsorption gating) all failed because they ignored this layered structure.*
+  surviving host defenses; features should be directed per-layer, not flat. Gate 1 (depolymerase × capsule) is validated
+  (+1.2pp AUC); Gate 2 (receptor × OMP) fails due to host-side OMP score homogeneity; Gate 3 (defense) is marginal.
+  [validated; source: Moriniere 2026, Noonan 2025 GenoPHI, 2026-04-11 literature review, GT03; see also:
+  receptor-specificity-solved, defense-lineage-confounding, adsorption-dominates-paper, depo-capsule-validated,
+  omp-score-homogeneity]
+  - *GT03 ablation on ST03 holdout: Gate 1 alone +0.7pp AUC (significant), Gate 2 alone +0.3pp (not significant), Gate 3
+    alone +0.6pp (not significant), all gates with RFE +1.2pp AUC (significant, 0.810→0.823). Gate 1 works because
+    capsule profiles vary richly across clinical strains (99 features, all nonzero). Gate 2 fails because all E. coli
+    have all 12 core OMPs at near-identical HMM scores (CV 0.01-0.17). The polysaccharide layer gates physical access to
+    OMP receptors in clinical isolates — Gate 1 is the outer barrier.*
 - **`host-capsule-variation`**: Our 369 clinical E. coli hosts have rich capsule variation (99 capsule feature columns,
   all nonzero) — they are NOT K-12 lab strains and can support depolymerase-capsule learning. [validated; source:
-  2026-04-11 host_surface audit; see also: three-layer-hypothesis, receptor-variant-richness]
+  2026-04-11 host_surface audit; see also: three-layer-hypothesis, receptor-variant-richness, depo-capsule-validated]
+- **`depo-capsule-validated`**: Depolymerase × capsule pairwise cross-terms (242 features: 41 DepoScope cluster
+  memberships + has_depo/count × 99 capsule HMM scores) provide a statistically significant +1.2pp AUC lift
+  (0.810→0.823) with 22% feature importance — the only validated pairwise feature family. [validated; source: GT03; see
+  also: three-layer-hypothesis, host-capsule-variation, omp-score-homogeneity]
+  - *Gate 1 alone gives +0.7pp AUC (significant). Combined with RFE pruning (502→252 features), the three-layer model
+    reaches 0.823 AUC [0.781, 0.858]. The cross-terms capture a specific mechanism: this phage has a depolymerase that
+    can degrade this host's capsule type. This works because capsule profiles vary richly across clinical E. coli (99
+    features with distinct variation), unlike OMP receptor scores which are near-constant.*
+- **`omp-score-homogeneity`**: All 369 clinical E. coli hosts express all 12 core OMP receptors at nearly identical HMM
+  scores (CV 0.01-0.17), making receptor × OMP cross-terms collapse to phage-only features with no host-side
+  discrimination. [validated; source: GT03, GT06, 2026-04-12 pair-level analysis; see also: receptor-variant-richness,
+  receptor-specificity-solved, three-layer-hypothesis]
+  - *LptD CV=0.01, OmpA CV=0.02, Tsx CV=0.03, OmpC CV=0.04. The cross-term predicted_is_OmpC × host_OmpC_score ≈
+    predicted_is_OmpC × constant. Direct test: OmpC phages lyse high-OmpC hosts at 37.0% vs low-OmpC at 33.4% (Cohen
+    d=0.086, negligible). Moriniere's receptor classifiers were trained on K-12 (BW25113/BL21) which lack
+    O-antigen/capsule — in clinical strains, polysaccharide barriers mask OMP differences. OMP variant/allele-level
+    features (extracellular loop regions) might restore host-side variation.*
+- **`same-receptor-uncorrelated-hosts`**: Phages sharing a predicted receptor class have weakly correlated or
+  uncorrelated host ranges: Tsx phages (8 phages) have mean pairwise Jaccard 0.091 (below random-pair baseline of 0.17);
+  only OmpC phages show above-random cohesion (Jaccard 0.42) due to Felixounavirus family dominance. [validated; source:
+  GT06, 2026-04-12 pair-level analysis; see also: omp-score-homogeneity, receptor-specificity-solved]
+  - *Receptor class tells which OMP a phage binds, but not whether it infects a given host. Post-adsorption factors
+    (O-antigen/capsule blocking, intracellular defenses, injection efficiency) dominate host-range determination in
+    clinical isolates. This means receptor identity is necessary but far from sufficient for predicting strain-level
+    lysis.*
 
 ## Model Architecture & Performance
 
@@ -77,11 +105,13 @@ Architecture choices, calibration, and performance bounds.
   of feature importance, and 5 soft-leaky pairwise features contributed ~5.5%. [validated; source: TL18 audit; see also:
   autoresearch-baseline]
 - **`autoresearch-baseline`**: AUTORESEARCH all-pairs model (0.810 AUC, 90.8% top-3 on ST03 holdout) is the canonical
-  clean baseline: derived from raw FASTA, no leakage, no feature mismatch, no per-phage blending. [validated; source:
-  2026-04-08 AUTORESEARCH eval; see also: tl18-flawed-baseline, defense-ablation-autoresearch,
-  per-phage-blending-dominant]
-  - *Adding defense features narrows the TL18 gap to 0.817 AUC (+0.7pp) but regresses top-3 from 90.8% to 86.2%. All
-    future track comparisons should use 0.810 as the single baseline, not TL18 (flawed) or per-phage (not deployable).*
+  clean baseline: derived from raw FASTA, no leakage, no feature mismatch, no per-phage blending. Track GIANTS improved
+  this to 0.823 AUC with depolymerase × capsule features and RFE. [validated; source: 2026-04-08 AUTORESEARCH eval,
+  GT03; see also: tl18-flawed-baseline, defense-ablation-autoresearch, per-phage-blending-dominant,
+  depo-capsule-validated]
+  - *The 0.810→0.823 gain is entirely from Gate 1 (depolymerase × capsule) cross-terms + RFE feature selection. Neither
+    HPO (+0.4pp, GT04), CatBoost (+0.3pp, GT05), nor expanded k-mer receptor predictions (+0.0pp, GT06) breaks through
+    the 0.823 ceiling — it is feature-bound, not model-bound.*
 - **`defense-ablation-autoresearch`**: Adding 79 DefenseFinder host defense features to AUTORESEARCH improves AUC from
   0.810 to 0.817 (+0.7pp) but regresses top-3 hit rate from 90.8% to 86.2% (-4.6pp). [validated; source: 2026-04-08
   defense ablation; see also: defense-lineage-confounding, autoresearch-baseline, ml-pipeline-over-features]
@@ -100,13 +130,14 @@ Architecture choices, calibration, and performance bounds.
   path; defense features contribute but are not gate-critical for first baseline. [validated; source: 2026-04-05 replan,
   antiphage-landscape reading; see also: autoresearch-baseline]
 - **`ml-pipeline-over-features`**: ML pipeline configuration (algorithm, training strategy, feature selection) matters
-  5-18x more than genomic feature representation for strain-level phage-host prediction quality. [validated; source:
-  Noonan 2025 GenoPHI, 2026-04-11 literature review; see also: defense-ablation-autoresearch,
-  defense-lineage-confounding, genophi-benchmark]
+  5-18x more than genomic feature representation for strain-level phage-host prediction quality. RFE is the most
+  impactful single pipeline change we've validated. [validated; source: Noonan 2025 GenoPHI, 2026-04-11 literature
+  review, GT03, GT04, GT05; see also: defense-ablation-autoresearch, defense-lineage-confounding, genophi-benchmark,
+  depo-capsule-validated]
   - *GenoPHI's 13.2M training run sweep: algorithm choice DMCC=0.365, training strategy DMCC=0.203, feature selection
-    DMCC=0.184, but genomic representation only DMCC=0.020-0.072. CatBoost + RFE + inverse-frequency class weighting per
-    phage is the empirically optimal classical ML configuration. Our pipeline uses LightGBM without RFE or class
-    weighting.*
+    DMCC=0.184, but genomic representation only DMCC=0.020-0.072. Our GT03-GT05 confirm: RFE adds +1.2pp over baseline
+    (validated), but HPO (+0.4pp, GT04) and CatBoost (+0.3pp, GT05) are not significant — the 0.823 ceiling is
+    feature-bound, not model-bound. CatBoost does improve Brier (0.152 vs 0.161) without AUC penalty.*
 - **`genophi-benchmark`**: GenoPHI achieves AUROC 0.869 on E. coli using 94/96 of our Guelin phages with binary
   protein-family and k-mer features, directionally outperforming our 0.830 with richer engineered features. [validated;
   source: Noonan 2025 GenoPHI, 2026-04-11 literature review; see also: ml-pipeline-over-features, autoresearch-baseline,
@@ -137,11 +168,13 @@ Holdout protocol, benchmark methodology, and error analysis.
   below the top-3 cutoff. [validated; source: ST09, 2026-04-09 APEX holdout NILS53 analysis]
 - **`narrow-host-prior-collapse`**: Per-phage models help broad-to-moderate phages distinguish their hosts but cannot
   override the broad-phage prior for narrow-host phages (<30% lysis rate) with few training positives; NILS53 (14
-  narrow-host TPs) remains a top-3 miss. [validated; source: 2026-04-09 APEX holdout NILS53 analysis; see also:
-  family-bias-straboviridae, receptor-specificity-solved, per-phage-blending-dominant]
-  - *Receptor-class-directed features (from Moriniere 2026) could help by giving the model mechanistic reasons to prefer
-    narrow-host phages that target the correct receptor, rather than relying on broad lysis-rate priors. Per-phage
-    inverse-frequency class weighting (GenoPHI approach) may also help.*
+  narrow-host TPs) remains a top-3 miss even with directed receptor features (GT06). [validated; source: 2026-04-09 APEX
+  holdout NILS53 analysis, GT06, 2026-04-12 pair-level analysis; see also: family-bias-straboviridae,
+  receptor-specificity-solved, per-phage-blending-dominant, omp-score-homogeneity]
+  - *Receptor-class-directed features do not help because host OMP scores are near-constant (CV 0.01-0.17). NILS53's 13
+    narrow-host TPs (Autographiviridae, Dhillonvirus, Kagunavirus; 10-26% lysis rate) are ranked 33-48, buried under
+    broad-host phages. OMP allele-level features or depolymerase-capsule specificity for these narrow-host phages are
+    the remaining paths.*
 - **`inner-val-unreliable-top3`**: Inner-val top-3 predictions do not reliably transfer to holdout: per-phage blend
   predicted a top-3/AUC trade-off on inner-val (93.2% vs 94.6%) that did not replicate on holdout (93.8% vs 90.8% — both
   improved). [validated; source: 2026-04-09 APEX holdout; see also: st03-canonical-benchmark, bootstrap-strain-level]
@@ -189,13 +222,29 @@ Compressed lessons from approaches that didn't work.
   anti-defense, depolymerase; 25 features) degrade top-3 from 94.6% to 87.8% on inner-val and are effectively noise for
   this prediction task. [validated; source: 2026-04-09 APEX ablation; see also: defense-lineage-confounding,
   defense-ablation-autoresearch]
-- **`pairwise-cross-terms-dead-end`**: Label-free pairwise RBP x receptor cross-terms (24 features: has_rbp x
-  receptor_score, rbp_count x receptor_score for 12 OMP receptors) showed no improvement on ST03 holdout; the inner-val
-  top-3 gain (+1.3pp) did not replicate. [validated; source: 2026-04-09 APEX ablation, 2026-04-09 APEX holdout; see
-  also: inner-val-unreliable-top3, receptor-specificity-solved]
-  - *The cross-terms are too coarse — they encode "phage has any RBP and host has any receptor" but not binding
-    specificity. Directed cross-terms using receptor-class predictions from Moriniere 2026 (predicted_receptor=OmpC x
-    host_OmpC_score) are the replacement approach.*
+- **`pairwise-cross-terms-dead-end`**: Both undirected (AX03: has_rbp × receptor_score) and directed (GT02/GT06:
+  predicted_receptor_is_OmpC × host_OmpC_score) receptor × OMP cross-terms show no improvement on ST03 holdout — OMP HMM
+  scores are too homogeneous to provide host-side discrimination. [validated; source: 2026-04-09 APEX ablation,
+  2026-04-09 APEX holdout, GT03, GT06, 2026-04-12 pair-level analysis; see also: inner-val-unreliable-top3,
+  receptor-specificity-solved, omp-score-homogeneity]
+  - *AX03 failed because it paired "any RBP" with "any receptor" without binding specificity. GT02/GT06 directed
+    cross-terms failed for a different reason: the host-side OMP scores have CV 0.01-0.17, so the cross-term collapses
+    to a phage-only feature. The replacement approach must use OMP allele/variant-level features (extracellular loop
+    regions) rather than whole-gene HMM scores.*
+- **`hpo-catboost-not-bottleneck`**: Neither Optuna HPO (+0.4pp AUC, GT04) nor CatBoost algorithm switch (+0.3pp AUC,
+  GT05) significantly improves over LightGBM defaults on the GT03 feature set — the 0.823 AUC ceiling is feature-bound,
+  not model-bound. [validated; source: GT04, GT05; see also: ml-pipeline-over-features, depo-capsule-validated]
+  - *GT04 Optuna found a more complex model (108 leaves, 450 trees) with delta CI [-0.010, +0.015]. GT05 CatBoost with
+    native categoricals and 50-trial HPO gave delta CI [-0.011, +0.017]. CatBoost improves Brier (0.152 vs 0.161)
+    without AUC penalty — useful for calibration but not discrimination. Confirms GenoPHI's finding that algorithm
+    choice matters less than feature selection once the algorithm family is fixed.*
+- **`kmer-receptor-expansion-neutral`**: Expanding Gate 2 receptor coverage from 8/96 (genus-level) to 39/96
+  (k-mer-based) OMP phages produces zero AUC improvement (0.824 vs 0.823, delta CI [-0.005, +0.005]). [validated;
+  source: GT06; see also: omp-score-homogeneity, pairwise-cross-terms-dead-end, receptor-specificity-solved]
+  - *Used GenoPHI's 815 receptor-predictive k-mers from Moriniere 2026 Dataset S6. The simplified k-mer max-vote
+    predictor assigns 39 OMP, 33 LPS, 22 NGR, 2 unknown. Despite 5x more OMP-assigned phages, the cross-terms still
+    collapse because the host-side OMP scores have CV 0.01-0.17. More accurate receptor predictions (full GenoPHI
+    classifier) would not help because the host side — not the phage side — is the bottleneck.*
 - **`plm-rbp-redundant`**: ProstT5+SaProt PLM embeddings of RBP sequences (1280-dim, PCA to 32) achieve 33.9% LightGBM
   feature importance but zero predictive lift on ST03 holdout; they cannibalize existing phage family features without
   adding new discriminative signal. [validated; source: 2026-04-10 AX08 holdout; see also:
@@ -212,23 +261,27 @@ Unresolved items that still matter for the project direction.
 - **`narrow-susceptibility-features`**: Can host-compatibility features (receptor/defense) lift narrow-susceptibility
   recovery for the 12/36 resolved narrow strains not rescued by any panel phage? [preliminary; source: ST09, TB04; see
   also: narrow-susceptibility-rescue, error-buckets]
-- **`within-family-reranking`**: Can within-family reranking using host-range evidence improve phage selection inside
-  saturated score bands where the model knows the right family but not the right phage? [preliminary; source: ST09; see
-  also: error-buckets, family-bias-straboviridae, receptor-specificity-solved]
-  - *Receptor-class-directed features (from Moriniere 2026) are the most promising path: if two phages from the same
-    family target different receptors, the model can use the host's receptor profile to rank them. Per-phage
-    inverse-frequency class weighting (GenoPHI approach) may also help differentiate within saturated bands.*
-- **`defense-top3-mitigation`**: Can the defense top-3 regression (-4.6pp on all-pairs) be mitigated on the deployable
-  all-pairs architecture to capture the +0.7pp AUC gain without the ranking penalty? [preliminary; source: 2026-04-08
-  defense ablation, 2026-04-09 APEX holdout, 2026-04-09 project direction; see also: defense-ablation-autoresearch,
-  defense-lineage-confounding, ml-pipeline-over-features]
-  - *GenoPHI's 13.2M run sweep found RFE is the best feature selection method (DMCC=0.184). RFE may automatically
-    exclude confounded defense subtypes that cause the top-3 regression. CatBoost with per-phage inverse-frequency
-    weighting is another concrete mitigation path.*
-- **`receptor-directed-features`**: Can receptor-class predictions from Moriniere 2026 be integrated as directed
-  phage-host cross-terms (predicted_receptor=OmpC x host_OmpC_score) to break the phage-side feature plateau and rescue
-  narrow-host misses like NILS53? [preliminary; source: Moriniere 2026, 2026-04-11 literature review; see also:
-  receptor-specificity-solved, pairwise-cross-terms-dead-end, narrow-host-prior-collapse]
-  - *Three paths to receptor predictions for our panel: genus-level mapping from 260-phage Table S1 (hours, coarse),
-    running GenoPHI v0.1 on our FNA files (days, requires retraining), or contacting authors who already have our data.
-    Limitation: O-antigen and capsule-mediated specificity not covered by current receptor models.*
+- **`within-family-reranking`**: Can within-family reranking improve phage selection inside saturated score bands?
+  Receptor-class features cannot help (GT06: same-receptor phages have uncorrelated host ranges, Jaccard 0.091 for Tsx).
+  OMP allele-level features or GenoPHI binary protein-family features are the remaining paths. [preliminary; source:
+  ST09, GT06, 2026-04-12 pair-level analysis; see also: error-buckets, family-bias-straboviridae,
+  receptor-specificity-solved, omp-score-homogeneity, same-receptor-uncorrelated-hosts]
+  - *Receptor-class-directed features failed because: (1) host OMP scores are near-constant, and (2) same-receptor
+    phages have wildly different host ranges. GenoPHI's binary protein-family features from both host and phage
+    proteomes (MMseqs2 clustering) are the most validated alternative — they achieve AUROC 0.869 with annotation-free
+    features.*
+- **`defense-top3-mitigation`**: RFE mitigates the defense top-3 regression: GT03 all_gates_rfe achieves 90.8% top-3 (vs
+  baseline 92.3% and defense-only 89.2%), while capturing the AUC gain (0.823 vs 0.810). The regression is reduced but
+  not eliminated. [validated; source: 2026-04-08 defense ablation, GT03; see also: defense-ablation-autoresearch,
+  defense-lineage-confounding, ml-pipeline-over-features, depo-capsule-validated]
+  - *RFE prunes ~250 of 502 features, removing redundant defense subtypes that cause lineage confounding. The
+    all_gates_rfe arm shows defense at only 4.6% feature importance (vs 21% for depo×capsule), suggesting RFE correctly
+    deprioritizes confounded features.*
+- **`receptor-directed-features`**: Directed receptor × OMP cross-terms (predicted_receptor=OmpC × host_OmpC_score) do
+  not break the feature plateau — tested with both genus-level (GT02, 8/96 phages) and k-mer (GT06, 39/96 phages)
+  receptor predictions, both show zero lift. The host-side OMP HMM scores are too homogeneous. [validated; source: GT02,
+  GT03, GT06, 2026-04-12 pair-level analysis; see also: receptor-specificity-solved, pairwise-cross-terms-dead-end,
+  narrow-host-prior-collapse, omp-score-homogeneity]
+  - *Answered: No. The cross-term collapses because host OMP scores have CV 0.01-0.17. The replacement path is OMP
+    allele-level features (extracellular loop variants) that provide actual host-side variation. OmpC has 50 allelic
+    variants, BtuB has 28 — the information exists but is compressed away by whole-gene HMM scoring.*
