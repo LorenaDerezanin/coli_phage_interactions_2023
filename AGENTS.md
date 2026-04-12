@@ -74,6 +74,23 @@ Detailed coding, testing, scientific review, CI, and orchestration policies live
 - When scope is ambiguous, prefer alignment with the plan unless the user overrides.
 - Use the `/replan` skill when completed work is questioned or assumptions are invalidated.
 
+# Waiting for PR Review
+
+- After pushing a PR, use a background polling loop to get notified when Claude Auto Review completes:
+  ```bash
+  while true; do
+    result=$(gh pr checks <PR_NUMBER> 2>&1)
+    if echo "$result" | grep -q "Claude Auto Review.*pass"; then
+      echo "REVIEW PASSED"; echo "$result"; break
+    elif echo "$result" | grep -q "Claude Auto Review.*fail"; then
+      echo "REVIEW FAILED — has feedback"; echo "$result"; break
+    fi
+    sleep 30
+  done
+  ```
+- Run this with `run_in_background: true`. Do other work while waiting — don't block.
+- On completion, check inline review comments and address any feedback before requesting re-review.
+
 # PR Creation for Orchestrator Tasks
 
 - Create PRs with `gh pr create`. Title pattern: `[ORCH][TASK_ID] Brief description`.
