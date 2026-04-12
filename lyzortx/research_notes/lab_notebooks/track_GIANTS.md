@@ -182,6 +182,10 @@ tradeoff: simpler, faster, and within noise of the tuned config.
 The feature importance shift is minor: depo×capsule increases from 21.5% to 24.1% with tuned params (deeper trees
 capture more of the cross-term signal), while host_typing drops from 12.8% to 5.5%.
 
+**Caveat:** RFE was applied once on the full training set before Optuna CV, so the inner CV scores are mildly
+optimistic (folds see features selected using their own labels). This doesn't affect the holdout comparison — both
+arms use the same RFE-selected features — but the Optuna best CV score overstates the true generalization.
+
 #### Next steps
 
 + GT05: CatBoost comparison — the GenoPHI-optimal algorithm, not just tuned LightGBM.
