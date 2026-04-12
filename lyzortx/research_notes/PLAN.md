@@ -937,7 +937,7 @@ graph LR
   - If cross-terms show lift on clean-assignment genera but not noisy ones, flag GenoPHI per-phage prediction as a
     follow-up
   - Record results in track_GIANTS.md
-- [ ] **GT03** Three-layer integration with RFE and class weighting. Model: `claude-opus-4-6`. CI image profile: `base`.
+- [x] **GT03** Three-layer integration with RFE and class weighting. Model: `claude-opus-4-6`. CI image profile: `base`.
       Depends on tasks: `GT01`, `GT02`.
   - Combine Gate 1 features (depolymerase x capsule) + Gate 2 features (receptor x OMP) + Gate 3 features (all 79+
     DefenseFinder defense system counts) with existing 5-slot AUTORESEARCH features
