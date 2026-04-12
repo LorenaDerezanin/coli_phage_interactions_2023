@@ -249,3 +249,65 @@ bottleneck.
 #### Next steps
 
 + GT06: GenoPHI per-phage receptor prediction to strengthen Gate 2 from 8/96 to 96/96 phage coverage.
+
+### 2026-04-12 12:09 CEST: GT06 — GenoPHI k-mer receptor prediction for Gate 2
+
+#### Executive summary
+
+Used GenoPHI's 815 receptor-predictive amino acid k-mers (Dataset S6, Moriniere 2026) to predict per-phage OMP
+receptor class from proteome sequence. Expanded Gate 2 coverage from 8/96 (genus-level) to 39/96 (k-mer-based) OMP
+phages. However, the expanded predictions produce no AUC improvement: 0.824 vs 0.823, delta CI [-0.005, +0.005].
+The 0.823 AUC ceiling from GT03 is robust — neither algorithm changes (GT04/GT05) nor feature expansion (GT06)
+breaks through.
+
+#### Receptor prediction coverage
+
+| Type | Count | Details |
+|------|-------|---------|
+| OMP | 39/96 | ompC (13), lptD (12), tsx (8), btub (6) |
+| LPS | 33/96 | Capsule-degrading phages |
+| NGR | 22/96 | Protein receptor, unidentified |
+| Unknown | 2/96 | No k-mer hits |
+
+#### Validation against genus-level assignments
+
+The k-mer predictions frequently disagree with genus-level consensus — this is expected and biologically correct.
+Table S1 shows within-genus receptor variation is high (Tequatrovirus spans 7 receptor types). The k-mer approach
+predicts per-phage specificity, not genus averages. For example, BCH953_P2/P4/P5 (Tequatrovirus) are predicted as
+OmpC with >75% confidence — OmpC accounts for 9% of Tequatrovirus assays in Table S1, so this is a plausible
+minority receptor.
+
+#### Holdout results
+
+| Arm | AUC | 95% CI | Top-3 | Brier |
+|-----|-----|--------|-------|-------|
+| gt03_genus_gate2 (8 OMP) | 0.823 | [0.782, 0.859] | 89.2% | 0.161 |
+| kmer_gate2_only (39 OMP) | 0.824 | [0.780, 0.861] | 89.2% | 0.159 |
+| both_gate2 (combined) | 0.823 | [0.780, 0.857] | 89.2% | 0.161 |
+
+Delta (k-mer vs genus): [-0.005, +0.005] — not significant.
+
+#### Interpretation
+
+**Expanding Gate 2 coverage does not break the AUC ceiling.** Despite 5x more OMP-assigned phages (39 vs 8), the
+k-mer-based receptor predictions add no discriminative signal on holdout. Two possible explanations:
+
+1. **Gate 2 is not the binding constraint.** The model already captures receptor-host compatibility through the
+   host_surface OMP HMM scores (21% feature importance in GT03). Adding phage-side receptor identity doesn't help
+   because the host-side variation is already informative — if a host has high OmpC score, phages that lyse it will
+   be ranked higher regardless of whether we explicitly encode "this phage targets OmpC."
+
+2. **k-mer predictions are noisy.** The simplified k-mer hit counting (max-vote) is less accurate than GenoPHI's
+   full gradient-boosted classifier with RFE. The low confidence on many predictions (mean ~0.5) suggests the signal
+   is diluted. A properly trained GenoPHI model (not just feature scanning) might produce better predictions.
+
+#### Track GIANTS conclusion
+
+The three-layer hypothesis produced one validated discovery: **Gate 1 depolymerase × capsule cross-terms** provide
+a statistically significant +1.2pp AUC lift (0.810 → 0.823). Gate 2 (receptor × OMP) and Gate 3 (defense) do not
+significantly contribute beyond Gate 1. Algorithm optimization (HPO, CatBoost) does not break the 0.823 ceiling.
+
+The remaining improvement paths are:
++ Full GenoPHI pipeline (trained classifier, not just k-mer scanning) for more accurate receptor predictions
++ Panel expansion beyond 96 phages to increase statistical power
++ Per-phage inverse-frequency weighting combined with CatBoost (GT05 showed Brier improvement)
