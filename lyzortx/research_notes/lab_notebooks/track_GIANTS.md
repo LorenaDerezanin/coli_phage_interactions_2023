@@ -470,3 +470,83 @@ OMP allele-variant features are a genuine improvement over HMM scores (5.1% vs 2
 per-feature discrimination), but they do not break the 0.823 AUC ceiling on ST03 holdout. The remaining Gate 2 path
 is exhausted at the feature level — receptor × OMP cross-terms cannot significantly improve all-pairs predictions
 regardless of how the host side is encoded.
+
+### 2026-04-12 14:44 CEST: GT08 — GenoPHI binary protein-family features
+
+#### Executive summary
+
+Reproduced GenoPHI's core feature representation: MMseqs2 clustering (40% identity, 80% coverage) of 1.78M proteins
+from all 369 host + 96 phage genomes → 28,389 non-singleton protein-family clusters → binary presence-absence matrix.
+After variance filtering (top 500 host + 200 phage by variance), combined with GT03 mechanistic features, and evaluated
+on ST03 holdout. Result: AUC 0.826 vs 0.823 baseline, delta CI [-0.002, +0.008] — not significant. RFE retained 244
+protein-family features (216 host + 28 phage) capturing 13.1% feature importance, but this does not translate to a
+holdout improvement.
+
+#### MMseqs2 clustering results
+
+| Metric | Value |
+|--------|-------|
+| Total proteins clustered | 1,783,579 |
+| Total clusters | 64,592 |
+| Non-singleton clusters (≥2 genomes) | 28,389 |
+| Host-only clusters | 26,702 |
+| Phage-only clusters | 1,500 |
+| Shared clusters (host + phage) | 187 |
+
+#### Variance pre-flight
+
+| Side | Total clusters | Variance > 0.05 | Degenerate (>90% same) |
+|------|---------------|-----------------|----------------------|
+| Host | 28,389 | 4,276 (15.1%) | 25,709 (90.5%) |
+| Phage | 28,389 | 670 (2.4%) | 28,075 (98.9%) |
+
+Pre-flight conclusion: sufficient non-degenerate features exist on both sides. Filtered to top 500 host + 200 phage
+by variance. Proceeded with evaluation.
+
+#### Holdout results
+
+| Arm | AUC | 95% CI | Top-3 | Brier |
+|-----|-----|--------|-------|-------|
+| gt03_baseline | 0.823 | [0.782, 0.859] | 89.2% | 0.161 |
+| +protein_families | 0.826 | [0.783, 0.862] | 89.2% | 0.159 |
+
+Delta: [-0.002, +0.008] — not significant.
+
+#### Feature importance
+
+Protein-family features capture 13.1% total importance (pf_host=11.0%, pf_phage=2.1%), comparable to host_stats (5.5%)
+and host_defense (4.0%). RFE retained 216/500 host PF features and 28/200 phage PF features, indicating moderate
+informativeness — enough to survive feature selection but not enough to displace the existing mechanistic features.
+
+#### Interpretation
+
+**GenoPHI's binary protein-family features add no significant lift when combined with mechanistic features.** This is
+a critical finding: GenoPHI's AUROC 0.869 (vs our 0.823) is NOT due to their feature representation being superior.
+Their features (binary k-mer/protein-family presence-absence) and our features (continuous HMM scores, depolymerase
+cross-terms, defense counts) encode partially overlapping information — the protein-family clusters largely capture
+the same host typing and surface variation that our HMM-based features already provide.
+
+The remaining gap between 0.823 and GenoPHI's 0.869 is likely due to:
+1. **Different holdout strategies** — GenoPHI uses LOGOCV (leave-one-genome-out per phage), we use cv_group-disjoint
+   bacteria holdout. Not directly comparable.
+2. **Different bacteria counts** — GenoPHI uses 402 bacteria, we use 369.
+3. **ML pipeline details** — GenoPHI uses CatBoost + RFE + per-phage inverse-frequency weighting as a joint
+   configuration, not as incremental additions. The interactions between these choices may matter.
+
+#### Track GIANTS Phase 2 conclusion
+
+GT07 (OMP variant features) and GT08 (GenoPHI binary features) both fail to break the 0.823 ceiling:
+
+| Ticket | Feature type | Importance | AUC delta CI |
+|--------|-------------|-----------|-------------|
+| GT07 | OMP allele variants (22 features) | 5.1% | [-0.001, +0.006] |
+| GT08 | Protein-family P/A (700 features) | 13.1% | [-0.002, +0.008] |
+
+Both feature families are informative enough to survive RFE and capture measurable importance, but neither provides
+sufficient independent signal to improve predictions on the 65-bacteria holdout. The 0.823 AUC represents a hard
+ceiling for this feature set, model class, and evaluation protocol.
+
+GT09 (BASEL panel expansion) depends on GT07+GT08 completing. Given both produced null results at the feature level,
+the remaining question is whether more training data (new phage diversity) changes the picture. However, this is a
+longer-running task that requires downloading, harmonizing, and extending the interaction matrix — and prior external
+data attempts (TK01-03) showed neutral lift.
